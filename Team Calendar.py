@@ -1,3 +1,37 @@
+# --- SAFE STATE INITIALIZATION ---
+# Using a central initialization function to ensure persistence
+def initialize_state():
+    defaults = {
+        "staff_roster": {"Agent A": {"bday": date(2000, 1, 1), "nick": "Agent A", "rest_days": []}},
+        "calendar_data": {},
+        "pending_requests": [],
+        "approved_requests": [],
+        "deviation_requests": [],
+        "limits": {"PTO": 1, "Wellness": 1},
+        "notifications": [],
+        "admin_authenticated": False,
+        "cases": [],
+        "active_tab": 0,
+        "admin_msg": None,
+        "edit_staff": None,
+        "selected_admin_date": date.today(),
+        "master_data": pd.DataFrame({
+            "Category": ["Contact Type", "Issue", "Product Group"], 
+            "Values": ["Call,Chat,Email", "Tech,Billing", "Hardware,Soft"]
+        })
+    }
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
+
+initialize_state()
+
+# --- MIGRATION (ONLY if you are updating structure) ---
+# This runs once to update old data formats to your new format
+if isinstance(next(iter(st.session_state.staff_roster.values()), None), date):
+    for name, bday in st.session_state.staff_roster.items():
+        st.session_state.staff_roster[name] = {"bday": bday, "nick": name, "rest_days": []}
+        
 from datetime import date, time
 import streamlit as st
 import calendar
