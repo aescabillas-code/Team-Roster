@@ -1,3 +1,8 @@
+import streamlit as st
+import pandas as pd
+from datetime import date, time, datetime # Ensure these are imported
+import calendar
+import holidays
 # --- SAFE STATE INITIALIZATION ---
 # Using a central initialization function to ensure persistence
 def initialize_state():
@@ -31,14 +36,6 @@ initialize_state()
 if isinstance(next(iter(st.session_state.staff_roster.values()), None), date):
     for name, bday in st.session_state.staff_roster.items():
         st.session_state.staff_roster[name] = {"bday": bday, "nick": name, "rest_days": []}
-        
-from datetime import date, time
-import streamlit as st
-import calendar
-from datetime import datetime, date
-import pandas as pd
-import holidays
-from datetime import time
 
 # 1. GLOBAL HANDLER FUNCTIONS
 def handle_approval(req, original_idx):
