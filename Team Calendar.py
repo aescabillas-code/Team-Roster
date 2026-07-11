@@ -1,29 +1,53 @@
 import streamlit as st
 import pandas as pd
-from datetime import date, time, datetime # Ensure these are imported
+from datetime import date, time
 import calendar
 import holidays
-# --- SAFE STATE INITIALIZATION ---
-# Using a central initialization function to ensure persistence
+import json
+import os
+import pickle
+
+# --- DATA PERSISTENCE ---
+DATA_FILE = "roster_data.pkl"
+
+def save_data():
+    data = {
+        "staff_roster": st.session_state.staff_roster,
+        "calendar_data": st.session_state.calendar_data,
+        "pending_requests": st.session_state.pending_requests,
+        "approved_requests": st.session_state.approved_requests,
+        "deviation_requests": st.session_state.deviation_requests,
+        "cases": st.session_state.cases,
+        "master_data": st.session_state.master_data
+    }
+    with open(DATA_FILE, "wb") as f:
+        pickle.dump(data, f)
+
+def load_data():
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "rb") as f:
+            return pickle.load(f)
+    return {}
+
+# --- INITIALIZATION ---
 def initialize_state():
+    saved = load_data()
     defaults = {
-        "staff_roster": {"Agent A": {"bday": date(2000, 1, 1), "nick": "Agent A", "rest_days": []}},
-        "calendar_data": {},
-        "pending_requests": [],
-        "approved_requests": [],
-        "deviation_requests": [],
+        "staff_roster": saved.get("staff_roster", {"Agent A": {"bday": date(2000, 1, 1), "nick": "Agent A", "rest_days": []}}),
+        "calendar_data": saved.get("calendar_data", {}),
+        "pending_requests": saved.get("pending_requests", []),
+        "approved_requests": saved.get("approved_requests", []),
+        "deviation_requests": saved.get("deviation_requests", []),
         "limits": {"PTO": 1, "Wellness": 1},
         "notifications": [],
         "admin_authenticated": False,
-        "cases": [],
+        "cases": saved.get("cases", []),
         "active_tab": 0,
-        "admin_msg": None,
-        "edit_staff": None,
         "selected_admin_date": date.today(),
-        "master_data": pd.DataFrame({
+        "master_data": saved.get("master_data", pd.DataFrame({
             "Category": ["Contact Type", "Issue", "Product Group"], 
             "Values": ["Call,Chat,Email", "Tech,Billing", "Hardware,Soft"]
-        })
+        }))
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -31,11 +55,16 @@ def initialize_state():
 
 initialize_state()
 
-# --- MIGRATION (ONLY if you are updating structure) ---
-# This runs once to update old data formats to your new format
-if isinstance(next(iter(st.session_state.staff_roster.values()), None), date):
-    for name, bday in st.session_state.staff_roster.items():
-        st.session_state.staff_roster[name] = {"bday": bday, "nick": name, "rest_days": []}
+# --- REUSABLE ACTIONS ---
+def handle_approval(req, original_idx):
+    req["status"] = "Approved"
+    st.session_state.approved_requests.append(req)
+    st.session_state.pending_requests.pop(original_idx)
+    save_data()
+    st.rerun()
+
+# --- APP LAYOUT ---
+st.set_page_config(layout="wide", page_title="Team Roster System")
 
 # 1. GLOBAL HANDLER FUNCTIONS
 def handle_approval(req, original_idx):
