@@ -6,6 +6,7 @@ from pymongo import MongoClient
 import calendar
 import pandas as pd
 import holidays
+from database import fetch_masterfile_from_db
 
 # --- DATABASE HELPERS ---
 # 1. ESTABLISH CONNECTION FIRST
@@ -15,6 +16,18 @@ client = MongoClient(uri)
 db = client["team_calendar_db"] # Replace with your actual DB name
 collection = db["team_data"]    # Replace with your actual collection name
 
+def fetch_masterfile_from_db():
+    # Replace this with your actual database logic
+    # Example:
+    # return list(db.master_collection.find({}))
+    
+    # Placeholder for testing:
+    return [
+        {"Category": "Contact Type", "Values": "Email,Phone,Chat"},
+        {"Category": "Issue", "Values": "Login,Billing,Technical"},
+        {"Category": "Product Group", "Values": "Software,Hardware,Services"}
+    ]
+    
 # 2. NOW DEFINE THE FUNCTION (it can now see 'collection')
 def load_data_from_db():
     if "staff_roster" not in st.session_state:
@@ -217,36 +230,85 @@ if "staff_roster" in st.session_state:
                 "nick": name  # Default nickname to the full name
             }
 
-
 # --- CSS STYLES ---
 st.markdown("""
     <style>
     /* Import Google Font */
     @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600&display=swap');
     
-    /* Apply Font */
-    html, body, [class*="css"] {
-        font-family: 'Quicksand', sans-serif !important;
+    /* 1. Global App Background */
+    [data-testid="stAppViewContainer"] {
+        background-color: #000000;
     }
     
-    h1, h2, h3 {
+    /* 2. Set all Labels and Text to Teal */
+    label, p, div, span, h1, h2, h3, .stMarkdown {
+        color: #008080 !important; 
         font-family: 'Quicksand', sans-serif !important;
-        font-weight: 600;
     }
 
-    /* Component Styling */
-    .side-block {font-family: 'Quicksand', sans-serif !important; font-size: 10px !important; line-height: 1.2; }
-    .day-block { border-radius: 15px; padding: 10px; height: auto; min-height: 140px; font-size: 11px; background-color: #ffffff; border: 1px solid #eef0f5; margin: 4px; display: flex; flex-direction: column; }
-    .calendar-divider { border-top: 1px solid #e0e0e0; margin: 5px 0; width: 100%; }
+    /* 3. Calendar Grid Styling (The "Normal Calendar" Look) */
+    .day-block { 
+        border: 1px solid #333333; 
+        border-radius: 8px; 
+        padding: 10px; 
+        height: 150px; 
+        width: 100%;
+        background-color: #121212; 
+        margin: 2px; 
+        display: flex; 
+        flex-direction: column;
+        overflow-y: auto;
+        font-size: 11px;
+    }
     
-    div.stButton > button { background: linear-gradient(90deg, #7b61ff 0%, #3b82f6 100%); color: white; border-radius: 12px; font-weight: 600; }
+    .header-cell { 
+        font-weight: bold; 
+        text-align: center; 
+        color: #008080 !important; 
+        padding-bottom: 10px; 
+        border-bottom: 2px solid #008080;
+    }
+
+    .rest-day {
+        background-color: #0a0a0a !important;
+        border: 1px dashed #333 !important;
+        color: #555 !important;
+    }
+
+    .calendar-divider { border-top: 1px solid #333; margin: 5px 0; width: 100%; }
     
-    .header-cell { font-weight: bold; text-align: center; color: #7b61ff; padding-bottom: 10px; }
+    /* Buttons */
+    div.stButton > button { 
+        background: linear-gradient(90deg, #008080 0%, #005f5f 100%); 
+        color: white; 
+        border-radius: 12px; 
+        font-weight: 600; 
+    }
     
-    .alert-container { border-radius: 20px; border: 2px solid #ff4d4d; padding: 15px; background-color: #fff5f5; margin-bottom: 20px; }
-    .flash-red { color: #ff4d4d; font-weight: bold; text-align: center; }
+    /* Alert & Knowledge Styling */
+    .alert-container { 
+        border-radius: 20px; 
+        border: 2px solid #ff4d4d; 
+        padding: 15px; 
+        background-color: #1a1a1a; 
+        margin-bottom: 20px; 
+    }
     
-    .knowledge-card { border: none; padding: 20px; margin-bottom: 15px; border-radius: 20px; background-color: #ffffff; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+    .flash-red { 
+        color: #ff4d4d !important; 
+        font-weight: bold; 
+        text-align: center; 
+    }
+    
+    .knowledge-card { 
+        border: none; 
+        padding: 20px; 
+        margin-bottom: 15px; 
+        border-radius: 20px; 
+        background-color: #121212; 
+        box-shadow: 0 4px 6px rgba(255,255,255,0.05); 
+    }
     </style>
 """, unsafe_allow_html=True)
 
