@@ -12,7 +12,7 @@ import holidays
 # Use st.secrets to keep your credentials safe
 uri = st.secrets["mongo"]["uri"] 
 client = MongoClient(uri)
-db = return client["my_database"]
+db = client["my_database"]
 collection = db["my_collection"] 
 
 def fetch_approved_requests_from_db():
