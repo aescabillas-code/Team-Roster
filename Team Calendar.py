@@ -12,33 +12,9 @@ import holidays
 # Use st.secrets to keep your credentials safe
 uri = st.secrets["mongo"]["uri"] 
 client = MongoClient(uri)
-db = client["my_database"]
-collection = db["my_collection"] 
+db = client["team_calendar_db"] # Replace with your actual DB name
+collection = db["team_data"]    # Replace with your actual collection name
 
-@st.cache_resource
-def get_db():
-    # Use the client defined at the top of your script
-    return client["my_database"]
-
-def fetch_approved_requests_from_db():
-    db = get_db() # Using the existing get_db() function you have
-    # Assuming you have a collection or a 'status' field in your collection
-    # Adjust the filter based on how your data is structured in 'my_collection'
-    return list(db["my_collection"].find({"type": "request", "status": "Approved"}))
-
-def fetch_cases_from_db():
-    db = get_db()
-    # Replace 'cases' with your actual collection name if different
-    return list(db["my_collection"].find({"type": "case"})) 
-
-def fetch_masterfile_from_db():
-    db = get_db()
-    return list(db["my_collection"].find({"type": "master"}))
-
-def fetch_deviations_from_db():
-    db = get_db()
-    return list(db["my_collection"].find({"type": "deviation"}))
-    
 # 2. NOW DEFINE THE FUNCTION (it can now see 'collection')
 def load_data_from_db():
     if "staff_roster" not in st.session_state:
@@ -83,25 +59,10 @@ def save_staff(name, data):
     )
 
 def delete_staff(name):
-    # 1. Remove from MongoDB
     collection.delete_one({"type": "roster", "name": name})
-    
-    # 2. Update session state immediately so the UI reflects the change
-    if name in st.session_state.staff_roster:
-        del st.session_state.staff_roster[name]
-        
-    st.success(f"{name} has been removed.")
+    # Clear cache so the app fetches the updated list immediately
+    st.cache_data.clear()
 
-def update_staff_in_db(name, update_dict):
-    # 1. Update in MongoDB
-    collection.update_one({"type": "roster", "name": name}, {"$set": update_dict})
-    
-    # 2. Update session state so the UI reflects the change
-    if name in st.session_state.staff_roster:
-        st.session_state.staff_roster[name].update(update_dict)
-        
-    st.success(f"{name} has been updated.")
-    
 # --- INITIAL CONFIG & STATE ---
 st.set_page_config(layout="wide", page_title="Team Roster & Staffing System")
 
@@ -120,10 +81,6 @@ def get_collection():
 collection = get_collection()
 
 # --- INITIALIZE STATE ---
-if "admin_password" not in st.session_state:
-    st.session_state.admin_password = "Password1234"
-if "admin_authenticated" not in st.session_state:
-    st.session_state.admin_authenticated = False
 if "staff_roster" not in st.session_state: 
     st.session_state.staff_roster = {
         "Agent A": {"bday": date(2000, 1, 1), "nick": "A"}, 
@@ -160,46 +117,23 @@ def handle_approval(req, original_idx):
     st.rerun()
     
 def render_request(req, idx, key_prefix):
-    # Unique keys for this specific request
     denial_key = f"denying_{key_prefix}_{idx}"
     
-    # 1. Standard Display Row
-    c1, c2, c3 = st.columns([3, 1, 1])
-    c1.write(f"**{req['name']}** - {req['date']} ({req['type']})")
-    
-    # 2. Approve Action
-    if c2.button("Approve", key=f"app_{key_prefix}_{idx}"):
-        # Update Database
-        update_request_status_in_db(req, "Approved")
-        # Sync Session State
-        req['status'] = "Approved"
-        st.session_state.approved_requests.append(req)
-        st.session_state.pending_requests.pop(idx)
-        st.success("Request Approved and saved!")
-        st.rerun()
-
-    # 3. Deny Action (Triggers Popup)
-    if c3.button("Deny", key=f"den_{key_prefix}_{idx}"):
-        st.session_state[denial_key] = True
-        st.rerun()
-
-    # 4. Denial Popup Logic
     if st.session_state.get(denial_key):
-        st.write(f"--- Reason for denying {req['name']}'s {req['type']} request ---")
+        # --- DENIAL POPUP UI ---
+        st.write(f"Reason for denying {req['name']}'s {req['type']} request:")
         reason = st.text_input("Reason", key=f"reason_{key_prefix}_{idx}")
         
         col1, col2 = st.columns(2)
         if col1.button("Proceed Denial", key=f"confirm_{key_prefix}_{idx}"):
-            # 1. Database Deletion
-            delete_request_from_db(req)
-            # 2. Notification (Optional)
+            # 1. Send denial email
             if req.get("email"):
                 send_request_notification(req['email'], "Denied", req['type'], req['date'])
-            # 3. State sync
+            # 2. Logic to remove from pending
             st.session_state.pending_requests.pop(idx)
             st.session_state[denial_key] = False
             st.session_state.admin_msg = ("warning", f"Denied {req['name']}'s request: {reason}")
-            st.rerun()
+            st.rerun() # Rerun AFTER all state changes
             
         if col2.button("Cancel", key=f"cancel_{key_prefix}_{idx}"):
             st.session_state[denial_key] = False
@@ -241,118 +175,36 @@ if "staff_roster" in st.session_state:
                 "nick": name  # Default nickname to the full name
             }
 
+
 # --- CSS STYLES ---
 st.markdown("""
     <style>
     /* Import Google Font */
     @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600&display=swap');
     
-    /* 1. Global App Background */
-    [data-testid="stAppViewContainer"] {
-        background-color: #000000;
-    }
-    
-    /* 2. Global Text Styling (White for readability) */
-    label, p, div, span, h1, h2, h3, .stMarkdown, .stText {
-        color: #ffffff !important; 
+    /* Apply Font */
+    html, body, [class*="css"] {
         font-family: 'Quicksand', sans-serif !important;
     }
     
-    /* Force Headers to be Teal */
-    h1, h2, h3 { color: #008080 !important; }
-
-    /* 3. Calendar Grid Styling - Connected & Ombre */
-    .day-block { 
-        border: 1px solid #005f5f; 
-        border-radius: 0px; 
-        padding: 8px; 
-        min-height: 200px; 
-        height: auto; 
-        width: 100%;
-        background: linear-gradient(180deg, #008080 0%, #002d2d 100%); 
-        margin: 0px; 
-        display: flex; 
-        flex-direction: column;
-        overflow-y: visible;
-        font-size: 12px;
-    }
-    
-    .header-cell { 
-        font-weight: bold; 
-        text-align: center; 
-        color: #008080 !important; 
-        padding-bottom: 5px; 
-        border-bottom: 2px solid #008080;
+    h1, h2, h3 {
+        font-family: 'Quicksand', sans-serif !important;
+        font-weight: 600;
     }
 
-    .rest-day {
-        background: #121212 !important;
-        border: 1px solid #333 !important;
-        color: #555 !important;
-    }
-
-    .calendar-divider { border-top: 1px solid rgba(255,255,255,0.2); margin: 4px 0; width: 100%; }
+    /* Component Styling */
+    .side-block {font-family: 'Quicksand', sans-serif !important; font-size: 10px !important; line-height: 1.2; }
+    .day-block { border-radius: 15px; padding: 10px; height: auto; min-height: 140px; font-size: 11px; background-color: #ffffff; border: 1px solid #eef0f5; margin: 4px; display: flex; flex-direction: column; }
+    .calendar-divider { border-top: 1px solid #e0e0e0; margin: 5px 0; width: 100%; }
     
-    /* Buttons - Ombre Teal */
-    div.stButton > button { 
-        background: linear-gradient(180deg, #008080 0%, #002d2d 100%); 
-        color: white !important; 
-        border: 1px solid #008080;
-        border-radius: 12px; 
-        font-weight: 600; 
-    }
+    div.stButton > button { background: linear-gradient(90deg, #7b61ff 0%, #3b82f6 100%); color: white; border-radius: 12px; font-weight: 600; }
     
-    /* Dropdown/Selectbox Styling - Translucent Teal with White Font */
-    [data-testid="stSelectbox"] div[data-baseweb="select"] {
-        background-color: rgba(0, 128, 128, 0.3) !important;
-        color: #ffffff !important;
-    }
+    .header-cell { font-weight: bold; text-align: center; color: #7b61ff; padding-bottom: 10px; }
     
-    [data-testid="stSelectbox"] div[data-baseweb="select"] span {
-        color: #ffffff !important;
-    }
-
-    /* Table Styling (Case Tracker, Masterfile, Deviation) */
-    table { width: 100%; border-collapse: collapse; }
+    .alert-container { border-radius: 20px; border: 2px solid #ff4d4d; padding: 15px; background-color: #fff5f5; margin-bottom: 20px; }
+    .flash-red { color: #ff4d4d; font-weight: bold; text-align: center; }
     
-    /* Row Alternating: Translucent White with Dark Teal Text */
-    tbody tr:nth-child(odd) { 
-        background-color: rgba(255, 255, 255, 0.1) !important; 
-        color: #008080 !important; 
-    }
-    
-    /* Row Alternating: Translucent Teal with White Text */
-    tbody tr:nth-child(even) { 
-        background-color: rgba(0, 128, 128, 0.2) !important; 
-        color: #ffffff !important; 
-    }
-    
-    /* Table Headers */
-    thead th { color: #008080 !important; }
-    
-    /* Alert & Knowledge Styling */
-    .alert-container { 
-        border-radius: 10px; 
-        border: 1px solid #ff4d4d; 
-        padding: 15px; 
-        background-color: #1a1a1a; 
-        margin-bottom: 20px; 
-    }
-    
-    .flash-red { 
-        color: #ff4d4d !important; 
-        font-weight: bold; 
-        text-align: center; 
-    }
-    
-    .knowledge-card { 
-        border: none; 
-        padding: 20px; 
-        margin-bottom: 15px; 
-        border-radius: 20px; 
-        background-color: #121212; 
-        box-shadow: 0 4px 6px rgba(255,255,255,0.05); 
-    }
+    .knowledge-card { border: none; padding: 20px; margin-bottom: 15px; border-radius: 20px; background-color: #ffffff; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
     </style>
 """, unsafe_allow_html=True)
 
@@ -489,88 +341,66 @@ with tab_cal:
                 for i, day in enumerate(week):
                     if day != 0:
                         d = date(year, month, day)
+                        approved = [r for r in st.session_state.approved_requests if r['date'] == d]
                         
-                        # --- CHECK FOR WEEKEND (Sat=5, Sun=6) ---
-                        is_weekend = d.weekday() in [5, 6]
+                        # --- NICKNAME LOOKUP LOGIC ---
+                        display_list = []
+                        for r in approved:
+                            # Get staff data from roster (assuming structure {'bday': ..., 'nick': ...})
+                            staff_info = st.session_state.staff_roster.get(r['name'], {})
+                            # Use nickname if available, else fallback to name
+                            nick = staff_info.get("nick", r['name'])
+                            display_list.append(f"{nick}({r['type']})")
                         
-                        if is_weekend:
-                            # Block as Rest Day
-                            cols[i].markdown(f'<div class="day-block rest-day"><b>{day}</b><br>REST DAY</div>', unsafe_allow_html=True)
-                        else:
-                            approved = [r for r in st.session_state.approved_requests if r['date'] == d]
-                            
-                            # --- NICKNAME LOOKUP LOGIC ---
-                            display_list = []
-                            for r in approved:
-                                # Get staff data from roster (assuming structure {'bday': ..., 'nick': ...})
-                                staff_info = st.session_state.staff_roster.get(r['name'], {})
-                                # Use nickname if available, else fallback to name
-                                nick = staff_info.get("nick", r['name'])
-                                display_list.append(f"{nick}({r['type']})")
-                            
-                            req_display = "<br>".join(display_list)
-                            
-                           # --- 1. Identify who is away today ---
-                            away_names = [r['name'] for r in approved]
-    
-                            # --- 2. Updated lookup helper ---
-                            def get_filtered_nicks(full_names):
-                                # Filter out anyone who is in the away_names list
-                                active_staff = [name for name in full_names if name not in away_names]
-                                # Return nicknames for those remaining
-                                return ", ".join([st.session_state.staff_roster.get(name, {}).get("nick", name) for name in active_staff])
-    
-                            data = st.session_state.calendar_data.get(d, {})
-                            
-                            content = (f"<b>{day}</b><div class='calendar-divider'></div>"
-                                       f"<u>{data.get('status', '-')}</u><div class='calendar-divider'></div>"
-                                       f"{data.get('shift', '-')}<div class='calendar-divider'></div>"
-                                       f"PTO/Wellness: {req_display}<div class='calendar-divider'></div>"
-                                       f"Call: {get_filtered_nicks(data.get('call', []))}<div class='calendar-divider'></div>"
-                                       f"Chat: {get_filtered_nicks(data.get('chat', []))}<div class='calendar-divider'></div>"
-                                       f"MFQ: {get_filtered_nicks(data.get('mfq', []))}<div class='calendar-divider'></div>"
-                                       f"SME: {get_filtered_nicks(data.get('sme', []))}")
-                            
-                            cols[i].markdown(f'<div class="day-block">{content}</div>', unsafe_allow_html=True)
+                        req_display = "<br>".join(display_list)
+                        
+                       # --- 1. Identify who is away today ---
+                        away_names = [r['name'] for r in approved]
+
+                        # --- 2. Updated lookup helper ---
+                        def get_filtered_nicks(full_names):
+                            # Filter out anyone who is in the away_names list
+                            active_staff = [name for name in full_names if name not in away_names]
+                            # Return nicknames for those remaining
+                            return ", ".join([st.session_state.staff_roster.get(name, {}).get("nick", name) for name in active_staff])
+
+                        data = st.session_state.calendar_data.get(d, {})
+                        
+                        content = (f"<b>{day}</b><div class='calendar-divider'></div>"
+                                   f"<u>{data.get('status', '-')}</u><div class='calendar-divider'></div>"
+                                   f"{data.get('shift', '-')}<div class='calendar-divider'></div>"
+                                   f"PTO/Wellness: {req_display}<div class='calendar-divider'></div>"
+                                   f"Call: {get_filtered_nicks(data.get('call', []))}<div class='calendar-divider'></div>"
+                                   f"Chat: {get_filtered_nicks(data.get('chat', []))}<div class='calendar-divider'></div>"
+                                   f"MFQ: {get_filtered_nicks(data.get('mfq', []))}<div class='calendar-divider'></div>"
+                                   f"SME: {get_filtered_nicks(data.get('sme', []))}")
+                        
+                        cols[i].markdown(f'<div class="day-block">{content}</div>', unsafe_allow_html=True)
 
 # --- TAB 2: REQUEST ---
 with tab_req:
     st.subheader("PTO/Wellness Request")
     
-    st.info("💡 **Tip:** Providing your work email is optional.")
+    # Instruction added here
+    st.info("💡 **Tip:** Providing your work email is optional. If you provide it, you will receive an automatic notification once your request status is updated.")
     
     with st.form("request_form", clear_on_submit=True):
-        # 1. Fetch staff roster from DB
-        staff_data = get_staff_list() # Ensure this returns a dict or list of names
-        name = st.selectbox("Name", list(staff_data.keys()))
-        
+        name = st.selectbox("Name", list(st.session_state.staff_roster.keys()))
         email = st.text_input("Work Email (Optional)")
         req_date = st.date_input("Request Date")
         req_type = st.selectbox("Type", ["PTO", "Wellness"])
         
         submitted = st.form_submit_button("Submit Request")
-        
         if submitted:
-            # 2. Fetch limits from DB
-            limits = get_request_limits() # Returns e.g., {"PTO": 5, "Wellness": 2}
-            
-            # Count existing requests for this specific date and type
-            count_on_date = len([
-                r for r in (st.session_state.pending_requests + st.session_state.approved_requests)
-                if r["date"] == req_date and r["type"] == req_type
-            ])
-            
-            # Check Duplicates
+            # --- DUPLICATE CHECK ---
+            # Check both pending and approved lists to ensure no conflicts
             is_already_requested = any(
                 r["name"] == name and r["date"] == req_date 
                 for r in (st.session_state.pending_requests + st.session_state.approved_requests)
             )
             
-            # 3. Validation Logic
             if is_already_requested:
                 st.warning(f"⚠️ A request for {name} on {req_date} already exists.")
-            elif count_on_date >= limits.get(req_type, 0):
-                st.error(f"❌ Limit reached for {req_type} on {req_date}. Please choose another date.")
             else:
                 st.session_state.pending_requests.append({
                     "name": name, 
@@ -578,124 +408,121 @@ with tab_req:
                     "type": req_type, 
                     "status": "Pending", 
                     "email": email,
-                    "viewed": False
+                    "viewed": False # Ensure this is added for your rendering logic
                 })
-                # Trigger a database write here to persist this new request
-                save_request_to_db(st.session_state.pending_requests[-1])
                 st.success("Request submitted successfully.")
 
 # --- TAB 3: CASE TRACKER ---
 with tab_case:
     st.subheader("Log New Case")
     
-    # 1. Fetch live data from the Masterfile collection
-    master_data = fetch_masterfile_from_db() 
-    
+    # 1. Fetch Masterfile data for dropdowns
     def get_master_values(category_name):
-        row = next((item for item in master_data if item.get('Category') == category_name), None)
-        return [v.strip() for v in row['Values'].split(',')] if row and row.get('Values') else []
+        row = st.session_state.master_data[st.session_state.master_data['Category'] == category_name]
+        if not row.empty:
+            return [v.strip() for v in row.iloc[0]['Values'].split(',')]
+        return []
 
-    # Dynamically populate lists from Masterfile DB entries
-    c_types = get_master_values('Contact Type')
-    issues = get_master_values('Issue')
-    prods = get_master_values('Product Group')
-    
-    c1, c2 = st.columns(2)
-    c_type = c1.selectbox("Contact Type", c_types)
-    issue = c1.selectbox("Issue", issues)
-    prod = c2.selectbox("Product Group", prods)
-    desc = st.text_area("Issue Description")
-    steps = st.text_area("Steps Taken")
-    
-    # Re-added: File uploader functionality
-    uploaded_file = st.file_uploader("Upload Screenshot")
-    
-    status = st.selectbox("Status", ["Resolved", "Pending/Monitoring", "Routed"])
-    extra = ""
-    if status == "Pending/Monitoring": extra = st.text_input("Pending/Monitoring Reason")
-    elif status == "Routed": extra = st.text_input("Queue Destination")
-    
-    # 2. Log Case to DB
-    if st.button("Log Case"):
-        new_case = {
-            "Date": str(date.today()), 
-            "Type": c_type, 
-            "Issue": issue, 
-            "Product Group": prod, 
-            "Desc": desc, 
-            "Steps": steps, 
-            "Status": status, 
-            "Extra": extra
-            # Note: Handle file storage logic here if needed (e.g., GridFS or saving path)
-        }
-        save_case_to_db(new_case)
-        st.success("Case logged to database successfully!")
-        st.rerun()
+    with st.form("case_form", clear_on_submit=True):
+        c1, c2 = st.columns(2)
+        c_type = c1.selectbox("Contact Type", get_master_values('Contact Type'))
+        issue = c1.selectbox("Issue", get_master_values('Issue'))
+        prod = c2.selectbox("Product Group", get_master_values('Product Group'))
+        desc = st.text_area("Issue Description")
+        steps = st.text_area("Steps Taken")
+        uploaded_file = st.file_uploader("Upload Screenshot")
+        status = st.selectbox("Status", ["Resolved", "Pending/Monitoring", "Routed"])
+        extra = st.text_input("Extra Info (Reason/Destination)")
+        
+        if st.form_submit_button("Log Case"):
+            st.session_state.cases.append({
+                "Date": date.today(), 
+                "Type": c_type, 
+                "Issue": issue, 
+                "Product Group": prod, 
+                "Desc": desc, 
+                "Steps": steps, 
+                "Status": status, 
+                "Extra": extra, 
+                "Image": uploaded_file
+            })
+            st.success("Case logged successfully!")
+            st.rerun()
 
     st.divider()
+    
+    # --- KNOWLEDGE BASE SECTION ---
     st.subheader("Knowledge Base")
     
-    # 3. Filtering
     f1, f2 = st.columns(2)
-    f_issue = f1.multiselect("Filter by Issue", issues)
-    f_prod = f2.multiselect("Filter by Product Group", prods)
+    f_issue = f1.multiselect("Filter by Issue", get_master_values('Issue'))
+    f_prod = f2.multiselect("Filter by Product Group", get_master_values('Product Group'))
 
-    # 4. Knowledge Base Loop
-    cases_list = fetch_cases_from_db() 
-
-    for case in reversed(cases_list):
+    # Display Cases
+    for i, case in enumerate(reversed(st.session_state.cases)):
+        # Calculate reverse index for list modification
+        actual_idx = len(st.session_state.cases) - 1 - i
+        
         if (not f_issue or case['Issue'] in f_issue) and (not f_prod or case['Product Group'] in f_prod):
-            with st.container(border=True): 
-                col_menu, col_content = st.columns([1, 10])
+            with st.container(border=True):
+                col_content, col_menu = st.columns([10, 1])
                 
+                # Display Card Content
+                col_content.markdown(f"""
+                <b>Date:</b> {case['Date']} | <b>Status:</b> {case['Status']}<br>
+                <b>Contact:</b> {case['Type']} | <b>Issue:</b> {case['Issue']} | <b>Group:</b> {case['Product Group']}<br>
+                <b>Description:</b> {case['Desc']}<br>
+                <b>Steps Taken:</b> {case['Steps']}<br>
+                {"<b>Extra Info:</b> " + case['Extra'] if case['Extra'] else ""}
+                """, unsafe_allow_html=True)
+                if case['Image']: col_content.image(case['Image'], caption="Case Screenshot", width=300)
+                
+                # Ellipses Menu
                 with col_menu.popover("⋮"):
-                    if st.button("Edit", key=f"edit_trigger_{case['_id']}"):
-                        st.session_state[f"edit_mode_{case['_id']}"] = True
-                    if st.button("Delete", key=f"del_trigger_{case['_id']}"):
-                        st.session_state[f"del_mode_{case['_id']}"] = True
-
-                col_content.markdown(f"**Date:** {case['Date']} | **Status:** {case['Status']} | **Issue:** {case['Issue']}")
-                # Display both description and steps for full knowledge base visibility
-                col_content.write(f"**Description:** {case.get('Desc', '')}")
-                col_content.write(f"**Steps Taken:** {case.get('Steps', '')}")
+                    if st.button("Edit", key=f"edit_{actual_idx}"):
+                        st.session_state[f"edit_mode_{actual_idx}"] = True
+                    if st.button("Delete", key=f"del_{actual_idx}"):
+                        st.session_state[f"del_mode_{actual_idx}"] = True
 
                 # --- EDIT LOGIC ---
-                if st.session_state.get(f"edit_mode_{case['_id']}"):
-                    with st.form(key=f"edit_form_{case['_id']}"):
-                        new_desc = st.text_area("Update Description", value=case.get('Desc', ''))
+                if st.session_state.get(f"edit_mode_{actual_idx}"):
+                    with st.form(f"form_edit_{actual_idx}"):
+                        new_desc = st.text_area("Update Description", value=case['Desc'])
                         if st.form_submit_button("Save Changes"):
-                            update_case_in_db(case['_id'], {"Desc": new_desc})
-                            st.session_state[f"edit_mode_{case['_id']}"] = False
-                            st.rerun()
-                        if st.form_submit_button("Cancel"):
-                            st.session_state[f"edit_mode_{case['_id']}"] = False
+                            st.session_state.cases[actual_idx]['Desc'] = new_desc
+                            st.session_state[f"edit_mode_{actual_idx}"] = False
                             st.rerun()
 
                 # --- DELETE LOGIC ---
-                if st.session_state.get(f"del_mode_{case['_id']}"):
-                    check_pass = st.text_input("Enter Admin Password to Confirm", type="password", key=f"pass_{case['_id']}")
-                    if check_pass == "Password1234":
-                        if st.button("Confirm Delete", key=f"confirm_del_{case['_id']}"):
-                            delete_case_from_db(case['_id'])
+                if st.session_state.get(f"del_mode_{actual_idx}"):
+                    pwd = st.text_input("Enter Admin Password to Delete", type="password", key=f"pwd_{actual_idx}")
+                    if pwd == "Password1234":
+                        if st.button("Confirm Delete", key=f"conf_del_{actual_idx}"):
+                            st.session_state.cases.pop(actual_idx)
                             st.rerun()
-                    elif check_pass:
+                    elif pwd:
                         st.error("Incorrect Password")
-                        
+
 # --- TAB: DEVIATION ---
 with tab_dev:
     st.subheader("Submit Deviation Request")
     
-    # Roster sourced from session_state as instructed
-    roster_list = list(st.session_state.staff_roster.keys())
-    
+    # 1. Fetch Masterfile data for dropdowns
+    master_data = fetch_masterfile_from_db() 
+    def get_master_values(category_name):
+        row = next((item for item in master_data if item.get('Category') == category_name), None)
+        return [v.strip() for v in row['Values'].split(',')] if row and row.get('Values') else []
+
     with st.form("deviation_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
         with col1:
             target_date = st.date_input("Target Date", value=date.today())
             manager = st.text_input("Manager", value="Jeff Bote")
-            name = st.selectbox("Name", roster_list)
+            # --- Name source from Admin Roster ---
+            name = st.selectbox("Name", list(st.session_state.staff_roster.keys()))
             shift_time = st.session_state.calendar_data.get(target_date, {}).get("shift", "Not Set")
             st.write(f"**Shift Time:** {shift_time}")
+            
         with col2:
             start_time = st.time_input("Start Time")
             end_time = st.time_input("End Time")
@@ -714,7 +541,10 @@ with tab_dev:
             st.rerun()
 
     st.divider()
-    st.subheader("Deviation Request Report")
+    
+    # --- REPORT SECTION ---
+    c_head1, c_head2 = st.columns([3, 1])
+    c_head1.subheader("Deviation Request Report")
     
     # 1. Filter UI
     with st.expander("Filter Report"):
@@ -724,63 +554,78 @@ with tab_dev:
         filter_date = f_col3.date_input("Specific Date (Optional)", value=None, key="dev_f_date")
         apply_filter = st.button("Apply Filter")
 
-    # 2. Fetch, Filter, and Table Display
-    dev_data = fetch_deviations_from_db()
-    if dev_data:
-        df = pd.DataFrame(dev_data)
+    # 2. Fetch and Filter Data
+    dev_requests = fetch_deviations_from_db()
+    
+    if dev_requests:
+        df = pd.DataFrame(dev_requests)
+        df['Date'] = pd.to_datetime(df['Date']).dt.date
         
-        # Apply filters for the table
+        filtered_df = df.copy()
         if apply_filter:
-            df['Date_obj'] = pd.to_datetime(df['Date']).dt.date
             if filter_date:
-                df = df[df['Date_obj'] == filter_date]
+                filtered_df = df[df['Date'] == filter_date]
             else:
-                df = df[(df['Date_obj'].apply(lambda x: x.month) == filter_month) & 
-                        (df['Date_obj'].apply(lambda x: x.year) == filter_year)]
-            df = df.drop(columns=['Date_obj'])
-
-        # Display as a Table with Date at the start
-        cols = ['Date'] + [c for c in df.columns if c != 'Date' and c != '_id']
-        st.table(df[cols])
-
-        # 3. Individual Edit/Delete Logic
-        for entry in reversed(dev_data):
-            with st.container():
-                col_menu, col_content = st.columns([1, 10])
-                with col_menu.popover("⋮"):
-                    if st.button("Edit", key=f"edit_trig_{entry['_id']}"):
-                        st.session_state[f"edit_dev_{entry['_id']}"] = True
-                    if st.button("Delete", key=f"del_trig_{entry['_id']}"):
-                        st.session_state[f"del_dev_{entry['_id']}"] = True
+                filtered_df = df[(df['Date'].apply(lambda x: x.month) == filter_month) & 
+                                 (df['Date'].apply(lambda x: x.year) == filter_year)]
+        
+        # 3. Display Rows with Popover Menus
+        for _, row in filtered_df.iterrows():
+            with st.container(border=True):
+                col_content, col_menu = st.columns([10, 1])
+                col_content.markdown(f"**{row['Date']}** | {row['Name']} | {row['Reason']}")
                 
-                col_content.markdown(f"**{entry['Date']}** | {entry['Name']} | {entry['Reason']}")
+                with col_menu.popover("⋮"):
+                    if st.button("Edit", key=f"edit_{row['_id']}"):
+                        st.session_state[f"edit_mode_{row['_id']}"] = True
+                    if st.button("Delete", key=f"del_{row['_id']}"):
+                        st.session_state[f"del_mode_{row['_id']}"] = True
 
                 # --- EDIT LOGIC ---
-                if st.session_state.get(f"edit_dev_{entry['_id']}"):
-                    with st.form(key=f"edit_f_{entry['_id']}"):
-                        new_r = st.text_area("Edit Reason", value=entry.get('Reason', ''))
-                        new_m = st.number_input("Edit Mins", value=entry.get('Total Mins', 0))
-                        if st.form_submit_button("Update"):
-                            update_deviation_in_db(entry['_id'], {"Reason": new_r, "Total Mins": new_m})
-                            st.session_state[f"edit_dev_{entry['_id']}"] = False
+                if st.session_state.get(f"edit_mode_{row['_id']}"):
+                    with st.form(f"form_edit_{row['_id']}"):
+                        new_reason = st.text_area("Reason", value=row.get('Reason', ''))
+                        new_mins = st.number_input("Mins", value=row.get('Total Mins', 0))
+                        if st.form_submit_button("Save"):
+                            update_deviation_in_db(row['_id'], {"Reason": new_reason, "Total Mins": new_mins})
+                            st.session_state[f"edit_mode_{row['_id']}"] = False
                             st.rerun()
 
                 # --- DELETE LOGIC ---
-                if st.session_state.get(f"del_dev_{entry['_id']}"):
-                    check_pass = st.text_input("Enter Admin Password", type="password", key=f"p_{entry['_id']}")
-                    if check_pass == "Password1234":
-                        if st.button("Confirm Delete", key=f"conf_del_{entry['_id']}"):
-                            delete_deviation_from_db(entry['_id'])
-                            st.session_state[f"del_dev_{entry['_id']}"] = False
+                if st.session_state.get(f"del_mode_{row['_id']}"):
+                    pwd = st.text_input("Enter Admin Password to Delete", type="password", key=f"pwd_{row['_id']}")
+                    if pwd == "Password1234":
+                        if st.button("Confirm Delete", key=f"conf_del_{row['_id']}"):
+                            delete_deviation_from_db(row['_id'])
                             st.rerun()
-                    elif check_pass:
-                        st.error("Invalid Password")
+                    elif pwd:
+                        st.error("Incorrect Password")
 
-        # 4. CSV Download
-        csv = df.to_csv(index=False).encode('utf-8')
+        # 4. Extract/Download button
+        csv = filtered_df.to_csv(index=False).encode('utf-8')
         st.download_button("Extract Report as CSV", csv, "deviation_report.csv", "text/csv")
     else:
-        st.write("No deviation requests found.")
+        st.write("No deviation requests submitted yet.")
+
+# --- TAB 4: MASTERFILE ---
+with tab_master:
+    if not st.session_state.admin_authenticated:
+        if st.text_input("Enter Password", type="password") == "Password1234": 
+            st.session_state.admin_authenticated = True
+            st.rerun()
+    else:
+        # Create columns to align the header and the button
+        col_m1, col_m2 = st.columns([4, 1])
+        
+        with col_m1:
+            st.subheader("System Masterfile")
+        with col_m2:
+            if st.button("Save Masterfile Changes"):
+                st.success("Masterfile updated.")
+                st.rerun()
+        
+        # Display the editor below the header/button row
+        st.session_state.master_data = st.data_editor(st.session_state.master_data, num_rows="dynamic")
 
 # --- TAB 5: ADMIN ---
 with tab_adm:
@@ -979,19 +824,10 @@ with tab_adm:
 
             # --- APPROVED HISTORY ---
             st.subheader("✅ Approved History")
-            
-            # 1. Fetch from DB instead of session state
-            # Assume fetch_approved_requests_from_db() returns a list of approved dicts
-            all_approved_from_db = fetch_approved_requests_from_db()
-            
-            # 2. Filter logic using the fetched data
-            month_to_filter = st.session_state.get("cal_m", date.today().month)
-            
-            app_wellness = [r for r in all_approved_from_db 
-                            if r['type'] == "Wellness" and r['date'].month == month_to_filter]
-            app_pto = [r for r in all_approved_from_db 
-                       if r['type'] == "PTO" and r['date'].month == month_to_filter]
-            
+            # Note: Ensure 'month' variable is accessible here (defined in your calendar tab)
+            app_wellness = [r for r in st.session_state.approved_requests if r['type'] == "Wellness" and r['date'].month == st.session_state.get("cal_m", date.today().month)]
+            app_pto = [r for r in st.session_state.approved_requests if r['type'] == "PTO" and r['date'].month == st.session_state.get("cal_m", date.today().month)]
+
             if app_wellness:
                 st.markdown("#### Approved Wellness")
                 st.table(pd.DataFrame(app_wellness))
