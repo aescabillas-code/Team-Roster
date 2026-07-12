@@ -1,12 +1,28 @@
-from datetime import datetime, time
-from datetime import datetime
-from datetime import date, time, datetime
 import streamlit as st
-from pymongo import MongoClient
 import calendar
 import pandas as pd
 import holidays
-from database import fetch_masterfile_from_db
+from datetime import datetime, date, time
+from pymongo import MongoClient
+
+# Import your database functions from your external file
+from database import (
+    fetch_masterfile_from_db, 
+    save_request_to_db, 
+    save_case_to_db, 
+    fetch_cases_from_db, 
+    delete_case_from_db, 
+    update_case_in_db,
+    save_deviation_to_db, 
+    fetch_deviations_from_db, 
+    update_deviation_in_db, 
+    delete_deviation_from_db,
+    save_masterfile_to_db,
+    update_request_status_in_db,
+    delete_request_from_db,
+    fetch_approved_requests_from_db,
+    get_request_limits
+)
 
 # --- DATABASE HELPERS ---
 # 1. ESTABLISH CONNECTION FIRST
@@ -19,7 +35,7 @@ collection = db["my_collection"]    # Replace with your actual collection name
 def fetch_masterfile_from_db():
     # Replace this with your actual database logic
     # Example:
-    # return list(db.master_collection.find({}))
+    # return list(db.my_collection.find({}))
     
     # Placeholder for testing:
     return [
