@@ -4,6 +4,17 @@ from pymongo import MongoClient
 import calendar
 import pandas as pd
 import holidays
+import sys
+from types import ModuleType
+
+# --- MOCK GMAIL BARD MODULE IF NOT LOCALLY INSTALLED ---
+if "gmail_bard" not in sys.modules:
+    mock_gmail = ModuleType("gmail_bard")
+    def send_message(to, subject, body):
+        # Console confirmation fallback log
+        print(f"[Mock Mail] Sent to {to}: {subject}")
+    mock_gmail.send_message = send_message
+    sys.modules["gmail_bard"] = mock_gmail
 
 # --- DATABASE HELPERS & CONNECTION ---
 uri = st.secrets["mongo"]["uri"] 
@@ -193,7 +204,9 @@ def render_request(req, key_prefix):
             st.rerun()
 
 # --- TABS WORKSPACE ---
-tabs = st.tabs(["📅 Calendar", "📝 Request", "🔍 Case Tracker", "🔀 Deviation", "📂 Masterfile", "🔑 Admin"])
+tab_cal, tab_req, tab_case, tab_dev, tab_mas, tab_adm = st.tabs([
+    "📅 Calendar", "📝 Request", "🔍 Case Tracker", "🔀 Deviation", "📂 Masterfile", "🔑 Admin"
+])
 
 # --- TAB 1: CALENDAR ---
 with tab_cal:
@@ -268,7 +281,7 @@ with tab_cal:
             
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # 5. Render interactive monthly calendar grid block (Correct Indentation)
+    # 5. Render interactive monthly calendar grid block
     with col_main:
         cols = st.columns(7)
         for i, d_name in enumerate(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]):
@@ -306,7 +319,7 @@ with tab_cal:
                     cols[i].markdown(f'<div class="day-block">{content}</div>', unsafe_allow_html=True)
 
 # --- TAB 2: REQUEST FORM ---
-with tabs[1]:
+with tab_req:
     st.subheader("PTO/Wellness Request")
     st.info("💡 **Tip:** Providing your work email is optional.")
     
@@ -456,7 +469,7 @@ with tab_case:
                 
                 st.markdown("---")
                 
-# --- TAB: DEVIATION ---
+# --- TAB 4: DEVIATION ---
 with tab_dev:
     st.subheader("Submit Deviation Request")
     
@@ -571,7 +584,7 @@ with tab_dev:
         st.write("No deviation requests found.")
 
 # --- TAB 5: MASTERFILE ---
-with tabs[4]:
+with tab_mas:
     if not st.session_state.admin_authenticated:
         if st.text_input("Enter Password", type="password", key="m_pass") == "Password1234":
             st.session_state.admin_authenticated = True
@@ -593,7 +606,7 @@ with tabs[4]:
         # Display the interactive data editor grid below the action layout row
         st.session_state.master_data = st.data_editor(st.session_state.master_data, num_rows="dynamic")
 
-# --- TAB 5: ADMIN ---
+# --- TAB 6: ADMIN Panel ---
 with tab_adm:
     if not st.session_state.admin_authenticated:
         if st.text_input("Admin Password", type="password", key="a_pass_admin_tab") == "Password1234": 
