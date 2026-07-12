@@ -6,6 +6,7 @@ from pymongo import MongoClient
 import calendar
 import pandas as pd
 import holidays
+from bson.objectid import ObjectId
 
 # --- DATABASE HELPERS ---
 # 1. ESTABLISH CONNECTION FIRST
@@ -23,35 +24,28 @@ def load_data_from_db():
     
     cal_doc = collection.find_one({"type": "calendar_data"})
     if cal_doc and "data" in cal_doc:
-        # Convert string keys (from DB) back into date objects (for logic/display)
         st.session_state.calendar_data = {
             datetime.strptime(k, "%Y-%m-%d").date(): v 
             for k, v in cal_doc["data"].items()
         }
     else:
         st.session_state.calendar_data = {}
-        
+
 @st.cache_data(ttl=600)
 def get_staff_list():
     try:
-        # Fetching documents from MongoDB
         cursor = collection.find({"type": "roster"})
-        # Building the dictionary
         return {doc["name"]: {
             "bday": doc["bday"], 
             "nick": doc["nick"], 
             "rest_days": doc.get("rest_days", [])
         } for doc in cursor}
     except Exception as e:
-        # If there's a connection error or query issue, show error and return empty dict
         st.error("Could not load staff data from the database.")
         return {}
 
 def save_staff(name, data):
-    # 1. Update Session State (for immediate UI response)
     st.session_state.staff_roster[name] = data
-    
-    # 2. Update Database (for persistence)
     collection.update_one(
         {"type": "roster_list"},
         {"$set": {"data": st.session_state.staff_roster}},
@@ -60,8 +54,27 @@ def save_staff(name, data):
 
 def delete_staff(name):
     collection.delete_one({"type": "roster", "name": name})
-    # Clear cache so the app fetches the updated list immediately
     st.cache_data.clear()
+
+# --- Case Tracker Database Functions ---
+# These functions target a document with type "case" in your collection
+def fetch_cases_from_db():
+    # Fetches all documents with type "case"
+    return list(collection.find({"type": "case"}))
+
+def save_case_to_db(case_data):
+    # Adds the type field so it can be fetched by fetch_cases_from_db
+    case_data["type"] = "case"
+    collection.insert_one(case_data)
+
+def update_case_in_db(case_id, update_data):
+    collection.update_one(
+        {"_id": ObjectId(case_id)}, 
+        {"$set": update_data}
+    )
+
+def delete_case_from_db(case_id):
+    collection.delete_one({"_id": ObjectId(case_id)})
 
 # --- INITIAL CONFIG & STATE ---
 st.set_page_config(layout="wide", page_title="Team Roster & Staffing System")
