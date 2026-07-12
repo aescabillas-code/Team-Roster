@@ -19,7 +19,8 @@ from database import (
     update_request_status_in_db,
     delete_request_from_db,
     fetch_approved_requests_from_db,
-    get_request_limits
+    get_request_limits,
+    load_data_from_db
 )
 
 # --- INITIAL CONFIG & STATE ---
@@ -43,21 +44,6 @@ def get_db_client():
 def get_collection():
     client = get_db_client()
     return client["my_database"]["my_collection"]
-
-def load_data_from_db():
-    if "staff_roster" not in st.session_state:
-        roster_doc = collection.find_one({"type": "roster_list"})
-        st.session_state.staff_roster = roster_doc.get("data", {}) if roster_doc else {}
-    
-    cal_doc = collection.find_one({"type": "calendar_data"})
-    if cal_doc and "data" in cal_doc:
-        # Convert string keys (from DB) back into date objects (for logic/display)
-        st.session_state.calendar_data = {
-            datetime.strptime(k, "%Y-%m-%d").date(): v 
-            for k, v in cal_doc["data"].items()
-        }
-    else:
-        st.session_state.calendar_data = {}
 
 # Initialize the collection once
 collection = get_collection()
