@@ -317,8 +317,14 @@ with tab_cal:
             st.write("No holidays this month.")
         
         st.subheader("Daily View")
-        view_date = st.session_state.get('selected_admin_date', current_date)
-        d_data = st.session_state.calendar_data.get(view_date, {})
+        # 1. Safely extract the date object and ensure it is a standard datetime.date object
+        raw_view_date = st.session_state.get('selected_admin_date', current_date)
+        view_date = raw_view_date.date() if hasattr(raw_view_date, 'date') else raw_view_date
+
+        # 2. Look up the data matching either the date object or its string representation
+        d_data = st.session_state.calendar_data.get(view_date)
+        if not d_data:
+            d_data = st.session_state.calendar_data.get(str(view_date), {})
         
         st.markdown(f"### Date: {view_date.strftime('%B %d, %Y')}")
         st.markdown(f"**Setup:** {d_data.get('status', 'Not Set')} | **Shift:** {d_data.get('shift', '--')}")
