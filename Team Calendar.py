@@ -42,12 +42,17 @@ st.set_page_config(layout="wide", page_title="Team Roster & Staffing System")
 
 # --- DATABASE ---
 uri = st.secrets["mongo"]["uri"]
+
 @st.cache_resource
-def get_db_collection():
-    client = MongoClient(uri)
+def get_db_client():
+    return MongoClient(uri)
+
+def get_collection():
+    client = get_db_client()
     return client["my_database"]["my_collection"]
 
-collection = get_db_collection()
+# Initialize the collection once
+collection = get_collection()
 
 # --- INITIALIZE STATE ---
 if "staff_roster" not in st.session_state: 
@@ -141,6 +146,10 @@ if "staff_roster" in st.session_state:
             }
 
 # --- INITIALIZE STATE ---
+if "staff_roster" not in st.session_state: 
+    st.session_state.staff_roster = {"Agent A": {"bday": ..., "nick": "A"}, ...}
+if "pending_requests" not in st.session_state: 
+    st.session_state.pending_requests = []
 if "deviation_requests" not in st.session_state:
     st.session_state.deviation_requests = []
 if "active_tab" not in st.session_state:
