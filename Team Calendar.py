@@ -5,15 +5,15 @@ import holidays
 from datetime import datetime, date, time
 from pymongo import MongoClient
 from database import (
-    fetch_masterfile_from_db, 
-    save_request_to_db, 
-    save_case_to_db, 
-    fetch_cases_from_db, 
-    delete_case_from_db, 
+    fetch_masterfile_from_db,
+    save_request_to_db,
+    save_case_to_db,
+    fetch_cases_from_db,
+    delete_case_from_db,
     update_case_in_db,
-    save_deviation_to_db, 
-    fetch_deviations_from_db, 
-    update_deviation_in_db, 
+    save_deviation_to_db,
+    fetch_deviations_from_db,
+    update_deviation_in_db,
     delete_deviation_from_db,
     save_masterfile_to_db,
     update_request_status_in_db,
