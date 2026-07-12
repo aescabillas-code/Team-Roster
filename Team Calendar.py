@@ -788,7 +788,7 @@ with tab_adm:
             
             start_t = st.time_input("Shift Start", value=time(9, 0), key="time_shift_start")
             end_t = st.time_input("Shift End", value=time(18, 0), key="time_shift_end")
-            timezone = "PHT"
+            timezone = "PHT (Philippine Time)"
             
             shift_display = f"{start_t.strftime('%I:%M %p')} - {end_t.strftime('%I:%M %p')} {timezone}"
             st.write(f"Selected Shift: **{shift_display}**")
