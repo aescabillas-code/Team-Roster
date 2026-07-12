@@ -125,10 +125,7 @@ if "approved_requests" not in st.session_state:
 if "admin_password" not in st.session_state: st.session_state.admin_password = "Password1234"
 if "admin_authenticated" not in st.session_state: st.session_state.admin_authenticated = False
 if "staff_roster" not in st.session_state: 
-    st.session_state.staff_roster = {
-        "Agent A": {"bday": date(2000, 1, 1), "nick": "A"}, 
-        "Agent B": {"bday": date(1995, 5, 20), "nick": "B"}
-    }
+    st.session_state.staff_roster = {}
 if "calendar_data" not in st.session_state: st.session_state.calendar_data = {}
 if "limits" not in st.session_state: st.session_state.limits = {"PTO": 1, "Wellness": 1}
 if "notifications" not in st.session_state: st.session_state.notifications = []
