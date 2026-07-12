@@ -317,8 +317,7 @@ with tab_cal:
             st.write("No holidays this month.")
         
         st.subheader("Daily View")
-        # Get the date chosen in your Admin/Config UI (fallback to today)
-        view_date = st.session_state.get('selected_admin_date', date.today())
+        view_date = st.session_state.get('selected_admin_date', current_date)
         d_data = st.session_state.calendar_data.get(view_date, {})
         
         st.markdown(f"### Date: {view_date.strftime('%B %d, %Y')}")
