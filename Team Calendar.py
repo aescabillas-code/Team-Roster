@@ -77,6 +77,16 @@ def update_staff_in_db(name, update_dict):
         st.session_state.staff_roster[name].update(update_dict)
         
     st.success(f"{name} has been updated.")
+
+def get_cases_from_db():
+    try:
+        # Fetching documents from the collection
+        # Assuming cases are stored with type 'case'
+        cursor = collection.find({"type": "case"})
+        return list(cursor)
+    except Exception as e:
+        st.error("Could not load case data from the database.")
+        return []
     
 # --- INITIAL CONFIG & STATE ---
 st.set_page_config(layout="wide", page_title="Team Roster & Staffing System")
@@ -98,6 +108,11 @@ collection = get_collection()
 # --- INITIALIZE STATE ---
 cases_list = []
 cases_list = get_cases_from_db()
+if "pending_requests" not in st.session_state:
+    st.session_state.pending_requests = [
+        {"name": "John Doe", "type": "Vacation", "date": "2026-07-20"},
+        {"name": "Jane Smith", "type": "Sick Leave", "date": "2026-07-22"}
+    ]
 if "admin_password" not in st.session_state:
     st.session_state.admin_password = "Password1234"
 if "admin_authenticated" not in st.session_state:
