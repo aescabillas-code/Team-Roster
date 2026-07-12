@@ -626,8 +626,9 @@ with tab_adm:
         with col1:
             st.subheader("Roster Management")
                 
-            # 1. Fetch current list from DB
-            roster = get_staff_list() 
+            # 1. Fetch current list directly from the roster_list document in DB
+            roster_doc = collection.find_one({"type": "roster_list"})
+            roster = roster_doc.get("data", {}) if roster_doc else {}
                 
             # 2. Header Grid Layout
             c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
