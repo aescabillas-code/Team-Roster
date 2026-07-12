@@ -8,7 +8,19 @@ import pandas as pd
 import holidays
 
 # --- DATABASE HELPERS ---
+def load_data_from_db():
+    if "staff_roster" not in st.session_state:
+        # Load from your MongoDB collection
+        roster_doc = collection.find_one({"type": "roster_list"})
+        st.session_state.staff_roster = roster_doc.get("data", {}) if roster_doc else {}
+    
+    if "calendar_data" not in st.session_state:
+        # Load calendar data
+        cal_doc = collection.find_one({"type": "calendar_data"})
+        st.session_state.calendar_data = cal_doc.get("data", {}) if cal_doc else {}
 
+# Call this immediately
+load_data_from_db()
 @st.cache_data(ttl=600)
 def get_staff_list():
     try:
@@ -26,13 +38,15 @@ def get_staff_list():
         return {}
 
 def save_staff(name, data):
+    # 1. Update Session State (for immediate UI response)
+    st.session_state.staff_roster[name] = data
+    
+    # 2. Update Database (for persistence)
     collection.update_one(
-        {"type": "roster", "name": name}, 
-        {"$set": {"name": name, **data}}, 
+        {"type": "roster_list"},
+        {"$set": {"data": st.session_state.staff_roster}},
         upsert=True
     )
-    # Clear cache so the app fetches the new list immediately
-    st.cache_data.clear()
 
 def delete_staff(name):
     collection.delete_one({"type": "roster", "name": name})
