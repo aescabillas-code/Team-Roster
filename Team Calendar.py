@@ -966,9 +966,10 @@ with tab_adm:
             st.markdown("### 🌿 Wellness Requests")
             wellness_pending = [r for r in st.session_state.pending_requests if r.get('type') == 'Wellness']
             if wellness_pending:
-                for req in wellness_pending:
-                    master_idx = st.session_state.pending_requests.index(req)
-                    render_request(req, f"wellness_{master_idx}")
+                for idx, req in enumerate(wellness_pending):
+                    # Generate a truly unique deterministic key string profile
+                    unique_key = f"wellness_{req.get('name')}_{req.get('date')}_{idx}"
+                    render_request(req, unique_key)
             else:
                 st.write("No pending Wellness requests.")
 
@@ -976,9 +977,10 @@ with tab_adm:
             st.markdown("### ✈️ PTO Requests")
             pto_pending = [r for r in st.session_state.pending_requests if r.get('type') == 'PTO']
             if pto_pending:
-                for req in pto_pending:
-                    master_idx = st.session_state.pending_requests.index(req)
-                    render_request(req, f"pto_{master_idx}")
+                for idx, req in enumerate(pto_pending):
+                    # Generate a truly unique deterministic key string profile
+                    unique_key = f"pto_{req.get('name')}_{req.get('date')}_{idx}"
+                    render_request(req, unique_key)
             else:
                 st.write("No pending PTO requests.")
 
