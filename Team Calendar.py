@@ -145,6 +145,7 @@ if "staff_roster" in st.session_state:
         if isinstance(value, dict) and isinstance(value.get("bday"), date) and not isinstance(value.get("bday"), datetime):
             d = value["bday"]
             value["bday"] = datetime(d.year, d.month, d.day)
+load_data_from_db()
 
 # --- GLOBAL CSS STYLING ---
 st.markdown("""
@@ -212,8 +213,6 @@ tab_cal, tab_req, tab_case, tab_dev, tab_mas, tab_adm = st.tabs([
 
 # --- TAB 1: CALENDAR ---
 with tab_cal:
-    # 1. Ensure we fetch the latest data from MongoDB
-    load_data_from_db()
     
     # 2. Define structural page layout allocation matrix columns
     col_main, col_side = st.columns([4, 1])
