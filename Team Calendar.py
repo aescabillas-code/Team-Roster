@@ -5,6 +5,38 @@ import calendar
 import pandas as pd
 import holidays
 
+# --- DATABASE HELPERS ---
+
+@st.cache_data(ttl=600)
+def get_staff_list():
+    try:
+        # Fetching documents from MongoDB
+        cursor = collection.find({"type": "roster"})
+        # Building the dictionary
+        return {doc["name"]: {
+            "bday": doc["bday"], 
+            "nick": doc["nick"], 
+            "rest_days": doc.get("rest_days", [])
+        } for doc in cursor}
+    except Exception as e:
+        # If there's a connection error or query issue, show error and return empty dict
+        st.error("Could not load staff data from the database.")
+        return {}
+
+def save_staff(name, data):
+    collection.update_one(
+        {"type": "roster", "name": name}, 
+        {"$set": {"name": name, **data}}, 
+        upsert=True
+    )
+    # Clear cache so the app fetches the new list immediately
+    st.cache_data.clear()
+
+def delete_staff(name):
+    collection.delete_one({"type": "roster", "name": name})
+    # Clear cache so the app fetches the updated list immediately
+    st.cache_data.clear()
+
 # --- INITIAL CONFIG & STATE ---
 st.set_page_config(layout="wide", page_title="Team Roster & Staffing System")
 
@@ -14,6 +46,7 @@ uri = st.secrets["mongo"]["uri"]
 def get_db_collection():
     client = MongoClient(uri)
     return client["my_database"]["my_collection"]
+
 collection = get_db_collection()
 
 # --- INITIALIZE STATE ---
@@ -32,21 +65,68 @@ if "master_data" not in st.session_state:
 
 # --- HANDLER FUNCTIONS ---
 def handle_approval(req, original_idx):
-    req["status"] = "Approved"
+    # 1. Add to approved list
     st.session_state.approved_requests.append(req)
+    
+    # 2. Remove from pending list
     st.session_state.pending_requests.pop(original_idx)
-    st.session_state.admin_msg = ("success", f"Approved {req['name']}")
+    
+    # 3. Send Email
+    if req.get("email"):
+        send_request_notification(req['email'], "Approved", req['type'], req['date'])
+        
+    # 4. Set Success Message
+    st.session_state.admin_msg = ("success", f"Approved {req['name']}'s {req['type']} request.")
+    
+    # 5. Rerun to refresh UI
     st.rerun()
-
-def render_request(req, idx, prefix):
-    safe_name = req.get('name', '').replace(' ', '_')
-    unique_id = f"{prefix}_{idx}_{safe_name}"
-    with st.expander(f"{req['name']} - {req['date']} ({req['type']})"):
-        if st.button("Approve", key=f"app_{unique_id}"):
-            handle_approval(req, idx)
-        if st.button("Deny", key=f"den_{unique_id}"):
+    
+def render_request(req, idx, key_prefix):
+    denial_key = f"denying_{key_prefix}_{idx}"
+    
+    if st.session_state.get(denial_key):
+        # --- DENIAL POPUP UI ---
+        st.write(f"Reason for denying {req['name']}'s {req['type']} request:")
+        reason = st.text_input("Reason", key=f"reason_{key_prefix}_{idx}")
+        
+        col1, col2 = st.columns(2)
+        if col1.button("Proceed Denial", key=f"confirm_{key_prefix}_{idx}"):
+            # 1. Send denial email
+            if req.get("email"):
+                send_request_notification(req['email'], "Denied", req['type'], req['date'])
+            # 2. Logic to remove from pending
             st.session_state.pending_requests.pop(idx)
+            st.session_state[denial_key] = False
+            st.session_state.admin_msg = ("warning", f"Denied {req['name']}'s request: {reason}")
+            st.rerun() # Rerun AFTER all state changes
+            
+        if col2.button("Cancel", key=f"cancel_{key_prefix}_{idx}"):
+            st.session_state[denial_key] = False
             st.rerun()
+            
+    else:
+        # --- STANDARD VIEW ---
+        st.write(f"**{req['name']}** | {req['type']} | {req['date']}")
+        
+        c1, c2 = st.columns(2)
+        # Call the handle_approval function here
+        if c1.button("Approve", key=f"app_{key_prefix}_{idx}"):
+            handle_approval(req, idx) 
+            
+        if c2.button("Deny", key=f"den_{key_prefix}_{idx}"):
+            st.session_state[denial_key] = True
+            st.rerun()
+            
+def send_request_notification(recipient_email, status, request_type, date):
+subject = f"Your {request_type} Request has been {status.upper()}"
+body = f"Hello,\n\nYour {request_type} request for {date} has been {status}.\n\nBest regards,\nAdmin Team"
+    
+# Use gmail_bard to send
+gmail_bard.send_message(
+    to=[recipient_email],
+    subject=subject,
+    body=body
+    )
 
 # --- ADD THIS MIGRATION BLOCK ---
 if "staff_roster" in st.session_state:
@@ -464,7 +544,9 @@ with tab_adm:
             st.session_state.admin_authenticated = True
             st.rerun()
     else:
-        # --- TOP LEVEL ADMIN UI ---
+        st.subheader("Admin Panel")
+        
+        # --- Top Level Admin UI ---
         if st.session_state.pending_requests:
             st.info(f"⚠️ You have {len(st.session_state.pending_requests)} pending request(s).")
         
@@ -474,15 +556,13 @@ with tab_adm:
 
         col1, col2 = st.columns(2)
 
-        with col1:
-
-            # Roster Management
+       with col1:
             st.subheader("Roster Management")
-
-            # Initialize edit state if not exists
-            if "edit_staff" not in st.session_state: st.session_state.edit_staff = None
-
-            # Header row
+            
+            # 1. Fetch current list from DB
+            roster = get_staff_list() 
+            
+            # 2. Header
             c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
             c1.write("**Name**")
             c2.write("**Nickname**")
@@ -490,60 +570,44 @@ with tab_adm:
             c4.write("**Actions**")
             st.divider()
 
-            # Loop through roster
-            for name in list(st.session_state.staff_roster.keys()):
-                data = st.session_state.staff_roster[name]
+            # 3. Loop through DB data
+            for name, data in roster.items():
+                c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
+                c1.write(name)
+                c2.write(data.get("nick", ""))
+                c3.write(data['bday'].strftime('%B %d'))
                 
-                if st.session_state.edit_staff == name:
-                    # EDIT MODE
-                    with st.container():
-                        new_name = st.text_input("Edit Name", value=name, key=f"edit_name_{name}")
-                        new_nick = st.text_input("Edit Nickname", value=data.get("nick", ""), key=f"edit_nick_{name}")
-                        new_bday = st.date_input("Edit Birthday", value=data["bday"], key=f"edit_bday_{name}")
-                        if st.button("Save Changes", key=f"save_{name}"):
-                            st.session_state.staff_roster[name] = {"bday": new_bday, "nick": new_nick}
-                            st.session_state.edit_staff = None
-                            st.rerun()
-                else:
-                    # DISPLAY MODE (Table-like rows)
-                    c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
-                    c1.write(name)
-                    c2.write(data.get("nick", ""))
-                    c3.write(data['bday'].strftime('%B %d'))
-                    
-                    # Actions in the 4th column
-                    sub_c1, sub_c2 = c4.columns(2)
-                    if sub_c1.button("Edit", key=f"edit_{name}"):
-                        st.session_state.edit_staff = name
-                        st.rerun()
-                    if sub_c2.button("Remove", key=f"del_{name}"):
-                        del st.session_state.staff_roster[name]
-                        st.rerun()
+                # Actions
+                if c4.button("Remove", key=f"del_{name}"):
+                    delete_staff(name)
+                    st.rerun()
 
-            # Entry Form
+            # 4. Entry Form (Using MongoDB Helper)
             st.markdown("---")
             new_name = st.text_input("Staff Name")
-            new_nick = st.text_input("Nickname") # This captures the input
-            new_bday = st.date_input("Birthday", min_value=date(1950, 1, 1))
+            new_nick = st.text_input("Nickname")
+            new_bday = st.date_input("Birthday", min_value=date(1950, 1, 1), key="new_bday")
             rest_days = st.multiselect("Select Rest Days", 
                            ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"])
             
-            if st.button("Add Staff"): 
-                if new_name: 
-                    # This saves the nickname (new_nick) into the dictionary
-                    st.session_state.staff_roster[new_name] = {
+            if st.button("Add Staff"):
+                if new_name:
+                    save_staff(new_name, {
                         "bday": new_bday, 
-                        "rest_days": rest_days,
-                        "nick": new_nick if new_nick else ""}
-                        
-                    st.success(f"Added {new_name} to roster!")
+                        "nick": new_nick if new_nick else new_name,
+                        "rest_days": rest_days
+                    })
+                    st.success(f"Added {new_name}!")
                     st.rerun()
-
             st.divider()
 
             # --- DAILY CONFIG---
-            chosen_date = st.date_input("Select Date to View/Edit", date.today())
-            st.session_state.selected_admin_date = chosen_date
+            st.subheader("Configuration")
+            
+            # Selected Date View
+            st.session_state.selected_admin_date = st.date_input("Select Date to View/Edit", date.today())
+            
+            st.markdown("---")
             st.subheader("Important Notifications")
             target_d = st.date_input("Target Date", key="config_target_date")
             admin_sender_email = st.text_input("Your Work Email (Sender Address)")
@@ -555,111 +619,75 @@ with tab_adm:
                     st.success("Notification posted!")
                     st.rerun()
             
+            # --- Daily Config ---
             st.subheader("Daily Config")
-            # 1. Choose the scope: Single Date vs. Range
-            config_mode = st.radio("Apply settings to:", ["Single Date", "Date Range", "Full Month"])
-
-            target_d = None
-            start_date = None
-            end_date = None
-            timezone = "PHT" # Added Timezone
-
-            # 1. Ensure target_d is defined based on the mode
-            if config_mode == "Single Date":
-                target_d = st.date_input("Target Date", key="cfg_target_d")
-            elif config_mode == "Date Range":
-                date_range = st.date_input("Select Date Range", [], key="cfg_date_range")
-                # Default to today if range is empty, otherwise use the start of the range
-                target_d = date_range[0] if date_range else date.today()
-                if len(date_range) == 2:
-                    start_date, end_date = date_range
-            elif config_mode == "Full Month":
-                selected_month = st.date_input("Select Month", value=date.today(), key="cfg_month")
-                target_d = selected_month # Default to the month start
-
-            # 2. Add a safety check before using strftime
-            if target_d:
-                day_name = target_d.strftime("%A")
-                # ... (rest of your logic using day_name)
+            config_mode = st.radio("Apply to:", ["Single Date", "Date Range", "Full Month"])
+            
+            # Date selection logic
+            if config_mode == "Single Date": 
+                target_dates = [st.date_input("Date", key="cfg_d")]
+            elif config_mode == "Date Range": 
+                dr = st.date_input("Range", [], key="cfg_dr")
+                target_dates = pd.date_range(dr[0], dr[1]).date if len(dr)==2 else []
             else:
-                day_name = date.today().strftime("%A") # Fallback
+                sm = st.date_input("Month", value=date.today(), key="cfg_m")
+                target_dates = pd.date_range(f"{sm.year}-{sm.month}-01", periods=31).date
+                target_dates = [d for d in target_dates if d.month == sm.month]
 
-            st.session_state.limits["PTO"] = st.number_input("Max PTO", value=st.session_state.limits["PTO"])
-            st.session_state.limits["Wellness"] = st.number_input("Max Wellness", value=st.session_state.limits["Wellness"])
+            # --- Limits, Shifts, and Status ---
+            st.session_state.limits["PTO"] = st.number_input("Max PTO", value=st.session_state.limits.get("PTO", 1))
+            st.session_state.limits["Wellness"] = st.number_input("Max Wellness", value=st.session_state.limits.get("Wellness", 1))
             
             start_t = st.time_input("Shift Start", value=time(9, 0))
             end_t = st.time_input("Shift End", value=time(18, 0))
-
-            # 2. Create the 12-hour string representation with Timezone
-            start_12hr = start_t.strftime("%I:%M %p")
-            end_12hr = end_t.strftime("%I:%M %p")
-            shift_display = f"{start_12hr} - {end_12hr} {timezone}"
-
-            # 3. Use these variables for your display
+            timezone = "PHT"
+            
+            # Format display
+            shift_display = f"{start_t.strftime('%I:%M %p')} - {end_t.strftime('%I:%M %p')} {timezone}"
             st.write(f"Selected Shift: **{shift_display}**")
             
             setup = st.selectbox("Status", ["PROD - ONSITE", "PROD - WAH", "HOLIDAY"])
             
-            import calendar
-
-            # 1. Determine the day of the week for the selected date
-            day_name = target_d.strftime("%A") 
-
-            # 2. Get list of staff who have approved requests for this date
-            unavailable = [r['name'] for r in st.session_state.approved_requests if r['date'] == target_d]
-
-            # 3. Filter staff:
-            # - Must not be in the 'unavailable' list
-            # - Must not have the current day_name in their 'rest_days' list
-            available_staff = [
-                name for name, info in st.session_state.staff_roster.items() 
-                if name not in unavailable and day_name not in info.get("rest_days", [])
-            ]
-            call = st.multiselect("Assign Call", available_staff)
-            chat = st.multiselect("Assign Chat", available_staff)
-            mfq = st.multiselect("Assign MFQ", available_staff)
-            sme = st.multiselect("Assign SME", available_staff)
+            # --- Assignment logic ---
+            base_date = target_dates[0] if target_dates else date.today()
+            unavailable = [r['name'] for r in st.session_state.approved_requests if r['date'] == base_date]
+            available = [n for n in roster.keys() if n not in unavailable]
+            
+            call = st.multiselect("Assign Call", available)
+            chat = st.multiselect("Assign Chat", available)
+            mfq = st.multiselect("Assign MFQ", available)
+            sme = st.multiselect("Assign SME", available)
             
             if st.button("Save Config"):
-                dates_to_update = []
-                if config_mode == "Single Date":
-                    dates_to_update = [target_d]
-                elif config_mode == "Date Range" and start_date and end_date:
-                    dates_to_update = pd.date_range(start_date, end_date).date
-                elif config_mode == "Full Month":
-                    dates_to_update = pd.date_range(
-                        start=f"{selected_month.year}-{selected_month.month}-01", 
-                        end=pd.Period(f"{selected_month.year}-{selected_month.month}", freq='M').end_time
-                    ).date
-
-                for d in dates_to_update:
-                    # Corrected: Use 'd' instead of 'target_d' so every date in the range gets saved
+                for d in target_dates:
                     st.session_state.calendar_data[d] = {
-                        "shift": shift_display,
+                        "shift": shift_display, 
                         "status": setup, 
                         "call": call, 
-                        "chat": chat, 
-                        "mfq": mfq, 
+                        "chat": chat,
+                        "mfq": mfq,
                         "sme": sme
                     }
-                st.success(f"Configuration saved for {len(dates_to_update)} day(s).")
+                st.success(f"Configuration saved for {len(target_dates)} day(s).")
         
-        with col2:
-            st.subheader("Approval Center")
-
-            # --- DISPLAY ADMIN MESSAGES ---
-            # This block handles messages at the top
-            if "admin_msg" not in st.session_state: st.session_state.admin_msg = None
-            if st.session_state.admin_msg:
-                msg_type, msg_text = st.session_state.admin_msg
-                if msg_type == "success": 
-                    st.success(msg_text)
-                else: 
-                    st.warning(msg_text)
+     with col2:
+         st.subheader("Approval Center")
+        if st.session_state.pending_requests:
+                        for idx, req in enumerate(st.session_state.pending_requests):
+                                render_request(req, idx, "req")
+         # --- DISPLAY ADMIN MESSAGES ---
+        # This block handles messages at the top
+        if "admin_msg" not in st.session_state: st.session_state.admin_msg = None
+        if st.session_state.admin_msg:
+            msg_type, msg_text = st.session_state.admin_msg
+            if msg_type == "success": 
+                st.success(msg_text)
+            else: 
+                st.warning(msg_text)
                 
-                if st.button("Clear Notification", key="clear_admin_notif"):
-                    st.session_state.admin_msg = None
-                    st.rerun()
+            if st.button("Clear Notification", key="clear_admin_notif"):
+                st.session_state.admin_msg = None
+                st.rerun()
 
             # --- WELLNESS SECTION ---
             # Properly un-indented so it always renders
