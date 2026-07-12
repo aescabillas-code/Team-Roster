@@ -17,50 +17,6 @@ db = client["team_calendar_db"] # Replace with your actual DB name
 collection = db["team_data"]    # Replace with your actual collection name
 
 # 2. NOW DEFINE THE FUNCTION (it can now see 'collection')
-def fetch_masterfile_from_db():
-    # Targets the document containing your masterfile data
-    # Assuming 'type' is used to identify the masterfile record
-    doc = collection.find_one({"type": "masterfile"})
-    
-    if doc and "data" in doc:
-        # If your masterfile is stored as a list of dicts or a dataframe-like structure
-        return doc["data"]
-    return []
-
-def fetch_deviations_from_db():
-    # Fetches all documents with type "deviation" from your collection
-    return list(collection.find({"type": "deviation"}))
-
-def save_deviation_to_db(deviation_data):
-    # Adds the type field so it can be fetched by fetch_deviations_from_db
-    deviation_data["type"] = "deviation"
-    collection.insert_one(deviation_data)
-
-def update_deviation_in_db(dev_id, update_data):
-    # Ensure you import ObjectId from bson.objectid at the top of your file
-    collection.update_one(
-        {"_id": ObjectId(dev_id)}, 
-        {"$set": update_data}
-    )
-
-def delete_deviation_from_db(dev_id):
-    collection.delete_one({"_id": ObjectId(dev_id)})
-    
-def load_data_from_db():
-    # 1. Initialize admin_roster if it doesn't exist
-    if "admin_roster" not in st.session_state:
-        # Fetch the roster from your database
-        roster_doc = collection.find_one({"type": "roster_list"})
-        st.session_state.admin_roster = roster_doc.get("data", {}) if roster_doc else {}
-    
-    cal_doc = collection.find_one({"type": "calendar_data"})
-    if cal_doc and "data" in cal_doc:
-        st.session_state.calendar_data = {
-            datetime.strptime(k, "%Y-%m-%d").date(): v 
-            for k, v in cal_doc["data"].items()
-        }
-    else:
-        st.session_state.calendar_data = {}
 
 @st.cache_data(ttl=600)
 def get_staff_list():
@@ -92,6 +48,48 @@ def delete_staff(name):
 def fetch_cases_from_db():
     # Fetches all documents with type "case"
     return list(collection.find({"type": "case"}))
+    # Targets the document containing your masterfile data
+    # Assuming 'type' is used to identify the masterfile record
+    doc = collection.find_one({"type": "masterfile"})
+    
+    if doc and "data" in doc:
+        # If your masterfile is stored as a list of dicts or a dataframe-like structure
+        return doc["data"]
+    return []
+
+def fetch_deviations_from_db():
+    # Fetches all documents with type "deviation" from your collection
+    return list(collection.find({"type": "deviation"}))
+
+def save_deviation_to_db(deviation_data):
+    # Adds the type field so it can be fetched by fetch_deviations_from_db
+    deviation_data["type"] = "deviation"
+    collection.insert_one(deviation_data)
+
+def update_deviation_in_db(dev_id, update_data):
+    # Ensure you import ObjectId from bson.objectid at the top of your file
+    collection.update_one(
+        {"_id": ObjectId(dev_id)}, 
+        {"$set": update_data}
+    )
+
+def delete_deviation_from_db(dev_id):
+    collection.delete_one({"_id": ObjectId(dev_id)})
+    
+def load_data_from_db():
+    # 1. Initialize admin_roster if it doesn't exist
+    if "admin_roster" not in st.session_state:
+        roster_doc = collection.find_one({"type": "roster_list"})
+        st.session_state.admin_roster = roster_doc.get("data", {}) if roster_doc else {}
+    
+    cal_doc = collection.find_one({"type": "calendar_data"})
+    if cal_doc and "data" in cal_doc:
+        st.session_state.calendar_data = {
+            datetime.strptime(k, "%Y-%m-%d").date(): v 
+            for k, v in cal_doc["data"].items()
+        }
+    else:
+        st.session_state.calendar_data = {}
 
 def save_case_to_db(case_data):
     # Adds the type field so it can be fetched by fetch_cases_from_db
