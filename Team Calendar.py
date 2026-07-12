@@ -241,7 +241,6 @@ if "staff_roster" in st.session_state:
                 "nick": name  # Default nickname to the full name
             }
 
-# --- CSS STYLES ---
 st.markdown("""
     <style>
     /* Import Google Font */
@@ -252,55 +251,57 @@ st.markdown("""
         background-color: #000000;
     }
     
-    /* 2. Set all Labels and Text to Teal */
+    /* 2. Global Text Styling (White for readability on Ombre) */
     label, p, div, span, h1, h2, h3, .stMarkdown {
-        color: #008080 !important; 
+        color: #ffffff !important; 
         font-family: 'Quicksand', sans-serif !important;
     }
 
-    /* 3. Calendar Grid Styling (The "Normal Calendar" Look) */
+    /* 3. Calendar Grid Styling - Connected & Ombre */
     .day-block { 
-        border: 1px solid #333333; 
-        border-radius: 8px; 
-        padding: 10px; 
-        height: 150px; 
+        border: 1px solid #005f5f; 
+        border-radius: 0px; 
+        padding: 8px; 
+        min-height: 200px; 
+        height: auto; 
         width: 100%;
-        background-color: #121212; 
-        margin: 2px; 
+        background: linear-gradient(180deg, #008080 0%, #002d2d 100%); 
+        margin: 0px; 
         display: flex; 
         flex-direction: column;
-        overflow-y: auto;
-        font-size: 11px;
+        overflow-y: visible;
+        font-size: 12px;
     }
     
     .header-cell { 
         font-weight: bold; 
         text-align: center; 
         color: #008080 !important; 
-        padding-bottom: 10px; 
+        padding-bottom: 5px; 
         border-bottom: 2px solid #008080;
     }
 
     .rest-day {
-        background-color: #0a0a0a !important;
-        border: 1px dashed #333 !important;
+        background: #121212 !important;
+        border: 1px solid #333 !important;
         color: #555 !important;
     }
 
-    .calendar-divider { border-top: 1px solid #333; margin: 5px 0; width: 100%; }
+    .calendar-divider { border-top: 1px solid rgba(255,255,255,0.2); margin: 4px 0; width: 100%; }
     
     /* Buttons */
     div.stButton > button { 
         background: linear-gradient(90deg, #008080 0%, #005f5f 100%); 
         color: white; 
+        border: 1px solid #008080;
         border-radius: 12px; 
         font-weight: 600; 
     }
     
     /* Alert & Knowledge Styling */
     .alert-container { 
-        border-radius: 20px; 
-        border: 2px solid #ff4d4d; 
+        border-radius: 10px; 
+        border: 1px solid #ff4d4d; 
         padding: 15px; 
         background-color: #1a1a1a; 
         margin-bottom: 20px; 
