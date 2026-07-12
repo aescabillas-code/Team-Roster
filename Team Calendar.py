@@ -814,7 +814,11 @@ with tab_adm:
                         "nick": new_nick if new_nick else new_name,
                         "rest_days": rest_days
                     }
-                    
+
+                    get_staff_list.clear() 
+    
+                    # 3. Rerun to refresh the UI
+         
                     st.success(f"Added {new_name}!")
                     st.rerun() # Forces the script to re-run from the top, re-fetching the list
     
