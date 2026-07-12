@@ -474,10 +474,15 @@ with tab_req:
 with tab_case:
     st.subheader("Log New Case")
     
-    # 1. Fetch dropdown data from DB (assuming your master_data logic holds)
-    c_types = st.session_state.master_data.loc[st.session_state.master_data['Category'] == 'Contact Type', 'Values'].iloc[0].split(',')
-    issues = st.session_state.master_data.loc[st.session_state.master_data['Category'] == 'Issue', 'Values'].iloc[0].split(',')
-    prods = st.session_state.master_data.loc[st.session_state.master_data['Category'] == 'Product Group', 'Values'].iloc[0].split(',')
+    # 1. Fetch dropdown data directly from DB
+    master_file = fetch_masterfile_from_db() 
+    def get_master_values(category):
+        row = next((item for item in master_file if item.get('Category') == category), None)
+        return row['Values'].split(',') if row else []
+
+    c_types = get_master_values('Contact Type')
+    issues = get_master_values('Issue')
+    prods = get_master_values('Product Group')
     
     c1, c2 = st.columns(2)
     c_type = c1.selectbox("Contact Type", c_types)
@@ -491,44 +496,60 @@ with tab_case:
     if status == "Pending/Monitoring": extra = st.text_input("Pending/Monitoring Reason")
     elif status == "Routed": extra = st.text_input("Queue Destination")
     
-    # 2. Use 'Log Case' button to save directly to DB
+    # 2. Log Case to DB
     if st.button("Log Case"):
         new_case = {"Date": str(date.today()), "Type": c_type, "Issue": issue, "Product Group": prod, "Desc": desc, "Steps": steps, "Status": status, "Extra": extra}
-        # CALL YOUR DB FUNCTION HERE (e.g., save_case_to_db(new_case))
+        save_case_to_db(new_case) # Ensure this function is defined
         st.success("Case logged to database successfully!")
         st.rerun()
 
     st.divider()
     st.subheader("Knowledge Base")
     
-    # 3. Fetch cases from DB instead of session_state
-    # cases_list = fetch_cases_from_db() 
-    
+    # 3. Filtering
     f1, f2 = st.columns(2)
     f_issue = f1.multiselect("Filter by Issue", issues)
     f_prod = f2.multiselect("Filter by Product Group", prods)
 
-    # 4. Password-protected Admin Actions
-    with st.expander("Admin Access (Edit/Delete)"):
-        admin_pass = st.text_input("Enter Admin Password", type="password")
-        # Returns None if the key doesn't exist, preventing the crash
-        is_admin = (admin_pass == st.session_state.get("admin_password"))
+    # 4. Knowledge Base Loop
+    cases_list = fetch_cases_from_db() 
 
-    for case in reversed(cases_list): # Use fetched list
+    for case in reversed(cases_list):
         if (not f_issue or case['Issue'] in f_issue) and (not f_prod or case['Product Group'] in f_prod):
             with st.container():
-                st.markdown(f"**Date:** {case['Date']} | **Status:** {case['Status']} | **Issue:** {case['Issue']}")
+                # Layout: Three-dot menu + Content
+                col_menu, col_content = st.columns([1, 10])
                 
-                # Admin controls
-                if is_admin:
-                    col_a, col_b = st.columns(2)
-                    if col_a.button(f"Edit Case {case['_id']}", key=f"edit_{case['_id']}"):
-                        # Add your edit logic/modal here
-                        pass
-                    if col_b.button(f"Delete Case {case['_id']}", key=f"del_{case['_id']}"):
-                        # Add your delete logic here
-                        pass
+                with col_menu.popover("⋮"):
+                    if st.button("Edit", key=f"edit_trigger_{case['_id']}"):
+                        st.session_state[f"edit_mode_{case['_id']}"] = True
+                    if st.button("Delete", key=f"del_trigger_{case['_id']}"):
+                        st.session_state[f"del_mode_{case['_id']}"] = True
 
+                col_content.markdown(f"**Date:** {case['Date']} | **Status:** {case['Status']} | **Issue:** {case['Issue']}")
+
+                # --- EDIT LOGIC (Accessible to all) ---
+                if st.session_state.get(f"edit_mode_{case['_id']}"):
+                    with st.form(key=f"edit_form_{case['_id']}"):
+                        new_desc = st.text_area("Update Description", value=case.get('Desc', ''))
+                        if st.form_submit_button("Save Changes"):
+                            update_case_in_db(case['_id'], {"Desc": new_desc})
+                            st.session_state[f"edit_mode_{case['_id']}"] = False
+                            st.rerun()
+                        if st.form_submit_button("Cancel"):
+                            st.session_state[f"edit_mode_{case['_id']}"] = False
+                            st.rerun()
+
+                # --- DELETE LOGIC (Password Protected) ---
+                if st.session_state.get(f"del_mode_{case['_id']}"):
+                    check_pass = st.text_input("Enter Admin Password to Confirm", type="password", key=f"pass_{case['_id']}")
+                    if check_pass == "Password1234":
+                        if st.button("Confirm Delete", key=f"confirm_del_{case['_id']}"):
+                            delete_case_from_db(case['_id'])
+                            st.rerun()
+                    elif check_pass:
+                        st.error("Incorrect Password")
+                        
 # --- TAB: DEVIATION ---
 with tab_dev:
     st.subheader("Submit Deviation Request")
@@ -572,44 +593,48 @@ with tab_dev:
     # 2. Fetch and Filter Data
     dev_data = fetch_deviations_from_db()
     if dev_data:
-        df = pd.DataFrame(dev_data)
-        df['Date'] = pd.to_datetime(df['Date']).dt.date
-        
-        if apply_filter:
-            if filter_date:
-                df = df[df['Date'] == filter_date]
-            else:
-                df = df[(df['Date'].apply(lambda x: x.month) == filter_month) & (df['Date'].apply(lambda x: x.year) == filter_year)]
-        
-        st.table(df)
-        
-        # 3. Password Protected Management
-        st.write("---")
-        st.subheader("Manage Entries")
-        admin_pass = st.text_input("Enter Password to Edit/Delete", type="password", key="dev_admin_pass")
-        is_admin = (admin_pass == st.session_state.admin_password)
-        
-        selected_id = st.selectbox("Select entry to modify", df['_id'].tolist())
-        selected_entry = next((item for item in dev_data if item["_id"] == selected_id), None)
-        
-        if selected_entry:
-            with st.form("edit_form"):
-                new_reason = st.text_area("Edit Reason", value=selected_entry.get('Reason', ''))
-                new_mins = st.number_input("Edit Mins", value=selected_entry.get('Total Mins', 0))
+        # Loop through data to display each entry with a menu
+        for entry in reversed(dev_data):
+            # Apply your filter logic
+            e_date = pd.to_datetime(entry['Date']).date()
+            if apply_filter:
+                if filter_date and e_date != filter_date: continue
+                if not filter_date and (e_date.month != filter_month or e_date.year != filter_year): continue
+            
+            with st.container():
+                # Menu + Content
+                col_menu, col_content = st.columns([1, 10])
+                with col_menu.popover("⋮"):
+                    if st.button("Edit", key=f"edit_trig_{entry['_id']}"):
+                        st.session_state[f"edit_dev_{entry['_id']}"] = True
+                    if st.button("Delete", key=f"del_trig_{entry['_id']}"):
+                        st.session_state[f"del_dev_{entry['_id']}"] = True
                 
-                c_edit, c_del = st.columns([1, 1])
-                if c_edit.form_submit_button("Update Entry"):
-                    update_deviation_in_db(selected_id, {"Reason": new_reason, "Total Mins": new_mins})
-                    st.success("Entry updated!")
-                    st.rerun()
-                
-                if is_admin:
-                    if c_del.form_submit_button("Delete Entry"):
-                        delete_deviation_from_db(selected_id)
-                        st.success("Entry deleted!")
-                        st.rerun()
+                col_content.markdown(f"**{e_date}** | {entry['Name']} | {entry['Reason']}")
+
+                # --- EDIT LOGIC ---
+                if st.session_state.get(f"edit_dev_{entry['_id']}"):
+                    with st.form(key=f"edit_f_{entry['_id']}"):
+                        new_r = st.text_area("Edit Reason", value=entry.get('Reason', ''))
+                        new_m = st.number_input("Edit Mins", value=entry.get('Total Mins', 0))
+                        if st.form_submit_button("Update"):
+                            update_deviation_in_db(entry['_id'], {"Reason": new_r, "Total Mins": new_m})
+                            st.session_state[f"edit_dev_{entry['_id']}"] = False
+                            st.rerun()
+
+                # --- DELETE LOGIC (Password Protected) ---
+                if st.session_state.get(f"del_dev_{entry['_id']}"):
+                    check_pass = st.text_input("Enter Admin Password", type="password", key=f"p_{entry['_id']}")
+                    if check_pass == "Password1234":
+                        if st.button("Confirm Delete", key=f"conf_del_{entry['_id']}"):
+                            delete_deviation_from_db(entry['_id'])
+                            st.session_state[f"del_dev_{entry['_id']}"] = False
+                            st.rerun()
+                    elif check_pass:
+                        st.error("Invalid Password")
 
         # 4. CSV Download
+        df = pd.DataFrame(dev_data)
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button("Extract Report as CSV", csv, "deviation_report.csv", "text/csv")
     else:
