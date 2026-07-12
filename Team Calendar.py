@@ -391,41 +391,41 @@ with tab_cal:
                             # Block as Rest Day
                             cols[i].markdown(f'<div class="day-block rest-day"><b>{day}</b><br>REST DAY</div>', unsafe_allow_html=True)
                         else:
-                        approved = [r for r in st.session_state.approved_requests if r['date'] == d]
-                        
-                        # --- NICKNAME LOOKUP LOGIC ---
-                        display_list = []
-                        for r in approved:
-                            # Get staff data from roster (assuming structure {'bday': ..., 'nick': ...})
-                            staff_info = st.session_state.staff_roster.get(r['name'], {})
-                            # Use nickname if available, else fallback to name
-                            nick = staff_info.get("nick", r['name'])
-                            display_list.append(f"{nick}({r['type']})")
-                        
-                        req_display = "<br>".join(display_list)
-                        
-                       # --- 1. Identify who is away today ---
-                        away_names = [r['name'] for r in approved]
-
-                        # --- 2. Updated lookup helper ---
-                        def get_filtered_nicks(full_names):
-                            # Filter out anyone who is in the away_names list
-                            active_staff = [name for name in full_names if name not in away_names]
-                            # Return nicknames for those remaining
-                            return ", ".join([st.session_state.staff_roster.get(name, {}).get("nick", name) for name in active_staff])
-
-                        data = st.session_state.calendar_data.get(d, {})
-                        
-                        content = (f"<b>{day}</b><div class='calendar-divider'></div>"
-                                   f"<u>{data.get('status', '-')}</u><div class='calendar-divider'></div>"
-                                   f"{data.get('shift', '-')}<div class='calendar-divider'></div>"
-                                   f"PTO/Wellness: {req_display}<div class='calendar-divider'></div>"
-                                   f"Call: {get_filtered_nicks(data.get('call', []))}<div class='calendar-divider'></div>"
-                                   f"Chat: {get_filtered_nicks(data.get('chat', []))}<div class='calendar-divider'></div>"
-                                   f"MFQ: {get_filtered_nicks(data.get('mfq', []))}<div class='calendar-divider'></div>"
-                                   f"SME: {get_filtered_nicks(data.get('sme', []))}")
-                        
-                        cols[i].markdown(f'<div class="day-block">{content}</div>', unsafe_allow_html=True)
+                            approved = [r for r in st.session_state.approved_requests if r['date'] == d]
+                            
+                            # --- NICKNAME LOOKUP LOGIC ---
+                            display_list = []
+                            for r in approved:
+                                # Get staff data from roster (assuming structure {'bday': ..., 'nick': ...})
+                                staff_info = st.session_state.staff_roster.get(r['name'], {})
+                                # Use nickname if available, else fallback to name
+                                nick = staff_info.get("nick", r['name'])
+                                display_list.append(f"{nick}({r['type']})")
+                            
+                            req_display = "<br>".join(display_list)
+                            
+                           # --- 1. Identify who is away today ---
+                            away_names = [r['name'] for r in approved]
+    
+                            # --- 2. Updated lookup helper ---
+                            def get_filtered_nicks(full_names):
+                                # Filter out anyone who is in the away_names list
+                                active_staff = [name for name in full_names if name not in away_names]
+                                # Return nicknames for those remaining
+                                return ", ".join([st.session_state.staff_roster.get(name, {}).get("nick", name) for name in active_staff])
+    
+                            data = st.session_state.calendar_data.get(d, {})
+                            
+                            content = (f"<b>{day}</b><div class='calendar-divider'></div>"
+                                       f"<u>{data.get('status', '-')}</u><div class='calendar-divider'></div>"
+                                       f"{data.get('shift', '-')}<div class='calendar-divider'></div>"
+                                       f"PTO/Wellness: {req_display}<div class='calendar-divider'></div>"
+                                       f"Call: {get_filtered_nicks(data.get('call', []))}<div class='calendar-divider'></div>"
+                                       f"Chat: {get_filtered_nicks(data.get('chat', []))}<div class='calendar-divider'></div>"
+                                       f"MFQ: {get_filtered_nicks(data.get('mfq', []))}<div class='calendar-divider'></div>"
+                                       f"SME: {get_filtered_nicks(data.get('sme', []))}")
+                            
+                            cols[i].markdown(f'<div class="day-block">{content}</div>', unsafe_allow_html=True)
 
 # --- TAB 2: REQUEST ---
 with tab_req:
