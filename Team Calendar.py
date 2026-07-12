@@ -181,6 +181,7 @@ st.markdown("""
         margin: 0px; 
         display: flex; 
         flex-direction: column; 
+        box-sizing: border-box;
     }
 
     /* Target state for blocks that fall outside the current month's active days */
@@ -199,6 +200,18 @@ st.markdown("""
     /* Strict layout equalization to combine calendar blocks side-by-side cleanly without separation gaps */
     div[data-testid="stHorizontalBlock"] {
         gap: 0px !important;
+    }
+
+    /* Adjust structural layouts containing the calendar elements to enforce a flawless square/rectangular block alignment */
+    div[data-testid="stHorizontalBlock"]:has(.day-block) {
+        margin: 0px !important;
+        padding: 0px !important;
+    }
+
+    /* Target the column block layout structure containing the calendar grid to separate it from the summary panel on the right */
+    div[data-testid="stColumn"]:has(.day-block),
+    div[data-testid="stColumn"]:has(.day-block-outside) {
+        padding-right: 4px !important; /* Generates a precise structural gap layout of at least 1.5px to the summary block */
     }
 
     /* Provide a structured spatial separation gap between the calendar container and the monthly/daily summaries below it */
