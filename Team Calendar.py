@@ -177,17 +177,23 @@ st.markdown("""
         font-size: 11px; 
         background-color: rgba(0, 128, 128, 0.75); 
         color: #ffffff !important;
-        border: 1px solid #ffffff !important; /* White border when there is a day/content */
+        border: 1px solid #ffffff !important; /* Solid white border when there's a valid day */
         margin: 0px; 
         display: flex; 
         flex-direction: column; 
     }
 
-    /* Target state for empty calendar block slots (no day entries present) */
-    .day-block:empty, 
-    .day-block-empty {
-        background-color: rgba(0, 128, 128, 0.08) !important; /* Almost transparent teal background */
+    /* Target state for blocks that fall outside the current month's active days */
+    .day-block-outside,
+    .day-block:empty {
+        background-color: rgba(230, 242, 242, 0.85) !important; /* Baby teal background */
         border: 1px solid #008080 !important; /* Teal border profile */
+        color: #008080 !important;
+    }
+
+    /* Force text elements inside outside-month/empty blocks to color match the teal theme */
+    .day-block-outside *, .day-block:empty * {
+        color: #008080 !important;
     }
     
     /* Strict layout equalization to combine calendar blocks side-by-side cleanly without separation gaps */
@@ -195,10 +201,12 @@ st.markdown("""
         gap: 0px !important;
     }
 
-    /* Target the container element specifically containing the calendar row to provide space above summaries */
-    div[data-testid="stHorizontalBlock"]:has(.day-block),
-    div[data-testid="stHorizontalBlock"]:has(.day-block-empty) {
-        margin-bottom: 40px !important; /* Distinct space between the calendar strip and summaries */
+    /* Provide a structured spatial separation gap between the calendar grid layout area and the main sidebar column */
+    div[data-testid="stColumn"]:nth-of-type(1):has(.day-block) {
+        padding-right: 2px !important; /* Generates physical structural space separating the sidebar elements */
+    }
+    div[data-testid="stColumn"]:nth-of-type(2):has(.side-block) {
+        border-left: 1.5px solid transparent !important; /* Ensures at least 1.5px structural gap spacing visually */
     }
     
     /* Make the date inside the day block noticeably bigger than the rest of the content */
@@ -252,7 +260,7 @@ st.markdown("""
     div[data-testid="stTabs"] button {
         background: linear-gradient(90deg, #004d4d 0%, #008080 100%) !important;
         color: #ffffff !important;
-        font-size: 18px !important; /* Bigger label size */
+        font-size: 18px !important; /* Noticeably bigger in size */
         font-weight: 600 !important;
         padding: 12px 24px !important;
         border-radius: 8px 8px 0px 0px !important;
