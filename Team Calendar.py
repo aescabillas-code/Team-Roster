@@ -15,6 +15,11 @@ client = MongoClient(uri)
 db = client["my_database"]
 collection = db["my_collection"] 
 
+@st.cache_resource
+def get_db():
+    # Use the client defined at the top of your script
+    return client["my_database"]
+
 def fetch_approved_requests_from_db():
     db = get_db() # Using the existing get_db() function you have
     # Assuming you have a collection or a 'status' field in your collection
