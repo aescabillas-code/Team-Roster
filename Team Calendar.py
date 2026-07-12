@@ -87,6 +87,15 @@ def get_cases_from_db():
     except Exception as e:
         st.error("Could not load case data from the database.")
         return []
+
+def fetch_deviations_from_db():
+    try:
+        # Assuming deviations are stored in your collection with type 'deviation'
+        cursor = collection.find({"type": "deviation"})
+        return list(cursor)
+    except Exception as e:
+        st.error("Could not load deviation data from the database.")
+        return []
     
 # --- INITIAL CONFIG & STATE ---
 st.set_page_config(layout="wide", page_title="Team Roster & Staffing System")
