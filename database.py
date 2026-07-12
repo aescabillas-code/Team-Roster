@@ -1,7 +1,7 @@
 import streamlit as st
 from pymongo import MongoClient
 
-# Establish connection
+# Establish connection helper
 @st.cache_resource
 def get_db():
     uri = st.secrets["mongo"]["uri"]
@@ -11,189 +11,50 @@ def get_db():
 db = get_db()
 collection = db["my_collection"]
 
+# --- DATABASE HELPER FUNCTIONS ---
 def fetch_masterfile_from_db():
-    # Replace this with your actual database logic
-    # Example:
-    # return list(db.my_collection.find({}))
-    
-    # Placeholder for testing:
-    return [
-        {"Category": "Contact Type", "Values": "Email,Phone,Chat"},
-        {"Category": "Issue", "Values": "Login,Billing,Technical"},
-        {"Category": "Product Group", "Values": "Software,Hardware,Services"}
-    ]
-    
-# 2. NOW DEFINE THE FUNCTION (it can now see 'collection')
-def load_data_from_db():
-    if "staff_roster" not in st.session_state:
-        roster_doc = collection.find_one({"type": "roster_list"})
-        st.session_state.staff_roster = roster_doc.get("data", {}) if roster_doc else {}
-    
-    cal_doc = collection.find_one({"type": "calendar_data"})
-    if cal_doc and "data" in cal_doc:
-        # Convert string keys (from DB) back into date objects (for logic/display)
-        st.session_state.calendar_data = {
-            datetime.strptime(k, "%Y-%m-%d").date(): v 
-            for k, v in cal_doc["data"].items()
-        }
-    else:
-        st.session_state.calendar_data = {}
-        
-@st.cache_data(ttl=600)
-def get_staff_list():
-    try:
-        # Fetching documents from MongoDB
-        cursor = collection.find({"type": "roster"})
-        # Building the dictionary
-        return {doc["name"]: {
-            "bday": doc["bday"], 
-            "nick": doc["nick"], 
-            "rest_days": doc.get("rest_days", [])
-        } for doc in cursor}
-    except Exception as e:
-        # If there's a connection error or query issue, show error and return empty dict
-        st.error("Could not load staff data from the database.")
-        return {}
+    # Replace with your actual collection if needed
+    return list(db.master_collection.find({}))
 
-def save_staff(name, data):
-    # 1. Update Session State (for immediate UI response)
-    st.session_state.staff_roster[name] = data
-    
-    # 2. Update Database (for persistence)
-    collection.update_one(
-        {"type": "roster_list"},
-        {"$set": {"data": st.session_state.staff_roster}},
-        upsert=True
-    )
+def save_request_to_db(req_data):
+    db.requests.insert_one(req_data)
 
-def delete_staff(name):
-    # 1. Remove from MongoDB
-    collection.delete_one({"type": "roster", "name": name})
-    
-    # 2. Update session state immediately so the UI reflects the change
-    if name in st.session_state.staff_roster:
-        del st.session_state.staff_roster[name]
-        
-    st.success(f"{name} has been removed.")
+def save_case_to_db(case_data):
+    db.cases.insert_one(case_data)
 
-def update_staff_in_db(name, update_dict):
-    # 1. Update in MongoDB
-    collection.update_one({"type": "roster", "name": name}, {"$set": update_dict})
-    
-    # 2. Update session state so the UI reflects the change
-    if name in st.session_state.staff_roster:
-        st.session_state.staff_roster[name].update(update_dict)
-        
-    st.success(f"{name} has been updated.")
-    
-# --- DATABASE ---
-uri = st.secrets["mongo"]["uri"]
+def fetch_cases_from_db():
+    return list(db.cases.find({}))
 
-@st.cache_resource
-def get_db_client():
-    return MongoClient(uri)
+def delete_case_from_db(case_id):
+    db.cases.delete_one({"_id": case_id})
 
-def get_collection():
-    client = get_db_client()
-    return client["my_database"]["my_collection"]
+def update_case_in_db(case_id, update_dict):
+    db.cases.update_one({"_id": case_id}, {"$set": update_dict})
 
-# --- HANDLER FUNCTIONS ---
-def handle_approval(req, original_idx):
-    # 1. Add to approved list
-    st.session_state.approved_requests.append(req)
-    
-    # 2. Remove from pending list
-    st.session_state.pending_requests.pop(original_idx)
-    
-    # 3. Send Email
-    if req.get("email"):
-        send_request_notification(req['email'], "Approved", req['type'], req['date'])
-        
-    # 4. Set Success Message
-    st.session_state.admin_msg = ("success", f"Approved {req['name']}'s {req['type']} request.")
-    
-    # 5. Rerun to refresh UI
-    st.rerun()
-    
-def render_request(req, idx, key_prefix):
-    # Unique keys for this specific request
-    denial_key = f"denying_{key_prefix}_{idx}"
-    
-    # 1. Standard Display Row
-    c1, c2, c3 = st.columns([3, 1, 1])
-    c1.write(f"**{req['name']}** - {req['date']} ({req['type']})")
-    
-    # 2. Approve Action
-    if c2.button("Approve", key=f"app_{key_prefix}_{idx}"):
-        # Update Database
-        update_request_status_in_db(req, "Approved")
-        # Sync Session State
-        req['status'] = "Approved"
-        st.session_state.approved_requests.append(req)
-        st.session_state.pending_requests.pop(idx)
-        st.success("Request Approved and saved!")
-        st.rerun()
+def save_deviation_to_db(dev_data):
+    db.deviations.insert_one(dev_data)
 
-    # 3. Deny Action (Triggers Popup)
-    if c3.button("Deny", key=f"den_{key_prefix}_{idx}"):
-        st.session_state[denial_key] = True
-        st.rerun()
+def fetch_deviations_from_db():
+    return list(db.deviations.find({}))
 
-    # 4. Denial Popup Logic
-    if st.session_state.get(denial_key):
-        st.write(f"--- Reason for denying {req['name']}'s {req['type']} request ---")
-        reason = st.text_input("Reason", key=f"reason_{key_prefix}_{idx}")
-        
-        col1, col2 = st.columns(2)
-        if col1.button("Proceed Denial", key=f"confirm_{key_prefix}_{idx}"):
-            # 1. Database Deletion
-            delete_request_from_db(req)
-            # 2. Notification (Optional)
-            if req.get("email"):
-                send_request_notification(req['email'], "Denied", req['type'], req['date'])
-            # 3. State sync
-            st.session_state.pending_requests.pop(idx)
-            st.session_state[denial_key] = False
-            st.session_state.admin_msg = ("warning", f"Denied {req['name']}'s request: {reason}")
-            st.rerun()
-            
-        if col2.button("Cancel", key=f"cancel_{key_prefix}_{idx}"):
-            st.session_state[denial_key] = False
-            st.rerun()
-            
-    else:
-        # --- STANDARD VIEW ---
-        st.write(f"**{req['name']}** | {req['type']} | {req['date']}")
-        
-        c1, c2 = st.columns(2)
-        # Call the handle_approval function here
-        if c1.button("Approve", key=f"app_{key_prefix}_{idx}"):
-            handle_approval(req, idx) 
-            
-        if c2.button("Deny", key=f"den_{key_prefix}_{idx}"):
-            st.session_state[denial_key] = True
-            st.rerun()
-            
-def send_request_notification(recipient_email, status, request_type, date):
-    # Everything below MUST be indented with 4 spaces (or one tab)
-    subject = f"Your {request_type} Request has been {status.upper()}"
-    body = f"Hello,\n\nYour {request_type} request for {date} has been {status}.\n\nBest regards,\nAdmin Team"
-    
-    # Use gmail_bard to send
-    gmail_bard.send_message(
-        to=[recipient_email],
-        subject=subject,
-        body=body
-    )
+def update_deviation_in_db(dev_id, update_dict):
+    db.deviations.update_one({"_id": dev_id}, {"$set": update_dict})
 
-# --- ADD THIS MIGRATION BLOCK ---
-if "staff_roster" in st.session_state:
-    for name, value in st.session_state.staff_roster.items():
-        # Check if the value is just a date object (the old format)
-        if not isinstance(value, dict):
-            # Convert the old format to the new format
-            st.session_state.staff_roster[name] = {
-                "bday": value, 
-                "nick": name  # Default nickname to the full name
-            }
+def delete_deviation_from_db(dev_id):
+    db.deviations.delete_one({"_id": dev_id})
 
+def save_masterfile_to_db(df):
+    # Logic to save your masterfile
+    pass
+
+def update_request_status_in_db(req, status):
+    db.requests.update_one({"_id": req["_id"]}, {"$set": {"status": status}})
+
+def delete_request_from_db(req):
+    db.requests.delete_one({"_id": req["_id"]})
+
+def fetch_approved_requests_from_db():
+    return list(db.requests.find({"status": "Approved"}))
+
+def get_request_limits():
+    return {"PTO": 1, "Wellness": 1} # Or fetch from DB
