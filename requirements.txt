@@ -2,5 +2,5 @@ streamlit==1.40.0
 pymongo==4.17.0
 pandas==2.2.3
 dnspython
-holidays
+holidays==0.100
 numpy==1.26.4
