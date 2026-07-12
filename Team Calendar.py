@@ -1,3 +1,4 @@
+from datetime import datetime, time
 from datetime import datetime
 from datetime import date, time, datetime
 import streamlit as st
@@ -25,8 +26,6 @@ def get_staff_list():
         return {}
 
 def save_staff(name, data):
-    # Add this temporary debug line in save_staff
-    print(f"DEBUG: Data being saved: {your_data_variable}")
     collection.update_one(
         {"type": "roster", "name": name}, 
         {"$set": {"name": name, **data}}, 
@@ -590,8 +589,11 @@ with tab_adm:
             
             if st.button("Add Staff"):
                 if new_name:
+                    # Convert date to datetime before passing to save_staff
+                    bday_datetime = datetime.combine(new_bday, time.min)
+                    
                     save_staff(new_name, {
-                        "bday": new_bday, 
+                        "bday": bday_datetime, # Use the converted datetime
                         "nick": new_nick if new_nick else new_name,
                         "rest_days": rest_days
                     })
