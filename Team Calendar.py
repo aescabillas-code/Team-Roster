@@ -383,6 +383,14 @@ with tab_cal:
                 for i, day in enumerate(week):
                     if day != 0:
                         d = date(year, month, day)
+                        
+                        # --- CHECK FOR WEEKEND (Sat=5, Sun=6) ---
+                        is_weekend = d.weekday() in [5, 6]
+                        
+                        if is_weekend:
+                            # Block as Rest Day
+                            cols[i].markdown(f'<div class="day-block rest-day"><b>{day}</b><br>REST DAY</div>', unsafe_allow_html=True)
+                        else:
                         approved = [r for r in st.session_state.approved_requests if r['date'] == d]
                         
                         # --- NICKNAME LOOKUP LOGIC ---
