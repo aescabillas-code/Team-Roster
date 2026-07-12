@@ -30,10 +30,6 @@ def load_data_from_db():
         }
     else:
         st.session_state.calendar_data = {}
-   
-    if 'master_data' not in st.session_state:
-        # Use your existing db function to load data once
-        st.session_state.master_data = fetch_masterfile_from_db()
         
 @st.cache_data(ttl=600)
 def get_staff_list():
@@ -420,13 +416,15 @@ with tab_req:
 with tab_case:
     st.subheader("Log New Case")
     
-    # 1. Fetch Masterfile data for dropdowns
+    # 1. Fetch dropdown options directly from the masterfile session state
     def get_master_values(category_name):
+        # Assuming master_data is a DataFrame as per your original code
         row = st.session_state.master_data[st.session_state.master_data['Category'] == category_name]
         if not row.empty:
             return [v.strip() for v in row.iloc[0]['Values'].split(',')]
         return []
 
+    # 2. Form to log case to the database
     with st.form("case_form", clear_on_submit=True):
         c1, c2 = st.columns(2)
         c_type = c1.selectbox("Contact Type", get_master_values('Contact Type'))
@@ -439,8 +437,9 @@ with tab_case:
         extra = st.text_input("Extra Info (Reason/Destination)")
         
         if st.form_submit_button("Log Case"):
-            st.session_state.cases.append({
-                "Date": date.today(), 
+            # Saves entered data to the database
+            save_case_to_db({
+                "Date": str(date.today()), 
                 "Type": c_type, 
                 "Issue": issue, 
                 "Product Group": prod, 
@@ -448,64 +447,65 @@ with tab_case:
                 "Steps": steps, 
                 "Status": status, 
                 "Extra": extra, 
-                "Image": uploaded_file
+                "Image": uploaded_file.getvalue() if uploaded_file else None
             })
-            st.success("Case logged successfully!")
+            st.success("Case logged successfully to the database!")
             st.rerun()
 
     st.divider()
     
-    # --- KNOWLEDGE BASE SECTION ---
+    # --- KNOWLEDGE BASE / REPORT SECTION ---
     st.subheader("Knowledge Base")
     
     f1, f2 = st.columns(2)
     f_issue = f1.multiselect("Filter by Issue", get_master_values('Issue'))
     f_prod = f2.multiselect("Filter by Product Group", get_master_values('Product Group'))
 
+    # Fetch cases from the database
+    cases = fetch_cases_from_db()
+    
     # Display Cases
-    for i, case in enumerate(reversed(st.session_state.cases)):
-        # Calculate reverse index for list modification
-        actual_idx = len(st.session_state.cases) - 1 - i
-        
-        if (not f_issue or case['Issue'] in f_issue) and (not f_prod or case['Product Group'] in f_prod):
-            with st.container(border=True):
-                col_content, col_menu = st.columns([10, 1])
-                
-                # Display Card Content
-                col_content.markdown(f"""
-                <b>Date:</b> {case['Date']} | <b>Status:</b> {case['Status']}<br>
-                <b>Contact:</b> {case['Type']} | <b>Issue:</b> {case['Issue']} | <b>Group:</b> {case['Product Group']}<br>
-                <b>Description:</b> {case['Desc']}<br>
-                <b>Steps Taken:</b> {case['Steps']}<br>
-                {"<b>Extra Info:</b> " + case['Extra'] if case['Extra'] else ""}
-                """, unsafe_allow_html=True)
-                if case['Image']: col_content.image(case['Image'], caption="Case Screenshot", width=300)
-                
-                # Ellipses Menu
-                with col_menu.popover("⋮"):
-                    if st.button("Edit", key=f"edit_{actual_idx}"):
-                        st.session_state[f"edit_mode_{actual_idx}"] = True
-                    if st.button("Delete", key=f"del_{actual_idx}"):
-                        st.session_state[f"del_mode_{actual_idx}"] = True
+    if cases:
+        for case in reversed(cases):
+            if (not f_issue or case['Issue'] in f_issue) and (not f_prod or case['Product Group'] in f_prod):
+                with st.container(border=True):
+                    col_content, col_menu = st.columns([10, 1])
+                    
+                    col_content.markdown(f"""
+                    <b>Date:</b> {case['Date']} | <b>Status:</b> {case['Status']}<br>
+                    <b>Contact:</b> {case['Type']} | <b>Issue:</b> {case['Issue']} | <b>Group:</b> {case['Product Group']}<br>
+                    <b>Description:</b> {case['Desc']}<br>
+                    <b>Steps Taken:</b> {case['Steps']}<br>
+                    {"<b>Extra Info:</b> " + case['Extra'] if case.get('Extra') else ""}
+                    """, unsafe_allow_html=True)
+                    
+                    # Ellipses Menu
+                    with col_menu.popover("⋮"):
+                        if st.button("Edit", key=f"edit_{case['_id']}"):
+                            st.session_state[f"edit_mode_{case['_id']}"] = True
+                        if st.button("Delete", key=f"del_{case['_id']}"):
+                            st.session_state[f"del_mode_{case['_id']}"] = True
 
-                # --- EDIT LOGIC ---
-                if st.session_state.get(f"edit_mode_{actual_idx}"):
-                    with st.form(f"form_edit_{actual_idx}"):
-                        new_desc = st.text_area("Update Description", value=case['Desc'])
-                        if st.form_submit_button("Save Changes"):
-                            st.session_state.cases[actual_idx]['Desc'] = new_desc
-                            st.session_state[f"edit_mode_{actual_idx}"] = False
-                            st.rerun()
+                    # --- EDIT LOGIC ---
+                    if st.session_state.get(f"edit_mode_{case['_id']}"):
+                        with st.form(f"form_edit_{case['_id']}"):
+                            new_desc = st.text_area("Update Description", value=case['Desc'])
+                            if st.form_submit_button("Save Changes"):
+                                update_case_in_db(case['_id'], {"Desc": new_desc})
+                                st.session_state[f"edit_mode_{case['_id']}"] = False
+                                st.rerun()
 
-                # --- DELETE LOGIC ---
-                if st.session_state.get(f"del_mode_{actual_idx}"):
-                    pwd = st.text_input("Enter Admin Password to Delete", type="password", key=f"pwd_{actual_idx}")
-                    if pwd == "Password1234":
-                        if st.button("Confirm Delete", key=f"conf_del_{actual_idx}"):
-                            st.session_state.cases.pop(actual_idx)
-                            st.rerun()
-                    elif pwd:
-                        st.error("Incorrect Password")
+                    # --- DELETE LOGIC (Password Protected) ---
+                    if st.session_state.get(f"del_mode_{case['_id']}"):
+                        pwd = st.text_input("Enter Admin Password to Delete", type="password", key=f"pwd_{case['_id']}")
+                        if pwd == "Password1234":
+                            if st.button("Confirm Delete", key=f"conf_del_{case['_id']}"):
+                                delete_case_from_db(case['_id'])
+                                st.rerun()
+                        elif pwd:
+                            st.error("Incorrect Password")
+    else:
+        st.write("No cases logged yet.")
 
 # --- TAB: DEVIATION ---
 with tab_dev:
@@ -522,8 +522,8 @@ with tab_dev:
         with col1:
             target_date = st.date_input("Target Date", value=date.today())
             manager = st.text_input("Manager", value="Jeff Bote")
-            # --- Name source from Admin Roster ---
-            name = st.selectbox("Name", list(st.session_state.staff_roster.keys()))
+            # --- Name source updated to admin_roster ---
+            name = st.selectbox("Name", list(st.session_state.admin_roster.keys()))
             shift_time = st.session_state.calendar_data.get(target_date, {}).get("shift", "Not Set")
             st.write(f"**Shift Time:** {shift_time}")
             
@@ -531,10 +531,11 @@ with tab_dev:
             start_time = st.time_input("Start Time")
             end_time = st.time_input("End Time")
             total_mins = st.number_input("Total Mins", min_value=0)
-            aux = st.text_input("Aux")
+            aux = st.selectbox("Aux", get_master_values("Aux"))
             reason = st.text_area("Reason of Deviation")
             
         if st.form_submit_button("Submit Deviation Request"):
+            # Saves entered data to the database
             save_deviation_to_db({
                 "Date": str(target_date), "Manager": manager, "Name": name,
                 "Shift Time": shift_time, "Start Time": str(start_time),
@@ -579,10 +580,11 @@ with tab_dev:
                 col_content, col_menu = st.columns([10, 1])
                 col_content.markdown(f"**{row['Date']}** | {row['Name']} | {row['Reason']}")
                 
+                # --- POPOVER MENU ---
                 with col_menu.popover("⋮"):
-                    if st.button("Edit", key=f"edit_{row['_id']}"):
+                    if st.button("Edit", key=f"edit_btn_{row['_id']}"):
                         st.session_state[f"edit_mode_{row['_id']}"] = True
-                    if st.button("Delete", key=f"del_{row['_id']}"):
+                    if st.button("Delete", key=f"del_btn_{row['_id']}"):
                         st.session_state[f"del_mode_{row['_id']}"] = True
 
                 # --- EDIT LOGIC ---
@@ -590,12 +592,12 @@ with tab_dev:
                     with st.form(f"form_edit_{row['_id']}"):
                         new_reason = st.text_area("Reason", value=row.get('Reason', ''))
                         new_mins = st.number_input("Mins", value=row.get('Total Mins', 0))
-                        if st.form_submit_button("Save"):
+                        if st.form_submit_button("Save Changes"):
                             update_deviation_in_db(row['_id'], {"Reason": new_reason, "Total Mins": new_mins})
                             st.session_state[f"edit_mode_{row['_id']}"] = False
                             st.rerun()
 
-                # --- DELETE LOGIC ---
+                # --- DELETE LOGIC (Password Protected) ---
                 if st.session_state.get(f"del_mode_{row['_id']}"):
                     pwd = st.text_input("Enter Admin Password to Delete", type="password", key=f"pwd_{row['_id']}")
                     if pwd == "Password1234":
