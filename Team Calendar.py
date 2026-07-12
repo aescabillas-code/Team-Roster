@@ -23,11 +23,11 @@ def get_staff_list():
     try:
         # 1. Fetch from your collection
         # We start by fetching all docs to ensure we aren't just filtering out the right ones
-        cursor = list(collection.find({"type": "roster"}))
+        cursor = list(collection.find({"type": "rosterlist"}))
         
         # 2. Debugging: If this is empty, check your Atlas dashboard for the "type" field
         if not cursor:
-            st.warning("No documents found with {'type': 'roster'}.")
+            st.warning("No documents found with {'type': 'rosterlist'}.")
             return {}
 
         # 3. Build dictionary
