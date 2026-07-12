@@ -649,6 +649,8 @@ with tab_adm:
             setup = st.selectbox("Status", ["PROD - ONSITE", "PROD - WAH", "HOLIDAY"])
             
             # --- Assignment logic ---
+            st.write(f"DEBUG: target_dates type is {type(target_dates)}")
+            st.write(f"DEBUG: target_dates value is {target_dates}")
             base_date = target_dates[0] if target_dates else date.today()
             unavailable = [r['name'] for r in st.session_state.approved_requests if r['date'] == base_date]
             available = [n for n in roster.keys() if n not in unavailable]
