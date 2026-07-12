@@ -1,5 +1,6 @@
-streamlit
+streamlit==1.40.0
 pymongo
-pandas
+pandas==2.2.3
 dnspython
 holidays
+numpy==1.26.4
