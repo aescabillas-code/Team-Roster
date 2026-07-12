@@ -149,14 +149,73 @@ st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600&display=swap');
     html, body, [class*="css"] { font-family: 'Quicksand', sans-serif !important; }
-    h1, h2, h3 { font-family: 'Quicksand', sans-serif !important; font-weight: 600; }
+    
+    /* All headers forced to Teal color */
+    h1, h2, h3, .header-cell { font-family: 'Quicksand', sans-serif !important; font-weight: 600; color: #008080 !important; }
+    
     .side-block { font-family: 'Quicksand', sans-serif !important; font-size: 10px !important; line-height: 1.2; }
-    .day-block { border-radius: 15px; padding: 10px; height: auto; min-height: 140px; font-size: 11px; background-color: #ffffff; border: 1px solid #eef0f5; margin: 4px; display: flex; flex-direction: column; }
-    .calendar-divider { border-top: 1px solid #e0e0e0; margin: 5px 0; width: 100%; }
+    
+    /* Calendar Day Block: Height increased, background changed to translucent teal, font color white */
+    .day-block { 
+        border-radius: 15px; 
+        padding: 10px; 
+        height: auto; 
+        min-height: 240px; 
+        font-size: 11px; 
+        background-color: rgba(0, 128, 128, 0.75); 
+        color: #ffffff !important;
+        border: 1px solid #00aaaa; 
+        margin: 4px; 
+        display: flex; 
+        flex-direction: column; 
+    }
+    
+    /* Make the date inside the day block noticeably bigger than the rest of the content */
+    .day-block > b:first-of-type {
+        font-size: 16px !important;
+        display: block;
+        margin-bottom: 2px;
+    }
+    
+    /* Force internal day text links and components to honor the white text profile */
+    .day-block u, .day-block center, .day-block b {
+        color: #ffffff !important;
+    }
+    
+    .calendar-divider { border-top: 1px solid rgba(255, 255, 255, 0.4); margin: 5px 0; width: 100%; }
     div.stButton > button { background: linear-gradient(90deg, #7b61ff 0%, #3b82f6 100%); color: white; border-radius: 12px; font-weight: 600; }
-    .header-cell { font-weight: bold; text-align: center; color: #7b61ff; padding-bottom: 10px; }
+    .header-cell { font-weight: bold; text-align: center; padding-bottom: 10px; }
     .alert-container { border-radius: 20px; border: 2px solid #ff4d4d; padding: 15px; background-color: #fff5f5; margin-bottom: 20px; }
     .flash-red { color: #ff4d4d; font-weight: bold; text-align: center; }
+    
+    /* Selectboxes / Dropdowns targeted to display as translucent teal with white font */
+    div[data-baseweb="select"] > div {
+        background-color: rgba(0, 128, 128, 0.75) !important;
+        color: #ffffff !important;
+        border-radius: 8px;
+        border: 1px solid #00aaaa !important;
+    }
+    
+    /* Ensures selection text strings inside dropdown elements render cleanly in white */
+    div[data-baseweb="select"] * {
+        color: #ffffff !important;
+    }
+
+    /* Target the dropdown popover list options to also be translucent teal with white font */
+    div[data-baseweb="menu"] {
+        background-color: rgba(0, 128, 128, 0.95) !important; 
+        border: 1px solid #00aaaa !important;
+    }
+    
+    div[data-baseweb="menu"] li {
+        color: #ffffff !important;
+        background-color: transparent !important;
+    }
+
+    /* Hover effect for items inside the dropdown menu */
+    div[data-baseweb="menu"] li:hover {
+        background-color: rgba(0, 170, 170, 0.4) !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
