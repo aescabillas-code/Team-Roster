@@ -694,7 +694,7 @@ with tab_dev:
             shift_time = st.session_state.calendar_data.get(target_date, {}).get("shift", "Not Set")
             st.write(f"**Shift Time:** {shift_time}")
         with col2:
-start_time = st.time_input("Start Time")
+            start_time = st.time_input("Start Time")
             end_time = st.time_input("End Time")
             
             # 1. Calculate the duration automatically based on time inputs
