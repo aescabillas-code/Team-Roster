@@ -21,16 +21,15 @@ def load_data_from_db():
         roster_doc = collection.find_one({"type": "roster_list"})
         st.session_state.staff_roster = roster_doc.get("data", {}) if roster_doc else {}
     
-    if "calendar_data" not in st.session_state:
-        cal_doc = collection.find_one({"type": "calendar_data"})
-        if cal_doc and "data" in cal_doc:
-            # Convert string keys back to date objects
-            st.session_state.calendar_data = {
-                datetime.strptime(k, "%Y-%m-%d").date(): v 
-                for k, v in cal_doc["data"].items()
-            }
-        else:
-            st.session_state.calendar_data = {}
+    cal_doc = collection.find_one({"type": "calendar_data"})
+    if cal_doc and "data" in cal_doc:
+        # Convert string keys (from DB) back into date objects (for logic/display)
+        st.session_state.calendar_data = {
+            datetime.strptime(k, "%Y-%m-%d").date(): v 
+            for k, v in cal_doc["data"].items()
+        }
+    else:
+        st.session_state.calendar_data = {}
         
 @st.cache_data(ttl=600)
 def get_staff_list():
@@ -711,8 +710,9 @@ with tab_adm:
             mfq = st.multiselect("Assign MFQ", available)
             sme = st.multiselect("Assign SME", available)
             
+            # --- Locate this block in your tab_adm ---
             if st.button("Save Config"):
-                # 1. Update session state (for the UI)
+                # 1. Update session state (for the UI to reflect changes immediately)
                 for d in target_dates:
                     st.session_state.calendar_data[d] = {
                         "shift": shift_display, 
@@ -723,17 +723,19 @@ with tab_adm:
                         "sme": sme
                     }
                 
-                # 2. IMPORTANT: Save to MongoDB
-                # You MUST convert the date keys to strings to save them in MongoDB
+                # 2. SAVE TO MONGODB: Convert date keys to strings for database compatibility
+                # MongoDB keys cannot be date objects; they must be strings
                 serializable_data = {str(k): v for k, v in st.session_state.calendar_data.items()}
                 
+                # Push to your existing MongoDB collection
                 collection.update_one(
                     {"type": "calendar_data"},
                     {"$set": {"data": serializable_data}},
                     upsert=True
                 )
-                st.success(f"Configuration saved to database for {len(target_dates)} day(s).")
-                st.rerun() # Refresh so the UI reflects the change
+                
+                st.success("Configuration saved to database!")
+                st.rerun() # Refresh so the main calendar view picks up the new data
         
         with col2:
             st.subheader("Approval Center")
