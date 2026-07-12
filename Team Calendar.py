@@ -706,6 +706,8 @@ with tab_adm:
             
             if st.button("Save Config"):
                 for d in target_dates:
+                    # Convert date to string (e.g., "2026-07-12")
+                    d_str = d.strftime("%Y-%m-%d")
                     st.session_state.calendar_data[d] = {
                         "shift": shift_display, 
                         "status": setup, 
@@ -714,7 +716,15 @@ with tab_adm:
                         "mfq": mfq,
                         "sme": sme
                     }
-                st.success(f"Configuration saved for {len(target_dates)} day(s).")
+                
+                # SAVE TO MONGODB: Convert dict keys to strings for the DB
+                serializable_data = {str(k): v for k, v in st.session_state.calendar_data.items()}
+                collection.update_one(
+                    {"type": "calendar_data"},
+                    {"$set": {"data": serializable_data}},
+                    upsert=True
+                )
+                st.success(f"Configuration saved!")
         
         with col2:
             st.subheader("Approval Center")
