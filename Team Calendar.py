@@ -564,12 +564,12 @@ with tab_adm:
             roster = get_staff_list() 
                 
             # 2. Header
-             c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
-                c1.write("**Name**")
-                c2.write("**Nickname**")
-                c3.write("**Birthday**")
-                c4.write("**Actions**")
-                st.divider()
+            c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
+            c1.write("**Name**")
+            c2.write("**Nickname**")
+            c3.write("**Birthday**")
+            c4.write("**Actions**")
+            st.divider()
     
                 # 3. Loop through DB data
                 for name, data in roster.items():
