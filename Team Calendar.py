@@ -118,14 +118,15 @@ def render_request(req, idx, key_prefix):
             st.rerun()
             
 def send_request_notification(recipient_email, status, request_type, date):
-subject = f"Your {request_type} Request has been {status.upper()}"
-body = f"Hello,\n\nYour {request_type} request for {date} has been {status}.\n\nBest regards,\nAdmin Team"
+    # Everything below MUST be indented with 4 spaces (or one tab)
+    subject = f"Your {request_type} Request has been {status.upper()}"
+    body = f"Hello,\n\nYour {request_type} request for {date} has been {status}.\n\nBest regards,\nAdmin Team"
     
-# Use gmail_bard to send
-gmail_bard.send_message(
-    to=[recipient_email],
-    subject=subject,
-    body=body
+    # Use gmail_bard to send
+    gmail_bard.send_message(
+        to=[recipient_email],
+        subject=subject,
+        body=body
     )
 
 # --- ADD THIS MIGRATION BLOCK ---
