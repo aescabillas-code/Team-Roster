@@ -117,7 +117,10 @@ def send_request_notification(recipient_email, status, request_type, date_val):
         st.error(f"Could not send notification email: {e}")
 
 # --- INITIAL CONFIG & STATE ---
-st.set_page_config(layout="wide", page_title="Team Roster & Staffing System")
+st.set_page_config(layout="wide")
+st.title("📊 Operational Shift & Roster Management System")
+st.markdown("### 🏢 Asia/Manila (PHT) Operations Command Center")
+st.divider()
 
 # Define your country's local timezone (Philippines / PHT)
 local_tz = pytz.timezone("Asia/Manila") 
