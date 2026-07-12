@@ -555,177 +555,177 @@ with tab_adm:
             st.success("Admin configuration saved.")
         st.divider()
 
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.subheader("Roster Management")
-            
-        # 1. Fetch current list from DB
-        roster = get_staff_list() 
-            
-        # 2. Header
-         c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
-            c1.write("**Name**")
-            c2.write("**Nickname**")
-            c3.write("**Birthday**")
-            c4.write("**Actions**")
-            st.divider()
-
-            # 3. Loop through DB data
-            for name, data in roster.items():
-                c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
-                c1.write(name)
-                c2.write(data.get("nick", ""))
-                c3.write(data['bday'].strftime('%B %d'))
+        col1, col2 = st.columns(2)
+    
+        with col1:
+            st.subheader("Roster Management")
                 
-                # Actions
-                if c4.button("Remove", key=f"del_{name}"):
-                    delete_staff(name)
-                    st.rerun()
-
-            # 4. Entry Form (Using MongoDB Helper)
-            st.markdown("---")
-            new_name = st.text_input("Staff Name")
-            new_nick = st.text_input("Nickname")
-            new_bday = st.date_input("Birthday", min_value=date(1950, 1, 1), key="new_bday")
-            rest_days = st.multiselect("Select Rest Days", 
-                           ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"])
-            
-            if st.button("Add Staff"):
-                if new_name:
-                    save_staff(new_name, {
-                        "bday": new_bday, 
-                        "nick": new_nick if new_nick else new_name,
-                        "rest_days": rest_days
-                    })
-                    st.success(f"Added {new_name}!")
-                    st.rerun()
-            st.divider()
-
-            # --- DAILY CONFIG---
-            st.subheader("Configuration")
-            
-            # Selected Date View
-            st.session_state.selected_admin_date = st.date_input("Select Date to View/Edit", date.today())
-            
-            st.markdown("---")
-            st.subheader("Important Notifications")
-            target_d = st.date_input("Target Date", key="config_target_date")
-            admin_sender_email = st.text_input("Your Work Email (Sender Address)")
-            
-            new_notif = st.text_input("Add New System Notification")
-            if st.button("Post Notification"): 
-                if new_notif:
-                    st.session_state.notifications.append(new_notif)
-                    st.success("Notification posted!")
-                    st.rerun()
-            
-            # --- Daily Config ---
-            st.subheader("Daily Config")
-            config_mode = st.radio("Apply to:", ["Single Date", "Date Range", "Full Month"])
-            
-            # Date selection logic
-            if config_mode == "Single Date": 
-                target_dates = [st.date_input("Date", key="cfg_d")]
-            elif config_mode == "Date Range": 
-                dr = st.date_input("Range", [], key="cfg_dr")
-                target_dates = pd.date_range(dr[0], dr[1]).date if len(dr)==2 else []
-            else:
-                sm = st.date_input("Month", value=date.today(), key="cfg_m")
-                target_dates = pd.date_range(f"{sm.year}-{sm.month}-01", periods=31).date
-                target_dates = [d for d in target_dates if d.month == sm.month]
-
-            # --- Limits, Shifts, and Status ---
-            st.session_state.limits["PTO"] = st.number_input("Max PTO", value=st.session_state.limits.get("PTO", 1))
-            st.session_state.limits["Wellness"] = st.number_input("Max Wellness", value=st.session_state.limits.get("Wellness", 1))
-            
-            start_t = st.time_input("Shift Start", value=time(9, 0))
-            end_t = st.time_input("Shift End", value=time(18, 0))
-            timezone = "PHT"
-            
-            # Format display
-            shift_display = f"{start_t.strftime('%I:%M %p')} - {end_t.strftime('%I:%M %p')} {timezone}"
-            st.write(f"Selected Shift: **{shift_display}**")
-            
-            setup = st.selectbox("Status", ["PROD - ONSITE", "PROD - WAH", "HOLIDAY"])
-            
-            # --- Assignment logic ---
-            base_date = target_dates[0] if target_dates else date.today()
-            unavailable = [r['name'] for r in st.session_state.approved_requests if r['date'] == base_date]
-            available = [n for n in roster.keys() if n not in unavailable]
-            
-            call = st.multiselect("Assign Call", available)
-            chat = st.multiselect("Assign Chat", available)
-            mfq = st.multiselect("Assign MFQ", available)
-            sme = st.multiselect("Assign SME", available)
-            
-            if st.button("Save Config"):
-                for d in target_dates:
-                    st.session_state.calendar_data[d] = {
-                        "shift": shift_display, 
-                        "status": setup, 
-                        "call": call, 
-                        "chat": chat,
-                        "mfq": mfq,
-                        "sme": sme
-                    }
-                st.success(f"Configuration saved for {len(target_dates)} day(s).")
-        
-     with col2:
-         st.subheader("Approval Center")
-        if st.session_state.pending_requests:
-                        for idx, req in enumerate(st.session_state.pending_requests):
-                                render_request(req, idx, "req")
-         # --- DISPLAY ADMIN MESSAGES ---
-        # This block handles messages at the top
-        if "admin_msg" not in st.session_state: st.session_state.admin_msg = None
-        if st.session_state.admin_msg:
-            msg_type, msg_text = st.session_state.admin_msg
-            if msg_type == "success": 
-                st.success(msg_text)
-            else: 
-                st.warning(msg_text)
+            # 1. Fetch current list from DB
+            roster = get_staff_list() 
                 
-            if st.button("Clear Notification", key="clear_admin_notif"):
-                st.session_state.admin_msg = None
-                st.rerun()
-
-            # --- WELLNESS SECTION ---
-            # Properly un-indented so it always renders
-            st.markdown("### 🌿 Wellness Requests")
-            wellness_pending = [r for r in st.session_state.pending_requests if r['type'] == 'Wellness']
-            if wellness_pending:
-                for req in wellness_pending:
-                    master_idx = st.session_state.pending_requests.index(req)
-                    render_request(req, master_idx, "wellness")
-            else:
-                st.write("No pending Wellness requests.")
-
-            # --- PTO SECTION ---
-            # Properly un-indented so it always renders
-            st.markdown("### ✈️ PTO Requests")
-            pto_pending = [r for r in st.session_state.pending_requests if r['type'] == 'PTO']
-            if pto_pending:
-                for req in pto_pending:
-                    master_idx = st.session_state.pending_requests.index(req)
-                    render_request(req, master_idx, "pto")
-            else:
-                st.write("No pending PTO requests.")
-
-            st.divider()
-
-            # --- APPROVED HISTORY ---
-            st.subheader("✅ Approved History")
-            # Displaying approved requests based on the current month
-            app_wellness = [r for r in st.session_state.approved_requests if r['type'] == "Wellness" and r['date'].month == month]
-            app_pto = [r for r in st.session_state.approved_requests if r['type'] == "PTO" and r['date'].month == month]
-
-            if app_wellness:
-                st.markdown("#### Approved Wellness")
-                st.table(pd.DataFrame(app_wellness))
-            if app_pto:
-                st.markdown("#### Approved PTO")
-                st.table(pd.DataFrame(app_pto))
-            if not app_wellness and not app_pto:
-                st.write("No approved requests for this month.")
+            # 2. Header
+             c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
+                c1.write("**Name**")
+                c2.write("**Nickname**")
+                c3.write("**Birthday**")
+                c4.write("**Actions**")
+                st.divider()
+    
+                # 3. Loop through DB data
+                for name, data in roster.items():
+                    c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
+                    c1.write(name)
+                    c2.write(data.get("nick", ""))
+                    c3.write(data['bday'].strftime('%B %d'))
+                    
+                    # Actions
+                    if c4.button("Remove", key=f"del_{name}"):
+                        delete_staff(name)
+                        st.rerun()
+    
+                # 4. Entry Form (Using MongoDB Helper)
+                st.markdown("---")
+                new_name = st.text_input("Staff Name")
+                new_nick = st.text_input("Nickname")
+                new_bday = st.date_input("Birthday", min_value=date(1950, 1, 1), key="new_bday")
+                rest_days = st.multiselect("Select Rest Days", 
+                               ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"])
+                
+                if st.button("Add Staff"):
+                    if new_name:
+                        save_staff(new_name, {
+                            "bday": new_bday, 
+                            "nick": new_nick if new_nick else new_name,
+                            "rest_days": rest_days
+                        })
+                        st.success(f"Added {new_name}!")
+                        st.rerun()
+                st.divider()
+    
+                # --- DAILY CONFIG---
+                st.subheader("Configuration")
+                
+                # Selected Date View
+                st.session_state.selected_admin_date = st.date_input("Select Date to View/Edit", date.today())
+                
+                st.markdown("---")
+                st.subheader("Important Notifications")
+                target_d = st.date_input("Target Date", key="config_target_date")
+                admin_sender_email = st.text_input("Your Work Email (Sender Address)")
+                
+                new_notif = st.text_input("Add New System Notification")
+                if st.button("Post Notification"): 
+                    if new_notif:
+                        st.session_state.notifications.append(new_notif)
+                        st.success("Notification posted!")
+                        st.rerun()
+                
+                # --- Daily Config ---
+                st.subheader("Daily Config")
+                config_mode = st.radio("Apply to:", ["Single Date", "Date Range", "Full Month"])
+                
+                # Date selection logic
+                if config_mode == "Single Date": 
+                    target_dates = [st.date_input("Date", key="cfg_d")]
+                elif config_mode == "Date Range": 
+                    dr = st.date_input("Range", [], key="cfg_dr")
+                    target_dates = pd.date_range(dr[0], dr[1]).date if len(dr)==2 else []
+                else:
+                    sm = st.date_input("Month", value=date.today(), key="cfg_m")
+                    target_dates = pd.date_range(f"{sm.year}-{sm.month}-01", periods=31).date
+                    target_dates = [d for d in target_dates if d.month == sm.month]
+    
+                # --- Limits, Shifts, and Status ---
+                st.session_state.limits["PTO"] = st.number_input("Max PTO", value=st.session_state.limits.get("PTO", 1))
+                st.session_state.limits["Wellness"] = st.number_input("Max Wellness", value=st.session_state.limits.get("Wellness", 1))
+                
+                start_t = st.time_input("Shift Start", value=time(9, 0))
+                end_t = st.time_input("Shift End", value=time(18, 0))
+                timezone = "PHT"
+                
+                # Format display
+                shift_display = f"{start_t.strftime('%I:%M %p')} - {end_t.strftime('%I:%M %p')} {timezone}"
+                st.write(f"Selected Shift: **{shift_display}**")
+                
+                setup = st.selectbox("Status", ["PROD - ONSITE", "PROD - WAH", "HOLIDAY"])
+                
+                # --- Assignment logic ---
+                base_date = target_dates[0] if target_dates else date.today()
+                unavailable = [r['name'] for r in st.session_state.approved_requests if r['date'] == base_date]
+                available = [n for n in roster.keys() if n not in unavailable]
+                
+                call = st.multiselect("Assign Call", available)
+                chat = st.multiselect("Assign Chat", available)
+                mfq = st.multiselect("Assign MFQ", available)
+                sme = st.multiselect("Assign SME", available)
+                
+                if st.button("Save Config"):
+                    for d in target_dates:
+                        st.session_state.calendar_data[d] = {
+                            "shift": shift_display, 
+                            "status": setup, 
+                            "call": call, 
+                            "chat": chat,
+                            "mfq": mfq,
+                            "sme": sme
+                        }
+                    st.success(f"Configuration saved for {len(target_dates)} day(s).")
+            
+         with col2:
+             st.subheader("Approval Center")
+            if st.session_state.pending_requests:
+                            for idx, req in enumerate(st.session_state.pending_requests):
+                                    render_request(req, idx, "req")
+             # --- DISPLAY ADMIN MESSAGES ---
+            # This block handles messages at the top
+            if "admin_msg" not in st.session_state: st.session_state.admin_msg = None
+            if st.session_state.admin_msg:
+                msg_type, msg_text = st.session_state.admin_msg
+                if msg_type == "success": 
+                    st.success(msg_text)
+                else: 
+                    st.warning(msg_text)
+                    
+                if st.button("Clear Notification", key="clear_admin_notif"):
+                    st.session_state.admin_msg = None
+                    st.rerun()
+    
+                # --- WELLNESS SECTION ---
+                # Properly un-indented so it always renders
+                st.markdown("### 🌿 Wellness Requests")
+                wellness_pending = [r for r in st.session_state.pending_requests if r['type'] == 'Wellness']
+                if wellness_pending:
+                    for req in wellness_pending:
+                        master_idx = st.session_state.pending_requests.index(req)
+                        render_request(req, master_idx, "wellness")
+                else:
+                    st.write("No pending Wellness requests.")
+    
+                # --- PTO SECTION ---
+                # Properly un-indented so it always renders
+                st.markdown("### ✈️ PTO Requests")
+                pto_pending = [r for r in st.session_state.pending_requests if r['type'] == 'PTO']
+                if pto_pending:
+                    for req in pto_pending:
+                        master_idx = st.session_state.pending_requests.index(req)
+                        render_request(req, master_idx, "pto")
+                else:
+                    st.write("No pending PTO requests.")
+    
+                st.divider()
+    
+                # --- APPROVED HISTORY ---
+                st.subheader("✅ Approved History")
+                # Displaying approved requests based on the current month
+                app_wellness = [r for r in st.session_state.approved_requests if r['type'] == "Wellness" and r['date'].month == month]
+                app_pto = [r for r in st.session_state.approved_requests if r['type'] == "PTO" and r['date'].month == month]
+    
+                if app_wellness:
+                    st.markdown("#### Approved Wellness")
+                    st.table(pd.DataFrame(app_wellness))
+                if app_pto:
+                    st.markdown("#### Approved PTO")
+                    st.table(pd.DataFrame(app_pto))
+                if not app_wellness and not app_pto:
+                    st.write("No approved requests for this month.")
    
