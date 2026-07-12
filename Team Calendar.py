@@ -960,7 +960,7 @@ with tab_adm:
                 )
                 st.success("Configuration saved to database!")
                 st.rerun()
-        
+        st.columns
         with col2:
             st.subheader("Approval Center")
             
