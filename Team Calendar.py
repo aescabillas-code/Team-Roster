@@ -92,13 +92,26 @@ def update_request_status_in_db(req, status):
     collection.update_one({"_id": req["_id"]}, {"$set": {"status": status}})
 
 def fetch_approved_requests_from_db():
-    return list(collection.find({"type": "request", "status": "Approved"}))
+    return list(collection.find({
+        "type": {"$in": ["PTO", "Wellness"]}, 
+        "status": "Approved"
+    }))
 
 def fetch_pending_requests_from_db():
-    return list(collection.find({"type": "request", "status": "Pending"}))
+    return list(collection.find({
+        "type": {"$in": ["PTO", "Wellness"]}, 
+        "status": "Pending"
+    }))
 
-def save_request_to_db(req):
-    req["type"] = "request"
+def save_request_to_db(req, request_type):
+    """
+    Saves a request payload to the MongoDB collection with a dynamic type designation.
+    
+    Parameters:
+        req (dict): The original request data payload.
+        request_type (str): Expected to be either "PTO" or "Wellness".
+    """
+    req["type"] = request_type
     collection.insert_one(req)
 
 def get_request_limits():
@@ -541,10 +554,13 @@ with tab_req:
                     "viewed": False
                 }
                 
-                # Persist directly into database collection and track via state cache
-                save_request_to_db(new_req)
+                # --- UPDATED DB SAVE FUNCTION CALL ---
+                # Pass both the dictionary payload and the selected type string ("PTO" or "Wellness")
+                save_request_to_db(new_req, req_type)
+                
                 st.session_state.pending_requests.append(new_req)
                 st.success("Request submitted successfully.")
+                st.rerun()
 
 # --- TAB 3: CASE TRACKER ---
 with tab_case:
