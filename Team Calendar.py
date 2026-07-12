@@ -196,22 +196,35 @@ def render_request(req, key_prefix):
 tabs = st.tabs(["📅 Calendar", "📝 Request", "🔍 Case Tracker", "🔀 Deviation", "📂 Masterfile", "🔑 Admin"])
 
 # --- TAB 1: CALENDAR ---
-with tabs[0]:
+with tab_cal:
+    # 1. Ensure we fetch the latest data from MongoDB
     load_data_from_db()
+    
+    # 2. Define structural page layout allocation matrix columns
     col_main, col_side = st.columns([4, 1])
     current_date = date.today()
     
+    # 3. Use col_main for the top filters
     with col_main:
         c1, c2 = st.columns([1, 1])
         year = c1.selectbox("Year", [2026, 2027, 2028], key="cal_y")
-        month = c2.selectbox("Month", range(1, 13), format_func=lambda x: calendar.month_name[x], index=current_date.month - 1, key="cal_m")
+        month = c2.selectbox(
+            "Month", 
+            range(1, 13), 
+            format_func=lambda x: calendar.month_name[x], 
+            index=current_date.month - 1, 
+            key="cal_m"
+        )
 
+    # 4. Use col_side for the summary/sidebar
     with col_side:
         st.markdown('<div class="side-block">', unsafe_allow_html=True)
         st.subheader("Monthly Summary")
+        
         st.markdown("**Birthdays:**")
         for name, info in st.session_state.staff_roster.items():
-            bday = info.get("bday")
+            # Robust extraction matching nested dictionary properties
+            bday = info.get("bday") if isinstance(info, dict) else info
             if isinstance(bday, (date, datetime)) and bday.month == month:
                 st.write(f"- {name}: {bday.strftime('%B %d')}")
 
@@ -219,30 +232,48 @@ with tabs[0]:
         us_hols, ph_hols, found_holiday = holidays.US(years=year), holidays.PH(years=year), False
         for d_obj, h_name in sorted(us_hols.items()):
             if d_obj.month == month:
-                st.write(f"- [US] {h_name}: {d_obj.strftime('%B %d')}"); found_holiday = True
+                st.write(f"- [US] {h_name}: {d_obj.strftime('%B %d')}")
+                found_holiday = True
         for d_obj, h_name in sorted(ph_hols.items()):
             if d_obj.month == month:
-                st.write(f"- [PH] {h_name}: {d_obj.strftime('%B %d')}"); found_holiday = True
-        if not found_holiday: st.write("No holidays this month.")
+                st.write(f"- [PH] {h_name}: {d_obj.strftime('%B %d')}")
+                found_holiday = True
+        if not found_holiday: 
+            st.write("No holidays this month.")
         
         st.subheader("Daily View")
+        # Get the date chosen in your Admin/Config UI (fallback to today)
         view_date = st.session_state.get('selected_admin_date', date.today())
         d_data = st.session_state.calendar_data.get(view_date, {})
+        
         st.markdown(f"### Date: {view_date.strftime('%B %d, %Y')}")
         st.markdown(f"**Setup:** {d_data.get('status', 'Not Set')} | **Shift:** {d_data.get('shift', '--')}")
         st.divider()
+        
         st.write("**Today's Schedule:**")
+        roles = ["call", "chat", "mfq", "sme"]
+        
         for name in st.session_state.staff_roster:
-            roles = [r.upper() for r in ["call", "chat", "mfq", "sme"] if name in d_data.get(r, [])]
-            p_status = [r['type'] for r in st.session_state.approved_requests if str(r['date']) == str(view_date) and r['name'] == name]
-            p_display = f" ({p_status[0]})" if p_status else ""
-            st.write(f"- **{name}**: {', '.join(roles) if roles else 'Unassigned'}{p_display}")
+            # Check for approved requests matching the active daily view date using string matching
+            p_status = [r['type'] for r in st.session_state.approved_requests 
+                        if str(r['date']) == str(view_date) and r['name'] == name]
+            
+            # If they have approved time off today, keep them in view but explicitly tag with leave type
+            if p_status:
+                st.write(f"- **{name}**: {str(p_status[0]).upper()}")
+            else:
+                assigned_roles = [r.upper() for r in roles if name in d_data.get(r, [])]
+                shift_role = ", ".join(assigned_roles) if assigned_roles else "Unassigned"
+                st.write(f"- **{name}**: {shift_role}")
+            
         st.markdown('</div>', unsafe_allow_html=True)
 
+    # 5. Render interactive monthly calendar grid block (Correct Indentation)
     with col_main:
         cols = st.columns(7)
         for i, d_name in enumerate(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]):
             cols[i].markdown(f'<div class="header-cell">{d_name}</div>', unsafe_allow_html=True)
+            
         for week in calendar.Calendar(firstweekday=6).monthdayscalendar(year, month):
             cols = st.columns(7)
             for i, day in enumerate(week):
@@ -251,48 +282,86 @@ with tabs[0]:
                     approved = [r for r in st.session_state.approved_requests if str(r['date']) == str(d)]
                     away_names = [r['name'] for r in approved]
                     
+                    # Look up nicknames for scheduled active workspace operators (filtering out away staff)
                     def get_filtered_nicks(full_names):
                         active = [n for n in full_names if n not in away_names]
                         return ", ".join([st.session_state.staff_roster.get(x, {}).get("nick", x) for x in active])
                     
                     req_display = "<br>".join([f"{st.session_state.staff_roster.get(r['name'], {}).get('nick', r['name'])}({r['type']})" for r in approved])
                     data = st.session_state.calendar_data.get(d, {})
-                    content = (f"<b>{day}</b><div class='calendar-divider'></div><u>{data.get('status', '-')}</u><div class='calendar-divider'></div>"
-                               f"{data.get('shift', '-')}<div class='calendar-divider'></div>PTO: {req_display}<div class='calendar-divider'></div>"
-                               f"Call: {get_filtered_nicks(data.get('call', []))}<div class='calendar-divider'></div>"
-                               f"Chat: {get_filtered_nicks(data.get('chat', []))}<div class='calendar-divider'></div>"
-                               f"MFQ: {get_filtered_nicks(data.get('mfq', []))}<div class='calendar-divider'></div>"
-                               f"SME: {get_filtered_nicks(data.get('sme', []))}")
+                    
+                    # WEEKEND INSTRUCTION: Block out Saturday (5) and Sunday (6) explicitly as REST DAY
+                    if d.weekday() in [5, 6]:
+                        content = f"<b>{day}</b><div class='calendar-divider'></div><br><center><b>REST DAY</b></center>"
+                    else:
+                        content = (f"<b>{day}</b><div class='calendar-divider'></div>"
+                                   f"<u>{data.get('status', '-')}</u><div class='calendar-divider'></div>"
+                                   f"{data.get('shift', '-')}<div class='calendar-divider'></div>"
+                                   f"PTO/Wellness: {req_display}<div class='calendar-divider'></div>"
+                                   f"Call: {get_filtered_nicks(data.get('call', []))}<div class='calendar-divider'></div>"
+                                   f"Chat: {get_filtered_nicks(data.get('chat', []))}<div class='calendar-divider'></div>"
+                                   f"MFQ: {get_filtered_nicks(data.get('mfq', []))}<div class='calendar-divider'></div>"
+                                   f"SME: {get_filtered_nicks(data.get('sme', []))}")
+                    
                     cols[i].markdown(f'<div class="day-block">{content}</div>', unsafe_allow_html=True)
 
 # --- TAB 2: REQUEST FORM ---
 with tabs[1]:
     st.subheader("PTO/Wellness Request")
     st.info("💡 **Tip:** Providing your work email is optional.")
+    
     with st.form("request_form", clear_on_submit=True):
+        # 1. Fetch staff roster safely with session fallback logic
         staff_data = get_staff_list()
-        name = st.selectbox("Name", list(staff_data.keys()) if staff_data else list(st.session_state.staff_roster.keys()))
+        available_names = list(staff_data.keys()) if staff_data else list(st.session_state.staff_roster.keys())
+        name = st.selectbox("Name", available_names)
+        
         email = st.text_input("Work Email (Optional)")
         req_date = st.date_input("Request Date")
         req_type = st.selectbox("Type", ["PTO", "Wellness"])
+        
         if st.form_submit_button("Submit Request"):
+            # 2. Fetch limit ceilings directly from DB configuration
             limits = get_request_limits()
-            count_on_date = len([r for r in (st.session_state.pending_requests + st.session_state.approved_requests) if str(r["date"]) == str(req_date) and r["type"] == req_type])
-            is_already_requested = any(r["name"] == name and str(r["date"]) == str(req_date) for r in (st.session_state.pending_requests + st.session_state.approved_requests))
             
+            # Count records on specified target date using explicit string conversions
+            count_on_date = len([
+                r for r in (st.session_state.pending_requests + st.session_state.approved_requests) 
+                if str(r["date"]) == str(req_date) and r["type"] == req_type
+            ])
+            
+            # Double Booking Duplicate Verification Check
+            is_already_requested = any(
+                r["name"] == name and str(r["date"]) == str(req_date) 
+                for r in (st.session_state.pending_requests + st.session_state.approved_requests)
+            )
+            
+            # 3. Validation and Submission Logic Flow
             if is_already_requested:
                 st.warning(f"⚠️ A request for {name} on {req_date} already exists.")
             elif count_on_date >= limits.get(req_type, 0):
-                st.error(f"❌ Limit reached for {req_type} on {req_date}.")
+                st.error(f"❌ Limit reached for {req_type} on {req_date}. Please choose another date.")
             else:
-                new_req = {"name": name, "date": str(req_date), "type": req_type, "status": "Pending", "email": email}
+                # Construct combined document payload
+                new_req = {
+                    "name": name, 
+                    "date": str(req_date), 
+                    "type": req_type, 
+                    "status": "Pending", 
+                    "email": email,
+                    "viewed": False
+                }
+                
+                # Persist directly into database collection and track via state cache
                 save_request_to_db(new_req)
                 st.session_state.pending_requests.append(new_req)
                 st.success("Request submitted successfully.")
 
 # --- TAB 3: CASE TRACKER ---
-with tabs[2]:
+with tab_case:
     st.subheader("Log New Case")
+    
+    # 1. Fetch dropdown data from DB (assuming your master_data logic holds)
     c_types = st.session_state.master_data.loc[st.session_state.master_data['Category'] == 'Contact Type', 'Values'].iloc[0].split(',')
     issues = st.session_state.master_data.loc[st.session_state.master_data['Category'] == 'Issue', 'Values'].iloc[0].split(',')
     prods = st.session_state.master_data.loc[st.session_state.master_data['Category'] == 'Product Group', 'Values'].iloc[0].split(',')
@@ -303,54 +372,203 @@ with tabs[2]:
     prod = c2.selectbox("Product Group", prods)
     desc = st.text_area("Issue Description")
     steps = st.text_area("Steps Taken")
+    uploaded_file = st.file_uploader("Upload Screenshot")
     status = st.selectbox("Status", ["Resolved", "Pending/Monitoring", "Routed"])
-    extra = st.text_input("Reason / Destination") if status in ["Pending/Monitoring", "Routed"] else ""
+    extra = ""
+    if status == "Pending/Monitoring": extra = st.text_input("Pending/Monitoring Reason")
+    elif status == "Routed": extra = st.text_input("Queue Destination")
     
+    # 2. Use 'Log Case' button to save directly to DB
     if st.button("Log Case"):
-        save_case_to_db({"Date": str(date.today()), "Type": c_type, "Issue": issue, "Product Group": prod, "Desc": desc, "Steps": steps, "Status": status, "Extra": extra})
-        st.success("Case logged successfully!")
+        new_case = {
+            "Date": str(date.today()), 
+            "Type": c_type, 
+            "Issue": issue, 
+            "Product Group": prod, 
+            "Desc": desc, 
+            "Steps": steps, 
+            "Has_Screenshot": uploaded_file is not None, # Captures attachment state
+            "Status": status, 
+            "Extra": extra
+        }
+        save_case_to_db(new_case) # Linked directly back to your Mongo helper
+        st.success("Case logged to database successfully!")
         st.rerun()
 
     st.divider()
     st.subheader("Knowledge Base")
-    cases_list = get_cases_from_db()
+    
+    # 3. Restored Database Linkage
+    cases_list = get_cases_from_db() 
+    
     f1, f2 = st.columns(2)
     f_issue = f1.multiselect("Filter by Issue", issues)
     f_prod = f2.multiselect("Filter by Product Group", prods)
     
-    with st.expander("Admin Access (Edit/Delete)"):
-        is_admin = (st.text_input("Enter Admin Password", type="password", key="case_adm_p") == st.session_state.admin_password)
-
-    for case in reversed(cases_list):
-        if (not f_issue or case.get('Issue') in f_issue) and (not f_prod or case.get('Product Group') in f_prod):
-            st.markdown(f"**Date:** {case.get('Date')} | **Status:** {case.get('Status')} | **Issue:** {case.get('Issue')}")
-            st.write(case.get('Desc'))
-            if is_admin:
-                st.button(f"Delete Row {case.get('_id')}", key=f"del_c_{case.get('_id')}", on_click=lambda: collection.delete_one({"_id": case["_id"]}))
-
-# --- TAB 4: DEVIATION ---
-with tabs[3]:
+    for case in reversed(cases_list): # Safely uses active list
+        if (not f_issue or case['Issue'] in f_issue) and (not f_prod or case['Product Group'] in f_prod):
+            with st.container():
+                # Split header row to place ellipses options menu on the upper right corner
+                head_col, opt_col = st.columns([6, 1])
+                
+                with head_col:
+                    st.markdown(f"**Date:** {case['Date']} | **Status:** {case['Status']} | **Issue:** {case['Issue']}")
+                
+                with opt_col:
+                    # Ellipses simulation dropdown for managing individual case entry
+                    options_menu = st.popover("⋮", help="Options")
+                    with options_menu:
+                        action = st.radio("Action", ["View", "Edit", "Delete"], key=f"act_{case['_id']}", horizontal=False)
+                
+                # Render content or Action menus depending on choice
+                if action == "Edit":
+                    st.markdown("#### Edit Case Details")
+                    # Populates current data into editable fields
+                    edit_desc = st.text_area("Update Issue Description", value=case.get('Desc', ''), key=f"ed_desc_{case['_id']}")
+                    edit_steps = st.text_area("Update Steps Taken", value=case.get('Steps', ''), key=f"ed_step_{case['_id']}")
+                    
+                    if st.button("Save Changes", key=f"save_ed_{case['_id']}"):
+                        # Updates the live collection document directly
+                        collection.update_one(
+                            {"_id": case["_id"]}, 
+                            {"$set": {"Desc": edit_desc, "Steps": edit_steps}}
+                        )
+                        st.success("Case updated successfully!")
+                        st.rerun()
+                        
+                elif action == "Delete":
+                    st.warning("⚠️ This action requires supervisor authorization.")
+                    del_password = st.text_input("Enter Admin Password to confirm delete", type="password", key=f"pwd_del_{case['_id']}")
+                    if st.button("Confirm Delete", key=f"conf_del_{case['_id']}"):
+                        if del_password == "Password1234":
+                            # Calls active MongoDB removal command
+                            collection.delete_one({"_id": case["_id"]})
+                            st.success("Case deleted successfully.")
+                            st.rerun()
+                        else:
+                            st.error("Incorrect Password. Action denied.")
+                else:
+                    # Default Display State (View Mode)
+                    st.write(case.get('Desc', ''))
+                    st.write(f"*Steps Taken:* {case.get('Steps', '')}")
+                    if case.get("Has_Screenshot"):
+                        st.caption("📎 Screenshot attached to this record.")
+                
+                st.markdown("---")
+                
+# --- TAB: DEVIATION ---
+with tab_dev:
     st.subheader("Submit Deviation Request")
+    
     with st.form("deviation_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
-        target_date = col1.date_input("Target Date", value=date.today())
-        manager = col1.text_input("Manager", value="Jeff Bote")
-        name = col1.selectbox("Name", list(st.session_state.staff_roster.keys()), key="dev_name_box")
-        start_time = col2.time_input("Start Time")
-        end_time = col2.time_input("End Time")
-        total_mins = col2.number_input("Total Mins", min_value=0)
-        reason = col2.text_area("Reason of Deviation")
+        with col1:
+            target_date = st.date_input("Target Date", value=date.today())
+            manager = st.text_input("Manager", value="Jeff Bote")
+            name = st.selectbox("Name", list(st.session_state.staff_roster.keys()), key="dev_name_box")
+            # Restored calendar shift time calculations
+            shift_time = st.session_state.calendar_data.get(target_date, {}).get("shift", "Not Set")
+            st.write(f"**Shift Time:** {shift_time}")
+        with col2:
+            start_time = st.time_input("Start Time")
+            end_time = st.time_input("End Time")
+            total_mins = st.number_input("Total Mins", min_value=0)
+            aux = st.text_input("Aux") # Restored input field
+            reason = st.text_area("Reason of Deviation")
+            
         if st.form_submit_button("Submit Deviation Request"):
-            save_deviation_to_db({"Date": str(target_date), "Manager": manager, "Name": name, "Start Time": str(start_time), "End Time": str(end_time), "Total Mins": total_mins, "Reason": reason})
-            st.success("Deviation saved!")
+            save_deviation_to_db({
+                "Date": str(target_date), "Manager": manager, "Name": name,
+                "Shift Time": shift_time, "Start Time": str(start_time),
+                "End Time": str(end_time), "Total Mins": total_mins,
+                "Aux": aux, "Reason": reason
+            })
+            st.success("Deviation request saved to database!")
+            st.rerun()
 
     st.divider()
+    st.subheader("Deviation Request Report")
+    
+    # 1. Restored Filter Block Controls
+    with st.expander("Filter Report"):
+        f_col1, f_col2, f_col3 = st.columns(3)
+        filter_month = f_col1.selectbox("Month", range(1, 13), index=date.today().month-1, key="dev_f_month")
+        filter_year = f_col2.number_input("Year", value=date.today().year, key="dev_f_year")
+        filter_date = f_col3.date_input("Specific Date (Optional)", value=None, key="dev_f_date")
+        apply_filter = st.button("Apply Filter")
+
+    # 2. Fetch and Filter Data
     dev_data = fetch_deviations_from_db()
     if dev_data:
         df = pd.DataFrame(dev_data)
-        st.table(df.drop(columns=['_id', 'type'], errors='ignore'))
+        df['Date'] = pd.to_datetime(df['Date']).dt.date
+        
+        if apply_filter:
+            if filter_date:
+                df = df[df['Date'] == filter_date]
+            else:
+                df = df[(df['Date'].apply(lambda x: x.month) == filter_month) & (df['Date'].apply(lambda x: x.year) == filter_year)]
+        
+        # Convert filtered dataframe back to list of dictionaries for container loop rendering
+        filtered_records = df.to_dict(orient="records")
+        
+        # 3. CSV Download
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button("Extract Report as CSV", csv, "deviation_report.csv", "text/csv")
+        st.write("## Deviation Records")
+        
+        # Render each row inside individual interactive blocks with ellipses menu
+        for dev in reversed(filtered_records):
+            with st.container():
+                # Split header row to place ellipses options menu on the upper right corner
+                head_col, opt_col = st.columns([6, 1])
+                
+                with head_col:
+                    st.markdown(f"**Date:** {dev.get('Date')} | **Staff Name:** {dev.get('Name')} | **Manager:** {dev.get('Manager')}")
+                
+                with opt_col:
+                    # Ellipses simulation popover menu for individual entries
+                    options_menu = st.popover("⋮", help="Options")
+                    with options_menu:
+                        action = st.radio("Action", ["View", "Edit", "Delete"], key=f"act_dev_{dev['_id']}", horizontal=False)
+                
+                # Render content or action menus depending on selector
+                if action == "Edit":
+                    st.markdown("#### Edit Deviation Request")
+                    edit_manager = st.text_input("Update Manager", value=dev.get('Manager', ''), key=f"ed_mgr_{dev['_id']}")
+                    edit_mins = st.number_input("Update Total Mins", value=int(dev.get('Total Mins', 0)), min_value=0, key=f"ed_mins_{dev['_id']}")
+                    edit_aux = st.text_input("Update Aux", value=dev.get('Aux', ''), key=f"ed_aux_{dev['_id']}")
+                    edit_reason = st.text_area("Update Reason of Deviation", value=dev.get('Reason', ''), key=f"ed_reas_{dev['_id']}")
+                    
+                    if st.button("Save Changes", key=f"save_ed_dev_{dev['_id']}"):
+                        update_deviation_in_db(dev["_id"], {
+                            "Manager": edit_manager,
+                            "Total Mins": edit_mins,
+                            "Aux": edit_aux,
+                            "Reason": edit_reason
+                        })
+                        st.success("Deviation record updated successfully!")
+                        st.rerun()
+                        
+                elif action == "Delete":
+                    st.warning("⚠️ This action requires supervisor authorization.")
+                    del_password = st.text_input("Enter Admin Password to confirm delete", type="password", key=f"pwd_del_dev_{dev['_id']}")
+                    if st.button("Confirm Delete", key=f"conf_del_dev_{dev['_id']}"):
+                        if del_password == "Password1234":
+                            delete_deviation_from_db(dev["_id"])
+                            st.success("Deviation record removed.")
+                            st.rerun()
+                        else:
+                            st.error("Incorrect Password. Action denied.")
+                else:
+                    # Default Display State (View Mode)
+                    st.write(f"**Shift:** {dev.get('Shift Time', 'Not Set')} | **Aux:** {dev.get('Aux', 'N/A')}")
+                    st.write(f"**Time-frame:** {dev.get('Start Time')} - {dev.get('End Time')} ({dev.get('Total Mins')} Mins)")
+                    st.write(f"*Reason:* {dev.get('Reason', '')}")
+                
+                st.markdown("---")
+    else:
+        st.write("No deviation requests found.")
 
 # --- TAB 5: MASTERFILE ---
 with tabs[4]:
@@ -359,92 +577,242 @@ with tabs[4]:
             st.session_state.admin_authenticated = True
             st.rerun()
     else:
+        # Create columns to align the header and the button side-by-side
         col_m1, col_m2 = st.columns([4, 1])
-        col_m1.subheader("System Masterfile")
-        if col_m2.button("Save Masterfile Changes"):
-            save_masterfile_to_db(st.session_state.master_data)
-            st.success("Masterfile saved to DB.")
+        
+        with col_m1:
+            st.subheader("System Masterfile")
+        
+        with col_m2:
+            if st.button("Save Masterfile Changes", key="btn_save_masterfile"):
+                # Persist the current data_editor state directly to MongoDB
+                save_masterfile_to_db(st.session_state.master_data)
+                st.success("Masterfile saved to DB.")
+                st.rerun() # Restored to immediately refresh state and commit configuration
+        
+        # Display the interactive data editor grid below the action layout row
         st.session_state.master_data = st.data_editor(st.session_state.master_data, num_rows="dynamic")
 
-# --- TAB 6: ADMIN ---
-with tabs[5]:
+# --- TAB 5: ADMIN ---
+with tab_adm:
     if not st.session_state.admin_authenticated:
-        if st.text_input("Admin Password", type="password", key="a_pass") == "Password1234":
+        if st.text_input("Admin Password", type="password", key="a_pass_admin_tab") == "Password1234": 
             st.session_state.admin_authenticated = True
             st.rerun()
     else:
         st.subheader("Admin Panel")
-        col1, col2 = st.columns(2)
         
+        # --- Top Level Admin UI ---
+        if st.session_state.pending_requests:
+            st.info(f"⚠️ You have {len(st.session_state.pending_requests)} pending request(s).")
+        
+        if st.button("Save Admin Changes", key="btn_top_admin_save"):
+            st.success("Admin configuration saved.")
+        st.divider()
+
+        col1, col2 = st.columns(2)
+    
         with col1:
             st.subheader("Roster Management")
-            roster = get_staff_list() if get_staff_list() else st.session_state.staff_roster
-            for n, d in list(roster.items()):
-                c1, c2, c3 = st.columns([3, 3, 2])
-                c1.write(n)
-                c2.write(d.get("nick", ""))
-                if c3.button("Remove", key=f"rm_{n}"):
-                    delete_staff(n)
-                    st.rerun()
-
+                
+            # 1. Fetch current list from DB
+            roster = get_staff_list() 
+                
+            # 2. Header Grid Layout
+            c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
+            c1.write("**Name**")
+            c2.write("**Nickname**")
+            c3.write("**Birthday**")
+            c4.write("**Actions**")
+            st.divider()
+    
+            # 3. Loop through DB data records
+            if roster:
+                for name, data in roster.items():
+                    c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
+                    c1.write(name)
+                    c2.write(data.get("nick", ""))
+                    
+                    bday_val = data.get("bday")
+                    if isinstance(bday_val, str):
+                        try:
+                            bday_val = datetime.strptime(bday_val.split("T")[0], "%Y-%m-%d").date()
+                        except ValueError:
+                            bday_val = date.today()
+                    
+                    c3.write(bday_val.strftime('%B %d') if hasattr(bday_val, 'strftime') else str(bday_val))
+                    
+                    # Actions Button Control
+                    if c4.button("Remove", key=f"del_staff_{name}"):
+                        delete_staff(name)
+                        st.rerun()
+            else:
+                st.write("*No staff members configured in the roster database.*")
+    
+            # 4. Entry Form Configuration
             st.markdown("---")
-            new_name = st.text_input("Staff Name")
-            new_nick = st.text_input("Nickname")
-            new_bday = st.date_input("Birthday", min_value=date(1950, 1, 1))
-            if st.button("Add Staff"):
-                if new_name:
-                    save_staff(new_name, {"bday": datetime.combine(new_bday, time.min), "nick": new_nick if new_nick else new_name, "rest_days": []})
-                    st.success("Staff member created successfully.")
-                    st.rerun()
-
-            st.subheader("Daily Config")
-            st.session_state.selected_admin_date = st.date_input("Select Date to View/Edit", date.today(), key="admin_date_pick")
-            st.session_state.limits["PTO"] = st.number_input("Max PTO", value=st.session_state.limits.get("PTO", 1))
-            st.session_state.limits["Wellness"] = st.number_input("Max Wellness", value=st.session_state.limits.get("Wellness", 1))
+            new_name = st.text_input("Staff Name", key="input_new_staff_name")
+            new_nick = st.text_input("Nickname", key="input_new_staff_nick")
+            new_bday = st.date_input("Birthday", min_value=date(1950, 1, 1), key="new_bday")
+            rest_days = st.multiselect("Select Rest Days", 
+                           ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], key="ms_rest_days")
             
-            config_mode = st.radio("Apply to:", ["Single Date", "Date Range", "Full Month"])
+            if st.button("Add Staff", key="btn_submit_add_staff"):
+                if new_name:
+                    bday_datetime = datetime.combine(new_bday, time.min)
+                    save_staff(new_name, {
+                        "bday": bday_datetime,
+                        "nick": new_nick if new_nick else new_name,
+                        "rest_days": rest_days
+                    })
+                    st.success(f"Added {new_name} to database!")
+                    st.rerun()
+            st.divider()
+    
+            # --- DAILY CONFIG ---
+            st.subheader("Configuration")
+            st.session_state.selected_admin_date = st.date_input("Select Date to View/Edit", date.today(), key="cfg_view_edit_date")
+            
+            st.markdown("---")
+            st.subheader("Important Notifications")
+            target_d = st.date_input("Target Date", key="config_target_date")
+            admin_sender_email = st.text_input("Your Work Email (Sender Address)", key="cfg_admin_sender_email")
+            
+            new_notif = st.text_input("Add New System Notification", key="input_new_sys_notif")
+            if st.button("Post Notification", key="btn_post_sys_notif"): 
+                if new_notif:
+                    if "notifications" not in st.session_state:
+                        st.session_state.notifications = []
+                    st.session_state.notifications.append(new_notif)
+                    st.success("Notification posted!")
+                    st.rerun()
+            
+            st.subheader("Daily Config")
+            config_mode = st.radio("Apply to:", ["Single Date", "Date Range", "Full Month"], key="radio_cfg_mode")
+            
+            # Date selection logic configuration mapping
             if config_mode == "Single Date": 
-                target_dates = [st.session_state.selected_admin_date]
+                target_dates = [st.date_input("Date", key="cfg_d")]
             elif config_mode == "Date Range": 
                 dr = st.date_input("Range", [], key="cfg_dr")
                 target_dates = pd.date_range(dr[0], dr[1]).date if len(dr) == 2 else []
             else:
-                sm = st.session_state.selected_admin_date
-                target_dates = [d.date() for d in pd.date_range(f"{sm.year}-{sm.month}-01", periods=31) if d.month == sm.month]
+                sm = st.date_input("Month", value=date.today(), key="cfg_m")
+                target_dates = pd.date_range(f"{sm.year}-{sm.month}-01", periods=31).date
+                target_dates = [d for d in target_dates if d.month == sm.month]
+    
+            # Limits, Shifts, and Status mapping definitions
+            st.session_state.limits["PTO"] = st.number_input("Max PTO", value=st.session_state.limits.get("PTO", 1), key="num_max_pto")
+            st.session_state.limits["Wellness"] = st.number_input("Max Wellness", value=st.session_state.limits.get("Wellness", 1), key="num_max_well")
             
-            setup = st.selectbox("Status Setup", ["PROD - ONSITE", "PROD - WAH", "HOLIDAY"])
-            available = list(roster.keys())
-            call = st.multiselect("Assign Call", available)
-            chat = st.multiselect("Assign Chat", available)
-            mfq = st.multiselect("Assign MFQ", available)
-            sme = st.multiselect("Assign SME", available)
+            start_t = st.time_input("Shift Start", value=time(9, 0), key="time_shift_start")
+            end_t = st.time_input("Shift End", value=time(18, 0), key="time_shift_end")
+            timezone = "PHT"
             
-            if st.button("Save Config"):
-                for tgt in target_dates:
-                    st.session_state.calendar_data[tgt] = {
-                        "shift": "09:00 AM - 06:00 PM PHT", 
+            shift_display = f"{start_t.strftime('%I:%M %p')} - {end_t.strftime('%I:%M %p')} {timezone}"
+            st.write(f"Selected Shift: **{shift_display}**")
+            
+            setup = st.selectbox("Status", ["PROD - ONSITE", "PROD - WAH", "HOLIDAY"], key="sb_daily_status_setup")
+            
+            # Assignment Availability Filters
+            safe_target_dates = target_dates if isinstance(target_dates, (list, tuple)) else []
+            base_date = safe_target_dates[0] if len(safe_target_dates) > 0 else date.today()
+            
+            unavailable = [r['name'] for r in st.session_state.approved_requests if str(r['date']) == str(base_date)]
+            available = [n for n in roster.keys() if n not in unavailable] if roster else []
+            
+            call = st.multiselect("Assign Call", available, key="ms_assign_call")
+            chat = st.multiselect("Assign Chat", available, key="ms_assign_chat")
+            mfq = st.multiselect("Assign MFQ", available, key="ms_assign_mfq")
+            sme = st.multiselect("Assign SME", available, key="ms_assign_sme")
+            
+            if st.button("Save Config", key="btn_save_daily_config"):
+                for d in target_dates:
+                    st.session_state.calendar_data[d] = {
+                        "shift": shift_display, 
                         "status": setup, 
                         "call": call, 
-                        "chat": chat, 
-                        "mfq": mfq, 
+                        "chat": chat,
+                        "mfq": mfq,
                         "sme": sme
                     }
+                
+                # Convert date keys to strings for MongoDB compatibility
                 serializable_data = {str(k): v for k, v in st.session_state.calendar_data.items()}
-                collection.update_one({"type": "calendar_data"}, {"$set": {"data": serializable_data}}, upsert=True)
-                st.success("Configuration synced successfully!")
+                
+                collection.update_one(
+                    {"type": "calendar_data"},
+                    {"$set": {"data": serializable_data}},
+                    upsert=True
+                )
+                st.success("Configuration saved to database!")
                 st.rerun()
         
         with col2:
             st.subheader("Approval Center")
-            pto_pending = [r for r in st.session_state.pending_requests if r.get('type') == 'PTO']
-            wellness_pending = [r for r in st.session_state.pending_requests if r.get('type') == 'Wellness']
             
-            st.markdown("### ✈️ PTO Requests")
-            for req in pto_pending: render_request(req, "pto")
+            # --- DISPLAY ADMIN MESSAGES ---
+            if "admin_msg" not in st.session_state: 
+                st.session_state.admin_msg = None
+            if st.session_state.admin_msg:
+                msg_type, msg_text = st.session_state.admin_msg
+                if msg_type == "success": 
+                    st.success(msg_text)
+                else: 
+                    st.warning(msg_text)
+                    
+                if st.button("Clear Notification", key="clear_admin_notif"):
+                    st.session_state.admin_msg = None
+                    st.rerun()
+
+            # --- WELLNESS SECTION ---
             st.markdown("### 🌿 Wellness Requests")
-            for req in wellness_pending: render_request(req, "wellness")
-            
+            wellness_pending = [r for r in st.session_state.pending_requests if r.get('type') == 'Wellness']
+            if wellness_pending:
+                for req in wellness_pending:
+                    master_idx = st.session_state.pending_requests.index(req)
+                    render_request(req, f"wellness_{master_idx}")
+            else:
+                st.write("No pending Wellness requests.")
+
+            # --- PTO SECTION ---
+            st.markdown("### ✈️ PTO Requests")
+            pto_pending = [r for r in st.session_state.pending_requests if r.get('type') == 'PTO']
+            if pto_pending:
+                for req in pto_pending:
+                    master_idx = st.session_state.pending_requests.index(req)
+                    render_request(req, f"pto_{master_idx}")
+            else:
+                st.write("No pending PTO requests.")
+
+            st.divider()
+
+            # --- APPROVED HISTORY ---
             st.subheader("✅ Approved History")
-            all_approved = fetch_approved_requests_from_db()
-            if all_approved:
-                st.table(pd.DataFrame(all_approved).drop(columns=['_id', 'type'], errors='ignore'))
+            all_approved_from_db = fetch_approved_requests_from_db()
+            month_to_filter = st.session_state.get("cal_m", date.today().month)
+            
+            app_wellness = []
+            app_pto = []
+            
+            for r in all_approved_from_db:
+                date_val = r.get('date')
+                if isinstance(date_val, str):
+                    try:
+                        date_val = datetime.strptime(date_val.split("T")[0], "%Y-%m-%d").date()
+                    except ValueError:
+                        continue
+                if date_val.month == month_to_filter:
+                    if r.get('type') == "Wellness":
+                        app_wellness.append(r)
+                    elif r.get('type') == "PTO":
+                        app_pto.append(r)
+            
+            if app_wellness:
+                st.markdown("#### Approved Wellness")
+                st.table(pd.DataFrame(app_wellness).drop(columns=['_id', 'type'], errors='ignore'))
+            if app_pto:
+                st.markdown("#### Approved PTO")
+                st.table(pd.DataFrame(app_pto).drop(columns=['_id', 'type'], errors='ignore'))
+            if not app_wellness and not app_pto:
+                st.write("No approved requests for this month.")
