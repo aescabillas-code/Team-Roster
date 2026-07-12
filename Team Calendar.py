@@ -7,6 +7,7 @@ import holidays
 import sys
 from types import ModuleType
 import pytz
+from datetime import datetime, timedelta
 
 # --- MOCK GMAIL BARD MODULE IF NOT LOCALLY INSTALLED ---
 if "gmail_bard" not in sys.modules:
@@ -693,16 +694,36 @@ with tab_dev:
             shift_time = st.session_state.calendar_data.get(target_date, {}).get("shift", "Not Set")
             st.write(f"**Shift Time:** {shift_time}")
         with col2:
-            start_time = st.time_input("Start Time")
+start_time = st.time_input("Start Time")
             end_time = st.time_input("End Time")
+            
+            # 1. Calculate the duration automatically based on time inputs
+            # Using a dummy date to handle delta calculations safely
+            dummy_date = date.today()
+            dt_start = datetime.combine(dummy_date, start_time)
+            dt_end = datetime.combine(dummy_date, end_time)
+            
+            # Handle overnight shifts (e.g., 11:00 PM to 7:00 AM)
+            if dt_end < dt_start:
+                dt_end += timedelta(days=1)
+                
+            time_delta = dt_end - dt_start
+            auto_total_mins = int(time_delta.total_seconds() / 60)
+            
+            # 2. Extract hours and minutes for the default values
+            default_hrs = auto_total_mins // 60
+            default_mins = auto_total_mins % 60
+            
+            # 3. Render layout columns pre-populated with the auto-calculated time
             duration_col1, duration_col2 = st.columns(2)
             with duration_col1:
-                duration_hrs = st.number_input("Hours", min_value=0, value=0, step=1)
+                duration_hrs = st.number_input("Hours", min_value=0, value=default_hrs, step=1)
             with duration_col2:
-                duration_mins = st.number_input("Mins", min_value=0, max_value=59, value=0, step=1)
+                duration_mins = st.number_input("Mins", min_value=0, max_value=59, value=default_mins, step=1)
             
-            # 2. Calculate total minutes properly down here
+            # 4. Final computed value to save to your database
             total_mins = (duration_hrs * 60) + duration_mins
+
             aux = st.text_input("Aux") # Restored input field
             reason = st.text_area("Reason of Deviation")
             
