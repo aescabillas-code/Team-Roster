@@ -119,7 +119,6 @@ def send_request_notification(recipient_email, status, request_type, date_val):
 # --- INITIAL CONFIG & STATE ---
 st.set_page_config(layout="wide")
 st.title("📊 Operational Shift & Roster Management System")
-st.divider()
 
 # Define your country's local timezone (Philippines / PHT)
 local_tz = pytz.timezone("Asia/Manila") 
@@ -161,7 +160,7 @@ if "last_tracked_date" not in st.session_state or st.session_state.last_tracked_
 # --- GLOBAL CSS STYLING ---
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght=400;600&display=swap');
     html, body, [class*="css"] { font-family: 'Quicksand', sans-serif !important; }
     
     /* All headers forced to Teal color */
@@ -169,19 +168,24 @@ st.markdown("""
     
     .side-block { font-family: 'Quicksand', sans-serif !important; font-size: 10px !important; line-height: 1.2; }
     
-    /* Calendar Day Block: Height increased, background changed to translucent teal, font color white */
+    /* Calendar Day Block: Combined together dynamically in a uniform strip layout with no margins */
     .day-block { 
-        border-radius: 15px; 
+        border-radius: 0px; 
         padding: 10px; 
-        height: auto; 
-        min-height: 240px; 
+        height: 100%; 
+        min-height: 280px; 
         font-size: 11px; 
         background-color: rgba(0, 128, 128, 0.75); 
         color: #ffffff !important;
-        border: 1px solid #00aaaa; 
-        margin: 4px; 
+        border: 1px solid rgba(0, 170, 170, 0.3); 
+        margin: 0px; 
         display: flex; 
         flex-direction: column; 
+    }
+    
+    /* Strict layout equalization to combine calendar blocks side-by-side cleanly without separation gaps */
+    div[data-testid="stHorizontalBlock"] {
+        gap: 0px !important;
     }
     
     /* Make the date inside the day block noticeably bigger than the rest of the content */
@@ -229,6 +233,68 @@ st.markdown("""
     /* Hover effect for items inside the dropdown menu */
     div[data-baseweb="menu"] li:hover {
         background-color: rgba(0, 170, 170, 0.4) !important;
+    }
+
+    /* Header Tab Bar Restyling: Ombre teal background, white text labels, and larger font sizing */
+    div[data-testid="stTabs"] button {
+        background: linear-gradient(90deg, #004d4d 0%, #008080 100%) !important;
+        color: #ffffff !important;
+        font-size: 18px !important; /* Noticeably bigger in size */
+        font-weight: 600 !important;
+        padding: 12px 24px !important;
+        border-radius: 8px 8px 0px 0px !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        margin-right: 4px !important;
+    }
+    
+    /* Active highlighted tab indicator color override */
+    div[data-testid="stTabs"] button[aria-selected="true"] {
+        background: linear-gradient(90deg, #008080 0%, #00bcbc 100%) !important;
+        color: #ffffff !important;
+        border-bottom: 3px solid #ffffff !important;
+    }
+
+    /* Translucent teal entry boxes and white font applied to all forms and their nested standard input tags */
+    div[data-testid="stForm"] input, 
+    div[data-testid="stForm"] textarea,
+    div[data-testid="stForm"] .stTextInput div div,
+    div[data-testid="stForm"] .stNumberInput div div,
+    div[data-testid="stForm"] .stDateInput div div,
+    div[data-testid="stForm"] div[role="textarea"] {
+        background-color: rgba(0, 128, 128, 0.75) !important;
+        color: #ffffff !important;
+        border: 1px solid #00aaaa !important;
+    }
+    
+    /* Ensure typed text and placeholders inside forms present cleanly in white */
+    div[data-testid="stForm"] input {
+        -webkit-text-fill-color: #ffffff !important;
+        color: #ffffff !important;
+    }
+    
+    /* General input label text color overrides inside interactive form view blocks */
+    div[data-testid="stForm"] label, div[data-testid="stForm"] p {
+        color: #008080 !important;
+        font-weight: 600;
+    }
+
+    /* Table alternate grid styles (skipping the main calendar layout) */
+    div[data-testid="stTable"] tr:nth-child(even) {
+        background-color: rgba(0, 128, 128, 0.85) !important;
+    }
+    div[data-testid="stTable"] tr:nth-child(even) td {
+        color: #ffffff !important;
+    }
+    div[data-testid="stTable"] tr:nth-child(odd) {
+        background-color: #ffffff !important;
+    }
+    div[data-testid="stTable"] tr:nth-child(odd) td {
+        color: #008080 !important;
+        font-weight: 600;
+    }
+    div[data-testid="stTable"] th {
+        background-color: #004d4d !important;
+        color: #ffffff !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -286,7 +352,6 @@ with tab_cal:
     
     # 2. Define structural page layout allocation matrix columns
     col_main, col_side = st.columns([4, 1])
-    current_date = date.today()
     
     # 3. Use col_main for the top filters
     with col_main:
