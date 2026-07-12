@@ -22,6 +22,7 @@ from database import (
     get_request_limits
 )
 
+# --- INITIAL CONFIG & STATE ---
 st.set_page_config(layout="wide", page_title="Team Roster & Staffing System")
 
 # --- DATABASE HELPERS ---
@@ -32,9 +33,6 @@ client = MongoClient(uri)
 db = client["my_database"] # Replace with your actual DB name
 collection = db["my_collection"]    # Replace with your actual collection name
    
-# --- INITIAL CONFIG & STATE ---
-st.set_page_config(layout="wide", page_title="Team Roster & Staffing System")
-
 # --- DATABASE ---
 uri = st.secrets["mongo"]["uri"]
 
