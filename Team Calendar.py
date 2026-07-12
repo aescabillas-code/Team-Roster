@@ -1,3 +1,4 @@
+from datetime import date
 from datetime import date, time, datetime
 import streamlit as st
 from pymongo.mongo_client import MongoClient
@@ -56,7 +57,10 @@ collection = get_collection()
 
 # --- INITIALIZE STATE ---
 if "staff_roster" not in st.session_state: 
-    st.session_state.staff_roster = {"Agent A": {"bday": date(2000, 1, 1), "nick": "A"}, "Agent B": {"bday": date(1995, 5, 20), "nick": "B"}}
+    st.session_state.staff_roster = {
+        "Agent A": {"bday": date(2000, 1, 1), "nick": "A"}, 
+        "Agent B": {"bday": date(1995, 5, 20), "nick": "B"}
+    }
 if "deviation_requests" not in st.session_state: st.session_state.deviation_requests = []
 if "pending_requests" not in st.session_state: st.session_state.pending_requests = []
 if "approved_requests" not in st.session_state: st.session_state.approved_requests = []
