@@ -2,25 +2,29 @@ from datetime import datetime, time
 from datetime import datetime
 from datetime import date, time, datetime
 import streamlit as st
-from pymongo.mongo_client import MongoClient
+from pymongo import MongoClient
 import calendar
 import pandas as pd
 import holidays
 
 # --- DATABASE HELPERS ---
+# 1. ESTABLISH CONNECTION FIRST
+# Use st.secrets to keep your credentials safe
+uri = st.secrets["mongo"]["uri"] 
+client = MongoClient(uri)
+db = client["team_calendar_db"] # Replace with your actual DB name
+collection = db["team_data"]    # Replace with your actual collection name
+
+# 2. NOW DEFINE THE FUNCTION (it can now see 'collection')
 def load_data_from_db():
     if "staff_roster" not in st.session_state:
-        # Load from your MongoDB collection
         roster_doc = collection.find_one({"type": "roster_list"})
         st.session_state.staff_roster = roster_doc.get("data", {}) if roster_doc else {}
     
     if "calendar_data" not in st.session_state:
-        # Load calendar data
         cal_doc = collection.find_one({"type": "calendar_data"})
         st.session_state.calendar_data = cal_doc.get("data", {}) if cal_doc else {}
-
-# Call this immediately
-load_data_from_db()
+        
 @st.cache_data(ttl=600)
 def get_staff_list():
     try:
