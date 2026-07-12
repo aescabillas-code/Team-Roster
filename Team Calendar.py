@@ -19,7 +19,8 @@ from database import (
     update_request_status_in_db,
     delete_request_from_db,
     fetch_approved_requests_from_db,
-    get_request_limits
+    get_request_limits,
+    load_data_from_db
 )
 
 # --- INITIAL CONFIG & STATE ---
