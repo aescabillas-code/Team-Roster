@@ -18,6 +18,15 @@ collection = db["team_data"]    # Replace with your actual collection name
 
 # 2. NOW DEFINE THE FUNCTION (it can now see 'collection')
 
+def initialize_session_data():
+    if "admin_roster" not in st.session_state:
+        roster_doc = collection.find_one({"type": "roster_list"})
+        # Ensure we safely extract the nested dictionary
+        st.session_state.admin_roster = roster_doc.get("data", {}) if roster_doc else {}
+
+# Call this before any tab definitions
+initialize_session_data()
+
 @st.cache_data(ttl=600)
 def get_staff_list():
     try:
@@ -31,13 +40,17 @@ def get_staff_list():
         st.error("Could not load staff data from the database.")
         return {}
 
-def save_staff(name, data):
-    st.session_state.staff_roster[name] = data
+def save_admin_staff(name, data):
+    # 1. Update the database
     collection.update_one(
         {"type": "roster_list"},
-        {"$set": {"data": st.session_state.staff_roster}},
+        {"$set": {f"data.{name}": data}}, # Updating only the specific key
         upsert=True
     )
+    # 2. IMPORTANT: Update the session state so other tabs see the change immediately
+    st.session_state.admin_roster[name] = data
+    st.success("Staff updated!")
+    st.rerun()
 
 def delete_staff(name):
     collection.delete_one({"type": "roster", "name": name})
