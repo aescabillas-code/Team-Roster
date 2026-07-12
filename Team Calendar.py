@@ -60,7 +60,7 @@ tab_names = ["📅 Calendar", "📝 Request", "🔍 Case Tracker", "🔀 Deviati
 tabs = st.tabs(tab_names)
     
     # Close the div
-    st.markdown('</div>', unsafe_allow_html=True)
+st.markdown('</div>', unsafe_allow_html=True)
 
 # --- ADD THIS MIGRATION BLOCK ---
 if "staff_roster" in st.session_state:
