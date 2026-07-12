@@ -54,7 +54,7 @@ def delete_staff(name):
         del st.session_state.staff_roster[name]
 
 def update_staff_in_db(name, update_dict):
-    collection.update_one({"type": ""roster_list", "name": name}, {"$set": update_dict})
+    collection.update_one({"type": "roster_list", "name": name}, {"$set": update_dict})
     if name in st.session_state.staff_roster:
         st.session_state.staff_roster[name].update(update_dict)
 
