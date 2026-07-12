@@ -6,7 +6,7 @@ from datetime import datetime, date, time
 from pymongo import MongoClient
 
 # Import your database functions from your external file
-from db["my_collection"] import (
+from db.my_collection import (
     fetch_masterfile_from_db, 
     save_request_to_db, 
     save_case_to_db, 
