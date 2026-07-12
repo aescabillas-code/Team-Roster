@@ -12,8 +12,14 @@ import holidays
 # Use st.secrets to keep your credentials safe
 uri = st.secrets["mongo"]["uri"] 
 client = MongoClient(uri)
-db = client["team_calendar_db"] # Replace with your actual DB name
-collection = db["team_data"]    # Replace with your actual collection name
+db = return client["my_database"]
+collection = db["my_collection"] 
+
+def fetch_approved_requests_from_db():
+    db = get_db() # Using the existing get_db() function you have
+    # Assuming you have a collection or a 'status' field in your collection
+    # Adjust the filter based on how your data is structured in 'my_collection'
+    return list(db["my_collection"].find({"type": "request", "status": "Approved"}))
 
 def fetch_cases_from_db():
     db = get_db()
