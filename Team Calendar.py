@@ -6,6 +6,7 @@ import pandas as pd
 import holidays
 import sys
 from types import ModuleType
+import pytz
 
 # --- MOCK GMAIL BARD MODULE IF NOT LOCALLY INSTALLED ---
 if "gmail_bard" not in sys.modules:
@@ -117,6 +118,10 @@ def send_request_notification(recipient_email, status, request_type, date_val):
 
 # --- INITIAL CONFIG & STATE ---
 st.set_page_config(layout="wide", page_title="Team Roster & Staffing System")
+
+# Define your country's local timezone (Philippines / PHT)
+local_tz = pytz.timezone("Asia/Manila") 
+current_date = datetime.now(local_tz).date()
 
 if "pending_requests" not in st.session_state: 
     st.session_state.pending_requests = fetch_pending_requests_from_db()
@@ -788,7 +793,7 @@ with tab_adm:
             
             start_t = st.time_input("Shift Start", value=time(9, 0), key="time_shift_start")
             end_t = st.time_input("Shift End", value=time(18, 0), key="time_shift_end")
-            timezone = "PHT (Philippine Time)"
+            timezone = "PHT"
             
             shift_display = f"{start_t.strftime('%I:%M %p')} - {end_t.strftime('%I:%M %p')} {timezone}"
             st.write(f"Selected Shift: **{shift_display}**")
