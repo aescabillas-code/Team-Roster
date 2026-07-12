@@ -39,7 +39,7 @@ def load_data_from_db():
 @st.cache_data(ttl=600)
 def get_staff_list():
     try:
-        cursor = collection.find({"type": "roster"})
+        cursor = collection.find({"type": "roster_list"})
         return {doc["name"]: {"bday": doc["bday"], "nick": doc["nick"], "rest_days": doc.get("rest_days", [])} for doc in cursor}
     except Exception:
         return {}
