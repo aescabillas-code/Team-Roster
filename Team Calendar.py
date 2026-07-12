@@ -48,12 +48,12 @@ def delete_staff(name):
 def fetch_cases_from_db():
     # Fetches all documents with type "case"
     return list(collection.find({"type": "case"}))
-    # Targets the document containing your masterfile data
-    # Assuming 'type' is used to identify the masterfile record
+    
+def fetch_masterfile_from_db():
+    # Replace 'masterfile' with the actual 'type' value used for your master data document
     doc = collection.find_one({"type": "masterfile"})
     
     if doc and "data" in doc:
-        # If your masterfile is stored as a list of dicts or a dataframe-like structure
         return doc["data"]
     return []
 
