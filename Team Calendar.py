@@ -17,6 +17,15 @@ db = client["team_calendar_db"] # Replace with your actual DB name
 collection = db["team_data"]    # Replace with your actual collection name
 
 # 2. NOW DEFINE THE FUNCTION (it can now see 'collection')
+def fetch_masterfile_from_db():
+    # Targets the document containing your masterfile data
+    # Assuming 'type' is used to identify the masterfile record
+    doc = collection.find_one({"type": "masterfile"})
+    
+    if doc and "data" in doc:
+        # If your masterfile is stored as a list of dicts or a dataframe-like structure
+        return doc["data"]
+    return []
 def load_data_from_db():
     if "staff_roster" not in st.session_state:
         roster_doc = collection.find_one({"type": "roster_list"})
