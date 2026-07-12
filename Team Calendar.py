@@ -18,6 +18,21 @@ collection = db["my_collection"]
 
 # 2. NOW DEFINE THE FUNCTION (it can now see 'collection')
 
+@st.cache_data(ttl=600)
+def get_staff_list():
+    try:
+        # Debugging: Does the collection exist?
+        cursor = collection.find({"type": "roster"})
+        results = {doc["name"]: {
+            "bday": doc["bday"], 
+            "nick": doc["nick"], 
+            "rest_days": doc.get("rest_days", [])
+        } for doc in cursor}
+        return results
+    except Exception as e:
+        st.error(f"Error fetching data: {e}")
+        return {}
+
 def save_config_to_db(data):
     # Saves configuration (shifts, statuses, assignments)
     collection.update_one(
@@ -61,19 +76,6 @@ def initialize_session_data():
 
 # Call this before any tab definitions
 initialize_session_data()
-
-@st.cache_data(ttl=600)
-def get_staff_list():
-    try:
-        cursor = collection.find({"type": "roster"})
-        return {doc["name"]: {
-            "bday": doc["bday"], 
-            "nick": doc["nick"], 
-            "rest_days": doc.get("rest_days", [])
-        } for doc in cursor}
-    except Exception as e:
-        st.error("Could not load staff data from the database.")
-        return {}
 
 def save_admin_staff(name, data):
     # 1. Update the database
