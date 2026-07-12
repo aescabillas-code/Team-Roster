@@ -18,6 +18,22 @@ collection = db["team_data"]    # Replace with your actual collection name
 
 # 2. NOW DEFINE THE FUNCTION (it can now see 'collection')
 
+def save_staff(name, data):
+    # 1. Update Session State (for immediate UI response)
+    if "staff_roster" not in st.session_state:
+        st.session_state.staff_roster = {}
+    st.session_state.staff_roster[name] = data
+    
+    # 2. Update Database (for persistence)
+    # Ensure 'collection' is defined globally at the top of your script
+    collection.update_one(
+        {"type": "roster_list"},
+        {"$set": {f"data.{name}": data}},
+        upsert=True
+    )
+    st.success("Staff updated!")
+    st.rerun()
+
 def initialize_session_data():
     if "admin_roster" not in st.session_state:
         roster_doc = collection.find_one({"type": "roster_list"})
