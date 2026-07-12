@@ -30,13 +30,6 @@ if "calendar_data" not in st.session_state: st.session_state.calendar_data = {}
 if "master_data" not in st.session_state: 
     st.session_state.master_data = pd.DataFrame({"Category": ["Contact Type", "Issue", "Product Group"], "Values": ["Call,Chat,Email", "Tech,Billing", "Hardware,Soft"]})
 
-# --- SHARED DATE SELECTION ---
-# Defining these here makes them accessible to both Calendar and Admin tabs
-col_top1, col_top2 = st.sidebar.columns(2)
-current_date = date.today()
-year = col_top1.selectbox("Year", [2026, 2027, 2028], key="g_year")
-month = col_top2.selectbox("Month", range(1, 13), format_func=lambda x: calendar.month_name[x], index=current_date.month - 1, key="g_month")
-
 # --- HANDLER FUNCTIONS ---
 def handle_approval(req, original_idx):
     req["status"] = "Approved"
@@ -54,10 +47,6 @@ def render_request(req, idx, prefix):
         if st.button("Deny", key=f"den_{unique_id}"):
             st.session_state.pending_requests.pop(idx)
             st.rerun()
-
-# --- APP LAYOUT ---
-tab_names = ["📅 Calendar", "📝 Request", "🔍 Case Tracker", "🔀 Deviation", "📂 Masterfile", "🔑 Admin"]
-tabs = st.tabs(tab_names)
     
     # Close the div
 st.markdown('</div>', unsafe_allow_html=True)
