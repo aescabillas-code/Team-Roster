@@ -86,9 +86,6 @@ def update_staff_in_db(name, update_dict):
         
     st.success(f"{name} has been updated.")
     
-# --- INITIAL CONFIG & STATE ---
-st.set_page_config(layout="wide", page_title="Team Roster & Staffing System")
-
 # --- DATABASE ---
 uri = st.secrets["mongo"]["uri"]
 
