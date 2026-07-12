@@ -119,7 +119,6 @@ def send_request_notification(recipient_email, status, request_type, date_val):
 # --- INITIAL CONFIG & STATE ---
 st.set_page_config(layout="wide")
 st.title("📊 Operational Shift & Roster Management System")
-st.markdown("### 🏢 Asia/Manila (PHT) Operations Command Center")
 st.divider()
 
 # Define your country's local timezone (Philippines / PHT)
@@ -144,18 +143,20 @@ if "master_data" not in st.session_state:
     })
 
 # --- DATA MIGRATION ---
-# Force type conversions during load transitions
+# Force type conversions during load transitions safely
 if "staff_roster" in st.session_state:
     for name, value in st.session_state.staff_roster.items():
         if isinstance(value, dict) and isinstance(value.get("bday"), date) and not isinstance(value.get("bday"), datetime):
             d = value["bday"]
             value["bday"] = datetime(d.year, d.month, d.day)
+
+# SAFE SYSTEM REFRESH IF THE DATE HAS SHIFTED TO A NEW DAY
 if "last_tracked_date" not in st.session_state or st.session_state.last_tracked_date != current_date:
     st.session_state.last_tracked_date = current_date
-    # Clear the old stale calendar mappings to force a clean pull from Mongo
-    if "calendar_data" in st.session_state:
-        del st.session_state.calendar_data
-load_data_from_db()
+    # Instead of deleting the object key entirely (which causes the segmentation fault),
+    # we cleanly clear out the old records or let load_data_from_db safely overwrite it.
+    st.session_state.calendar_data = {} 
+    load_data_from_db()
 
 # --- GLOBAL CSS STYLING ---
 st.markdown("""
