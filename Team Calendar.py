@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import datetime
 from datetime import date, time, datetime
 import streamlit as st
 from pymongo.mongo_client import MongoClient
@@ -25,6 +25,8 @@ def get_staff_list():
         return {}
 
 def save_staff(name, data):
+    # Add this temporary debug line in save_staff
+    print(f"DEBUG: Data being saved: {your_data_variable}")
     collection.update_one(
         {"type": "roster", "name": name}, 
         {"$set": {"name": name, **data}}, 
