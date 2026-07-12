@@ -799,17 +799,24 @@ with tab_adm:
             
             if st.button("Add Staff"):
                 if new_name:
-                    # Convert date to datetime before passing to save_staff
                     bday_datetime = datetime.combine(new_bday, time.min)
                     
+                    # 1. Save to DB
                     save_staff(new_name, {
-                        "bday": bday_datetime, # Use the converted datetime
+                        "bday": bday_datetime,
                         "nick": new_nick if new_nick else new_name,
                         "rest_days": rest_days
                     })
+                    
+                    # 2. Update session state specifically to avoid stale reads
+                    st.session_state.admin_roster[new_name] = {
+                        "bday": bday_datetime,
+                        "nick": new_nick if new_nick else new_name,
+                        "rest_days": rest_days
+                    }
+                    
                     st.success(f"Added {new_name}!")
-                    st.rerun()
-            st.divider()
+                    st.rerun() # Forces the script to re-run from the top, re-fetching the list
     
             # --- DAILY CONFIG---
             st.subheader("Configuration")
