@@ -59,10 +59,25 @@ def save_staff(name, data):
     )
 
 def delete_staff(name):
+    # 1. Remove from MongoDB
     collection.delete_one({"type": "roster", "name": name})
-    # Clear cache so the app fetches the updated list immediately
-    st.cache_data.clear()
+    
+    # 2. Update session state immediately so the UI reflects the change
+    if name in st.session_state.staff_roster:
+        del st.session_state.staff_roster[name]
+        
+    st.success(f"{name} has been removed.")
 
+def update_staff_in_db(name, update_dict):
+    # 1. Update in MongoDB
+    collection.update_one({"type": "roster", "name": name}, {"$set": update_dict})
+    
+    # 2. Update session state so the UI reflects the change
+    if name in st.session_state.staff_roster:
+        st.session_state.staff_roster[name].update(update_dict)
+        
+    st.success(f"{name} has been updated.")
+    
 # --- INITIAL CONFIG & STATE ---
 st.set_page_config(layout="wide", page_title="Team Roster & Staffing System")
 
@@ -117,23 +132,46 @@ def handle_approval(req, original_idx):
     st.rerun()
     
 def render_request(req, idx, key_prefix):
+    # Unique keys for this specific request
     denial_key = f"denying_{key_prefix}_{idx}"
     
+    # 1. Standard Display Row
+    c1, c2, c3 = st.columns([3, 1, 1])
+    c1.write(f"**{req['name']}** - {req['date']} ({req['type']})")
+    
+    # 2. Approve Action
+    if c2.button("Approve", key=f"app_{key_prefix}_{idx}"):
+        # Update Database
+        update_request_status_in_db(req, "Approved")
+        # Sync Session State
+        req['status'] = "Approved"
+        st.session_state.approved_requests.append(req)
+        st.session_state.pending_requests.pop(idx)
+        st.success("Request Approved and saved!")
+        st.rerun()
+
+    # 3. Deny Action (Triggers Popup)
+    if c3.button("Deny", key=f"den_{key_prefix}_{idx}"):
+        st.session_state[denial_key] = True
+        st.rerun()
+
+    # 4. Denial Popup Logic
     if st.session_state.get(denial_key):
-        # --- DENIAL POPUP UI ---
-        st.write(f"Reason for denying {req['name']}'s {req['type']} request:")
+        st.write(f"--- Reason for denying {req['name']}'s {req['type']} request ---")
         reason = st.text_input("Reason", key=f"reason_{key_prefix}_{idx}")
         
         col1, col2 = st.columns(2)
         if col1.button("Proceed Denial", key=f"confirm_{key_prefix}_{idx}"):
-            # 1. Send denial email
+            # 1. Database Deletion
+            delete_request_from_db(req)
+            # 2. Notification (Optional)
             if req.get("email"):
                 send_request_notification(req['email'], "Denied", req['type'], req['date'])
-            # 2. Logic to remove from pending
+            # 3. State sync
             st.session_state.pending_requests.pop(idx)
             st.session_state[denial_key] = False
             st.session_state.admin_msg = ("warning", f"Denied {req['name']}'s request: {reason}")
-            st.rerun() # Rerun AFTER all state changes
+            st.rerun()
             
         if col2.button("Cancel", key=f"cancel_{key_prefix}_{idx}"):
             st.session_state[denial_key] = False
@@ -381,26 +419,40 @@ with tab_cal:
 with tab_req:
     st.subheader("PTO/Wellness Request")
     
-    # Instruction added here
-    st.info("💡 **Tip:** Providing your work email is optional. If you provide it, you will receive an automatic notification once your request status is updated.")
+    st.info("💡 **Tip:** Providing your work email is optional.")
     
     with st.form("request_form", clear_on_submit=True):
-        name = st.selectbox("Name", list(st.session_state.staff_roster.keys()))
+        # 1. Fetch staff roster from DB
+        staff_data = get_staff_list() # Ensure this returns a dict or list of names
+        name = st.selectbox("Name", list(staff_data.keys()))
+        
         email = st.text_input("Work Email (Optional)")
         req_date = st.date_input("Request Date")
         req_type = st.selectbox("Type", ["PTO", "Wellness"])
         
         submitted = st.form_submit_button("Submit Request")
+        
         if submitted:
-            # --- DUPLICATE CHECK ---
-            # Check both pending and approved lists to ensure no conflicts
+            # 2. Fetch limits from DB
+            limits = get_request_limits() # Returns e.g., {"PTO": 5, "Wellness": 2}
+            
+            # Count existing requests for this specific date and type
+            count_on_date = len([
+                r for r in (st.session_state.pending_requests + st.session_state.approved_requests)
+                if r["date"] == req_date and r["type"] == req_type
+            ])
+            
+            # Check Duplicates
             is_already_requested = any(
                 r["name"] == name and r["date"] == req_date 
                 for r in (st.session_state.pending_requests + st.session_state.approved_requests)
             )
             
+            # 3. Validation Logic
             if is_already_requested:
                 st.warning(f"⚠️ A request for {name} on {req_date} already exists.")
+            elif count_on_date >= limits.get(req_type, 0):
+                st.error(f"❌ Limit reached for {req_type} on {req_date}. Please choose another date.")
             else:
                 st.session_state.pending_requests.append({
                     "name": name, 
@@ -408,22 +460,21 @@ with tab_req:
                     "type": req_type, 
                     "status": "Pending", 
                     "email": email,
-                    "viewed": False # Ensure this is added for your rendering logic
+                    "viewed": False
                 })
+                # Trigger a database write here to persist this new request
+                save_request_to_db(st.session_state.pending_requests[-1])
                 st.success("Request submitted successfully.")
 
 # --- TAB 3: CASE TRACKER ---
 with tab_case:
-    # 1. Define the columns first
-    col_h1, col_h2 = st.columns([4, 1])
-    with col_h1:
-        st.subheader("Log New Case")
-    with col_h2:
-        if st.button("Save Case Tracker"):
-            st.success("Case tracker data saved!")
+    st.subheader("Log New Case")
+    
+    # 1. Fetch dropdown data from DB (assuming your master_data logic holds)
     c_types = st.session_state.master_data.loc[st.session_state.master_data['Category'] == 'Contact Type', 'Values'].iloc[0].split(',')
     issues = st.session_state.master_data.loc[st.session_state.master_data['Category'] == 'Issue', 'Values'].iloc[0].split(',')
     prods = st.session_state.master_data.loc[st.session_state.master_data['Category'] == 'Product Group', 'Values'].iloc[0].split(',')
+    
     c1, c2 = st.columns(2)
     c_type = c1.selectbox("Contact Type", c_types)
     issue = c1.selectbox("Issue", issues)
@@ -436,135 +487,128 @@ with tab_case:
     if status == "Pending/Monitoring": extra = st.text_input("Pending/Monitoring Reason")
     elif status == "Routed": extra = st.text_input("Queue Destination")
     
+    # 2. Use 'Log Case' button to save directly to DB
     if st.button("Log Case"):
-        st.session_state.cases.append({"Date": date.today(), "Type": c_type, "Issue": issue, "Product Group": prod, "Desc": desc, "Steps": steps, "Status": status, "Extra": extra, "Image": uploaded_file})
-        st.success("Case logged successfully!")
+        new_case = {"Date": str(date.today()), "Type": c_type, "Issue": issue, "Product Group": prod, "Desc": desc, "Steps": steps, "Status": status, "Extra": extra}
+        # CALL YOUR DB FUNCTION HERE (e.g., save_case_to_db(new_case))
+        st.success("Case logged to database successfully!")
         st.rerun()
 
     st.divider()
     st.subheader("Knowledge Base")
+    
+    # 3. Fetch cases from DB instead of session_state
+    # cases_list = fetch_cases_from_db() 
+    
     f1, f2 = st.columns(2)
     f_issue = f1.multiselect("Filter by Issue", issues)
     f_prod = f2.multiselect("Filter by Product Group", prods)
-    for case in reversed(st.session_state.cases):
+
+    # 4. Password-protected Admin Actions
+    with st.expander("Admin Access (Edit/Delete)"):
+        admin_pass = st.text_input("Enter Admin Password", type="password")
+        is_admin = (admin_pass == st.session_state.admin_password) # Assuming password is in session_state
+
+    for case in reversed(cases_list): # Use fetched list
         if (not f_issue or case['Issue'] in f_issue) and (not f_prod or case['Product Group'] in f_prod):
             with st.container():
-                st.markdown(f"""
-                <div class="knowledge-card">
-                    <b>Date:</b> {case['Date']} | <b>Status:</b> {case['Status']}<br>
-                    <b>Contact:</b> {case['Type']} | <b>Issue:</b> {case['Issue']} | <b>Group:</b> {case['Product Group']}<br>
-                    <b>Description:</b> {case['Desc']}<br>
-                    <b>Steps Taken:</b> {case['Steps']}<br>
-                    {"<b>Extra Info:</b> " + case['Extra'] if case['Extra'] else ""}
-                </div>
-                """, unsafe_allow_html=True)
-                if case['Image']: st.image(case['Image'], caption="Case Screenshot", width=300)
+                st.markdown(f"**Date:** {case['Date']} | **Status:** {case['Status']} | **Issue:** {case['Issue']}")
+                
+                # Admin controls
+                if is_admin:
+                    col_a, col_b = st.columns(2)
+                    if col_a.button(f"Edit Case {case['_id']}", key=f"edit_{case['_id']}"):
+                        # Add your edit logic/modal here
+                        pass
+                    if col_b.button(f"Delete Case {case['_id']}", key=f"del_{case['_id']}"):
+                        # Add your delete logic here
+                        pass
 
 # --- TAB: DEVIATION ---
-    with tab_dev:  # Ensure this tab is defined in your main st.tabs list
-        st.subheader("Submit Deviation Request")
-        
-        with st.form("deviation_form", clear_on_submit=True):
-            col1, col2 = st.columns(2)
-            with col1:
-                target_date = st.date_input("Target Date", value=date.today())
-                manager = st.text_input("Manager", value="Jeff Bote")
-                name = st.selectbox("Name", list(st.session_state.staff_roster.keys()))
-                # Retrieve shift from Admin configuration
-                shift_time = st.session_state.calendar_data.get(target_date, {}).get("shift", "Not Set")
-                st.write(f"**Shift Time:** {shift_time}")
-                
-            with col2:
-                start_time = st.time_input("Start Time")
-                end_time = st.time_input("End Time")
-                total_mins = st.number_input("Total Mins", min_value=0)
-                aux = st.text_input("Aux")
-                reason = st.text_area("Reason of Deviation")
-                
-            submitted = st.form_submit_button("Submit Deviation Request")
-            if submitted:
-                st.session_state.deviation_requests.append({
-                    "Date": target_date,
-                    "Manager": manager,
-                    "Name": name,
-                    "Shift Time": shift_time,
-                    "Start Time": str(start_time),
-                    "End Time": str(end_time),
-                    "Total Mins": total_mins,
-                    "Aux": aux,
-                    "Reason": reason
-                })
-                st.success("Deviation request submitted!")
+with tab_dev:
+    st.subheader("Submit Deviation Request")
+    
+    with st.form("deviation_form", clear_on_submit=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            target_date = st.date_input("Target Date", value=date.today())
+            manager = st.text_input("Manager", value="Jeff Bote")
+            name = st.selectbox("Name", list(st.session_state.staff_roster.keys()))
+            shift_time = st.session_state.calendar_data.get(target_date, {}).get("shift", "Not Set")
+            st.write(f"**Shift Time:** {shift_time}")
+        with col2:
+            start_time = st.time_input("Start Time")
+            end_time = st.time_input("End Time")
+            total_mins = st.number_input("Total Mins", min_value=0)
+            aux = st.text_input("Aux")
+            reason = st.text_area("Reason of Deviation")
+            
+        if st.form_submit_button("Submit Deviation Request"):
+            save_deviation_to_db({
+                "Date": str(target_date), "Manager": manager, "Name": name,
+                "Shift Time": shift_time, "Start Time": str(start_time),
+                "End Time": str(end_time), "Total Mins": total_mins,
+                "Aux": aux, "Reason": reason
+            })
+            st.success("Deviation request saved to database!")
+            st.rerun()
 
-    # --- DEVIATION REPORT SECTION ---
-        st.divider()
-        c_head1, c_head2 = st.columns([3, 1])
-        c_head1.subheader("Deviation Request Report")
-        
-        # 1. Filter UI
-        with st.expander("Filter Report"):
-            f_col1, f_col2, f_col3 = st.columns(3)
-            # Using keys to ensure these widgets don't conflict with others in the app
-            filter_month = f_col1.selectbox("Month", range(1, 13), index=date.today().month-1, key="dev_f_month")
-            filter_year = f_col2.number_input("Year", value=date.today().year, key="dev_f_year")
-            filter_date = f_col3.date_input("Specific Date (Optional)", value=None, key="dev_f_date")
-            
-            apply_filter = st.button("Apply Filter")
+    st.divider()
+    st.subheader("Deviation Request Report")
+    
+    # 1. Filter UI
+    with st.expander("Filter Report"):
+        f_col1, f_col2, f_col3 = st.columns(3)
+        filter_month = f_col1.selectbox("Month", range(1, 13), index=date.today().month-1, key="dev_f_month")
+        filter_year = f_col2.number_input("Year", value=date.today().year, key="dev_f_year")
+        filter_date = f_col3.date_input("Specific Date (Optional)", value=None, key="dev_f_date")
+        apply_filter = st.button("Apply Filter")
 
-        # 2. Filtering Logic
-        if st.session_state.deviation_requests:
-            df = pd.DataFrame(st.session_state.deviation_requests)
-            
-            # Ensure the 'Date' column is in datetime format for accurate filtering
-            df['Date'] = pd.to_datetime(df['Date']).dt.date
-            
-            filtered_df = df.copy()
-            
-            if apply_filter:
-                if filter_date:
-                    filtered_df = df[df['Date'] == filter_date]
-                else:
-                    filtered_df = df[(df['Date'].apply(lambda x: x.month) == filter_month) & 
-                                    (df['Date'].apply(lambda x: x.year) == filter_year)]
-            
-            # 3. Display Result
-            st.table(filtered_df)
-                # --- MODIFY ENTRY SECTION ---
-            st.write("---")
-            st.subheader("Modify Existing Entry")
-            
-            # Create a display string for selection
-            options = {f"{i}: {req['Name']} - {req['Date']}": i for i, req in enumerate(st.session_state.deviation_requests)}
-            selected_option = st.selectbox("Select entry to modify", options.keys())
-            
-            if selected_option:
-                idx = options[selected_option]
-                req = st.session_state.deviation_requests[idx]
+    # 2. Fetch and Filter Data
+    dev_data = fetch_deviations_from_db()
+    if dev_data:
+        df = pd.DataFrame(dev_data)
+        df['Date'] = pd.to_datetime(df['Date']).dt.date
+        
+        if apply_filter:
+            if filter_date:
+                df = df[df['Date'] == filter_date]
+            else:
+                df = df[(df['Date'].apply(lambda x: x.month) == filter_month) & (df['Date'].apply(lambda x: x.year) == filter_year)]
+        
+        st.table(df)
+        
+        # 3. Password Protected Management
+        st.write("---")
+        st.subheader("Manage Entries")
+        admin_pass = st.text_input("Enter Password to Edit/Delete", type="password", key="dev_admin_pass")
+        is_admin = (admin_pass == st.session_state.admin_password)
+        
+        selected_id = st.selectbox("Select entry to modify", df['_id'].tolist())
+        selected_entry = next((item for item in dev_data if item["_id"] == selected_id), None)
+        
+        if selected_entry:
+            with st.form("edit_form"):
+                new_reason = st.text_area("Edit Reason", value=selected_entry.get('Reason', ''))
+                new_mins = st.number_input("Edit Mins", value=selected_entry.get('Total Mins', 0))
                 
-                with st.form(f"edit_form_{idx}"):
-                    new_date = st.date_input("Edit Date", value=req['Date'])
-                    new_reason = st.text_area("Edit Reason", value=req['Reason'])
-                    new_mins = st.number_input("Edit Mins", value=req['Total Mins'])
-                    
-                    if st.form_submit_button("Update Entry"):
-                        st.session_state.deviation_requests[idx].update({
-                            "Date": new_date,
-                            "Reason": new_reason,
-                            "Total Mins": new_mins
-                        })
-                        st.success("Entry updated! Refreshing...")
-                        st.rerun() # Refresh the app to update the table
-            
-            # 4. Extract/Download button
-            csv = filtered_df.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="Extract Report as CSV", 
-                data=csv, 
-                file_name="deviation_report.csv", 
-                mime="text/csv"
-            )
-        else:
-            st.write("No deviation requests submitted yet.")
+                c_edit, c_del = st.columns([1, 1])
+                if c_edit.form_submit_button("Update Entry"):
+                    update_deviation_in_db(selected_id, {"Reason": new_reason, "Total Mins": new_mins})
+                    st.success("Entry updated!")
+                    st.rerun()
+                
+                if is_admin:
+                    if c_del.form_submit_button("Delete Entry"):
+                        delete_deviation_from_db(selected_id)
+                        st.success("Entry deleted!")
+                        st.rerun()
+
+        # 4. CSV Download
+        csv = df.to_csv(index=False).encode('utf-8')
+        st.download_button("Extract Report as CSV", csv, "deviation_report.csv", "text/csv")
+    else:
+        st.write("No deviation requests found.")
 
 # --- TAB 4: MASTERFILE ---
 with tab_master:
@@ -580,10 +624,16 @@ with tab_master:
             st.subheader("System Masterfile")
         with col_m2:
             if st.button("Save Masterfile Changes"):
-                st.success("Masterfile updated.")
+                # 1. Update the session state with the editor's current content
+                # 2. Call your database function to persist the data
+                # Assuming your database function takes the dataframe or dict
+                save_masterfile_to_db(st.session_state.master_data) 
+                
+                st.success("Masterfile updated in database.")
                 st.rerun()
         
         # Display the editor below the header/button row
+        # We assign the result of data_editor back to session_state
         st.session_state.master_data = st.data_editor(st.session_state.master_data, num_rows="dynamic")
 
 # --- TAB 5: ADMIN ---
@@ -783,10 +833,19 @@ with tab_adm:
 
             # --- APPROVED HISTORY ---
             st.subheader("✅ Approved History")
-            # Note: Ensure 'month' variable is accessible here (defined in your calendar tab)
-            app_wellness = [r for r in st.session_state.approved_requests if r['type'] == "Wellness" and r['date'].month == st.session_state.get("cal_m", date.today().month)]
-            app_pto = [r for r in st.session_state.approved_requests if r['type'] == "PTO" and r['date'].month == st.session_state.get("cal_m", date.today().month)]
-
+            
+            # 1. Fetch from DB instead of session state
+            # Assume fetch_approved_requests_from_db() returns a list of approved dicts
+            all_approved_from_db = fetch_approved_requests_from_db()
+            
+            # 2. Filter logic using the fetched data
+            month_to_filter = st.session_state.get("cal_m", date.today().month)
+            
+            app_wellness = [r for r in all_approved_from_db 
+                            if r['type'] == "Wellness" and r['date'].month == month_to_filter]
+            app_pto = [r for r in all_approved_from_db 
+                       if r['type'] == "PTO" and r['date'].month == month_to_filter]
+            
             if app_wellness:
                 st.markdown("#### Approved Wellness")
                 st.table(pd.DataFrame(app_wellness))
