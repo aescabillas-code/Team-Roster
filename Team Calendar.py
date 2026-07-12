@@ -24,6 +24,8 @@ from database import (
     get_request_limits
 )
 
+st.set_page_config(layout="wide", page_title="Team Roster & Staffing System")
+
 # --- DATABASE HELPERS ---
 # 1. ESTABLISH CONNECTION FIRST
 # Use st.secrets to keep your credentials safe
