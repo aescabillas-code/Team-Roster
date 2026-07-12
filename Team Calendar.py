@@ -16,22 +16,17 @@ db = client["team_calendar_db"] # Replace with your actual DB name
 collection = db["team_data"]    # Replace with your actual collection name
 
 def fetch_cases_from_db():
-    # Add your database connection and query logic here
-    # Example for MongoDB:
-    # return list(db.cases_collection.find({}))
-    return [] # Placeholder
+    db = get_db()
+    # Replace 'cases' with your actual collection name if different
+    return list(db["my_collection"].find({"type": "case"})) 
 
 def fetch_masterfile_from_db():
-    # Replace this with your actual database logic
-    # Example:
-    # return list(db.master_collection.find({}))
-    
-    # Placeholder for testing:
-    return [
-        {"Category": "Contact Type", "Values": "Email,Phone,Chat"},
-        {"Category": "Issue", "Values": "Login,Billing,Technical"},
-        {"Category": "Product Group", "Values": "Software,Hardware,Services"}
-    ]
+    db = get_db()
+    return list(db["my_collection"].find({"type": "master"}))
+
+def fetch_deviations_from_db():
+    db = get_db()
+    return list(db["my_collection"].find({"type": "deviation"}))
     
 # 2. NOW DEFINE THE FUNCTION (it can now see 'collection')
 def load_data_from_db():
