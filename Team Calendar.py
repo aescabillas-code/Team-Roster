@@ -322,8 +322,11 @@ with tab_req:
     st.info("💡 **Tip:** Providing your work email is optional.")
     
     with st.form("request_form", clear_on_submit=True):
-        # 1. Fetch staff roster safely with session fallback logic
-        staff_data = get_staff_list()
+        # 1. Fetch current roster directly from the database document
+        roster_doc = collection.find_one({"type": "roster_list"})
+        staff_data = roster_doc.get("data", {}) if roster_doc else {}
+        
+        # 2. Extract available names or fallback to session state
         available_names = list(staff_data.keys()) if staff_data else list(st.session_state.staff_roster.keys())
         name = st.selectbox("Name", available_names)
         
@@ -476,7 +479,12 @@ with tab_dev:
         with col1:
             target_date = st.date_input("Target Date", value=date.today())
             manager = st.text_input("Manager", value="Jeff Bote")
-            name = st.selectbox("Name", list(st.session_state.staff_roster.keys()), key="dev_name_box")
+            # 1. Fetch current roster directly from the database document
+            roster_doc = collection.find_one({"type": "roster_list"})
+            staff_data = roster_doc.get("data", {}) if roster_doc else {}
+            # 2. Extract available names or fallback to session state
+            available_names = list(staff_data.keys()) if staff_data else list(st.session_state.staff_roster.keys())
+            name = st.selectbox("Name", available_names, key="dev_name_box")
             # Restored calendar shift time calculations
             shift_time = st.session_state.calendar_data.get(target_date, {}).get("shift", "Not Set")
             st.write(f"**Shift Time:** {shift_time}")
