@@ -139,10 +139,12 @@ if "master_data" not in st.session_state:
     })
 
 # --- DATA MIGRATION ---
+# Force type conversions during load transitions
 if "staff_roster" in st.session_state:
     for name, value in st.session_state.staff_roster.items():
-        if not isinstance(value, dict):
-            st.session_state.staff_roster[name] = {"bday": value, "nick": name}
+        if isinstance(value, dict) and isinstance(value.get("bday"), date) and not isinstance(value.get("bday"), datetime):
+            d = value["bday"]
+            value["bday"] = datetime(d.year, d.month, d.day)
 
 # --- GLOBAL CSS STYLING ---
 st.markdown("""
@@ -672,9 +674,11 @@ with tab_adm:
             
             if st.button("Add Staff", key="btn_submit_add_staff"):
                 if new_name:
-                    bday_datetime = datetime.combine(new_bday, time.min)
+                    # Explicitly force a true datetime object that PyMongo natively serializes
+                    bday_datetime = datetime(new_bday.year, new_bday.month, new_bday.day)
+                    
                     save_staff(new_name, {
-                        "bday": bday_datetime,
+                        "bday": bday_datetime, 
                         "nick": new_nick if new_nick else new_name,
                         "rest_days": rest_days
                     })
