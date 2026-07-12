@@ -47,9 +47,6 @@ def render_request(req, idx, prefix):
         if st.button("Deny", key=f"den_{unique_id}"):
             st.session_state.pending_requests.pop(idx)
             st.rerun()
-    
-    # Close the div
-st.markdown('</div>', unsafe_allow_html=True)
 
 # --- ADD THIS MIGRATION BLOCK ---
 if "staff_roster" in st.session_state:
@@ -77,8 +74,6 @@ if "cases" not in st.session_state: st.session_state.cases = []
 if "master_data" not in st.session_state: 
     st.session_state.master_data = pd.DataFrame({"Category": ["Contact Type", "Issue", "Product Group"], "Values": ["Call,Chat,Email", "Tech,Billing", "Hardware,Soft"]})
 if "notifications" not in st.session_state: st.session_state.notifications = []
-
-st.set_page_config(layout="wide", page_title="Team Roster & Staffing System")
 
 # --- CSS STYLES ---
 st.markdown("""
