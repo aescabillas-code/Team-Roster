@@ -96,6 +96,8 @@ def get_collection():
 collection = get_collection()
 
 # --- INITIALIZE STATE ---
+cases_list = []
+cases_list = get_cases_from_db()
 if "admin_password" not in st.session_state:
     st.session_state.admin_password = "Password1234"
 if "admin_authenticated" not in st.session_state:
