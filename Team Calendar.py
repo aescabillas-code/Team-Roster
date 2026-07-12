@@ -96,6 +96,10 @@ def get_collection():
 collection = get_collection()
 
 # --- INITIALIZE STATE ---
+if "admin_password" not in st.session_state:
+    st.session_state.admin_password = "Password1234"
+if "admin_authenticated" not in st.session_state:
+    st.session_state.admin_authenticated = False
 if "staff_roster" not in st.session_state: 
     st.session_state.staff_roster = {
         "Agent A": {"bday": date(2000, 1, 1), "nick": "A"}, 
@@ -507,7 +511,8 @@ with tab_case:
     # 4. Password-protected Admin Actions
     with st.expander("Admin Access (Edit/Delete)"):
         admin_pass = st.text_input("Enter Admin Password", type="password")
-        is_admin = (admin_pass == st.session_state.admin_password) # Assuming password is in session_state
+        # Returns None if the key doesn't exist, preventing the crash
+        is_admin = (admin_pass == st.session_state.get("admin_password"))
 
     for case in reversed(cases_list): # Use fetched list
         if (not f_issue or case['Issue'] in f_issue) and (not f_prod or case['Product Group'] in f_prod):
