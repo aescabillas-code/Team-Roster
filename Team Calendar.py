@@ -235,10 +235,13 @@ tab_cal, tab_req, tab_case, tab_dev, tab_master, tab_adm = tabs
 
 # --- TAB 1: CALENDAR ---
 with tab_cal:
-    # 1. Define your layout columns first
+    # 1. ADD THIS LINE: Ensure we fetch the latest data from MongoDB
+    load_data_from_db()
+    
+    # 2. Define your layout columns
     col_main, col_side = st.columns([4, 1])
     
-    # 2. Use col_main for the top filters
+    # 3. Use col_main for the top filters
     with col_main:
         c1, c2 = st.columns([1, 1])
         
