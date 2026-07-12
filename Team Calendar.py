@@ -147,6 +147,11 @@ if "staff_roster" in st.session_state:
         if isinstance(value, dict) and isinstance(value.get("bday"), date) and not isinstance(value.get("bday"), datetime):
             d = value["bday"]
             value["bday"] = datetime(d.year, d.month, d.day)
+if "last_tracked_date" not in st.session_state or st.session_state.last_tracked_date != current_date:
+    st.session_state.last_tracked_date = current_date
+    # Clear the old stale calendar mappings to force a clean pull from Mongo
+    if "calendar_data" in st.session_state:
+        del st.session_state.calendar_data
 load_data_from_db()
 
 # --- GLOBAL CSS STYLING ---
