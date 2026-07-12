@@ -477,6 +477,10 @@ with tab_cal:
 
     # 5. Render interactive monthly calendar grid block
     with col_main:
+        # Fetch current roster directly from the database document to align nickname matching
+        roster_doc = collection.find_one({"type": "roster_list"})
+        roster = roster_doc.get("data", {}) if roster_doc else {}
+
         cols = st.columns(7)
         for i, d_name in enumerate(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]):
             cols[i].markdown(f'<div class="header-cell">{d_name}</div>', unsafe_allow_html=True)
@@ -489,12 +493,13 @@ with tab_cal:
                     approved = [r for r in st.session_state.approved_requests if str(r['date']) == str(d)]
                     away_names = [r['name'] for r in approved]
                     
-                    # Look up nicknames for scheduled active workspace operators (filtering out away staff)
+                    # Look up nicknames from the active roster configuration list instead of full names
                     def get_filtered_nicks(full_names):
                         active = [n for n in full_names if n not in away_names]
-                        return ", ".join([st.session_state.staff_roster.get(x, {}).get("nick", x) for x in active])
+                        return ", ".join([roster.get(x, {}).get("nick", x) for x in active])
                     
-                    req_display = "<br>".join([f"{st.session_state.staff_roster.get(r['name'], {}).get('nick', r['name'])}({r['type']})" for r in approved])
+                    # Mapping nickname profile directly onto the requested leave items
+                    req_display = "<br>".join([f"{roster.get(r['name'], {}).get('nick', r['name'])}({r['type']})" for r in approved])
                     data = st.session_state.calendar_data.get(d, {})
                     
                     # WEEKEND INSTRUCTION: Block out Saturday (5) and Sunday (6) explicitly as REST DAY
