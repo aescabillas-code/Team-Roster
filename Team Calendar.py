@@ -177,7 +177,7 @@ st.markdown("""
         font-size: 11px; 
         background-color: rgba(0, 128, 128, 0.75); 
         color: #ffffff !important;
-        border: 1px solid #ffffff !important; /* Solid white border when there's a valid day */
+        border: 1px solid #ffffff !important; /* Solid white border for calendar days within the month */
         margin: 0px; 
         display: flex; 
         flex-direction: column; 
@@ -186,7 +186,7 @@ st.markdown("""
     /* Target state for blocks that fall outside the current month's active days */
     .day-block-outside,
     .day-block:empty {
-        background-color: rgba(230, 242, 242, 0.85) !important; /* Baby teal background */
+        background-color: rgba(230, 242, 242, 0.85) !important; /* Baby teal design background */
         border: 1px solid #008080 !important; /* Teal border profile */
         color: #008080 !important;
     }
@@ -201,12 +201,10 @@ st.markdown("""
         gap: 0px !important;
     }
 
-    /* Provide a structured spatial separation gap between the calendar grid layout area and the main sidebar column */
-    div[data-testid="stColumn"]:nth-of-type(1):has(.day-block) {
-        padding-right: 2px !important; /* Generates physical structural space separating the sidebar elements */
-    }
-    div[data-testid="stColumn"]:nth-of-type(2):has(.side-block) {
-        border-left: 1.5px solid transparent !important; /* Ensures at least 1.5px structural gap spacing visually */
+    /* Provide a structured spatial separation gap between the calendar container and the monthly/daily summaries below it */
+    div[data-testid="stHorizontalBlock"]:has(.day-block),
+    div[data-testid="stHorizontalBlock"]:has(.day-block-outside) {
+        margin-bottom: 25px !important; /* Provides clear separation space layout above the summary modules */
     }
     
     /* Make the date inside the day block noticeably bigger than the rest of the content */
