@@ -6,14 +6,15 @@ from pymongo import MongoClient
 import calendar
 import pandas as pd
 import holidays
+from database import get_cases_from_db
 
 # --- DATABASE HELPERS ---
 # 1. ESTABLISH CONNECTION FIRST
 # Use st.secrets to keep your credentials safe
 uri = st.secrets["mongo"]["uri"] 
 client = MongoClient(uri)
-db = client["team_calendar_db"] # Replace with your actual DB name
-collection = db["team_data"]    # Replace with your actual collection name
+db = client["my_database"] # Replace with your actual DB name
+collection = db["my_collection"]    # Replace with your actual collection name
 
 # 2. NOW DEFINE THE FUNCTION (it can now see 'collection')
 def load_data_from_db():
