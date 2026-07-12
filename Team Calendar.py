@@ -740,23 +740,41 @@ with tab_dev:
         st.download_button("Extract Report as CSV", csv, "deviation_report.csv", "text/csv")
         st.write("## Deviation Records")
         
-        # Render each row inside individual interactive blocks with ellipses menu
+        # --- NEW: Table Column Width Configuration Block ---
+        # 10 columns matching the requested columns: Date, Manager, Name, Shift Time, Start Time, End Time, Mins, Aux, Reason, Action
+        col_widths = [1.2, 1.2, 1.2, 1.2, 1.0, 1.0, 0.8, 0.8, 2.0, 1.0]
+        
+        # Render Table Header Row
+        h_cols = st.columns(col_widths)
+        headers = ["Date", "Manager", "Name", "Shift Time", "Start Time", "End Time", "Mins", "Aux", "Reason", "Action"]
+        for idx, header_title in enumerate(headers):
+            h_cols[idx].markdown(f"**{header_title}**")
+        st.markdown("---")
+        
+        # Render each row inside the custom layout grid loop
         for dev in reversed(filtered_records):
-            with st.container():
-                # Split header row to place ellipses options menu on the upper right corner
-                head_col, opt_col = st.columns([6, 1])
-                
-                with head_col:
-                    st.markdown(f"**Date:** {dev.get('Date')} | **Staff Name:** {dev.get('Name')} | **Manager:** {dev.get('Manager')}")
-                
-                with opt_col:
-                    # Ellipses simulation popover menu for individual entries
-                    options_menu = st.popover("⋮", help="Options")
-                    with options_menu:
-                        action = st.radio("Action", ["View", "Edit", "Delete"], key=f"act_dev_{dev['_id']}", horizontal=False)
-                
-                # Render content or action menus depending on selector
-                if action == "Edit":
+            r_cols = st.columns(col_widths)
+            
+            # Populate text data into layout columns
+            r_cols[0].write(str(dev.get('Date', '')))
+            r_cols[1].write(str(dev.get('Manager', '')))
+            r_cols[2].write(str(dev.get('Name', '')))
+            r_cols[3].write(str(dev.get('Shift Time', 'Not Set')))
+            r_cols[4].write(str(dev.get('Start Time', '')))
+            r_cols[5].write(str(dev.get('End Time', '')))
+            r_cols[6].write(str(dev.get('Total Mins', 0)))
+            r_cols[7].write(str(dev.get('Aux', 'N/A')))
+            r_cols[8].write(str(dev.get('Reason', '')))
+            
+            with r_cols[9]:
+                # Inline popover container placement for action controls
+                options_menu = st.popover("⋮", help="Options")
+                with options_menu:
+                    action = st.radio("Action", ["View", "Edit", "Delete"], key=f"act_dev_{dev['_id']}", horizontal=False)
+            
+            # Handle secondary update modifications contextually inline underneath the target row
+            if action == "Edit":
+                with st.container():
                     st.markdown("#### Edit Deviation Request")
                     edit_manager = st.text_input("Update Manager", value=dev.get('Manager', ''), key=f"ed_mgr_{dev['_id']}")
                     edit_mins = st.number_input("Update Total Mins", value=int(dev.get('Total Mins', 0)), min_value=0, key=f"ed_mins_{dev['_id']}")
@@ -773,7 +791,8 @@ with tab_dev:
                         st.success("Deviation record updated successfully!")
                         st.rerun()
                         
-                elif action == "Delete":
+            elif action == "Delete":
+                with st.container():
                     st.warning("⚠️ This action requires supervisor authorization.")
                     del_password = st.text_input("Enter Admin Password to confirm delete", type="password", key=f"pwd_del_dev_{dev['_id']}")
                     if st.button("Confirm Delete", key=f"conf_del_dev_{dev['_id']}"):
@@ -783,13 +802,8 @@ with tab_dev:
                             st.rerun()
                         else:
                             st.error("Incorrect Password. Action denied.")
-                else:
-                    # Default Display State (View Mode)
-                    st.write(f"**Shift:** {dev.get('Shift Time', 'Not Set')} | **Aux:** {dev.get('Aux', 'N/A')}")
-                    st.write(f"**Time-frame:** {dev.get('Start Time')} - {dev.get('End Time')} ({dev.get('Total Mins')} Mins)")
-                    st.write(f"*Reason:* {dev.get('Reason', '')}")
-                
-                st.markdown("---")
+            
+            st.markdown("---")
     else:
         st.write("No deviation requests found.")
 
