@@ -4,8 +4,6 @@ import pandas as pd
 import holidays
 from datetime import datetime, date, time
 from pymongo import MongoClient
-
-# Import your database functions from your external file
 from database import (
     fetch_masterfile_from_db, 
     save_request_to_db, 
