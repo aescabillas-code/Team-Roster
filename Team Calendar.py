@@ -151,7 +151,10 @@ if "staff_roster" in st.session_state:
 
 # --- INITIALIZE STATE ---
 if "staff_roster" not in st.session_state: 
-    st.session_state.staff_roster = {"Agent A": {"bday": ..., "nick": "A"}, ...}
+    st.session_state.staff_roster = {
+        "Agent A": {"bday": date(2000, 1, 1), "nick": "A"}, 
+        "Agent B": {"bday": date(1995, 5, 20), "nick": "B"}
+    }
 if "pending_requests" not in st.session_state: 
     st.session_state.pending_requests = []
 if "deviation_requests" not in st.session_state:
