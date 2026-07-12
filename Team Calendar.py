@@ -302,6 +302,16 @@ st.markdown("""
         font-weight: 600; 
     }
     
+    /* Dropdown/Selectbox Styling - Translucent Teal with White Font */
+    [data-testid="stSelectbox"] div[data-baseweb="select"] {
+        background-color: rgba(0, 128, 128, 0.3) !important;
+        color: #ffffff !important;
+    }
+    
+    [data-testid="stSelectbox"] div[data-baseweb="select"] span {
+        color: #ffffff !important;
+    }
+
     /* Table Styling (Case Tracker, Masterfile, Deviation) */
     table { width: 100%; border-collapse: collapse; }
     
@@ -578,12 +588,14 @@ with tab_req:
 with tab_case:
     st.subheader("Log New Case")
     
-    # 1. Fetch dropdown data directly from DB
-    master_file = fetch_masterfile_from_db() 
-    def get_master_values(category):
-        row = next((item for item in master_file if item.get('Category') == category), None)
-        return row['Values'].split(',') if row else []
+    # 1. Fetch live data from the Masterfile collection
+    master_data = fetch_masterfile_from_db() 
+    
+    def get_master_values(category_name):
+        row = next((item for item in master_data if item.get('Category') == category_name), None)
+        return [v.strip() for v in row['Values'].split(',')] if row and row.get('Values') else []
 
+    # Dynamically populate lists from Masterfile DB entries
     c_types = get_master_values('Contact Type')
     issues = get_master_values('Issue')
     prods = get_master_values('Product Group')
@@ -594,7 +606,10 @@ with tab_case:
     prod = c2.selectbox("Product Group", prods)
     desc = st.text_area("Issue Description")
     steps = st.text_area("Steps Taken")
+    
+    # Re-added: File uploader functionality
     uploaded_file = st.file_uploader("Upload Screenshot")
+    
     status = st.selectbox("Status", ["Resolved", "Pending/Monitoring", "Routed"])
     extra = ""
     if status == "Pending/Monitoring": extra = st.text_input("Pending/Monitoring Reason")
@@ -602,8 +617,18 @@ with tab_case:
     
     # 2. Log Case to DB
     if st.button("Log Case"):
-        new_case = {"Date": str(date.today()), "Type": c_type, "Issue": issue, "Product Group": prod, "Desc": desc, "Steps": steps, "Status": status, "Extra": extra}
-        save_case_to_db(new_case) # Ensure this function is defined
+        new_case = {
+            "Date": str(date.today()), 
+            "Type": c_type, 
+            "Issue": issue, 
+            "Product Group": prod, 
+            "Desc": desc, 
+            "Steps": steps, 
+            "Status": status, 
+            "Extra": extra
+            # Note: Handle file storage logic here if needed (e.g., GridFS or saving path)
+        }
+        save_case_to_db(new_case)
         st.success("Case logged to database successfully!")
         st.rerun()
 
@@ -620,8 +645,7 @@ with tab_case:
 
     for case in reversed(cases_list):
         if (not f_issue or case['Issue'] in f_issue) and (not f_prod or case['Product Group'] in f_prod):
-            with st.container():
-                # Layout: Three-dot menu + Content
+            with st.container(border=True): 
                 col_menu, col_content = st.columns([1, 10])
                 
                 with col_menu.popover("⋮"):
@@ -631,8 +655,11 @@ with tab_case:
                         st.session_state[f"del_mode_{case['_id']}"] = True
 
                 col_content.markdown(f"**Date:** {case['Date']} | **Status:** {case['Status']} | **Issue:** {case['Issue']}")
+                # Display both description and steps for full knowledge base visibility
+                col_content.write(f"**Description:** {case.get('Desc', '')}")
+                col_content.write(f"**Steps Taken:** {case.get('Steps', '')}")
 
-                # --- EDIT LOGIC (Accessible to all) ---
+                # --- EDIT LOGIC ---
                 if st.session_state.get(f"edit_mode_{case['_id']}"):
                     with st.form(key=f"edit_form_{case['_id']}"):
                         new_desc = st.text_area("Update Description", value=case.get('Desc', ''))
@@ -644,7 +671,7 @@ with tab_case:
                             st.session_state[f"edit_mode_{case['_id']}"] = False
                             st.rerun()
 
-                # --- DELETE LOGIC (Password Protected) ---
+                # --- DELETE LOGIC ---
                 if st.session_state.get(f"del_mode_{case['_id']}"):
                     check_pass = st.text_input("Enter Admin Password to Confirm", type="password", key=f"pass_{case['_id']}")
                     if check_pass == "Password1234":
@@ -658,12 +685,15 @@ with tab_case:
 with tab_dev:
     st.subheader("Submit Deviation Request")
     
+    # Roster sourced from session_state as instructed
+    roster_list = list(st.session_state.staff_roster.keys())
+    
     with st.form("deviation_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
         with col1:
             target_date = st.date_input("Target Date", value=date.today())
             manager = st.text_input("Manager", value="Jeff Bote")
-            name = st.selectbox("Name", list(st.session_state.staff_roster.keys()))
+            name = st.selectbox("Name", roster_list)
             shift_time = st.session_state.calendar_data.get(target_date, {}).get("shift", "Not Set")
             st.write(f"**Shift Time:** {shift_time}")
         with col2:
@@ -694,19 +724,28 @@ with tab_dev:
         filter_date = f_col3.date_input("Specific Date (Optional)", value=None, key="dev_f_date")
         apply_filter = st.button("Apply Filter")
 
-    # 2. Fetch and Filter Data
+    # 2. Fetch, Filter, and Table Display
     dev_data = fetch_deviations_from_db()
     if dev_data:
-        # Loop through data to display each entry with a menu
+        df = pd.DataFrame(dev_data)
+        
+        # Apply filters for the table
+        if apply_filter:
+            df['Date_obj'] = pd.to_datetime(df['Date']).dt.date
+            if filter_date:
+                df = df[df['Date_obj'] == filter_date]
+            else:
+                df = df[(df['Date_obj'].apply(lambda x: x.month) == filter_month) & 
+                        (df['Date_obj'].apply(lambda x: x.year) == filter_year)]
+            df = df.drop(columns=['Date_obj'])
+
+        # Display as a Table with Date at the start
+        cols = ['Date'] + [c for c in df.columns if c != 'Date' and c != '_id']
+        st.table(df[cols])
+
+        # 3. Individual Edit/Delete Logic
         for entry in reversed(dev_data):
-            # Apply your filter logic
-            e_date = pd.to_datetime(entry['Date']).date()
-            if apply_filter:
-                if filter_date and e_date != filter_date: continue
-                if not filter_date and (e_date.month != filter_month or e_date.year != filter_year): continue
-            
             with st.container():
-                # Menu + Content
                 col_menu, col_content = st.columns([1, 10])
                 with col_menu.popover("⋮"):
                     if st.button("Edit", key=f"edit_trig_{entry['_id']}"):
@@ -714,7 +753,7 @@ with tab_dev:
                     if st.button("Delete", key=f"del_trig_{entry['_id']}"):
                         st.session_state[f"del_dev_{entry['_id']}"] = True
                 
-                col_content.markdown(f"**{e_date}** | {entry['Name']} | {entry['Reason']}")
+                col_content.markdown(f"**{entry['Date']}** | {entry['Name']} | {entry['Reason']}")
 
                 # --- EDIT LOGIC ---
                 if st.session_state.get(f"edit_dev_{entry['_id']}"):
@@ -726,7 +765,7 @@ with tab_dev:
                             st.session_state[f"edit_dev_{entry['_id']}"] = False
                             st.rerun()
 
-                # --- DELETE LOGIC (Password Protected) ---
+                # --- DELETE LOGIC ---
                 if st.session_state.get(f"del_dev_{entry['_id']}"):
                     check_pass = st.text_input("Enter Admin Password", type="password", key=f"p_{entry['_id']}")
                     if check_pass == "Password1234":
@@ -738,37 +777,10 @@ with tab_dev:
                         st.error("Invalid Password")
 
         # 4. CSV Download
-        df = pd.DataFrame(dev_data)
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button("Extract Report as CSV", csv, "deviation_report.csv", "text/csv")
     else:
         st.write("No deviation requests found.")
-
-# --- TAB 4: MASTERFILE ---
-with tab_master:
-    if not st.session_state.admin_authenticated:
-        if st.text_input("Enter Password", type="password") == "Password1234": 
-            st.session_state.admin_authenticated = True
-            st.rerun()
-    else:
-        # Create columns to align the header and the button
-        col_m1, col_m2 = st.columns([4, 1])
-        
-        with col_m1:
-            st.subheader("System Masterfile")
-        with col_m2:
-            if st.button("Save Masterfile Changes"):
-                # 1. Update the session state with the editor's current content
-                # 2. Call your database function to persist the data
-                # Assuming your database function takes the dataframe or dict
-                save_masterfile_to_db(st.session_state.master_data) 
-                
-                st.success("Masterfile updated in database.")
-                st.rerun()
-        
-        # Display the editor below the header/button row
-        # We assign the result of data_editor back to session_state
-        st.session_state.master_data = st.data_editor(st.session_state.master_data, num_rows="dynamic")
 
 # --- TAB 5: ADMIN ---
 with tab_adm:
