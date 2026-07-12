@@ -1,70 +1,26 @@
-import streamlit as st
-import pandas as pd
 from datetime import date, time
+import streamlit as st
+from pymongo.mongo_client import MongoClient
+uri = st.secrets["mongo"]["uri"]
 import calendar
+from datetime import datetime, date
+import pandas as pd
 import holidays
-import json
-import os
-import pickle
+from datetime import time
 
-# --- DATA PERSISTENCE ---
-DATA_FILE = "roster_data.pkl"
+@st.cache_resource
+def get_db_collection():
+    client = MongoClient(uri)
+    # Replace 'my_database' and 'my_collection' with your actual names
+    return client["my_database"]["my_collection"]
 
-def save_data():
-    data = {
-        "staff_roster": st.session_state.staff_roster,
-        "calendar_data": st.session_state.calendar_data,
-        "pending_requests": st.session_state.pending_requests,
-        "approved_requests": st.session_state.approved_requests,
-        "deviation_requests": st.session_state.deviation_requests,
-        "cases": st.session_state.cases,
-        "master_data": st.session_state.master_data
-    }
-    with open(DATA_FILE, "wb") as f:
-        pickle.dump(data, f)
+collection = get_db_collection()
 
-def load_data():
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "rb") as f:
-            return pickle.load(f)
-    return {}
-
-# --- INITIALIZATION ---
-def initialize_state():
-    saved = load_data()
-    defaults = {
-        "staff_roster": saved.get("staff_roster", {"Agent A": {"bday": date(2000, 1, 1), "nick": "Agent A", "rest_days": []}}),
-        "calendar_data": saved.get("calendar_data", {}),
-        "pending_requests": saved.get("pending_requests", []),
-        "approved_requests": saved.get("approved_requests", []),
-        "deviation_requests": saved.get("deviation_requests", []),
-        "limits": {"PTO": 1, "Wellness": 1},
-        "notifications": [],
-        "admin_authenticated": False,
-        "cases": saved.get("cases", []),
-        "active_tab": 0,
-        "selected_admin_date": date.today(),
-        "master_data": saved.get("master_data", pd.DataFrame({
-            "Category": ["Contact Type", "Issue", "Product Group"], 
-            "Values": ["Call,Chat,Email", "Tech,Billing", "Hardware,Soft"]
-        }))
-    }
-    for key, value in defaults.items():
-        if key not in st.session_state:
-            st.session_state[key] = value
-
-initialize_state()
-
-# --- REUSABLE ACTIONS ---
-def handle_approval(req, original_idx):
-    req["status"] = "Approved"
-    st.session_state.approved_requests.append(req)
-    st.session_state.pending_requests.pop(original_idx)
-    save_data()
-    st.rerun()
-
-# --- APP LAYOUT ---
-st.set_page_config(layout="wide", page_title="Team Roster System")
+# 3. Use it to save data
+if st.button("Save Data"):
+    data_to_save = {"name": "Test User", "activity": "Logged In"}
+    collection.insert_one(data_to_save)
+    st.success("Data saved to MongoDB!")
 
 # 1. GLOBAL HANDLER FUNCTIONS
 def handle_approval(req, original_idx):
