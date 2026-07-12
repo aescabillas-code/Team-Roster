@@ -24,20 +24,6 @@ def fetch_masterfile_from_db():
     ]
     
 # 2. NOW DEFINE THE FUNCTION (it can now see 'collection')
-def load_data_from_db():
-    if "staff_roster" not in st.session_state:
-        roster_doc = collection.find_one({"type": "roster_list"})
-        st.session_state.staff_roster = roster_doc.get("data", {}) if roster_doc else {}
-    
-    cal_doc = collection.find_one({"type": "calendar_data"})
-    if cal_doc and "data" in cal_doc:
-        # Convert string keys (from DB) back into date objects (for logic/display)
-        st.session_state.calendar_data = {
-            datetime.strptime(k, "%Y-%m-%d").date(): v 
-            for k, v in cal_doc["data"].items()
-        }
-    else:
-        st.session_state.calendar_data = {}
         
 @st.cache_data(ttl=600)
 def get_staff_list():
