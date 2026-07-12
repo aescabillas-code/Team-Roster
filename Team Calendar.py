@@ -1,100 +1,63 @@
-from datetime import date, time
+from datetime import date, time, datetime
 import streamlit as st
 from pymongo.mongo_client import MongoClient
-uri = st.secrets["mongo"]["uri"]
 import calendar
-from datetime import datetime, date
 import pandas as pd
 import holidays
-from datetime import time
 
+# --- INITIAL CONFIG & STATE ---
+st.set_page_config(layout="wide", page_title="Team Roster & Staffing System")
+
+# --- DATABASE ---
+uri = st.secrets["mongo"]["uri"]
 @st.cache_resource
 def get_db_collection():
     client = MongoClient(uri)
-    # Replace 'my_database' and 'my_collection' with your actual names
     return client["my_database"]["my_collection"]
-
 collection = get_db_collection()
 
-# 3. Use it to save data
-if st.button("Save Data"):
-    data_to_save = {"name": "Test User", "activity": "Logged In"}
-    collection.insert_one(data_to_save)
-    st.success("Data saved to MongoDB!")
+# --- INITIALIZE STATE ---
+if "staff_roster" not in st.session_state: 
+    st.session_state.staff_roster = {"Agent A": {"bday": date(2000, 1, 1), "nick": "A"}, "Agent B": {"bday": date(1995, 5, 20), "nick": "B"}}
+if "deviation_requests" not in st.session_state: st.session_state.deviation_requests = []
+if "pending_requests" not in st.session_state: st.session_state.pending_requests = []
+if "approved_requests" not in st.session_state: st.session_state.approved_requests = []
+if "limits" not in st.session_state: st.session_state.limits = {"PTO": 1, "Wellness": 1}
+if "admin_authenticated" not in st.session_state: st.session_state.admin_authenticated = False
+if "cases" not in st.session_state: st.session_state.cases = []
+if "notifications" not in st.session_state: st.session_state.notifications = []
+if "calendar_data" not in st.session_state: st.session_state.calendar_data = {}
+if "master_data" not in st.session_state: 
+    st.session_state.master_data = pd.DataFrame({"Category": ["Contact Type", "Issue", "Product Group"], "Values": ["Call,Chat,Email", "Tech,Billing", "Hardware,Soft"]})
 
-# 1. GLOBAL HANDLER FUNCTIONS
+# --- SHARED DATE SELECTION ---
+# Defining these here makes them accessible to both Calendar and Admin tabs
+col_top1, col_top2 = st.sidebar.columns(2)
+current_date = date.today()
+year = col_top1.selectbox("Year", [2026, 2027, 2028], key="g_year")
+month = col_top2.selectbox("Month", range(1, 13), format_func=lambda x: calendar.month_name[x], index=current_date.month - 1, key="g_month")
+
+# --- HANDLER FUNCTIONS ---
 def handle_approval(req, original_idx):
-    # Duplicate Check
-    is_duplicate = any(
-        r["name"] == req["name"] and r["date"] == req["date"] and r["type"] == req["type"] 
-        for r in st.session_state.approved_requests
-    )
-    if is_duplicate:
-        st.session_state.admin_msg = ("warning", f"Duplicate found: {req['name']} already has an approved {req['type']} request for {req['date']}.")
-        st.rerun()
-    
-    # Process Approval
     req["status"] = "Approved"
     st.session_state.approved_requests.append(req)
     st.session_state.pending_requests.pop(original_idx)
-    
-    # Email Notification
-    if req.get("email") and 'admin_sender_email' in globals():
-        gmail_bard.send_message(
-            to=[req["email"]], 
-            body=f"Your {req['type']} request for {req['date']} has been approved.", 
-            subject="Request Approved"
-        )
-    
     st.session_state.admin_msg = ("success", f"Approved {req['name']}")
     st.rerun()
 
-def handle_denial_final(req, original_idx, reason):
-    req["status"] = "Denied"
-    st.session_state.pending_requests.pop(original_idx)
-    
-    # Email Notification
-    if req.get("email") and 'admin_sender_email' in globals():
-        gmail_bard.send_message(
-            to=[req["email"]], 
-            body=f"Your {req['type']} request for {req['date']} has been denied.\nReason: {reason}", 
-            subject="Request Denied"
-        )
-    
-    st.session_state.admin_msg = ("warning", f"Denied {req['name']}")
-    st.rerun()
-
-# 2. GLOBAL RENDERING FUNCTION
 def render_request(req, idx, prefix):
-    # 1. Generate unique identifier for buttons and state
-    # We replace spaces with underscores to ensure the key is clean
     safe_name = req.get('name', '').replace(' ', '_')
     unique_id = f"{prefix}_{idx}_{safe_name}"
-    
-    # 2. Add visual indicator for unviewed requests
-    is_unviewed = not req.get("viewed", False)
-    tile_class = "unviewed-req-tile" if is_unviewed else ""
-    st.markdown(f'<div class="{tile_class}">', unsafe_allow_html=True)
-    
-    # 3. Render expander
     with st.expander(f"{req['name']} - {req['date']} ({req['type']})"):
-        req["viewed"] = True # Mark as viewed when opened
-        
-        is_denying = st.session_state.get(f"show_deny_{unique_id}", False)
-        
-        if not is_denying:
-            col_a, col_b = st.columns(2)
-            # Use unique_id in the button keys to prevent collisions
-            if col_a.button("Approve", key=f"app_{unique_id}"):
-                handle_approval(req, idx)
-            if col_b.button("Deny", key=f"den_{unique_id}"):
-                st.session_state[f"show_deny_{unique_id}"] = True
-                st.rerun()
-        
-        if is_denying:
-            reason = st.text_input("Reason for denial:", key=f"reason_{unique_id}")
-            if reason and st.button("Confirm Denial", key=f"conf_{unique_id}"):
-                handle_denial_final(req, idx, reason)
+        if st.button("Approve", key=f"app_{unique_id}"):
+            handle_approval(req, idx)
+        if st.button("Deny", key=f"den_{unique_id}"):
+            st.session_state.pending_requests.pop(idx)
+            st.rerun()
+
+# --- APP LAYOUT ---
+tab_names = ["📅 Calendar", "📝 Request", "🔍 Case Tracker", "🔀 Deviation", "📂 Masterfile", "🔑 Admin"]
+tabs = st.tabs(tab_names)
     
     # Close the div
     st.markdown('</div>', unsafe_allow_html=True)
