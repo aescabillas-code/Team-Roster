@@ -23,7 +23,14 @@ def load_data_from_db():
     
     if "calendar_data" not in st.session_state:
         cal_doc = collection.find_one({"type": "calendar_data"})
-        st.session_state.calendar_data = cal_doc.get("data", {}) if cal_doc else {}
+        if cal_doc and "data" in cal_doc:
+            # Convert string keys back to date objects
+            st.session_state.calendar_data = {
+                datetime.strptime(k, "%Y-%m-%d").date(): v 
+                for k, v in cal_doc["data"].items()
+            }
+        else:
+            st.session_state.calendar_data = {}
         
 @st.cache_data(ttl=600)
 def get_staff_list():
@@ -705,9 +712,8 @@ with tab_adm:
             sme = st.multiselect("Assign SME", available)
             
             if st.button("Save Config"):
+                # 1. Update session state (for the UI)
                 for d in target_dates:
-                    # Convert date to string (e.g., "2026-07-12")
-                    d_str = d.strftime("%Y-%m-%d")
                     st.session_state.calendar_data[d] = {
                         "shift": shift_display, 
                         "status": setup, 
@@ -717,14 +723,17 @@ with tab_adm:
                         "sme": sme
                     }
                 
-                # SAVE TO MONGODB: Convert dict keys to strings for the DB
+                # 2. IMPORTANT: Save to MongoDB
+                # You MUST convert the date keys to strings to save them in MongoDB
                 serializable_data = {str(k): v for k, v in st.session_state.calendar_data.items()}
+                
                 collection.update_one(
                     {"type": "calendar_data"},
                     {"$set": {"data": serializable_data}},
                     upsert=True
                 )
-                st.success(f"Configuration saved!")
+                st.success(f"Configuration saved to database for {len(target_dates)} day(s).")
+                st.rerun() # Refresh so the UI reflects the change
         
         with col2:
             st.subheader("Approval Center")
