@@ -6,7 +6,6 @@ from pymongo import MongoClient
 import calendar
 import pandas as pd
 import holidays
-from database import get_cases_from_db
 
 # --- DATABASE HELPERS ---
 # 1. ESTABLISH CONNECTION FIRST
