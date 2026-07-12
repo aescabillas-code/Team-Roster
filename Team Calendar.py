@@ -27,9 +27,11 @@ def fetch_masterfile_from_db():
         return doc["data"]
     return []
 def load_data_from_db():
-    if "staff_roster" not in st.session_state:
+    # 1. Initialize admin_roster if it doesn't exist
+    if "admin_roster" not in st.session_state:
+        # Fetch the roster from your database
         roster_doc = collection.find_one({"type": "roster_list"})
-        st.session_state.staff_roster = roster_doc.get("data", {}) if roster_doc else {}
+        st.session_state.admin_roster = roster_doc.get("data", {}) if roster_doc else {}
     
     cal_doc = collection.find_one({"type": "calendar_data"})
     if cal_doc and "data" in cal_doc:
