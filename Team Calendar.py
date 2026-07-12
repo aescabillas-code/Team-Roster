@@ -61,14 +61,15 @@ if "staff_roster" not in st.session_state:
         "Agent A": {"bday": date(2000, 1, 1), "nick": "A"}, 
         "Agent B": {"bday": date(1995, 5, 20), "nick": "B"}
     }
-if "deviation_requests" not in st.session_state: st.session_state.deviation_requests = []
 if "pending_requests" not in st.session_state: st.session_state.pending_requests = []
+if "deviation_requests" not in st.session_state: st.session_state.deviation_requests = []
+if "active_tab" not in st.session_state: st.session_state.active_tab = 0
+if "calendar_data" not in st.session_state: st.session_state.calendar_data = {}
 if "approved_requests" not in st.session_state: st.session_state.approved_requests = []
 if "limits" not in st.session_state: st.session_state.limits = {"PTO": 1, "Wellness": 1}
 if "admin_authenticated" not in st.session_state: st.session_state.admin_authenticated = False
 if "cases" not in st.session_state: st.session_state.cases = []
 if "notifications" not in st.session_state: st.session_state.notifications = []
-if "calendar_data" not in st.session_state: st.session_state.calendar_data = {}
 if "master_data" not in st.session_state: 
     st.session_state.master_data = pd.DataFrame({"Category": ["Contact Type", "Issue", "Product Group"], "Values": ["Call,Chat,Email", "Tech,Billing", "Hardware,Soft"]})
 
@@ -149,28 +150,6 @@ if "staff_roster" in st.session_state:
                 "nick": name  # Default nickname to the full name
             }
 
-# --- INITIALIZE STATE ---
-if "staff_roster" not in st.session_state: 
-    st.session_state.staff_roster = {
-        "Agent A": {"bday": date(2000, 1, 1), "nick": "A"}, 
-        "Agent B": {"bday": date(1995, 5, 20), "nick": "B"}
-    }
-if "pending_requests" not in st.session_state: 
-    st.session_state.pending_requests = []
-if "deviation_requests" not in st.session_state:
-    st.session_state.deviation_requests = []
-if "active_tab" not in st.session_state:
-    st.session_state.active_tab = 0
-if "calendar_data" not in st.session_state: st.session_state.calendar_data = {}
-if "pending_requests" not in st.session_state: st.session_state.pending_requests = []
-if "approved_requests" not in st.session_state: st.session_state.approved_requests = []
-if "staff_roster" not in st.session_state: st.session_state.staff_roster = {"Agent A": date(2000, 1, 1), "Agent B": date(1995, 5, 20)}
-if "limits" not in st.session_state: st.session_state.limits = {"PTO": 1, "Wellness": 1}
-if "admin_authenticated" not in st.session_state: st.session_state.admin_authenticated = False
-if "cases" not in st.session_state: st.session_state.cases = []
-if "master_data" not in st.session_state: 
-    st.session_state.master_data = pd.DataFrame({"Category": ["Contact Type", "Issue", "Product Group"], "Values": ["Call,Chat,Email", "Tech,Billing", "Hardware,Soft"]})
-if "notifications" not in st.session_state: st.session_state.notifications = []
 
 # --- CSS STYLES ---
 st.markdown("""
