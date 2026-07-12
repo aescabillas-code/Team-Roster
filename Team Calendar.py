@@ -21,16 +21,29 @@ collection = db["my_collection"]
 @st.cache_data(ttl=600)
 def get_staff_list():
     try:
-        # Debugging: Does the collection exist?
-        cursor = collection.find({"type": "roster"})
-        results = {doc["name"]: {
-            "bday": doc["bday"], 
-            "nick": doc["nick"], 
-            "rest_days": doc.get("rest_days", [])
-        } for doc in cursor}
-        return results
+        # 1. Fetch from your collection
+        # We start by fetching all docs to ensure we aren't just filtering out the right ones
+        cursor = list(collection.find({"type": "roster"}))
+        
+        # 2. Debugging: If this is empty, check your Atlas dashboard for the "type" field
+        if not cursor:
+            st.warning("No documents found with {'type': 'roster'}.")
+            return {}
+
+        # 3. Build dictionary
+        roster_data = {}
+        for doc in cursor:
+            # Safely get values using .get() to avoid KeyError
+            name = doc.get("name", "Unknown")
+            roster_data[name] = {
+                "bday": doc.get("bday"),
+                "nick": doc.get("nick", name),
+                "rest_days": doc.get("rest_days", [])
+            }
+        return roster_data
+
     except Exception as e:
-        st.error(f"Error fetching data: {e}")
+        st.error(f"Error connecting to database: {e}")
         return {}
 
 def save_config_to_db(data):
