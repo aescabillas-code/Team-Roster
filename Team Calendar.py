@@ -792,12 +792,19 @@ with tab_adm:
             c4.write("**Actions**")
             st.divider()
     
-            # 3. Loop through DB data
+           # 3. Loop through DB data
             for name, data in roster.items():
                 c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
                 c1.write(name)
                 c2.write(data.get("nick", ""))
-                c3.write(data['bday'].strftime('%B %d'))
+                
+                # --- ADD THIS CHECK ---
+                bday = data.get('bday')
+                if bday:
+                    c3.write(bday.strftime('%B %d'))
+                else:
+                    c3.write("N/A") # Or any placeholder you prefer
+                # ----------------------
                 
                 # Actions
                 if c4.button("Remove", key=f"del_{name}"):
