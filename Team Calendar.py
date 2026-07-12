@@ -241,6 +241,7 @@ if "staff_roster" in st.session_state:
                 "nick": name  # Default nickname to the full name
             }
 
+# --- CSS STYLES ---
 st.markdown("""
     <style>
     /* Import Google Font */
@@ -251,11 +252,14 @@ st.markdown("""
         background-color: #000000;
     }
     
-    /* 2. Global Text Styling (White for readability on Ombre) */
-    label, p, div, span, h1, h2, h3, .stMarkdown {
+    /* 2. Global Text Styling (White for readability) */
+    label, p, div, span, h1, h2, h3, .stMarkdown, .stText {
         color: #ffffff !important; 
         font-family: 'Quicksand', sans-serif !important;
     }
+    
+    /* Force Headers to be Teal */
+    h1, h2, h3 { color: #008080 !important; }
 
     /* 3. Calendar Grid Styling - Connected & Ombre */
     .day-block { 
@@ -289,14 +293,32 @@ st.markdown("""
 
     .calendar-divider { border-top: 1px solid rgba(255,255,255,0.2); margin: 4px 0; width: 100%; }
     
-    /* Buttons */
+    /* Buttons - Ombre Teal */
     div.stButton > button { 
-        background: linear-gradient(90deg, #008080 0%, #005f5f 100%); 
-        color: white; 
+        background: linear-gradient(180deg, #008080 0%, #002d2d 100%); 
+        color: white !important; 
         border: 1px solid #008080;
         border-radius: 12px; 
         font-weight: 600; 
     }
+    
+    /* Table Styling (Case Tracker, Masterfile, Deviation) */
+    table { width: 100%; border-collapse: collapse; }
+    
+    /* Row Alternating: Translucent White with Dark Teal Text */
+    tbody tr:nth-child(odd) { 
+        background-color: rgba(255, 255, 255, 0.1) !important; 
+        color: #008080 !important; 
+    }
+    
+    /* Row Alternating: Translucent Teal with White Text */
+    tbody tr:nth-child(even) { 
+        background-color: rgba(0, 128, 128, 0.2) !important; 
+        color: #ffffff !important; 
+    }
+    
+    /* Table Headers */
+    thead th { color: #008080 !important; }
     
     /* Alert & Knowledge Styling */
     .alert-container { 
