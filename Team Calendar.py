@@ -30,6 +30,10 @@ def load_data_from_db():
         }
     else:
         st.session_state.calendar_data = {}
+   
+    if 'master_data' not in st.session_state:
+    # Use your existing db function to load data once
+    st.session_state.master_data = fetch_masterfile_from_db()
         
 @st.cache_data(ttl=600)
 def get_staff_list():
