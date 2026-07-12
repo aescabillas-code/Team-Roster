@@ -697,7 +697,7 @@ with tab_dev:
             start_time = st.time_input("Start Time")
             end_time = st.time_input("End Time")
             
-            # Calculate the duration automatically based on time inputs
+            # 1. Calculate the duration automatically based on time inputs
             from datetime import datetime, timedelta
             dummy_date = date.today()
             dt_start = datetime.combine(dummy_date, start_time)
@@ -708,6 +708,15 @@ with tab_dev:
                 
             time_delta = dt_end - dt_start
             total_mins = int(time_delta.total_seconds() / 60)
+
+            # 2. Format the calculated total minutes as Xh Ym string layout
+            if total_mins >= 60:
+                display_duration = f"{total_mins // 60}h {total_mins % 60}m"
+            else:
+                display_duration = f"{total_mins}m"
+            
+            # 3. Inform the user of the auto-calculated duration in the UI
+            st.info(f"Calculated Duration: **{display_duration}**")
 
             aux = st.text_input("Aux") # Restored input field
             reason = st.text_area("Reason of Deviation")
