@@ -695,7 +695,14 @@ with tab_dev:
         with col2:
             start_time = st.time_input("Start Time")
             end_time = st.time_input("End Time")
-            total_mins = st.number_input("Total Mins", min_value=0)
+            duration_col1, duration_col2 = st.columns(2)
+            with duration_col1:
+                duration_hrs = st.number_input("Hours", min_value=0, value=0, step=1)
+            with duration_col2:
+                duration_mins = st.number_input("Mins", min_value=0, max_value=59, value=0, step=1)
+            
+            # 2. Calculate total minutes properly down here
+            total_mins = (duration_hrs * 60) + duration_mins
             aux = st.text_input("Aux") # Restored input field
             reason = st.text_area("Reason of Deviation")
             
@@ -741,12 +748,12 @@ with tab_dev:
         st.write("## Deviation Records")
         
         # --- NEW: Table Column Width Configuration Block ---
-        # 10 columns matching the requested columns: Date, Manager, Name, Shift Time, Start Time, End Time, Mins, Aux, Reason, Action
+        # 10 columns matching the requested columns: Date, Manager, Name, Shift Time, Start Time, End Time, Total Mins, Aux, Reason of Deviation, Action
         col_widths = [1.2, 1.2, 1.2, 1.2, 1.0, 1.0, 0.8, 0.8, 2.0, 1.0]
         
         # Render Table Header Row
         h_cols = st.columns(col_widths)
-        headers = ["Date", "Manager", "Name", "Shift Time", "Start Time", "End Time", "Mins", "Aux", "Reason", "Action"]
+        headers = ["Date", "Manager", "Name", "Shift Time", "Start Time", "End Time", "Total Mins", "Aux", "Reason of Deviation", "Action"]
         for idx, header_title in enumerate(headers):
             h_cols[idx].markdown(f"**{header_title}**")
         st.markdown("---")
