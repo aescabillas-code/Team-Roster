@@ -555,16 +555,16 @@ with tab_adm:
             st.success("Admin configuration saved.")
         st.divider()
 
-        col1, col2 = st.columns(2)
+    col1, col2 = st.columns(2)
 
-       with col1:
-            st.subheader("Roster Management")
+    with col1:
+        st.subheader("Roster Management")
             
-            # 1. Fetch current list from DB
-            roster = get_staff_list() 
+        # 1. Fetch current list from DB
+        roster = get_staff_list() 
             
-            # 2. Header
-            c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
+        # 2. Header
+         c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
             c1.write("**Name**")
             c2.write("**Nickname**")
             c3.write("**Birthday**")
@@ -728,3 +728,4 @@ with tab_adm:
                 st.table(pd.DataFrame(app_pto))
             if not app_wellness and not app_pto:
                 st.write("No approved requests for this month.")
+   
