@@ -177,15 +177,28 @@ st.markdown("""
         font-size: 11px; 
         background-color: rgba(0, 128, 128, 0.75); 
         color: #ffffff !important;
-        border: 1px solid rgba(0, 170, 170, 0.3); 
+        border: 1px solid #ffffff !important; /* White border when there is a day/content */
         margin: 0px; 
         display: flex; 
         flex-direction: column; 
+    }
+
+    /* Target state for empty calendar block slots (no day entries present) */
+    .day-block:empty, 
+    .day-block-empty {
+        background-color: rgba(0, 128, 128, 0.08) !important; /* Almost transparent teal background */
+        border: 1px solid #008080 !important; /* Teal border profile */
     }
     
     /* Strict layout equalization to combine calendar blocks side-by-side cleanly without separation gaps */
     div[data-testid="stHorizontalBlock"] {
         gap: 0px !important;
+    }
+
+    /* Target the container element specifically containing the calendar row to provide space above summaries */
+    div[data-testid="stHorizontalBlock"]:has(.day-block),
+    div[data-testid="stHorizontalBlock"]:has(.day-block-empty) {
+        margin-bottom: 40px !important; /* Distinct space between the calendar strip and summaries */
     }
     
     /* Make the date inside the day block noticeably bigger than the rest of the content */
@@ -239,7 +252,7 @@ st.markdown("""
     div[data-testid="stTabs"] button {
         background: linear-gradient(90deg, #004d4d 0%, #008080 100%) !important;
         color: #ffffff !important;
-        font-size: 18px !important; /* Noticeably bigger in size */
+        font-size: 18px !important; /* Bigger label size */
         font-weight: 600 !important;
         padding: 12px 24px !important;
         border-radius: 8px 8px 0px 0px !important;
