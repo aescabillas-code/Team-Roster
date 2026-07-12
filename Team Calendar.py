@@ -26,6 +26,26 @@ def fetch_masterfile_from_db():
         # If your masterfile is stored as a list of dicts or a dataframe-like structure
         return doc["data"]
     return []
+
+def fetch_deviations_from_db():
+    # Fetches all documents with type "deviation" from your collection
+    return list(collection.find({"type": "deviation"}))
+
+def save_deviation_to_db(deviation_data):
+    # Adds the type field so it can be fetched by fetch_deviations_from_db
+    deviation_data["type"] = "deviation"
+    collection.insert_one(deviation_data)
+
+def update_deviation_in_db(dev_id, update_data):
+    # Ensure you import ObjectId from bson.objectid at the top of your file
+    collection.update_one(
+        {"_id": ObjectId(dev_id)}, 
+        {"$set": update_data}
+    )
+
+def delete_deviation_from_db(dev_id):
+    collection.delete_one({"_id": ObjectId(dev_id)})
+    
 def load_data_from_db():
     # 1. Initialize admin_roster if it doesn't exist
     if "admin_roster" not in st.session_state:
