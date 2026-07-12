@@ -52,20 +52,17 @@ def load_data_from_db():
         st.session_state.calendar_data = {}
 
 def render_request(req, idx, req_type):
-    # This must be in your main file to access st.button and st.rerun
+    # This helper now lives in the main UI file so it can access st.button
     with st.expander(f"{req['name']} - {req['type']} on {req['date']}"):
         c1, c2 = st.columns(2)
         if c1.button("Approve", key=f"app_{req_type}_{idx}"):
-            # 1. Logic to move from pending to approved
-            req['status'] = 'Approved'
+            update_request_status_in_db(req, "Approved")
             st.session_state.approved_requests.append(req)
             st.session_state.pending_requests.pop(idx)
-            # 2. Update DB
-            update_request_status_in_db(req, "Approved")
             st.rerun()
         if c2.button("Reject", key=f"rej_{req_type}_{idx}"):
-            st.session_state.pending_requests.pop(idx)
             delete_request_from_db(req)
+            st.session_state.pending_requests.pop(idx)
             st.rerun()
 
 @st.cache_resource
