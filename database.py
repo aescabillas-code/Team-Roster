@@ -13,8 +13,12 @@ collection = db["my_collection"]
 
 # --- DATABASE HELPER FUNCTIONS ---
 def fetch_masterfile_from_db():
-    # Replace with your actual collection if needed
-    return list(db.master_collection.find({}))
+    return list(db.my_collection.find({}))
+
+def save_masterfile_to_db(df):
+    # Clear existing data and insert new data
+    db.my_collection.delete_many({})
+    db.my_collection.insert_many(df.to_dict('records'))
 
 def save_request_to_db(req_data):
     db.requests.insert_one(req_data)
