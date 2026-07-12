@@ -358,31 +358,39 @@ def render_request(req, key_prefix):
     denial_key = f"denying_{key_prefix}_{unique_id}"
     
     st.write(f"**{req['name']}** | {req['type']} | {req['date']}")
-    c1, c2 = st.columns(2)
     
-    if c1.button("Approve", key=f"app_{key_prefix}_{unique_id}"):
-        update_request_status_in_db(req, "Approved")
-        if req in st.session_state.pending_requests: st.session_state.pending_requests.remove(req)
-        st.session_state.approved_requests.append(req)
-        if req.get("email"):
-            send_request_notification(req['email'], "Approved", req['type'], req['date'])
-        st.success("Approved safely!")
-        st.rerun()
+    # Render primary action buttons only if the denial process has NOT been triggered
+    if not st.session_state.get(denial_key):
+        c1, c2 = st.columns(2)
+        
+        if c1.button("Approve", key=f"app_{key_prefix}_{unique_id}"):
+            update_request_status_in_db(req, "Approved")
+            if req in st.session_state.pending_requests: 
+                st.session_state.pending_requests.remove(req)
+            st.session_state.approved_requests.append(req)
+            if req.get("email"):
+                send_request_notification(req['email'], "Approved", req['type'], req['date'])
+            st.success("Approved!")
+            st.rerun()
 
-    if c2.button("Deny", key=f"den_{key_prefix}_{unique_id}"):
-        st.session_state[denial_key] = True
-        st.rerun()
+        if c2.button("Deny", key=f"den_{key_prefix}_{unique_id}"):
+            st.session_state[denial_key] = True
+            st.rerun()
 
+    # Render denial follow-up flow elements when triggered
     if st.session_state.get(denial_key):
         reason = st.text_input("Reason for denial", key=f"reason_{key_prefix}_{unique_id}")
         col1, col2 = st.columns(2)
+        
         if col1.button("Proceed Denial", key=f"confirm_{key_prefix}_{unique_id}"):
             delete_request_from_db(req)
-            if req in st.session_state.pending_requests: st.session_state.pending_requests.remove(req)
+            if req in st.session_state.pending_requests: 
+                st.session_state.pending_requests.remove(req)
             if req.get("email"):
                 send_request_notification(req['email'], "Denied", req['type'], req['date'])
             st.session_state[denial_key] = False
             st.rerun()
+            
         if col2.button("Cancel", key=f"cancel_{key_prefix}_{unique_id}"):
             st.session_state[denial_key] = False
             st.rerun()
@@ -960,7 +968,7 @@ with tab_adm:
                 )
                 st.success("Configuration saved to database!")
                 st.rerun()
-        st.columns
+        
         with col2:
             st.subheader("Approval Center")
             
@@ -1002,10 +1010,32 @@ with tab_adm:
 
             st.divider()
 
-            # --- APPROVED HISTORY ---
+           # --- APPROVED HISTORY ---
             st.subheader("✅ Approved History")
+            
+            # --- ADDED: Month and Year Filters ---
+            filter_col1, filter_col2 = st.columns(2)
+            with filter_col1:
+                month_options = {
+                    1: "January", 2: "February", 3: "March", 4: "April", 
+                    5: "May", 6: "June", 7: "July", 8: "August", 
+                    9: "September", 10: "October", 11: "November", 12: "December"
+                }
+                # Default to the session state month 'cal_m' if available, otherwise current month
+                default_month = st.session_state.get("cal_m", date.today().month)
+                selected_month = st.selectbox("Filter by Month", options=list(month_options.keys()), format_func=lambda x: month_options[x], index=list(month_options.keys()).index(default_month), key="history_filter_month")
+            
+            with filter_col2:
+                current_year = date.today().year
+                year_options = list(range(current_year - 5, current_year + 6))
+                selected_year = st.selectbox("Filter by Year", options=year_options, index=year_options.index(current_year), key="history_filter_year")
+            # -------------------------------------
+
             all_approved_from_db = fetch_approved_requests_from_db()
-            month_to_filter = st.session_state.get("cal_m", date.today().month)
+            
+            # Updated to use the selected dropdown choices for filtering
+            month_to_filter = selected_month
+            year_to_filter = selected_year
             
             app_wellness = []
             app_pto = []
@@ -1017,7 +1047,8 @@ with tab_adm:
                         date_val = datetime.strptime(date_val.split("T")[0], "%Y-%m-%d").date()
                     except ValueError:
                         continue
-                if date_val.month == month_to_filter:
+                # Added explicit year validation alongside the existing month matching condition
+                if date_val.month == month_to_filter and date_val.year == year_to_filter:
                     if r.get('type') == "Wellness":
                         app_wellness.append(r)
                     elif r.get('type') == "PTO":
