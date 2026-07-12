@@ -502,6 +502,31 @@ with tab_case:
             
             # 3. Display Result
             st.table(filtered_df)
+                # --- MODIFY ENTRY SECTION ---
+            st.write("---")
+            st.subheader("Modify Existing Entry")
+            
+            # Create a display string for selection
+            options = {f"{i}: {req['Name']} - {req['Date']}": i for i, req in enumerate(st.session_state.deviation_requests)}
+            selected_option = st.selectbox("Select entry to modify", options.keys())
+            
+            if selected_option:
+                idx = options[selected_option]
+                req = st.session_state.deviation_requests[idx]
+                
+                with st.form(f"edit_form_{idx}"):
+                    new_date = st.date_input("Edit Date", value=req['Date'])
+                    new_reason = st.text_area("Edit Reason", value=req['Reason'])
+                    new_mins = st.number_input("Edit Mins", value=req['Total Mins'])
+                    
+                    if st.form_submit_button("Update Entry"):
+                        st.session_state.deviation_requests[idx].update({
+                            "Date": new_date,
+                            "Reason": new_reason,
+                            "Total Mins": new_mins
+                        })
+                        st.success("Entry updated! Refreshing...")
+                        st.rerun() # Refresh the app to update the table
             
             # 4. Extract/Download button
             csv = filtered_df.to_csv(index=False).encode('utf-8')
