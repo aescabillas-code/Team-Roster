@@ -96,6 +96,16 @@ def fetch_deviations_from_db():
     except Exception as e:
         st.error("Could not load deviation data from the database.")
         return []
+
+def delete_request_from_db(req):
+    try:
+        # Assuming your requests have a unique identifier like '_id'
+        # Adjust the query filter based on how your 'req' object is structured
+        collection.delete_one({"_id": req["_id"]})
+        st.success("Request deleted successfully.")
+        st.rerun()
+    except Exception as e:
+        st.error(f"Could not delete request: {e}")
     
 # --- INITIAL CONFIG & STATE ---
 st.set_page_config(layout="wide", page_title="Team Roster & Staffing System")
