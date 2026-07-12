@@ -18,6 +18,25 @@ collection = db["team_data"]    # Replace with your actual collection name
 
 # 2. NOW DEFINE THE FUNCTION (it can now see 'collection')
 
+def save_config_to_db(data):
+    # Saves configuration (shifts, statuses, assignments)
+    collection.update_one(
+        {"type": "calendar_data"},
+        {"$set": {"data": {str(k): v for k, v in data.items()}}},
+        upsert=True
+    )
+
+def update_request_in_db(request_id, status):
+    # Updates a request (PTO/Wellness) status in the DB
+    collection.update_one(
+        {"_id": request_id, "type": "request"},
+        {"$set": {"status": status}}
+    )
+
+def fetch_requests_from_db():
+    # Fetches all requests
+    return list(collection.find({"type": "request"}))
+
 def save_staff(name, data):
     # 1. Update Session State (for immediate UI response)
     if "staff_roster" not in st.session_state:
@@ -133,6 +152,27 @@ def update_case_in_db(case_id, update_data):
 
 def delete_case_from_db(case_id):
     collection.delete_one({"_id": ObjectId(case_id)})
+
+def render_request(req, idx, key_prefix):
+    col_req, col_btn = st.columns([3, 1])
+    col_req.write(f"{req['name']} | {req['date']} | {req['type']}")
+    
+    with col_btn:
+        if st.button("Approve", key=f"app_{key_prefix}_{idx}"):
+            # 1. Update Database
+            update_request_in_db(req['_id'], "Approved")
+            # 2. Update Session State
+            req['status'] = "Approved"
+            st.session_state.approved_requests.append(req)
+            st.session_state.pending_requests.remove(req)
+            st.rerun()
+            
+        if st.button("Deny", key=f"den_{key_prefix}_{idx}"):
+            # 1. Update Database
+            update_request_in_db(req['_id'], "Denied")
+            # 2. Update Session State
+            st.session_state.pending_requests.remove(req)
+            st.rerun()
 
 # --- INITIAL CONFIG & STATE ---
 st.set_page_config(layout="wide", page_title="Team Roster & Staffing System")
@@ -833,7 +873,7 @@ with tab_adm:
             
             # --- Locate this block in your tab_adm ---
             if st.button("Save Config"):
-                # 1. Update session state (for the UI to reflect changes immediately)
+                # 1. Update session state
                 for d in target_dates:
                     st.session_state.calendar_data[d] = {
                         "shift": shift_display, 
@@ -844,19 +884,11 @@ with tab_adm:
                         "sme": sme
                     }
                 
-                # 2. SAVE TO MONGODB: Convert date keys to strings for database compatibility
-                # MongoDB keys cannot be date objects; they must be strings
-                serializable_data = {str(k): v for k, v in st.session_state.calendar_data.items()}
+                # 2. Persist to MongoDB
+                save_config_to_db(st.session_state.calendar_data)
                 
-                # Push to your existing MongoDB collection
-                collection.update_one(
-                    {"type": "calendar_data"},
-                    {"$set": {"data": serializable_data}},
-                    upsert=True
-                )
-                
-                st.success("Configuration saved to database!")
-                st.rerun() # Refresh so the main calendar view picks up the new data
+                st.success("All configuration changes saved to database!")
+                st.rerun()
         
         with col2:
             st.subheader("Approval Center")
