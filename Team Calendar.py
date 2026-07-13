@@ -576,7 +576,252 @@ with tab_req:
                 st.success("Request submitted successfully.")
                 st.rerun()
 
-# --- TAB 3: CASE TRACKER ---
+# --- TAB 3.1: PRODUCTIVITY MONITORING ---
+with tab_prod:
+
+    st.subheader("Productivity Monitoring")
+
+    cases = get_cases_from_db()
+
+    if not cases:
+
+        st.info("No case records found.")
+
+    else:
+
+        df = pd.DataFrame(cases)
+
+        if "_id" in df.columns:
+            df = df.drop(columns=["_id"])
+
+        df["Date"] = pd.to_datetime(
+            df["Date"],
+            errors="coerce"
+        )
+
+        df["Month"] = df["Date"].dt.month
+        df["Year"] = df["Date"].dt.year
+        df["Day"] = df["Date"].dt.date
+
+        st.markdown("## Monthly Productivity")
+
+        m_col1, m_col2 = st.columns(2)
+
+        available_years = sorted(
+            df["Year"].dropna().unique()
+        )
+
+        selected_year = m_col1.selectbox(
+            "Year",
+            available_years,
+            key="prod_month_year"
+        )
+
+        selected_month = m_col2.selectbox(
+            "Month",
+            range(1, 13),
+            format_func=lambda x: calendar.month_name[x],
+            key="prod_month_month"
+        )
+
+        monthly_df = df[
+            (df["Year"] == selected_year)
+            &
+            (df["Month"] == selected_month)
+        ]
+
+        if not monthly_df.empty:
+
+            monthly_summary = pd.pivot_table(
+                monthly_df,
+                index="Owner",
+                columns="Type",
+                values="Case Number",
+                aggfunc="count",
+                fill_value=0
+            )
+
+            monthly_summary["Total Cases"] = (
+                monthly_summary.sum(axis=1)
+            )
+
+            st.dataframe(
+                monthly_summary,
+                use_container_width=True
+            )
+
+        else:
+
+            st.info(
+                "No records for selected month."
+            )
+
+        st.divider()
+
+        st.markdown("## Daily Productivity")
+
+        selected_day = st.date_input(
+            "Select Day",
+            value=date.today(),
+            key="prod_daily_date"
+        )
+
+        daily_df = df[
+            df["Day"] == selected_day
+        ]
+
+        if not daily_df.empty:
+
+            daily_summary = pd.pivot_table(
+                daily_df,
+                index="Owner",
+                columns="Type",
+                values="Case Number",
+                aggfunc="count",
+                fill_value=0
+            )
+
+            daily_summary["Total Cases"] = (
+                daily_summary.sum(axis=1)
+            )
+
+            st.dataframe(
+                daily_summary,
+                use_container_width=True
+            )
+
+        else:
+
+            st.info(
+                "No records for selected day."
+            )
+
+        st.divider()
+
+        st.markdown(
+            "## Most Common Issues Assisted Per Owner"
+        )
+
+        owner_issue_df = (
+            df.groupby(
+                ["Owner", "Issue"]
+            )
+            .size()
+            .reset_index(
+                name="Count"
+            )
+        )
+
+        if not owner_issue_df.empty:
+
+            st.bar_chart(
+                owner_issue_df,
+                x="Owner",
+                y="Count"
+            )
+
+            top_issue_owner = (
+                owner_issue_df
+                .sort_values(
+                    "Count",
+                    ascending=False
+                )
+            )
+
+            st.dataframe(
+                top_issue_owner,
+                use_container_width=True
+            )
+
+        st.divider()
+
+        st.markdown(
+            "## Most Common Product Group Assisted Per Owner"
+        )
+
+        owner_product_df = (
+            df.groupby(
+                ["Owner", "Product Group"]
+            )
+            .size()
+            .reset_index(
+                name="Count"
+            )
+        )
+
+        if not owner_product_df.empty:
+
+            st.bar_chart(
+                owner_product_df,
+                x="Owner",
+                y="Count"
+            )
+
+            st.dataframe(
+                owner_product_df.sort_values(
+                    "Count",
+                    ascending=False
+                ),
+                use_container_width=True
+            )
+
+        st.divider()
+
+        st.markdown(
+            "## Overall Most Common Issues"
+        )
+
+        overall_issue = (
+            df["Issue"]
+            .value_counts()
+            .reset_index()
+        )
+
+        overall_issue.columns = [
+            "Issue",
+            "Count"
+        ]
+
+        st.bar_chart(
+            overall_issue,
+            x="Issue",
+            y="Count"
+        )
+
+        st.dataframe(
+            overall_issue,
+            use_container_width=True
+        )
+
+        st.divider()
+
+        st.markdown(
+            "## Overall Most Common Product Groups"
+        )
+
+        overall_product = (
+            df["Product Group"]
+            .value_counts()
+            .reset_index()
+        )
+
+        overall_product.columns = [
+            "Product Group",
+            "Count"
+        ]
+
+        st.bar_chart(
+            overall_product,
+            x="Product Group",
+            y="Count"
+        )
+
+        st.dataframe(
+            overall_product,
+            use_container_width=True
+        )
+
+# --- TAB 3.2: CASE TRACKER ---
 with tab_case:
 
     st.subheader("Log New Case")
