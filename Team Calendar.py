@@ -690,34 +690,63 @@ with tab_dev:
             # 2. Extract available names or fallback to session state
             available_names = list(staff_data.keys()) if staff_data else list(st.session_state.staff_roster.keys())
             name = st.selectbox("Name", available_names, key="dev_name_box")
-            # Restored calendar shift time calculations
-            shift_time = st.session_state.calendar_data.get(target_date, {}).get("shift", "Not Set")
+            # Restored calendar shift time calculations dynamically from MongoDB
+            # 1. Fetch the admin calendar configuration document directly from the database
+            calendar_doc = collection.find_one({"type": "calendar_data"})
+            
+            # 2. Safely navigate down to find the shift for that specific target date
+            # Assumes database structure maps dates as strings (e.g., {"2026-07-12": {"shift": "Day Shift"}})
+            if calendar_doc:
+                date_str = str(target_date)
+                # Read the shift from the DB matrix, or fallback to the session state if not found
+                shift_time = calendar_doc.get("data", {}).get(date_str, {}).get("shift") or \
+                             st.session_state.calendar_data.get(target_date, {}).get("shift", "Not Set")
+            else:
+                # Absolute fallback if database document isn't accessible
+                shift_time = st.session_state.calendar_data.get(target_date, {}).get("shift", "Not Set")
+                
             st.write(f"**Shift Time:** {shift_time}")
         with col2:
-            start_time = st.time_input("Start Time")
-            end_time = st.time_input("End Time")
+            # Manual inputs for Start Time
+            st.markdown("##### Start Time")
+            start_col1, start_col2 = st.columns(2)
+            with start_col1:
+                start_hr = st.number_input("Start Hour", min_value=0, max_value=23, value=0, step=1, key="manual_start_hr")
+            with start_col2:
+                start_min = st.number_input("Start Minute", min_value=0, max_value=59, value=0, step=1, key="manual_start_min")
             
-            # 1. Calculate the duration automatically based on time inputs
-            from datetime import datetime, timedelta
-            dummy_date = date.today()
-            dt_start = datetime.combine(dummy_date, start_time)
-            dt_end = datetime.combine(dummy_date, end_time)
-            
-            if dt_end < dt_start:
-                dt_end += timedelta(days=1)
-                
-            time_delta = dt_end - dt_start
-            total_mins = int(time_delta.total_seconds() / 60)
+            # Manual inputs for End Time
+            st.markdown("##### End Time")
+            end_col1, end_col2 = st.columns(2)
+            with end_col1:
+                end_hr = st.number_input("End Hour", min_value=0, max_value=23, value=0, step=1, key="manual_end_hr")
+            with end_col2:
+                end_min = st.number_input("End Minute", min_value=0, max_value=59, value=0, step=1, key="manual_end_min")
 
-            # 2. Format the calculated total minutes as Xh Ym string layout
-            if total_mins >= 60:
-                display_duration = f"{total_mins // 60}h {total_mins % 60}m"
+            # Convert to standard strings for consistent reporting/DB storage
+            start_time = f"{start_hr:02d}:{start_min:02d}"
+            end_time = f"{end_hr:02d}:{end_min:02d}"
+            
+            # Manual inputs for Duration
+            st.markdown("##### Duration")
+            duration_col1, duration_col2 = st.columns(2)
+            with duration_col1:
+                duration_hrs = st.number_input("Hours", min_value=0, value=0, step=1, key="manual_dur_hrs")
+            with duration_col2:
+                duration_mins = st.number_input("Mins", min_value=0, max_value=59, value=0, step=1, key="manual_dur_mins")
+            
+            # 1. Calculate absolute integer minutes for your database pipeline
+            total_mins = (duration_hrs * 60) + duration_mins
+            
+            # 2. Convert and format it back to the clean Xh Ym layout structure
+            if duration_hrs > 0:
+                display_duration = f"{duration_hrs}h {duration_mins}m"
             else:
-                display_duration = f"{total_mins}m"
+                display_duration = f"{duration_mins}m"
+                
+            # 3. Output UI verification helper text
+            st.info(f"Summary Duration: **{display_duration}** ({total_mins} total mins)")
             
-            # 3. Inform the user of the auto-calculated duration in the UI
-            st.info(f"Calculated Duration: **{display_duration}**")
-
             aux = st.text_input("Aux") # Restored input field
             reason = st.text_area("Reason of Deviation")
             
