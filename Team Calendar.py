@@ -578,6 +578,7 @@ with tab_req:
 
 # --- TAB 3: CASE TRACKER ---
 with tab_case:
+
     st.subheader("Log New Case")
 
     c_types = st.session_state.master_data.loc[
@@ -644,12 +645,14 @@ with tab_case:
     extra = ""
 
     if status == "Pending/Monitoring":
+
         extra = st.text_input(
             "Pending/Monitoring Reason",
             key="case_form_pending"
         )
 
     elif status == "Routed":
+
         extra = st.text_input(
             "Queue Destination",
             key="case_form_routed"
@@ -659,6 +662,10 @@ with tab_case:
 
         new_case = {
             "Date": str(date.today()),
+            "Owner": st.session_state.get(
+                "user_name",
+                "Unknown"
+            ),
             "Type": c_type,
             "Case Number": case_number,
             "Issue": issue,
@@ -666,7 +673,8 @@ with tab_case:
             "Desc": desc,
             "Steps": steps,
             "Has_Screenshot": uploaded_file is not None,
-            "Screenshot": uploaded_file.getvalue() if uploaded_file else None,
+            "Screenshot": uploaded_file.getvalue()
+            if uploaded_file else None,
             "Status": status,
             "Extra": extra
         }
@@ -674,10 +682,14 @@ with tab_case:
         save_case_to_db(new_case)
 
         for key in list(st.session_state.keys()):
+
             if key.startswith("case_form_"):
                 del st.session_state[key]
 
-        st.success("Case logged to database successfully!")
+        st.success(
+            "Case logged to database successfully!"
+        )
+
         st.rerun()
 
     st.divider()
@@ -721,23 +733,32 @@ with tab_case:
     for case in reversed(cases_list):
 
         matches_issue = (
-            not f_issue or case.get("Issue") in f_issue
+            not f_issue
+            or case.get("Issue") in f_issue
         )
 
         matches_prod = (
-            not f_prod or case.get("Product Group") in f_prod
+            not f_prod
+            or case.get("Product Group") in f_prod
         )
 
         matches_case = (
             not f_case
-            or f_case.lower() in str(
-                case.get("Case Number", "")
+            or f_case.lower()
+            in str(
+                case.get(
+                    "Case Number",
+                    ""
+                )
             ).lower()
         )
 
         matches_owner = (
             f_owner == "All"
-            or case.get("Owner", "") == f_owner
+            or case.get(
+                "Owner",
+                ""
+            ) == f_owner
         )
 
         if (
@@ -750,42 +771,22 @@ with tab_case:
 
     if filtered_cases:
 
-        overview_rows = []
-
-        for case in filtered_cases:
-            overview_rows.append(
-                {
-                    "Case #": case.get(
-                        "Case Number",
-                        ""
-                    ),
-                    "Issue Description": case.get(
-                        "Desc",
-                        ""
-                    )[:100]
-                }
-            )
-
-        st.dataframe(
-            overview_rows,
-            use_container_width=True,
-            hide_index=True
-        )
-
-        st.markdown("### Case Details")
-
         for case in filtered_cases:
 
-            with st.expander(
-                f"Case #{case.get('Case Number','')} | "
-                f"{case.get('Desc','')[:80]}"
-            ):
+            entry_col, action_col = st.columns([9, 1])
 
-                head_col, opt_col = st.columns([6, 1])
+            with entry_col:
 
-                with head_col:
+                with st.expander(
+                    f"Case #{case.get('Case Number','')} | "
+                    f"{case.get('Desc','')[:80]}",
+                    expanded=False
+                ):
+
                     st.markdown(
                         f"""
+                        **Owner:** {case.get('Owner','')}
+
                         **Date:** {case.get('Date','')}
 
                         **Contact Type:** {case.get('Type','')}
@@ -800,24 +801,75 @@ with tab_case:
                         """
                     )
 
-                with opt_col:
-
-                    options_menu = st.popover(
-                        "⋮",
-                        help="Options"
+                    st.markdown(
+                        "### Issue Description"
+                    )
+                    st.write(
+                        case.get("Desc", "")
                     )
 
-                    with options_menu:
+                    st.markdown(
+                        "### Steps Taken"
+                    )
+                    st.write(
+                        case.get("Steps", "")
+                    )
 
-                        action = st.radio(
-                            "Action",
-                            ["View", "Edit", "Delete"],
-                            key=f"act_{case['_id']}"
+                    if case.get("Extra"):
+
+                        st.markdown(
+                            "### Additional Information"
                         )
 
-                if action == "Edit":
+                        st.write(
+                            case.get("Extra", "")
+                        )
 
-                    st.markdown("#### Edit Case Details")
+                    if (
+                        case.get("Has_Screenshot")
+                        and case.get("Screenshot")
+                    ):
+
+                        st.image(
+                            case["Screenshot"],
+                            caption="Attached Screenshot",
+                            use_container_width=True
+                        )
+
+                    elif case.get(
+                        "Has_Screenshot"
+                    ):
+
+                        st.caption(
+                            "📎 Screenshot attached to this record."
+                        )
+
+            with action_col:
+
+                pop = st.popover(
+                    "⋮",
+                    help="Actions"
+                )
+
+                with pop:
+
+                    action = st.selectbox(
+                        "Action",
+                        [
+                            "None",
+                            "Edit",
+                            "Delete"
+                        ],
+                        key=f"action_{case['_id']}"
+                    )
+
+            if action == "Edit":
+
+                with st.container():
+
+                    st.markdown(
+                        f"### Editing Case #{case.get('Case Number','')}"
+                    )
 
                     edit_date = st.text_input(
                         "Date",
@@ -863,7 +915,9 @@ with tab_case:
                     edit_status = st.selectbox(
                         "Status",
                         status_options,
-                        index=status_options.index(current_status)
+                        index=status_options.index(
+                            current_status
+                        )
                         if current_status in status_options
                         else 0,
                         key=f"status_{case['_id']}"
@@ -887,44 +941,64 @@ with tab_case:
                         key=f"ed_step_{case['_id']}"
                     )
 
-                    if st.button(
-                        "Save Changes",
-                        key=f"save_ed_{case['_id']}"
-                    ):
+                    save_col, cancel_col = st.columns(2)
 
-                        collection.update_one(
-                            {"_id": case["_id"]},
-                            {
-                                "$set": {
-                                    "Date": edit_date,
-                                    "Type": edit_type,
-                                    "Case Number": edit_case_number,
-                                    "Issue": edit_issue,
-                                    "Product Group": edit_product,
-                                    "Status": edit_status,
-                                    "Extra": edit_extra,
-                                    "Desc": edit_desc,
-                                    "Steps": edit_steps
+                    with save_col:
+
+                        if st.button(
+                            "Save Changes",
+                            key=f"save_ed_{case['_id']}"
+                        ):
+
+                            collection.update_one(
+                                {
+                                    "_id": case["_id"]
+                                },
+                                {
+                                    "$set": {
+                                        "Date": edit_date,
+                                        "Type": edit_type,
+                                        "Case Number": edit_case_number,
+                                        "Issue": edit_issue,
+                                        "Product Group": edit_product,
+                                        "Status": edit_status,
+                                        "Extra": edit_extra,
+                                        "Desc": edit_desc,
+                                        "Steps": edit_steps
+                                    }
                                 }
-                            }
-                        )
+                            )
 
-                        st.success(
-                            "Case updated successfully!"
-                        )
-                        st.rerun()
+                            st.success(
+                                "Case updated successfully!"
+                            )
 
-                elif action == "Delete":
+                            st.rerun()
 
-                    st.warning(
-                        "⚠️ This action requires supervisor authorization."
-                    )
+                    with cancel_col:
 
-                    del_password = st.text_input(
-                        "Enter Admin Password to confirm delete",
-                        type="password",
-                        key=f"pwd_del_{case['_id']}"
-                    )
+                        if st.button(
+                            "Cancel",
+                            key=f"cancel_edit_{case['_id']}"
+                        ):
+
+                            st.rerun()
+
+            elif action == "Delete":
+
+                st.warning(
+                    "⚠️ Supervisor authorization required."
+                )
+
+                del_password = st.text_input(
+                    "Enter Admin Password",
+                    type="password",
+                    key=f"pwd_del_{case['_id']}"
+                )
+
+                del_col, cancel_col = st.columns(2)
+
+                with del_col:
 
                     if st.button(
                         "Confirm Delete",
@@ -934,7 +1008,9 @@ with tab_case:
                         if del_password == "Password1234":
 
                             collection.delete_one(
-                                {"_id": case["_id"]}
+                                {
+                                    "_id": case["_id"]
+                                }
                             )
 
                             st.success(
@@ -946,33 +1022,22 @@ with tab_case:
                         else:
 
                             st.error(
-                                "Incorrect Password. Action denied."
+                                "Incorrect Password."
                             )
 
-                else:
+                with cancel_col:
 
-                    st.markdown("### Issue Description")
-                    st.write(case.get("Desc", ""))
-
-                    st.markdown("### Steps Taken")
-                    st.write(case.get("Steps", ""))
-
-                    if (
-                        case.get("Has_Screenshot")
-                        and case.get("Screenshot")
+                    if st.button(
+                        "Cancel",
+                        key=f"cancel_del_{case['_id']}"
                     ):
-                        st.image(
-                            case["Screenshot"],
-                            caption="Attached Screenshot",
-                            use_container_width=True
-                        )
 
-                    elif case.get("Has_Screenshot"):
-                        st.caption(
-                            "📎 Screenshot attached to this record."
-                        )
+                        st.rerun()
+
+            st.divider()
 
     else:
+
         st.info(
             "No cases match the selected filters."
         )
