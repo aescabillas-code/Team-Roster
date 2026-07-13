@@ -587,6 +587,7 @@ with tab_case:
     
     c1, c2 = st.columns(2)
     c_type = c1.selectbox("Contact Type", c_types)
+    case_number = c1.text_input("Case Number")
     issue = c1.selectbox("Issue", issues)
     prod = c2.selectbox("Product Group", prods)
     desc = st.text_area("Issue Description")
@@ -602,6 +603,7 @@ with tab_case:
         new_case = {
             "Date": str(date.today()), 
             "Type": c_type, 
+            "Case Number": case_number,
             "Issue": issue, 
             "Product Group": prod, 
             "Desc": desc, 
@@ -631,7 +633,14 @@ with tab_case:
                 head_col, opt_col = st.columns([6, 1])
                 
                 with head_col:
-                    st.markdown(f"**Date:** {case['Date']} | **Status:** {case['Status']} | **Issue:** {case['Issue']}")
+                    st.markdown(
+                        f"**Date:** {case['Date']} | "
+                        f"**Contact Type:** {case.get('Type', '')} | "
+                        f"**Case Number:** {case.get('Case Number', '')} | "
+                        f"**Status:** {case['Status']} | "
+                        f"**Issue:** {case['Issue']}"
+                    )
+
                 
                 with opt_col:
                     # Ellipses simulation dropdown for managing individual case entry
@@ -643,6 +652,11 @@ with tab_case:
                 if action == "Edit":
                     st.markdown("#### Edit Case Details")
                     # Populates current data into editable fields
+                    edit_case_number = st.text_input(
+                            "Case Number",
+                            value=case.get("Case Number", ""),
+                            key=f"case_num_{case['_id']}"
+                        )
                     edit_desc = st.text_area("Update Issue Description", value=case.get('Desc', ''), key=f"ed_desc_{case['_id']}")
                     edit_steps = st.text_area("Update Steps Taken", value=case.get('Steps', ''), key=f"ed_step_{case['_id']}")
                     
@@ -650,7 +664,7 @@ with tab_case:
                         # Updates the live collection document directly
                         collection.update_one(
                             {"_id": case["_id"]}, 
-                            {"$set": {"Desc": edit_desc, "Steps": edit_steps}}
+                            {"$set": {"Case Number": edit_case_number,"Desc": edit_desc, "Steps": edit_steps}}
                         )
                         st.success("Case updated successfully!")
                         st.rerun()
