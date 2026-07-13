@@ -1009,9 +1009,8 @@ with tab_case:
                                 }
                             )
 
-                            st.session_state[
-                                f"action_{case['_id']}"
-                            ] = "None"
+                            st.success(
+                                "Case updated successfully!")
 
                             st.rerun()
 
@@ -1021,10 +1020,6 @@ with tab_case:
                             "Cancel",
                             key=f"cancel_edit_{case['_id']}"
                         ):
-
-                            st.session_state[
-                                f"action_{case['_id']}"
-                            ] = "None"
 
                             st.rerun()
 
@@ -1055,12 +1050,10 @@ with tab_case:
                                 {"_id": case["_id"]}
                             )
 
-                            st.session_state[
-                                f"action_{case['_id']}"
-                            ] = "None"
-
+                            
+                            st.success(
+                                "Case deleted successfully.")
                             st.rerun()
-
                         else:
 
                             st.error(
@@ -1073,11 +1066,6 @@ with tab_case:
                         "Cancel",
                         key=f"cancel_del_{case['_id']}"
                     ):
-
-                        st.session_state[
-                            f"action_{case['_id']}"
-                        ] = "None"
-
                         st.rerun()
 
             st.divider()
