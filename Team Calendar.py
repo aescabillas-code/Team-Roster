@@ -147,7 +147,7 @@ if "admin_authenticated" not in st.session_state: st.session_state.admin_authent
 if "staff_roster" not in st.session_state: 
     st.session_state.staff_roster = {}
 if "calendar_data" not in st.session_state: st.session_state.calendar_data = {}
-if "limits" not in st.session_state: st.session_state.limits = {"PTO": 1, "Wellness": 1}
+if "limits" not in st.session_state: st.session_state.limits = {"PTO_per_day": 1,"Wellness_per_day": 1}
 if "notifications" not in st.session_state: st.session_state.notifications = []
 if "master_data" not in st.session_state: 
     st.session_state.master_data = pd.DataFrame({
@@ -1391,9 +1391,27 @@ with tab_adm:
                 target_dates = [d for d in target_dates if d.month == sm.month]
     
             # Limits, Shifts, and Status mapping definitions
-            st.session_state.limits["PTO"] = st.number_input("Max PTO", value=st.session_state.limits.get("PTO", 1), key="num_max_pto")
-            st.session_state.limits["Wellness"] = st.number_input("Max Wellness", value=st.session_state.limits.get("Wellness", 1), key="num_max_well")
             
+            st.session_state.limits["PTO_per_day"] = st.number_input(
+                "Max PTO Per Day",
+                min_value=1,
+                value=st.session_state.limits.get(
+                    "PTO_per_day",
+                    1
+                ),
+                key="num_max_pto_per_day"
+            )
+            
+            st.session_state.limits["Wellness_per_day"] = st.number_input(
+                "Max Wellness Per Day",
+                min_value=1,
+                value=st.session_state.limits.get(
+                    "Wellness_per_day",
+                    1
+                ),
+                key="num_max_well_per_day"
+            )
+
             start_t = st.time_input("Shift Start", value=time(9, 0), key="time_shift_start")
             end_t = st.time_input("Shift End", value=time(18, 0), key="time_shift_end")
             timezone = "PHT"
