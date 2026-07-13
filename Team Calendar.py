@@ -743,9 +743,6 @@ with tab_dev:
                 display_duration = f"{total_mins // 60}h {total_mins % 60}m"
             else:
                 display_duration = f"{total_mins}m"
-                
-            # Output UI verification confirmation helper text
-            st.info(f"Summary Duration: **{display_duration}** ({total_mins} total mins)")
             
             aux = st.text_input("Aux") # Restored input field
             reason = st.text_area("Reason of Deviation")
