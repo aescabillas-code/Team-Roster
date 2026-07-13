@@ -585,9 +585,13 @@ with tab_req:
 # --- TAB 3.1: PRODUCTIVITY MONITORING ---
 with tab_prod:
 
-    st.subheader("Productivity Monitoring")
+    st.subheader("📈 Productivity Monitoring")
 
-    cases = get_cases_from_db()
+    cases = list(
+        collection.find(
+            {"type": "case"}
+        )
+    )
 
     if not cases:
 
@@ -600,34 +604,55 @@ with tab_prod:
         if "_id" in df.columns:
             df = df.drop(columns=["_id"])
 
+        required_cols = [
+            "Date",
+            "Owner",
+            "Type",
+            "Issue",
+            "Product Group"
+        ]
+
+        for col in required_cols:
+
+            if col not in df.columns:
+
+                df[col] = "Unknown"
+
         df["Date"] = pd.to_datetime(
             df["Date"],
             errors="coerce"
         )
 
+        df = df.dropna(subset=["Date"])
+
         df["Month"] = df["Date"].dt.month
         df["Year"] = df["Date"].dt.year
         df["Day"] = df["Date"].dt.date
 
+        # =============================
+        # MONTHLY PRODUCTIVITY
+        # =============================
+
         st.markdown("## Monthly Productivity")
 
-        m_col1, m_col2 = st.columns(2)
+        col1, col2 = st.columns(2)
 
-        available_years = sorted(
+        years = sorted(
             df["Year"].dropna().unique()
         )
 
-        selected_year = m_col1.selectbox(
+        selected_year = col1.selectbox(
             "Year",
-            available_years,
-            key="prod_month_year"
+            years,
+            key="prod_year"
         )
 
-        selected_month = m_col2.selectbox(
+        selected_month = col2.selectbox(
             "Month",
             range(1, 13),
-            format_func=lambda x: calendar.month_name[x],
-            key="prod_month_month"
+            format_func=lambda x:
+            calendar.month_name[x],
+            key="prod_month"
         )
 
         monthly_df = df[
@@ -637,6 +662,7 @@ with tab_prod:
         ]
 
         if not monthly_df.empty:
+
             monthly_summary = (
                 monthly_df.groupby(
                     ["Owner", "Type"]
@@ -644,11 +670,11 @@ with tab_prod:
                 .size()
                 .unstack(fill_value=0)
             )
-            
+
             monthly_summary["Total Cases"] = (
                 monthly_summary.sum(axis=1)
             )
-            
+
             st.dataframe(
                 monthly_summary,
                 use_container_width=True
@@ -657,17 +683,21 @@ with tab_prod:
         else:
 
             st.info(
-                "No records for selected month."
+                "No cases found for selected month."
             )
 
         st.divider()
+
+        # =============================
+        # DAILY PRODUCTIVITY
+        # =============================
 
         st.markdown("## Daily Productivity")
 
         selected_day = st.date_input(
             "Select Day",
             value=date.today(),
-            key="prod_daily_date"
+            key="prod_day"
         )
 
         daily_df = df[
@@ -675,6 +705,7 @@ with tab_prod:
         ]
 
         if not daily_df.empty:
+
             daily_summary = (
                 daily_df.groupby(
                     ["Owner", "Type"]
@@ -682,14 +713,9 @@ with tab_prod:
                 .size()
                 .unstack(fill_value=0)
             )
-            
+
             daily_summary["Total Cases"] = (
                 daily_summary.sum(axis=1)
-            )
-            
-            st.dataframe(
-                daily_summary,
-                use_container_width=True
             )
 
             st.dataframe(
@@ -700,72 +726,46 @@ with tab_prod:
         else:
 
             st.info(
-                "No records for selected day."
+                "No cases found for selected day."
             )
 
         st.divider()
 
+        # =============================
+        # ISSUE ANALYSIS BY OWNER
+        # =============================
+
         st.markdown(
-            "## Most Common Issues Assisted Per Owner"
+            "## Most Common Issues Per Owner"
         )
 
-        owner_issue_df = (
+        issue_owner = (
             df.groupby(
                 ["Owner", "Issue"]
             )
             .size()
-            .reset_index(
-                name="Count"
-            )
+            .reset_index(name="Count")
         )
 
-        if not owner_issue_df.empty:
+        if not issue_owner.empty:
 
-            st.bar_chart(
-                owner_issue_df,
-                x="Owner",
-                y="Count"
+            selected_owner = st.selectbox(
+                "Owner",
+                sorted(issue_owner["Owner"].unique()),
+                key="issue_owner_filter"
             )
 
-            top_issue_owner = (
-                owner_issue_df
-                .sort_values(
-                    "Count",
-                    ascending=False
-                )
+            owner_df = issue_owner[
+                issue_owner["Owner"]
+                == selected_owner
+            ]
+
+            st.bar_chart(
+                owner_df.set_index("Issue")["Count"]
             )
 
             st.dataframe(
-                top_issue_owner,
-                use_container_width=True
-            )
-
-        st.divider()
-
-        st.markdown(
-            "## Most Common Product Group Assisted Per Owner"
-        )
-
-        owner_product_df = (
-            df.groupby(
-                ["Owner", "Product Group"]
-            )
-            .size()
-            .reset_index(
-                name="Count"
-            )
-        )
-
-        if not owner_product_df.empty:
-
-            st.bar_chart(
-                owner_product_df,
-                x="Owner",
-                y="Count"
-            )
-
-            st.dataframe(
-                owner_product_df.sort_values(
+                owner_df.sort_values(
                     "Count",
                     ascending=False
                 ),
@@ -773,6 +773,57 @@ with tab_prod:
             )
 
         st.divider()
+
+        # =============================
+        # PRODUCT GROUP ANALYSIS BY OWNER
+        # =============================
+
+        st.markdown(
+            "## Most Common Product Groups Per Owner"
+        )
+
+        product_owner = (
+            df.groupby(
+                ["Owner", "Product Group"]
+            )
+            .size()
+            .reset_index(name="Count")
+        )
+
+        if not product_owner.empty:
+
+            selected_owner_pg = st.selectbox(
+                "Owner ",
+                sorted(
+                    product_owner["Owner"].unique()
+                ),
+                key="product_owner_filter"
+            )
+
+            owner_pg_df = product_owner[
+                product_owner["Owner"]
+                == selected_owner_pg
+            ]
+
+            st.bar_chart(
+                owner_pg_df.set_index(
+                    "Product Group"
+                )["Count"]
+            )
+
+            st.dataframe(
+                owner_pg_df.sort_values(
+                    "Count",
+                    ascending=False
+                ),
+                use_container_width=True
+            )
+
+        st.divider()
+
+        # =============================
+        # OVERALL ISSUE ANALYSIS
+        # =============================
 
         st.markdown(
             "## Overall Most Common Issues"
@@ -790,9 +841,9 @@ with tab_prod:
         ]
 
         st.bar_chart(
-            overall_issue,
-            x="Issue",
-            y="Count"
+            overall_issue.set_index(
+                "Issue"
+            )["Count"]
         )
 
         st.dataframe(
@@ -801,6 +852,10 @@ with tab_prod:
         )
 
         st.divider()
+
+        # =============================
+        # OVERALL PRODUCT ANALYSIS
+        # =============================
 
         st.markdown(
             "## Overall Most Common Product Groups"
@@ -818,9 +873,9 @@ with tab_prod:
         ]
 
         st.bar_chart(
-            overall_product,
-            x="Product Group",
-            y="Count"
+            overall_product.set_index(
+                "Product Group"
+            )["Count"]
         )
 
         st.dataframe(
