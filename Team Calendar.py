@@ -581,20 +581,47 @@ with tab_case:
 
     st.subheader("Log New Case")
 
-    c_types = st.session_state.master_data.loc[
-        st.session_state.master_data['Category'] == 'Contact Type',
-        'Values'
-    ].iloc[0].split(',')
+    masterfile_doc = collection.find_one(
+        {"type": "masterfile"}
+    )
 
-    issues = st.session_state.master_data.loc[
-        st.session_state.master_data['Category'] == 'Issue',
-        'Values'
-    ].iloc[0].split(',')
+    if masterfile_doc and "data" in masterfile_doc:
 
-    prods = st.session_state.master_data.loc[
-        st.session_state.master_data['Category'] == 'Product Group',
-        'Values'
-    ].iloc[0].split(',')
+        master_df = pd.DataFrame(
+            masterfile_doc["data"]
+        )
+
+    else:
+
+        master_df = pd.DataFrame(
+            {
+                "Category": [
+                    "Contact Type",
+                    "Issue",
+                    "Product Group"
+                ],
+                "Values": [
+                    "Call,Chat,Email",
+                    "Tech,Billing",
+                    "Hardware,Soft"
+                ]
+            }
+        )
+
+    c_types = master_df.loc[
+        master_df["Category"] == "Contact Type",
+        "Values"
+    ].iloc[0].split(",")
+
+    issues = master_df.loc[
+        master_df["Category"] == "Issue",
+        "Values"
+    ].iloc[0].split(",")
+
+    prods = master_df.loc[
+        master_df["Category"] == "Product Group",
+        "Values"
+    ].iloc[0].split(",")
 
     c1, c2 = st.columns(2)
 
@@ -877,9 +904,14 @@ with tab_case:
                         key=f"date_{case['_id']}"
                     )
 
-                    edit_type = st.text_input(
+                    edit_type = st.selectbox(
                         "Contact Type",
-                        value=case.get("Type", ""),
+                        c_types,
+                        index=c_types.index(
+                            case.get("Type")
+                        )
+                        if case.get("Type") in c_types
+                        else 0,
                         key=f"type_{case['_id']}"
                     )
 
@@ -889,15 +921,25 @@ with tab_case:
                         key=f"case_num_{case['_id']}"
                     )
 
-                    edit_issue = st.text_input(
+                    edit_issue = st.selectbox(
                         "Issue",
-                        value=case.get("Issue", ""),
+                        issues,
+                        index=issues.index(
+                            case.get("Issue")
+                        )
+                        if case.get("Issue") in issues
+                        else 0,
                         key=f"issue_{case['_id']}"
                     )
 
-                    edit_product = st.text_input(
+                    edit_product = st.selectbox(
                         "Product Group",
-                        value=case.get("Product Group", ""),
+                        prods,
+                        index=prods.index(
+                            case.get("Product Group")
+                        )
+                        if case.get("Product Group") in prods
+                        else 0,
                         key=f"prod_{case['_id']}"
                     )
 
@@ -951,9 +993,7 @@ with tab_case:
                         ):
 
                             collection.update_one(
-                                {
-                                    "_id": case["_id"]
-                                },
+                                {"_id": case["_id"]},
                                 {
                                     "$set": {
                                         "Date": edit_date,
@@ -969,9 +1009,9 @@ with tab_case:
                                 }
                             )
 
-                            st.success(
-                                "Case updated successfully!"
-                            )
+                            st.session_state[
+                                f"action_{case['_id']}"
+                            ] = "None"
 
                             st.rerun()
 
@@ -981,6 +1021,10 @@ with tab_case:
                             "Cancel",
                             key=f"cancel_edit_{case['_id']}"
                         ):
+
+                            st.session_state[
+                                f"action_{case['_id']}"
+                            ] = "None"
 
                             st.rerun()
 
@@ -1008,14 +1052,12 @@ with tab_case:
                         if del_password == "Password1234":
 
                             collection.delete_one(
-                                {
-                                    "_id": case["_id"]
-                                }
+                                {"_id": case["_id"]}
                             )
 
-                            st.success(
-                                "Case deleted successfully."
-                            )
+                            st.session_state[
+                                f"action_{case['_id']}"
+                            ] = "None"
 
                             st.rerun()
 
@@ -1031,6 +1073,10 @@ with tab_case:
                         "Cancel",
                         key=f"cancel_del_{case['_id']}"
                     ):
+
+                        st.session_state[
+                            f"action_{case['_id']}"
+                        ] = "None"
 
                         st.rerun()
 
