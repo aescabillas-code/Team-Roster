@@ -637,20 +637,18 @@ with tab_prod:
         ]
 
         if not monthly_df.empty:
-
-            monthly_summary = pd.pivot_table(
-                monthly_df,
-                index="Owner",
-                columns="Type",
-                values="Case Number",
-                aggfunc="count",
-                fill_value=0
+            monthly_summary = (
+                monthly_df.groupby(
+                    ["Owner", "Type"]
+                )
+                .size()
+                .unstack(fill_value=0)
             )
-
+            
             monthly_summary["Total Cases"] = (
                 monthly_summary.sum(axis=1)
             )
-
+            
             st.dataframe(
                 monthly_summary,
                 use_container_width=True
@@ -677,18 +675,21 @@ with tab_prod:
         ]
 
         if not daily_df.empty:
-
-            daily_summary = pd.pivot_table(
-                daily_df,
-                index="Owner",
-                columns="Type",
-                values="Case Number",
-                aggfunc="count",
-                fill_value=0
+            daily_summary = (
+                daily_df.groupby(
+                    ["Owner", "Type"]
+                )
+                .size()
+                .unstack(fill_value=0)
             )
-
+            
             daily_summary["Total Cases"] = (
                 daily_summary.sum(axis=1)
+            )
+            
+            st.dataframe(
+                daily_summary,
+                use_container_width=True
             )
 
             st.dataframe(
