@@ -707,36 +707,46 @@ with tab_dev:
                 
             st.write(f"**Shift Time:** {shift_time}")
         with col2:
-            # Replace st.time_input with manual numerical inputs for Start Time
+            # Replace st.time_input with keyboard-only manual inputs for Start Time
             st.markdown("##### Start Time")
             start_col1, start_col2 = st.columns(2)
             with start_col1:
-                start_hr = st.number_input("Start Hour", min_value=0, max_value=23, value=0, step=1, key="manual_start_hr")
+                # Setting step=0 removes the increment/decrement buttons
+                start_hr = st.number_input("Start Hour", min_value=0, max_value=23, value=0, step=0, key="manual_start_hr")
             with start_col2:
-                start_min = st.number_input("Start Minute", min_value=0, max_value=59, value=0, step=1, key="manual_start_min")
+                start_min = st.number_input("Start Minute", min_value=0, max_value=59, value=0, step=0, key="manual_start_min")
             
-            # Replace st.time_input with manual numerical inputs for End Time
+            # Replace st.time_input with keyboard-only manual inputs for End Time
             st.markdown("##### End Time")
             end_col1, end_col2 = st.columns(2)
             with end_col1:
-                end_hr = st.number_input("End Hour", min_value=0, max_value=23, value=0, step=1, key="manual_end_hr")
+                end_hr = st.number_input("End Hour", min_value=0, max_value=23, value=0, step=0, key="manual_end_hr")
             with end_col2:
-                end_min = st.number_input("End Minute", min_value=0, max_value=59, value=0, step=1, key="manual_end_min")
+                end_min = st.number_input("End Minute", min_value=0, max_value=59, value=0, step=0, key="manual_end_min")
 
             # Format them as standard HH:MM strings to preserve your database structure
             start_time = f"{start_hr:02d}:{start_min:02d}"
             end_time = f"{end_hr:02d}:{end_min:02d}"
             
-            # Manual inputs for Total Duration
+            # Keyboard-only manual inputs for Total Duration
             st.markdown("##### Duration")
             duration_col1, duration_col2 = st.columns(2)
             with duration_col1:
-                duration_hrs = st.number_input("Hours", min_value=0, value=0, step=1, key="manual_dur_hrs")
+                duration_hrs = st.number_input("Hours", min_value=0, value=0, step=0, key="manual_dur_hrs")
             with duration_col2:
-                duration_mins = st.number_input("Mins", min_value=0, max_value=59, value=0, step=1, key="manual_dur_mins")
+                duration_mins = st.number_input("Mins", min_value=0, max_value=59, value=0, step=0, key="manual_dur_mins")
             
             # Final calculated value sent to your database submission payload
             total_mins = (duration_hrs * 60) + duration_mins
+            
+            # Convert and format it back to the clean Xh Ym layout structure
+            if duration_hrs > 0:
+                display_duration = f"{duration_hrs}h {duration_mins}m"
+            else:
+                display_duration = f"{duration_mins}m"
+                
+            # Output UI verification helper text
+            st.info(f"Summary Duration: **{display_duration}** ({total_mins} total mins)")
             
             aux = st.text_input("Aux") # Restored input field
             reason = st.text_area("Reason of Deviation")
