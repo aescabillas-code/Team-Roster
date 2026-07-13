@@ -397,8 +397,14 @@ def render_request(req, key_prefix):
             st.rerun()
 
 # --- TABS WORKSPACE ---
-tab_cal, tab_req, tab_case, tab_dev, tab_mas, tab_adm = st.tabs([
-    "📅 Calendar", "📝 Request", "🔍 Case Tracker", "🔀 Deviation", "📂 Masterfile", "🔑 Admin"
+tab_cal, tab_req, tab_prod, tab_case, tab_dev, tab_mas, tab_adm = st.tabs([
+    "📅 Calendar",
+    "📝 Request",
+    "📈 Productivity Monitoring",
+    "🔍 Case Tracker",
+    "🔀 Deviation",
+    "📂 Masterfile",
+    "🔑 Admin"
 ])
 
 # --- TAB 1: CALENDAR ---
