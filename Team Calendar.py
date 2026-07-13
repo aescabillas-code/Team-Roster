@@ -652,7 +652,7 @@ with tab_prod:
             range(1, 13), 
             format_func=lambda x: calendar.month_name[x], 
             index=current_date.month - 1, 
-            key="cal_m"
+            key="prod_monitor_month"
         )
 
         monthly_df = df[
