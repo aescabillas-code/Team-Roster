@@ -707,7 +707,7 @@ with tab_dev:
                 
             st.write(f"**Shift Time:** {shift_time}")
         with col2:
-            # Manual inputs for Start Time
+            # Replace st.time_input with manual numerical inputs for Start Time
             st.markdown("##### Start Time")
             start_col1, start_col2 = st.columns(2)
             with start_col1:
@@ -715,7 +715,7 @@ with tab_dev:
             with start_col2:
                 start_min = st.number_input("Start Minute", min_value=0, max_value=59, value=0, step=1, key="manual_start_min")
             
-            # Manual inputs for End Time
+            # Replace st.time_input with manual numerical inputs for End Time
             st.markdown("##### End Time")
             end_col1, end_col2 = st.columns(2)
             with end_col1:
@@ -723,11 +723,11 @@ with tab_dev:
             with end_col2:
                 end_min = st.number_input("End Minute", min_value=0, max_value=59, value=0, step=1, key="manual_end_min")
 
-            # Convert to standard strings for consistent reporting/DB storage
+            # Format them as standard HH:MM strings to preserve your database structure
             start_time = f"{start_hr:02d}:{start_min:02d}"
             end_time = f"{end_hr:02d}:{end_min:02d}"
             
-            # Manual inputs for Duration
+            # Manual inputs for Total Duration
             st.markdown("##### Duration")
             duration_col1, duration_col2 = st.columns(2)
             with duration_col1:
@@ -735,17 +735,8 @@ with tab_dev:
             with duration_col2:
                 duration_mins = st.number_input("Mins", min_value=0, max_value=59, value=0, step=1, key="manual_dur_mins")
             
-            # 1. Calculate absolute integer minutes for your database pipeline
+            # Final calculated value sent to your database submission payload
             total_mins = (duration_hrs * 60) + duration_mins
-            
-            # 2. Convert and format it back to the clean Xh Ym layout structure
-            if duration_hrs > 0:
-                display_duration = f"{duration_hrs}h {duration_mins}m"
-            else:
-                display_duration = f"{duration_mins}m"
-                
-            # 3. Output UI verification helper text
-            st.info(f"Summary Duration: **{display_duration}** ({total_mins} total mins)")
             
             aux = st.text_input("Aux") # Restored input field
             reason = st.text_area("Reason of Deviation")
