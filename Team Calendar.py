@@ -914,18 +914,21 @@ with tab_case:
                 ]
             }
         )
+    
+c_types = master_df.loc[
+    master_df["Category"] == "Contact Type",
+    "Values"
+].iloc[0].split(",")
 
-    c_types = master_df.loc[
-        master_df["Category"] == "Contact Type",
-        "Values"
-    ].iloc[0].split(",")
+issues = master_df.loc[
+    master_df["Category"] == "Issue",
+    "Values"
+].iloc[0].split(",")
 
-    issues = master_df.loc[
-        master_df["Category"] == "Issue",
-        "Values"
-    ].iloc[0].split(",")
-
-    prods = master_df.loc[
+prods = master_df.loc[
+    master_df["Category"] == "Product Group",
+    "Values"
+].iloc[0].split(",")
                 
 # --- TAB 4: DEVIATION ---
 with tab_dev:
