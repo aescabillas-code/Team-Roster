@@ -707,45 +707,44 @@ with tab_dev:
                 
             st.write(f"**Shift Time:** {shift_time}")
         with col2:
-            # Replace st.time_input with keyboard-only manual inputs for Start Time
-            st.markdown("##### Start Time")
-            start_col1, start_col2 = st.columns(2)
-            with start_col1:
-                # Setting step=0 removes the increment/decrement buttons
-                start_hr = st.number_input("Start Hour", min_value=0, max_value=23, value=0, step=0, key="manual_start_hr")
-            with start_col2:
-                start_min = st.number_input("Start Minute", min_value=0, max_value=59, value=0, step=0, key="manual_start_min")
+            # Clean keyboard text entry for Start Time
+            start_time_input = st.text_input("Start Time (HH:MM)", value="00:00", key="manual_start_time")
             
-            # Replace st.time_input with keyboard-only manual inputs for End Time
-            st.markdown("##### End Time")
-            end_col1, end_col2 = st.columns(2)
-            with end_col1:
-                end_hr = st.number_input("End Hour", min_value=0, max_value=23, value=0, step=0, key="manual_end_hr")
-            with end_col2:
-                end_min = st.number_input("End Minute", min_value=0, max_value=59, value=0, step=0, key="manual_end_min")
+            # Clean keyboard text entry for End Time
+            end_time_input = st.text_input("End Time (HH:MM)", value="00:00", key="manual_end_time")
 
-            # Format them as standard HH:MM strings to preserve your database structure
-            start_time = f"{start_hr:02d}:{start_min:02d}"
-            end_time = f"{end_hr:02d}:{end_min:02d}"
+            # Clean keyboard text entry for Duration
+            duration_input = st.text_input("Duration (e.g., 1h 15m or 45m)", value="0m", key="manual_duration")
             
-            # Keyboard-only manual inputs for Total Duration
-            st.markdown("##### Duration")
-            duration_col1, duration_col2 = st.columns(2)
-            with duration_col1:
-                duration_hrs = st.number_input("Hours", min_value=0, value=0, step=0, key="manual_dur_hrs")
-            with duration_col2:
-                duration_mins = st.number_input("Mins", min_value=0, max_value=59, value=0, step=0, key="manual_dur_mins")
+            # --- Parse and format backend values to keep DB pipelines perfectly intact ---
+            # 1. Normalize time strings for standard HH:MM reporting structure
+            start_time = start_time_input.strip()
+            end_time = end_time_input.strip()
             
-            # Final calculated value sent to your database submission payload
-            total_mins = (duration_hrs * 60) + duration_mins
+            # 2. Extract hours and minutes from the text duration field to calculate total_mins
+            import re
+            duration_raw = duration_input.lower().strip()
             
-            # Convert and format it back to the clean Xh Ym layout structure
-            if duration_hrs > 0:
-                display_duration = f"{duration_hrs}h {duration_mins}m"
+            # Regex checks for patterns like "1h 15m", "2h", or just "45m"
+            hrs_match = re.search(r'(\d+)\s*h', duration_raw)
+            mins_match = re.search(r'(\d+)\s*m', duration_raw)
+            
+            parsed_hrs = int(hrs_match.group(1)) if hrs_match else 0
+            parsed_mins = int(mins_match.group(1)) if mins_match else 0
+            
+            # If they just type a raw number without letters (e.g., "75"), treat it as raw minutes
+            if not hrs_match and not mins_match and duration_raw.isdigit():
+                total_mins = int(duration_raw)
             else:
-                display_duration = f"{duration_mins}m"
+                total_mins = (parsed_hrs * 60) + parsed_mins
                 
-            # Output UI verification helper text
+            # 3. Create the clean summary layout display string format
+            if total_mins >= 60:
+                display_duration = f"{total_mins // 60}h {total_mins % 60}m"
+            else:
+                display_duration = f"{total_mins}m"
+                
+            # Output UI verification confirmation helper text
             st.info(f"Summary Duration: **{display_duration}** ({total_mins} total mins)")
             
             aux = st.text_input("Aux") # Restored input field
