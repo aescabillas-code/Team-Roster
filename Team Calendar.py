@@ -484,19 +484,30 @@ with tab_cal:
         
         st.write("**Today's Schedule:**")
         roles = ["call", "chat", "mfq", "sme"]
+
+        
+        approved_requests = fetch_approved_requests_from_db()
         
         for name in st.session_state.staff_roster:
             # Check for approved requests matching the active daily view date using string matching
-            p_status = [r['type'] for r in st.session_state.approved_requests 
-                        if str(r['date']) == str(view_date) and r['name'] == name]
+            p_status = [
+                    r["type"]
+                    for r in approved_requests
+                    if str(r["date"]) == str(view_date)
+                    and r["name"] == name
+                ]
             
             # If they have approved time off today, keep them in view but explicitly tag with leave type
             if p_status:
-                st.write(f"- **{name}**: {str(p_status[0]).upper()}")
-            else:
-                assigned_roles = [r.upper() for r in roles if name in d_data.get(r, [])]
-                shift_role = ", ".join(assigned_roles) if assigned_roles else "Unassigned"
-                st.write(f"- **{name}**: {shift_role}")
+                    st.write(f"- **{name}**: {p_status[0].upper()}")
+                else:
+                    assigned_roles = [
+                        r.upper()
+                        for r in roles
+                        if name in d_data.get(r, [])
+                    ]
+                    shift_role = ", ".join(assigned_roles) if assigned_roles else "Unassigned"
+                    st.write(f"- **{name}**: {shift_role}")
             
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -515,7 +526,9 @@ with tab_cal:
             for i, day in enumerate(week):
                 if day != 0:
                     d = date(year, month, day)
-                    approved = [r for r in st.session_state.approved_requests if str(r['date']) == str(d)]
+                    approved_requests = fetch_approved_requests_from_db()
+                    approved = [r for r in approved_requests
+                        if str(r["date"]) == str(d)]
                     away_names = [r['name'] for r in approved]
                     
                     # Look up nicknames from the active roster configuration list instead of full names
@@ -1781,8 +1794,11 @@ with tab_adm:
             # Assignment Availability Filters
             safe_target_dates = target_dates if isinstance(target_dates, (list, tuple)) else []
             base_date = safe_target_dates[0] if len(safe_target_dates) > 0 else date.today()
-            
-            unavailable = [r['name'] for r in st.session_state.approved_requests if str(r['date']) == str(base_date)]
+            approved_requests = fetch_approved_requests_from_db()   
+            unavailable = [r["name"]
+                for r in approved_requests
+                if str(r["date"]) == str(base_date)]
+
             available = [n for n in roster.keys() if n not in unavailable] if roster else []
             
             call = st.multiselect("Assign Call", available, key="ms_assign_call")
