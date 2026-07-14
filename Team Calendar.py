@@ -147,7 +147,7 @@ if "admin_authenticated" not in st.session_state: st.session_state.admin_authent
 if "staff_roster" not in st.session_state: 
     st.session_state.staff_roster = {}
 if "calendar_data" not in st.session_state: st.session_state.calendar_data = {}
-if "limits" not in st.session_state: st.session_state.limits = {"PTO_per_day": 1,"Wellness_per_day": 1}
+if "limits" not in st.session_state: st.session_state.limits = {"PTO": 1, "Wellness": 1}
 if "notifications" not in st.session_state: st.session_state.notifications = []
 if "master_data" not in st.session_state: 
     st.session_state.master_data = pd.DataFrame({
@@ -397,14 +397,8 @@ def render_request(req, key_prefix):
             st.rerun()
 
 # --- TABS WORKSPACE ---
-tab_cal, tab_req, tab_prod, tab_case, tab_dev, tab_mas, tab_adm = st.tabs([
-    "📅 Calendar",
-    "📝 Request",
-    "📈 Productivity Monitoring",
-    "🔍 Case Tracker",
-    "🔀 Deviation",
-    "📂 Masterfile",
-    "🔑 Admin"
+tab_cal, tab_req, tab_case, tab_dev, tab_mas, tab_adm = st.tabs([
+    "📅 Calendar", "📝 Request", "🔍 Case Tracker", "🔀 Deviation", "📂 Masterfile", "🔑 Admin"
 ])
 
 # --- TAB 1: CALENDAR ---
@@ -582,298 +576,32 @@ with tab_req:
                 st.success("Request submitted successfully.")
                 st.rerun()
 
-# --- TAB 3.1: PRODUCTIVITY MONITORING ---
-with tab_prod:
-
-    st.subheader("📈 Productivity Monitoring")
-
-    cases = list(
-        collection.find(
-            {"type": "case"}
-        )
-    )
-
-    if not cases:
-
-        st.info("No case records found.")
-
-    else:
-
-        df = pd.DataFrame(cases)
-
-        if "_id" in df.columns:
-            df = df.drop(columns=["_id"])
-
-        required_cols = [
-            "Date",
-            "Owner",
-            "Type",
-            "Issue",
-            "Product Group"
-        ]
-
-        for col in required_cols:
-
-            if col not in df.columns:
-
-                df[col] = "Unknown"
-
-        df["Date"] = pd.to_datetime(
-            df["Date"],
-            errors="coerce"
-        )
-
-        df = df.dropna(subset=["Date"])
-
-        df["Month"] = df["Date"].dt.month
-        df["Year"] = df["Date"].dt.year
-        df["Day"] = df["Date"].dt.date
-
-        # =============================
-        # MONTHLY PRODUCTIVITY
-        # =============================
-
-        st.markdown("## Monthly Productivity")
-
-        col1, col2 = st.columns(2)
-
-        years = sorted(
-            df["Year"].dropna().unique()
-        )
-
-        selected_year = col1.selectbox(
-            "Year",
-            years,
-            key="prod_year"
-        )
-
-        selected_month = col2.selectbox(
-            "Month", 
-            range(1, 13), 
-            format_func=lambda x: calendar.month_name[x], 
-            index=current_date.month - 1, 
-            key="prod_monitor_month"
-        )
-
-        monthly_df = df[
-            (df["Year"] == selected_year)
-            &
-            (df["Month"] == selected_month)
-        ]
-
-        if not monthly_df.empty:
-
-            monthly_summary = (
-                monthly_df.groupby(
-                    ["Owner", "Type"]
-                )
-                .size()
-                .unstack(fill_value=0)
-            )
-
-            monthly_summary["Total Cases"] = (
-                monthly_summary.sum(axis=1)
-            )
-
-            st.dataframe(
-                monthly_summary,
-                use_container_width=True
-            )
-
-        else:
-
-            st.info(
-                "No cases found for selected month."
-            )
-
-        st.divider()
-
-        # =============================
-        # DAILY PRODUCTIVITY
-        # =============================
-
-        st.markdown("## Daily Productivity")
-
-        selected_day = st.date_input(
-            "Select Day",
-            value=date.today(),
-            key="prod_day"
-        )
-
-        daily_df = df[
-            df["Day"] == selected_day
-        ]
-
-        if not daily_df.empty:
-
-            daily_summary = (
-                daily_df.groupby(
-                    ["Owner", "Type"]
-                )
-                .size()
-                .unstack(fill_value=0)
-            )
-
-            daily_summary["Total Cases"] = (
-                daily_summary.sum(axis=1)
-            )
-
-            st.dataframe(
-                daily_summary,
-                use_container_width=True
-            )
-
-        else:
-
-            st.info(
-                "No cases found for selected day."
-            )
-
-        st.divider()
-
-        # =============================
-        # OVERALL ISSUE ANALYSIS
-        # =============================
-
-        st.markdown(
-            "## Overall Most Common Issues"
-        )
-
-        overall_issue = (
-            df["Issue"]
-            .value_counts()
-            .reset_index()
-        )
-
-        overall_issue.columns = [
-            "Issue",
-            "Count"
-        ]
-
-        st.bar_chart(
-            overall_issue.set_index(
-                "Issue"
-            )["Count"]
-        )
-
-        st.dataframe(
-            overall_issue,
-            use_container_width=True
-        )
-
-        st.divider()
-
-        # =============================
-        # OVERALL PRODUCT ANALYSIS
-        # =============================
-
-        st.markdown(
-            "## Overall Most Common Product Groups"
-        )
-
-        overall_product = (
-            df["Product Group"]
-            .value_counts()
-            .reset_index()
-        )
-
-        overall_product.columns = [
-            "Product Group",
-            "Count"
-        ]
-
-        st.bar_chart(
-            overall_product.set_index(
-                "Product Group"
-            )["Count"]
-        )
-
-        st.dataframe(
-            overall_product,
-            use_container_width=True
-        )
-
-# --- TAB 3.2: CASE TRACKER ---
+# --- TAB 3: CASE TRACKER ---
 with tab_case:
 
     st.subheader("Log New Case")
 
-    masterfile_doc = collection.find_one(
-        {"type": "masterfile"}
-    )
+    c_types = st.session_state.master_data.loc[
+        st.session_state.master_data['Category'] == 'Contact Type',
+        'Values'
+    ].iloc[0].split(',')
 
-    if masterfile_doc and "data" in masterfile_doc:
+    issues = st.session_state.master_data.loc[
+        st.session_state.master_data['Category'] == 'Issue',
+        'Values'
+    ].iloc[0].split(',')
 
-        master_df = pd.DataFrame(
-            masterfile_doc["data"]
-        )
+    prods = st.session_state.master_data.loc[
+        st.session_state.master_data['Category'] == 'Product Group',
+        'Values'
+    ].iloc[0].split(',')
 
-    else:
-
-        master_df = pd.DataFrame(
-            {
-                "Category": [
-                    "Contact Type",
-                    "Issue",
-                    "Product Group"
-                ],
-                "Values": [
-                    "Call,Chat,Email",
-                    "Tech,Billing",
-                    "Hardware,Soft"
-                ]
-            }
-        )
-
-    c_types = master_df.loc[
-        master_df["Category"] == "Contact Type",
-        "Values"
-    ].iloc[0].split(",")
-
-    issues = master_df.loc[
-        master_df["Category"] == "Issue",
-        "Values"
-    ].iloc[0].split(",")
-
-    prods = master_df.loc[
-        master_df["Category"] == "Product Group",
-        "Values"
-    ].iloc[0].split(",")
-
-    # -----------------------------
-    # Fetch Roster
-    # -----------------------------
-    roster_doc = collection.find_one(
-        {"type": "roster_list"}
-    )
-
-    staff_data = (
-        roster_doc.get("data", {})
-        if roster_doc else {}
-    )
-
-    owner_list = sorted(
-        list(staff_data.keys())
-    )
-
-    if not owner_list:
-        owner_list = ["Unknown"]
-
-    # -----------------------------
-    # Case Form
-    # -----------------------------
     c1, c2 = st.columns(2)
 
     c_type = c1.selectbox(
         "Contact Type",
         c_types,
         key="case_form_type"
-    )
-
-    case_owner = c2.selectbox(
-        "Owner",
-        owner_list,
-        key="case_form_owner"
     )
 
     case_number = c1.text_input(
@@ -934,7 +662,10 @@ with tab_case:
 
         new_case = {
             "Date": str(date.today()),
-            "Owner": case_owner,
+            "Owner": st.session_state.get(
+                "user_name",
+                "Unknown"
+            ),
             "Type": c_type,
             "Case Number": case_number,
             "Issue": issue,
@@ -962,10 +693,6 @@ with tab_case:
         st.rerun()
 
     st.divider()
-
-    # -----------------------------
-    # Knowledge Base
-    # -----------------------------
     st.subheader("Knowledge Base")
 
     cases_list = get_cases_from_db()
@@ -1028,8 +755,10 @@ with tab_case:
 
         matches_owner = (
             f_owner == "All"
-            or case.get("Owner", "")
-            == f_owner
+            or case.get(
+                "Owner",
+                ""
+            ) == f_owner
         )
 
         if (
@@ -1072,11 +801,19 @@ with tab_case:
                         """
                     )
 
-                    st.markdown("### Issue Description")
-                    st.write(case.get("Desc", ""))
+                    st.markdown(
+                        "### Issue Description"
+                    )
+                    st.write(
+                        case.get("Desc", "")
+                    )
 
-                    st.markdown("### Steps Taken")
-                    st.write(case.get("Steps", ""))
+                    st.markdown(
+                        "### Steps Taken"
+                    )
+                    st.write(
+                        case.get("Steps", "")
+                    )
 
                     if case.get("Extra"):
 
@@ -1099,7 +836,9 @@ with tab_case:
                             use_container_width=True
                         )
 
-                    elif case.get("Has_Screenshot"):
+                    elif case.get(
+                        "Has_Screenshot"
+                    ):
 
                         st.caption(
                             "📎 Screenshot attached to this record."
@@ -1124,9 +863,6 @@ with tab_case:
                         key=f"action_{case['_id']}"
                     )
 
-            # -----------------------------
-            # EDIT
-            # -----------------------------
             if action == "Edit":
 
                 with st.container():
@@ -1141,25 +877,9 @@ with tab_case:
                         key=f"date_{case['_id']}"
                     )
 
-                    edit_owner = st.selectbox(
-                        "Owner",
-                        owner_list,
-                        index=owner_list.index(
-                            case.get("Owner")
-                        )
-                        if case.get("Owner") in owner_list
-                        else 0,
-                        key=f"owner_{case['_id']}"
-                    )
-
-                    edit_type = st.selectbox(
+                    edit_type = st.text_input(
                         "Contact Type",
-                        c_types,
-                        index=c_types.index(
-                            case.get("Type")
-                        )
-                        if case.get("Type") in c_types
-                        else 0,
+                        value=case.get("Type", ""),
                         key=f"type_{case['_id']}"
                     )
 
@@ -1169,25 +889,15 @@ with tab_case:
                         key=f"case_num_{case['_id']}"
                     )
 
-                    edit_issue = st.selectbox(
+                    edit_issue = st.text_input(
                         "Issue",
-                        issues,
-                        index=issues.index(
-                            case.get("Issue")
-                        )
-                        if case.get("Issue") in issues
-                        else 0,
+                        value=case.get("Issue", ""),
                         key=f"issue_{case['_id']}"
                     )
 
-                    edit_product = st.selectbox(
+                    edit_product = st.text_input(
                         "Product Group",
-                        prods,
-                        index=prods.index(
-                            case.get("Product Group")
-                        )
-                        if case.get("Product Group") in prods
-                        else 0,
+                        value=case.get("Product Group", ""),
                         key=f"prod_{case['_id']}"
                     )
 
@@ -1241,11 +951,12 @@ with tab_case:
                         ):
 
                             collection.update_one(
-                                {"_id": case["_id"]},
+                                {
+                                    "_id": case["_id"]
+                                },
                                 {
                                     "$set": {
                                         "Date": edit_date,
-                                        "Owner": edit_owner,
                                         "Type": edit_type,
                                         "Case Number": edit_case_number,
                                         "Issue": edit_issue,
@@ -1273,9 +984,6 @@ with tab_case:
 
                             st.rerun()
 
-            # -----------------------------
-            # DELETE
-            # -----------------------------
             elif action == "Delete":
 
                 st.warning(
@@ -1300,7 +1008,9 @@ with tab_case:
                         if del_password == "Password1234":
 
                             collection.delete_one(
-                                {"_id": case["_id"]}
+                                {
+                                    "_id": case["_id"]
+                                }
                             )
 
                             st.success(
@@ -1647,27 +1357,9 @@ with tab_adm:
                 target_dates = [d for d in target_dates if d.month == sm.month]
     
             # Limits, Shifts, and Status mapping definitions
+            st.session_state.limits["PTO"] = st.number_input("Max PTO", value=st.session_state.limits.get("PTO", 1), key="num_max_pto")
+            st.session_state.limits["Wellness"] = st.number_input("Max Wellness", value=st.session_state.limits.get("Wellness", 1), key="num_max_well")
             
-            st.session_state.limits["PTO_per_day"] = st.number_input(
-                "Max PTO Per Day",
-                min_value=1,
-                value=st.session_state.limits.get(
-                    "PTO_per_day",
-                    1
-                ),
-                key="num_max_pto_per_day"
-            )
-            
-            st.session_state.limits["Wellness_per_day"] = st.number_input(
-                "Max Wellness Per Day",
-                min_value=1,
-                value=st.session_state.limits.get(
-                    "Wellness_per_day",
-                    1
-                ),
-                key="num_max_well_per_day"
-            )
-
             start_t = st.time_input("Shift Start", value=time(9, 0), key="time_shift_start")
             end_t = st.time_input("Shift End", value=time(18, 0), key="time_shift_end")
             timezone = "PHT"
