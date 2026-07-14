@@ -648,11 +648,11 @@ with tab_prod:
         )
 
         selected_month = col2.selectbox(
-            "Month",
-            range(1, 13),
-            format_func=lambda x:
-            calendar.month_name[x],
-            key="prod_month"
+            "Month", 
+            range(1, 13), 
+            format_func=lambda x: calendar.month_name[x], 
+            index=current_date.month - 1, 
+            key="prod_monitor_month"
         )
 
         monthly_df = df[
