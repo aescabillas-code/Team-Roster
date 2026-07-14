@@ -496,16 +496,16 @@ with tab_cal:
                     if str(r["date"]) == str(view_date)
                     and r["name"] == name
                 ]
-        if p_status:
-            st.write(f"- **{name}**: {p_status[0].upper()}")
-        else:
-            assigned_roles = [
-                r.upper()
-                for r in roles
-                if name in d_data.get(r, [])]
-        
-            shift_role = ", ".join(assigned_roles) if assigned_roles else "Unassigned"
-            st.write(f"- **{name}**: {shift_role}")
+            if p_status:
+                st.write(f"- **{name}**: {p_status[0].upper()}")
+            else:
+                assigned_roles = [
+                    r.upper()
+                    for r in roles
+                    if name in d_data.get(r, [])]
+            
+                shift_role = ", ".join(assigned_roles) if assigned_roles else "Unassigned"
+                st.write(f"- **{name}**: {shift_role}")
 
         st.markdown('</div>', unsafe_allow_html=True)
 
