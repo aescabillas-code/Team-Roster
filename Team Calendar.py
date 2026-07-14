@@ -141,7 +141,7 @@ current_date = datetime.now(local_tz).date()
 if "pending_requests" not in st.session_state: 
     st.session_state.pending_requests = fetch_pending_requests_from_db()
 if "approved_requests" not in st.session_state: 
-    st.session_state.approved_requests = fetch_approved_requests_from_db()
+    approved_requests = fetch_approved_requests_from_db()
 if "admin_password" not in st.session_state: st.session_state.admin_password = "Password1234"
 if "admin_authenticated" not in st.session_state: st.session_state.admin_authenticated = False
 if "staff_roster" not in st.session_state: 
@@ -368,12 +368,20 @@ def render_request(req, key_prefix):
     # Render primary action buttons only if the denial process has NOT been triggered
     if not st.session_state.get(denial_key):
         c1, c2 = st.columns(2)
-        
+            
         if c1.button("Approve", key=f"app_{key_prefix}_{unique_id}"):
             update_request_status_in_db(req, "Approved")
+            if req.get("email"):
+                send_request_notification(
+                    req["email"],
+                    "Approved",
+                    req["type"],
+                    req["date"]
+                )
             st.success("Approved!")
             st.rerun()
-            ``
+
+        
             if req.get("email"):
                 send_request_notification(req['email'], "Approved", req['type'], req['date'])
             st.success("Approved!")
@@ -390,14 +398,18 @@ def render_request(req, key_prefix):
         
         if col1.button("Proceed Denial", key=f"confirm_{key_prefix}_{unique_id}"):
             update_request_status_in_db(req, "Rejected")
+            if req.get("email"):
+                send_request_notification(
+                    req["email"],
+                    "Denied",
+                    req["type"],
+                    req["date"]
+                )
+            st.session_state[denial_key] = False
+        
             st.success("Request denied.")
             st.rerun()
 
-            if req.get("email"):
-                send_request_notification(req['email'], "Denied", req['type'], req['date'])
-            st.session_state[denial_key] = False
-            st.rerun()
-            
         if col2.button("Cancel", key=f"cancel_{key_prefix}_{unique_id}"):
             st.session_state[denial_key] = False
             st.rerun()
@@ -556,10 +568,15 @@ with tab_req:
             count_on_date = collection.count_documents({"type": req_type,"date": str(req_date),"status": {"$in": ["Pending", "Approved"]}})
             
             # Double Booking Duplicate Verification Check
-            is_already_requested = any(
-                r["name"] == name and str(r["date"]) == str(req_date) 
-                for r in (st.session_state.pending_requests + st.session_state.approved_requests)
-            )
+            is_already_requested = collection.count_documents(
+                {
+                    "name": name,
+                    "date": str(req_date),
+                    "status": {
+                        "$in": ["Pending", "Approved"]
+                    }
+                }
+            ) > 0
             
             # 3. Validation and Submission Logic Flow
             if is_already_requested:
