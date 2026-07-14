@@ -358,7 +358,12 @@ def render_request(req, key_prefix):
     unique_id = str(req.get('_id', 'fallback'))
     denial_key = f"denying_{key_prefix}_{unique_id}"
     
-    st.write(f"**{req['name']}** | {req['type']} | {req['date']}")
+    st.info(f"""
+    Name: {req.get('name')}
+    Type: {req.get('type')}
+    Date: {req.get('date')}
+    Status: {req.get('status')}
+    """)
     
     # Render primary action buttons only if the denial process has NOT been triggered
     if not st.session_state.get(denial_key):
@@ -366,9 +371,9 @@ def render_request(req, key_prefix):
         
         if c1.button("Approve", key=f"app_{key_prefix}_{unique_id}"):
             update_request_status_in_db(req, "Approved")
-            if req in st.session_state.pending_requests: 
-                st.session_state.pending_requests.remove(req)
-            st.session_state.approved_requests.append(req)
+            st.success("Approved!")
+            st.rerun()
+            ``
             if req.get("email"):
                 send_request_notification(req['email'], "Approved", req['type'], req['date'])
             st.success("Approved!")
@@ -384,9 +389,10 @@ def render_request(req, key_prefix):
         col1, col2 = st.columns(2)
         
         if col1.button("Proceed Denial", key=f"confirm_{key_prefix}_{unique_id}"):
-            delete_request_from_db(req)
-            if req in st.session_state.pending_requests: 
-                st.session_state.pending_requests.remove(req)
+            update_request_status_in_db(req, "Rejected")
+            st.success("Request denied.")
+            st.rerun()
+
             if req.get("email"):
                 send_request_notification(req['email'], "Denied", req['type'], req['date'])
             st.session_state[denial_key] = False
@@ -547,10 +553,7 @@ with tab_req:
             limits = get_request_limits()
             
             # Count records on specified target date using explicit string conversions
-            count_on_date = len([
-                r for r in (st.session_state.pending_requests + st.session_state.approved_requests) 
-                if str(r["date"]) == str(req_date) and r["type"] == req_type
-            ])
+            count_on_date = collection.count_documents({"type": req_type,"date": str(req_date),"status": {"$in": ["Pending", "Approved"]}})
             
             # Double Booking Duplicate Verification Check
             is_already_requested = any(
@@ -1545,8 +1548,10 @@ with tab_adm:
         st.subheader("Admin Panel")
         
         # --- Top Level Admin UI ---
-        if st.session_state.pending_requests:
-            st.info(f"⚠️ You have {len(st.session_state.pending_requests)} pending request(s).")
+        pending_count = len(fetch_pending_requests_from_db())
+
+        if pending_count > 0:
+            st.info(f"⚠️ You have {pending_count} pending request(s).")
         
         if st.button("Save Admin Changes", key="btn_top_admin_save"):
             st.success("Admin configuration saved.")
@@ -1593,24 +1598,103 @@ with tab_adm:
                 st.write("*No staff members configured in the roster database.*")
     
             # 4. Entry Form Configuration
-            st.markdown("---")
-            new_name = st.text_input("Staff Name", key="input_new_staff_name")
-            new_nick = st.text_input("Nickname", key="input_new_staff_nick")
-            new_bday = st.date_input("Birthday", min_value=date(1950, 1, 1), key="new_bday")
-            rest_days = st.multiselect("Select Rest Days", 
-                           ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], key="ms_rest_days")
+            st.markdown("### Add Multiple Staff")
+            if "new_staff_entries" not in st.session_state:
+                st.session_state.new_staff_entries = [
+                    {
+                        "name": "",
+                        "nick": "",
+                        "bday": date.today(),
+                        "rest_days": []
+                    }
+                ]
             
-            if st.button("Add Staff", key="btn_submit_add_staff"):
-                if new_name:
-                    # Explicitly force a true datetime object that PyMongo natively serializes
-                    bday_datetime = datetime(new_bday.year, new_bday.month, new_bday.day)
-                    
-                    save_staff(new_name, {
-                        "bday": bday_datetime, 
-                        "nick": new_nick if new_nick else new_name,
-                        "rest_days": rest_days
-                    })
-                    st.success(f"Added {new_name} to database!")
+            for idx, staff in enumerate(st.session_state.new_staff_entries):
+                st.markdown(f"#### Staff #{idx + 1}")
+            
+                c1, c2 = st.columns(2)
+            
+                with c1:
+                    staff["name"] = st.text_input(
+                        "Staff Name",
+                        value=staff["name"],
+                        key=f"multi_staff_name_{idx}"
+                    )
+            
+                    staff["nick"] = st.text_input(
+                        "Nickname",
+                        value=staff["nick"],
+                        key=f"multi_staff_nick_{idx}"
+                    )
+            
+                with c2:
+                    staff["bday"] = st.date_input(
+                        "Birthday",
+                        value=staff["bday"],
+                        min_value=date(1950, 1, 1),
+                        key=f"multi_staff_bday_{idx}"
+                    )
+            
+                    staff["rest_days"] = st.multiselect(
+                        "Select Rest Days",
+                        ["Monday", "Tuesday", "Wednesday", "Thursday",
+                         "Friday", "Saturday", "Sunday"],
+                        default=staff["rest_days"],
+                        key=f"multi_staff_rest_{idx}"
+                    )
+            
+                st.divider()
+            
+            col_add, col_save = st.columns(2)
+            
+            with col_add:
+                if st.button("➕ Add Another Staff", key="btn_add_staff_row"):
+                    st.session_state.new_staff_entries.append(
+                        {
+                            "name": "",
+                            "nick": "",
+                            "bday": date.today(),
+                            "rest_days": []
+                        }
+                    )
+                    st.rerun()
+            
+            with col_save:
+                if st.button("💾 Save Staff Entries", key="btn_save_multiple_staff"):
+                    added_count = 0
+            
+                    for staff in st.session_state.new_staff_entries:
+                        if not staff["name"]:
+                            continue
+            
+                        bday_datetime = datetime(
+                            staff["bday"].year,
+                            staff["bday"].month,
+                            staff["bday"].day
+                        )
+            
+                        save_staff(
+                            staff["name"],
+                            {
+                                "bday": bday_datetime,
+                                "nick": staff["nick"] if staff["nick"] else staff["name"],
+                                "rest_days": staff["rest_days"]
+                            }
+                        )
+            
+                        added_count += 1
+            
+                    st.success(f"{added_count} staff record(s) saved successfully!")
+            
+                    st.session_state.new_staff_entries = [
+                        {
+                            "name": "",
+                            "nick": "",
+                            "bday": date.today(),
+                            "rest_days": []
+                        }
+                    ]
+            
                     st.rerun()
             st.divider()
     
@@ -1713,6 +1797,9 @@ with tab_adm:
         
         with col2:
             st.subheader("Approval Center")
+            # Always pull latest pending requests from MongoDB
+            all_pending_requests = fetch_pending_requests_from_db()
+
             
             # --- DISPLAY ADMIN MESSAGES ---
             if "admin_msg" not in st.session_state: 
@@ -1730,7 +1817,8 @@ with tab_adm:
 
             # --- WELLNESS SECTION ---
             st.markdown("### 🌿 Wellness Requests")
-            wellness_pending = [r for r in st.session_state.pending_requests if r.get('type') == 'Wellness']
+            wellness_pending = [ r for r in all_pending_requests if r.get("type") == "Wellness"]
+
             if wellness_pending:
                 for idx, req in enumerate(wellness_pending):
                     # Generate a truly unique deterministic key string profile
@@ -1741,7 +1829,8 @@ with tab_adm:
 
             # --- PTO SECTION ---
             st.markdown("### ✈️ PTO Requests")
-            pto_pending = [r for r in st.session_state.pending_requests if r.get('type') == 'PTO']
+            pto_pending = [r for r in all_pending_requests if r.get("type") == "PTO"]
+
             if pto_pending:
                 for idx, req in enumerate(pto_pending):
                     # Generate a truly unique deterministic key string profile
