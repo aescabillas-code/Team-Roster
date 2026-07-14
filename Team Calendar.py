@@ -592,8 +592,16 @@ with tab_req:
             # 3. Validation and Submission Logic Flow
             if is_already_requested:
                 st.warning(f"⚠️ A request for {name} on {req_date} already exists.")
-            elif count_on_date >= limits.get(req_type, 0):
-                st.error(f"❌ Limit reached for {req_type} on {req_date}. Please choose another date.")
+            limit_value = (
+                limits["PTO_per_day"]
+                if req_type == "PTO"
+                else limits["Wellness_per_day"])
+            
+            if count_on_date >= limit_value:
+                st.error(
+                    f"❌ Limit reached for {req_type} on {req_date}."
+                )
+
             else:
                 # Construct combined document payload
                 new_req = {
