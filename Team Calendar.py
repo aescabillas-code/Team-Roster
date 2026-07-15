@@ -443,14 +443,17 @@ with tab_cal:
             key="cal_m"
         )
 
+    # Fetch current roster directly from the database document to avoid empty st.session_state fallbacks
+    roster_doc = collection.find_one({"type": "roster_list"})
+    roster = roster_doc.get("data", {}) if roster_doc else {}
+
     # 4. Use col_side for the summary/sidebar
     with col_side:
         st.markdown('<div class="side-block">', unsafe_allow_html=True)
         st.subheader("Monthly Summary")
         
         st.markdown("**Birthdays:**")
-        for name, info in st.session_state.staff_roster.items():
-            # Robust extraction matching nested dictionary properties
+        for name, info in roster.items():
             bday = info.get("bday") if isinstance(info, dict) else info
             if isinstance(bday, (date, datetime)) and bday.month == month:
                 st.write(f"- {name}: {bday.strftime('%B %d')}")
@@ -473,10 +476,18 @@ with tab_cal:
         raw_view_date = st.session_state.get('selected_admin_date', current_date)
         view_date = raw_view_date.date() if hasattr(raw_view_date, 'date') else raw_view_date
 
-        # 2. Look up the data matching either the date object or its string representation
-        d_data = st.session_state.calendar_data.get(view_date)
+        # 2. Look up the calendar data matching either the date object, its string representation, or direct from DB
+        d_data = None
+        if hasattr(st.session_state, 'calendar_data') and st.session_state.calendar_data:
+            d_data = st.session_state.calendar_data.get(view_date)
+            if not d_data:
+                d_data = st.session_state.calendar_data.get(str(view_date))
+        
+        # Fallback: Query direct database if session state does not have it configured
         if not d_data:
-            d_data = st.session_state.calendar_data.get(str(view_date), {})
+            d_data = collection.find_one({"type": "calendar_day", "date": str(view_date)})
+        if not d_data:
+            d_data = {}
         
         st.markdown(f"### Date: {view_date.strftime('%B %d, %Y')}")
         
@@ -488,9 +499,9 @@ with tab_cal:
         if view_date.weekday() in [5, 6]:
             st.info("📊 **Rest Day** — Weekend Schedule")
             
-            # Show standard rest day table layout for everyone on the roster
+            # Show standard rest day table layout for everyone
             sched_rows = []
-            for name in st.session_state.staff_roster:
+            for name in roster.keys():
                 sched_rows.append({
                     "Name": name,
                     "Work Setup": "REST DAY",
@@ -510,8 +521,8 @@ with tab_cal:
             
             # Build tabular structured schedule data
             sched_rows = []
-            for name in st.session_state.staff_roster:
-                # Check for approved requests matching the active daily view date using string matching
+            for name in roster.keys():
+                # Check for approved requests matching the active daily view date
                 p_status = [
                     r["type"]
                     for r in approved_requests
@@ -519,23 +530,25 @@ with tab_cal:
                     and r["name"] == name
                 ]
                 
-                # Default setup & shift representations back to original 'Not Set' & '--' fallbacks
-                setup_display = d_data.get('status', 'Not Set') if d_data else 'Not Set'
-                shift_display = d_data.get('shift', '--') if d_data else '--'
+                # Setup & Shift representations matched from active day configurations (falling back to "Not Set" & "--")
+                setup_display = d_data.get('status', 'Not Set')
+                shift_display = d_data.get('shift', '--')
                 
                 if p_status:
                     role_display = p_status[0].upper()
-                    # Override setup status if they are on approved leave (PTO, Wellness, etc.)
                     setup_display = p_status[0].upper()
                     shift_display = "--"
                 else:
-                    # Dynamically check if this person has been assigned to ANY role in database
-                    assigned_roles = [
-                        r.upper().replace("_", " ")
-                        for r in roles
-                        if d_data and name in d_data.get(r, [])
-                    ]
-                    # If not assigned to any specific channel/role, list them as "UNASSIGNED"
+                    # Dynamically check if this person has been assigned to ANY role
+                    assigned_roles = []
+                    for r in roles:
+                        assigned_list = d_data.get(r, [])
+                        # Handles cases where database stores names nested in dicts vs flat list
+                        if isinstance(assigned_list, list) and name in assigned_list:
+                            assigned_roles.append(r.upper().replace("_", " "))
+                        elif isinstance(assigned_list, dict) and name in assigned_list.keys():
+                            assigned_roles.append(r.upper().replace("_", " "))
+                            
                     role_display = ", ".join(assigned_roles) if assigned_roles else "UNASSIGNED"
                     
                 sched_rows.append({
@@ -555,10 +568,6 @@ with tab_cal:
 
     # 5. Render interactive monthly calendar grid block
     with col_main:
-        # Fetch current roster directly from the database document to align nickname matching
-        roster_doc = collection.find_one({"type": "roster_list"})
-        roster = roster_doc.get("data", {}) if roster_doc else {}
-
         cols = st.columns(7)
         for i, d_name in enumerate(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]):
             cols[i].markdown(f'<div class="header-cell">{d_name}</div>', unsafe_allow_html=True)
@@ -580,20 +589,30 @@ with tab_cal:
                     
                     # Mapping nickname profile directly onto the requested leave items
                     req_display = "<br>".join([f"{roster.get(r['name'], {}).get('nick', r['name'])}({r['type']})" for r in approved])
-                    data = st.session_state.calendar_data.get(d, {})
+                    
+                    # Look up calendar grid data with direct DB fallback as well to prevent empty renders
+                    grid_data = None
+                    if hasattr(st.session_state, 'calendar_data') and st.session_state.calendar_data:
+                        grid_data = st.session_state.calendar_data.get(d)
+                        if not grid_data:
+                            grid_data = st.session_state.calendar_data.get(str(d))
+                    if not grid_data:
+                        grid_data = collection.find_one({"type": "calendar_day", "date": str(d)})
+                    if not grid_data:
+                        grid_data = {}
                     
                     # WEEKEND INSTRUCTION: Block out Saturday (5) and Sunday (6) explicitly as REST DAY
                     if d.weekday() in [5, 6]:
                         content = f"<b>{day}</b><div class='calendar-divider'></div><br><center><b>REST DAY</b></center>"
                     else:
                         content = (f"<b>{day}</b><div class='calendar-divider'></div>"
-                                   f"<u>{data.get('status', '-')}</u><div class='calendar-divider'></div>"
-                                   f"{data.get('shift', '-')}<div class='calendar-divider'></div>"
+                                   f"<u>{grid_data.get('status', '-')}</u><div class='calendar-divider'></div>"
+                                   f"{grid_data.get('shift', '-')}<div class='calendar-divider'></div>"
                                    f"PTO/Wellness: {req_display}<div class='calendar-divider'></div>"
-                                   f"Call: {get_filtered_nicks(data.get('call', []))}<div class='calendar-divider'></div>"
-                                   f"Chat: {get_filtered_nicks(data.get('chat', []))}<div class='calendar-divider'></div>"
-                                   f"MFQ: {get_filtered_nicks(data.get('mfq', []))}<div class='calendar-divider'></div>"
-                                   f"SME: {get_filtered_nicks(data.get('sme', []))}")
+                                   f"Call: {get_filtered_nicks(grid_data.get('call', []))}<div class='calendar-divider'></div>"
+                                   f"Chat: {get_filtered_nicks(grid_data.get('chat', []))}<div class='calendar-divider'></div>"
+                                   f"MFQ: {get_filtered_nicks(grid_data.get('mfq', []))}<div class='calendar-divider'></div>"
+                                   f"SME: {get_filtered_nicks(grid_data.get('sme', []))}")
                     
                     cols[i].markdown(f'<div class="day-block">{content}</div>', unsafe_allow_html=True)
                     
