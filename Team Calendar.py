@@ -1807,6 +1807,7 @@ with tab_adm:
 
             available = [n for n in roster.keys() if n not in unavailable] if roster else []
             
+            team_manager = st.selectbox("Assign Team Manager", [""] + available, key="sb_assign_team_manager")
             call = st.multiselect("Assign Call", available, key="ms_assign_call")
             chat = st.multiselect("Assign Chat", available, key="ms_assign_chat")
             mfq = st.multiselect("Assign MFQ", available, key="ms_assign_mfq")
@@ -1817,6 +1818,7 @@ with tab_adm:
                     st.session_state.calendar_data[d] = {
                         "shift": shift_display, 
                         "status": setup, 
+                        "team_manager": [team_manager] if team_manager else [],
                         "call": call, 
                         "chat": chat,
                         "mfq": mfq,
