@@ -696,7 +696,10 @@ with tab_req:
         st.markdown("### 🌿 Wellness Pending")
         wellness_reqs = [r for r in all_pending if r['type'] == 'Wellness']
         if wellness_reqs:
-            st.table(pd.DataFrame(wellness_reqs)[["name", "date"]])
+            df_w = pd.DataFrame(wellness_reqs)[["name", "date"]]
+            df_w.columns = ["Name", "Date"]
+            # Use st.dataframe with hide_index=True to remove numbering
+            st.dataframe(df_w, hide_index=True, use_container_width=True)
         else:
             st.caption("No pending wellness requests.")
             
@@ -704,7 +707,10 @@ with tab_req:
         st.markdown("### ✈️ PTO Pending")
         pto_reqs = [r for r in all_pending if r['type'] == 'PTO']
         if pto_reqs:
-            st.table(pd.DataFrame(pto_reqs)[["name", "date"]])
+            df_p = pd.DataFrame(pto_reqs)[["name", "date"]]
+            df_p.columns = ["Name", "Date"]
+            # Use st.dataframe with hide_index=True to remove numbering
+            st.dataframe(df_p, hide_index=True, use_container_width=True)
         else:
             st.caption("No pending PTO requests.")        
     st.divider()
