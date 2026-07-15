@@ -483,48 +483,76 @@ with tab_cal:
         st.divider()
         
         st.write("**Today's Schedule:**")
-        roles = ["team_manager", "call", "chat", "mfq", "sme"]
-        approved_requests = fetch_approved_requests_from_db()
         
-        # Build tabular structured schedule data
-        sched_rows = []
-        for name in st.session_state.staff_roster:
-            # Check for approved requests matching the active daily view date using string matching
-            p_status = [
-                r["type"]
-                for r in approved_requests
-                if str(r["date"]) == str(view_date)
-                and r["name"] == name
-            ]
+        # Check if the selected date is a weekend (weekday 5 = Saturday, 6 = Sunday)
+        if view_date.weekday() in [5, 6]:
+            st.info("📊 **Rest Day** — Weekend Schedule")
             
-            # Setup & Shift representations
-            setup_display = d_data.get('status', 'Not Set') if d_data else 'Not Set'
-            shift_display = d_data.get('shift', '--') if d_data else '--'
+            # Show standard rest day table layout for everyone on the roster
+            sched_rows = []
+            for name in st.session_state.staff_roster:
+                sched_rows.append({
+                    "Name": name,
+                    "Work Setup": "REST DAY",
+                    "Shift Schedule": "--",
+                    "Role": "REST DAY"
+                })
             
-            if p_status:
-                role_display = p_status[0].upper()
+            if sched_rows:
+                sched_df = pd.DataFrame(sched_rows)
+                st.table(sched_df)
             else:
-                assigned_roles = [
-                    r.upper().replace("_", " ")
-                    for r in roles
-                    if name in d_data.get(r, [])
-                ]
-                role_display = ", ".join(assigned_roles) if assigned_roles else "UNASSIGNED"
+                st.write("*No staff configured in the system.*")
                 
-            sched_rows.append({
-                "Name": name,
-                "Work Setup": setup_display,
-                "Shift Schedule": shift_display,
-                "Role": role_display
-            })
-            
-        if sched_rows:
-            sched_df = pd.DataFrame(sched_rows)
-            st.table(sched_df)
         else:
-            st.write("*No staff configured in the system.*")
+            roles = ["team_manager", "call", "chat", "mfq", "sme"]
+            approved_requests = fetch_approved_requests_from_db()
+            
+            # Build tabular structured schedule data
+            sched_rows = []
+            for name in st.session_state.staff_roster:
+                # Check for approved requests matching the active daily view date using string matching
+                p_status = [
+                    r["type"]
+                    for r in approved_requests
+                    if str(r["date"]) == str(view_date)
+                    and r["name"] == name
+                ]
+                
+                # Default setup & shift representations back to original 'Not Set' & '--' fallbacks
+                setup_display = d_data.get('status', 'Not Set') if d_data else 'Not Set'
+                shift_display = d_data.get('shift', '--') if d_data else '--'
+                
+                if p_status:
+                    role_display = p_status[0].upper()
+                    # Override setup status if they are on approved leave (PTO, Wellness, etc.)
+                    setup_display = p_status[0].upper()
+                    shift_display = "--"
+                else:
+                    # Dynamically check if this person has been assigned to ANY role in database
+                    assigned_roles = [
+                        r.upper().replace("_", " ")
+                        for r in roles
+                        if d_data and name in d_data.get(r, [])
+                    ]
+                    # If not assigned to any specific channel/role, list them as "UNASSIGNED"
+                    role_display = ", ".join(assigned_roles) if assigned_roles else "UNASSIGNED"
+                    
+                sched_rows.append({
+                    "Name": name,
+                    "Work Setup": setup_display,
+                    "Shift Schedule": shift_display,
+                    "Role": role_display
+                })
+                
+            if sched_rows:
+                sched_df = pd.DataFrame(sched_rows)
+                st.table(sched_df)
+            else:
+                st.write("*No staff configured in the system.*")
 
         st.markdown('</div>', unsafe_allow_html=True)
+
     # 5. Render interactive monthly calendar grid block
     with col_main:
         # Fetch current roster directly from the database document to align nickname matching
@@ -568,7 +596,7 @@ with tab_cal:
                                    f"SME: {get_filtered_nicks(data.get('sme', []))}")
                     
                     cols[i].markdown(f'<div class="day-block">{content}</div>', unsafe_allow_html=True)
-
+                    
 # --- TAB 2: REQUEST FORM ---
 with tab_req:
     st.subheader("PTO/Wellness Request")
