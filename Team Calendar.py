@@ -27,25 +27,6 @@ collection = db["my_collection"]
 
 # --- LEAVE LIMITS HELPERS ---
 
-def save_leave_limits(limit_date):
-    collection.update_one(
-        {
-            "type": "Leave_limits",
-            "date": str(limit_date)
-        },
-        {
-            "$set": {
-                "PTO_per_day": int(
-                    st.session_state.limits["PTO_per_day"]
-                ),
-                "Wellness_per_day": int(
-                    st.session_state.limits["Wellness_per_day"]
-                )
-            }
-        },
-        upsert=True
-    )
-
 def bulk_update_requests(request_ids, status):
     collection.update_many(
         {"_id": {"$in": request_ids}},
@@ -156,19 +137,26 @@ def save_request_to_db(req, request_type):
 
 def get_request_limits(req_date):
     calendar_doc = collection.find_one({"type": "calendar_data"})
-
+    selected_config = {}
+    
     if calendar_doc:
-        day_config = calendar_doc.get("data", {}).get(str(req_date), {})
-
-        return {
-            "PTO_per_day": int(day_config.get("PTO_per_day", 1)),
-            "Wellness_per_day": int(day_config.get("Wellness_per_day", 1))
-        }
-
-    return {
-        "PTO_per_day": 1,
-        "Wellness_per_day": 1
-    }
+        selected_config = calendar_doc.get(
+            "data",
+            {}
+        ).get(
+            str(st.session_state.selected_admin_date),
+            {}
+        )
+    
+    st.session_state.limits["PTO_per_day"] = selected_config.get(
+        "PTO_per_day",
+        1
+    )
+    
+    st.session_state.limits["Wellness_per_day"] = selected_config.get(
+        "Wellness_per_day",
+        1
+    )
 
 def save_masterfile_to_db(df):
     collection.update_one({"type": "masterfile"}, {"$set": {"data": df.to_dict(orient="records")}}, upsert=True)
@@ -180,7 +168,7 @@ def send_request_notification(recipient_email, status, request_type, date_val):
 
 # --- INITIAL CONFIG & STATE ---
 st.set_page_config(layout="wide")
-st.title("📊 Operational Shift & Roster Management System")
+st.title("📊 Team Operations Management System (TOMS)")
 
 # Define your country's local timezone (Philippines / PHT)
 local_tz = pytz.timezone("Asia/Manila") 
@@ -195,6 +183,11 @@ if "admin_authenticated" not in st.session_state: st.session_state.admin_authent
 if "staff_roster" not in st.session_state: 
     st.session_state.staff_roster = {}
 if "calendar_data" not in st.session_state: st.session_state.calendar_data = {}
+if "limits" not in st.session_state:
+    st.session_state.limits = {
+        "PTO_per_day": 1,
+        "Wellness_per_day": 1
+    }
 if "notifications" not in st.session_state: st.session_state.notifications = []
 if "master_data" not in st.session_state: 
     st.session_state.master_data = pd.DataFrame({
@@ -1818,24 +1811,6 @@ with tab_adm:
                     1
                 )
 
-            limit_doc = collection.find_one({
-                "type": "Leave_limits",
-                "date": str(st.session_state.selected_admin_date)
-            })
-            
-            if limit_doc:
-                st.session_state.limits["PTO_per_day"] = limit_doc.get(
-                    "PTO_per_day",
-                    1
-                )
-            
-                st.session_state.limits["Wellness_per_day"] = limit_doc.get(
-                    "Wellness_per_day",
-                    1
-                )
-            else:
-                st.session_state.limits["PTO_per_day"] = 1
-                st.session_state.limits["Wellness_per_day"] = 1
     
             st.markdown("---")
             st.subheader("Important Notifications")
@@ -1928,9 +1903,6 @@ with tab_adm:
                     {"type": "calendar_data"},
                     {"$set": {"data": serializable_data}},
                     upsert=True
-                )
-                save_leave_limits(
-                    st.session_state.selected_admin_date
                 )
                 
                 st.cache_data.clear()
