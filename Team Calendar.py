@@ -495,14 +495,32 @@ with tab_cal:
         )
         
         view_date = pd.to_datetime(selected_date).date()
+
+        # Reload schedule data based on selected date
+        d_data = None
         
-        st.write("**Today's Schedule:**")
+        if st.session_state.calendar_data:
+            d_data = st.session_state.calendar_data.get(view_date)
+            if not d_data:
+                d_data = st.session_state.calendar_data.get(str(view_date))
         
-        # Team Manager role displayed above the table following the role then name format
+        # Fallback to database
+        if not d_data:
+            calendar_doc = collection.find_one({"type": "calendar_data"})
+            if calendar_doc:
+                d_data = calendar_doc.get("data", {}).get(str(view_date))
+        
+        if not d_data:
+            d_data = {}
+
+        # Team Manager for selected date
         tm_list = d_data.get('team_manager', [])
         tm_name = tm_list[0] if (isinstance(tm_list, list) and tm_list) else ""
+        
         if tm_name:
             st.write(f"**Team Manager:** {tm_name}")
+        
+        st.write("**Today's Schedule:**")
 
         # Check if the selected date is a weekend (weekday 5 = Saturday, 6 = Sunday)
         if view_date.weekday() in [5, 6]:
