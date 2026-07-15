@@ -27,20 +27,6 @@ collection = db["my_collection"]
 
 # --- LEAVE LIMITS HELPERS ---
 
-def load_leave_limits():
-    doc = collection.find_one({"type": "Leave_limits"})
-
-    if doc:
-        return {
-            "PTO_per_day": int(doc.get("PTO_per_day", 1)),
-            "Wellness_per_day": int(doc.get("Wellness_per_day", 1))
-        }
-
-    return {
-        "PTO_per_day": 1,
-        "Wellness_per_day": 1
-    }
-
 def save_leave_limits(limit_date):
     collection.update_one(
         {
@@ -162,15 +148,14 @@ def save_request_to_db(req, request_type):
     st.cache_data.clear()
 
 def get_request_limits(req_date):
-    doc = collection.find_one({
-        "type": "Leave_limits",
-        "date": str(req_date)
-    })
+    calendar_doc = collection.find_one({"type": "calendar_data"})
 
-    if doc:
+    if calendar_doc:
+        day_config = calendar_doc.get("data", {}).get(str(req_date), {})
+
         return {
-            "PTO_per_day": int(doc.get("PTO_per_day", 1)),
-            "Wellness_per_day": int(doc.get("Wellness_per_day", 1))
+            "PTO_per_day": int(day_config.get("PTO_per_day", 1)),
+            "Wellness_per_day": int(day_config.get("Wellness_per_day", 1))
         }
 
     return {
@@ -203,8 +188,6 @@ if "admin_authenticated" not in st.session_state: st.session_state.admin_authent
 if "staff_roster" not in st.session_state: 
     st.session_state.staff_roster = {}
 if "calendar_data" not in st.session_state: st.session_state.calendar_data = {}
-if "limits" not in st.session_state:
-    st.session_state.limits = load_leave_limits()
 if "notifications" not in st.session_state: st.session_state.notifications = []
 if "master_data" not in st.session_state: 
     st.session_state.master_data = pd.DataFrame({
@@ -1807,6 +1790,27 @@ with tab_adm:
             st.subheader("Configuration")
             st.session_state.selected_admin_date = st.date_input("Select Date to View/Edit", date.today(), key="cfg_view_edit_date")
 
+            calendar_doc = collection.find_one({"type": "calendar_data"})
+
+            if calendar_doc:
+                selected_config = calendar_doc.get(
+                    "data",
+                    {}
+                ).get(
+                    str(st.session_state.selected_admin_date),
+                    {}
+                )
+            
+                st.session_state.limits["PTO_per_day"] = selected_config.get(
+                    "PTO_per_day",
+                    1
+                )
+            
+                st.session_state.limits["Wellness_per_day"] = selected_config.get(
+                    "Wellness_per_day",
+                    1
+                )
+
             limit_doc = collection.find_one({
                 "type": "Leave_limits",
                 "date": str(st.session_state.selected_admin_date)
@@ -1900,13 +1904,15 @@ with tab_adm:
             if st.button("Save Config", key="btn_save_daily_config"):
                 for d in target_dates:
                     st.session_state.calendar_data[d] = {
-                        "shift": shift_display, 
-                        "status": setup, 
+                        "shift": shift_display,
+                        "status": setup,
                         "team_manager": [team_manager] if team_manager else [],
-                        "call": call, 
+                        "call": call,
                         "chat": chat,
                         "mfq": mfq,
-                        "sme": sme
+                        "sme": sme,
+                        "PTO_per_day": st.session_state.limits["PTO_per_day"],
+                        "Wellness_per_day": st.session_state.limits["Wellness_per_day"]
                     }
                 
                 serializable_data = {str(k): v for k, v in st.session_state.calendar_data.items()}
