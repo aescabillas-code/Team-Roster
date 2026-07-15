@@ -488,6 +488,14 @@ with tab_cal:
         
         st.divider()
         
+        # Date Filter
+        selected_date = st.date_input(
+            "Select Date",
+            value=view_date if 'view_date' in locals() else date.today()
+        )
+        
+        view_date = pd.to_datetime(selected_date).date()
+        
         st.write("**Today's Schedule:**")
         
         # Team Manager role displayed above the table following the role then name format
