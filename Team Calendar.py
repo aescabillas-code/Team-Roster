@@ -564,8 +564,6 @@ with tab_cal:
                     
                 sched_rows.append({
                     "Name": name,
-                    "Work Setup": setup_display,
-                    "Shift Schedule": shift_display,
                     "Role": role_display
                 })
                 
