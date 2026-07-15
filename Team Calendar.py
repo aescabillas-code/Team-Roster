@@ -489,7 +489,19 @@ with tab_cal:
         if not d_data:
             d_data = {}
         
+        # --- TOP HEADER: Date, Status, and Shift ---
         st.markdown(f"### Date: {view_date.strftime('%B %d, %Y')}")
+        
+        # Extract general status and shift for this selected date
+        if view_date.weekday() in [5, 6]:
+            day_status = "REST DAY"
+            day_shift = "--"
+        else:
+            day_status = d_data.get('status', 'Not Set')
+            day_shift = d_data.get('shift', '--')
+
+        st.markdown(f"**Work Setup:** `{day_status}`")
+        st.markdown(f"**Shift:** `{day_shift}`")
         
         st.divider()
         
@@ -530,9 +542,9 @@ with tab_cal:
                     and r["name"] == name
                 ]
                 
-                # Setup & Shift representations matched from active day configurations (falling back to "Not Set" & "--")
-                setup_display = d_data.get('status', 'Not Set')
-                shift_display = d_data.get('shift', '--')
+                # Rows inherit the day's global setup and shift configuration
+                setup_display = day_status
+                shift_display = day_shift
                 
                 if p_status:
                     role_display = p_status[0].upper()
@@ -543,7 +555,6 @@ with tab_cal:
                     assigned_roles = []
                     for r in roles:
                         assigned_list = d_data.get(r, [])
-                        # Handles cases where database stores names nested in dicts vs flat list
                         if isinstance(assigned_list, list) and name in assigned_list:
                             assigned_roles.append(r.upper().replace("_", " "))
                         elif isinstance(assigned_list, dict) and name in assigned_list.keys():
