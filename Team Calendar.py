@@ -689,57 +689,30 @@ with tab_req:
 
     # --- ADDED: REQUEST TAB APPROVAL VIEWPORT AND HISTORY RENDER ---
     st.divider()
-    st.subheader("📋 Pending Request Approvals")
-    req_pending_all = fetch_pending_requests_from_db()
-    
-    col_pending_well, col_pending_pto = st.columns(2)
-    
-    with col_pending_well:
-        st.markdown("### 🌿 Pending Wellness Requests")
-        well_p = [r for r in req_pending_all if r.get("type") == "Wellness"]
-        if well_p:
-            for idx, req in enumerate(well_p):
-                unique_key = f"tab_req_wellness_{req.get('name')}_{req.get('date')}_{idx}"
-                render_request(req, unique_key)
-        else:
-            st.info("No pending Wellness requests.")
-            
-    with col_pending_pto:
-        st.markdown("### ✈️ Pending PTO Requests")
-        pto_p = [r for r in req_pending_all if r.get("type") == "PTO"]
-        if pto_p:
-            for idx, req in enumerate(pto_p):
-                unique_key = f"tab_req_pto_{req.get('name')}_{req.get('date')}_{idx}"
-                render_request(req, unique_key)
-        else:
-            st.info("No pending PTO requests.")
+    st.subheader("Pending Requests")
+    all_pending = fetch_pending_requests_from_db()
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("### 🌿 Wellness")
+        for r in [x for x in all_pending if x['type']=='Wellness']:
+            if st.button(f"Approve {r.get('name')} ({r.get('date')})", key=f"app_well_{r['_id']}"):
+                update_request_status_in_db(r, "Approved"); st.rerun()
+    with c2:
+        st.markdown("### ✈️ PTO")
+        for r in [x for x in all_pending if x['type']=='PTO']:
+            if st.button(f"Approve {r.get('name')} ({r.get('date')})", key=f"app_pto_{r['_id']}"):
+                update_request_status_in_db(r, "Approved"); st.rerun()
             
     st.divider()
-    st.subheader("✅ Approved Requests History")
-    
-    col_hist_well, col_hist_pto = st.columns(2)
-    hist_all_approved = fetch_approved_requests_from_db()
-    
-    with col_hist_well:
-        st.markdown("#### Approved Wellness")
-        hist_well = [r for r in hist_all_approved if r.get("type") == "Wellness"]
-        if hist_well:
-            df_h_well = pd.DataFrame(hist_well).drop(columns=['_id', 'type'], errors='ignore')
-            w_h = min(1000, max(100, len(df_h_well) * 35 + 38))
-            st.dataframe(df_h_well, hide_index=True, use_container_width=True, height=w_h)
-        else:
-            st.write("No approved Wellness history found.")
-            
-    with col_hist_pto:
-        st.markdown("#### Approved PTO")
-        hist_pto = [r for r in hist_all_approved if r.get("type") == "PTO"]
-        if hist_pto:
-            df_h_pto = pd.DataFrame(hist_pto).drop(columns=['_id', 'type'], errors='ignore')
-            p_h = min(1000, max(100, len(df_h_pto) * 35 + 38))
-            st.dataframe(df_h_pto, hide_index=True, use_container_width=True, height=p_h)
-        else:
-            st.write("No approved PTO history found.")
-
+    st.subheader("Approved History")
+    f_c1, f_c2 = st.columns(2)
+    f_m = f_c1.selectbox("Month", range(1, 13), index=current_date.month-1)
+    f_y = f_c2.number_input("Year", value=current_date.year)
+    app_reqs = fetch_approved_requests_from_db()
+    filtered_app = [r for r in app_reqs if int(r['date'].split('-')[1])==f_m and int(r['date'].split('-')[0])==f_y]
+    if filtered_app: st.dataframe(pd.DataFrame(filtered_app)[['name', 'date', 'type']])
+    else: st.write("No records found.")
+        
 # --- TAB 3: PRODUCTIVITY MONITORING ---
 with tab_prod:
 
@@ -1107,6 +1080,12 @@ with tab_case:
     st.subheader("Knowledge Base")
 
     cases_list = get_cases_from_db()
+    if cases:
+        df_cases = pd.DataFrame(cases)
+        # Download button for KB
+        csv = df_cases.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Download Knowledge Base CSV", csv, "kb_export.csv", "text/csv")
+        st.dataframe(df_cases)
 
     f1, f2, f3, f4 = st.columns(4)
 
