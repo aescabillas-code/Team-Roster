@@ -2022,71 +2022,71 @@ with tab_adm:
                 st.write("No pending Wellness requests.")
 
            st.markdown("### ✈️ PTO Requests")
-            pto_pending = [
-                r for r in all_pending_requests
-                if r.get("type") == "PTO"
-            ]
-            
-            pto_selected = []
-            
-            if pto_pending:
-            
-                select_all_pto = st.checkbox(
-                    "Select All PTO",
-                    key="select_all_pto"
-                )
-            
-                for req in pto_pending:
-            
-                    req_id = str(req["_id"])
-            
-                    c1, c2 = st.columns([1, 8])
-            
+           pto_pending = [
+                    r for r in all_pending_requests
+                    if r.get("type") == "PTO"
+                ]
+                
+                pto_selected = []
+                
+                if pto_pending:
+                
+                    select_all_pto = st.checkbox(
+                        "Select All PTO",
+                        key="select_all_pto"
+                    )
+                
+                    for req in pto_pending:
+                
+                        req_id = str(req["_id"])
+                
+                        c1, c2 = st.columns([1, 8])
+                
+                        with c1:
+                            checked = st.checkbox(
+                                "",
+                                value=select_all_pto,
+                                key=f"pto_chk_{req_id}"
+                            )
+                
+                        with c2:
+                            st.write(
+                                f"{req['name']} | {req['date']} | {req['status']}"
+                            )
+                
+                        if checked:
+                            pto_selected.append(req["_id"])
+                
+                    c1, c2 = st.columns(2)
+                
                     with c1:
-                        checked = st.checkbox(
-                            "",
-                            value=select_all_pto,
-                            key=f"pto_chk_{req_id}"
-                        )
-            
+                        if st.button(
+                            "✅ Approve Selected PTO",
+                            key="approve_pto"
+                        ):
+                            if pto_selected:
+                                bulk_update_requests(
+                                    pto_selected,
+                                    "Approved"
+                                )
+                                st.success("Selected PTO requests approved.")
+                                st.rerun()
+                
                     with c2:
-                        st.write(
-                            f"{req['name']} | {req['date']} | {req['status']}"
-                        )
-            
-                    if checked:
-                        pto_selected.append(req["_id"])
-            
-                c1, c2 = st.columns(2)
-            
-                with c1:
-                    if st.button(
-                        "✅ Approve Selected PTO",
-                        key="approve_pto"
-                    ):
-                        if pto_selected:
-                            bulk_update_requests(
-                                pto_selected,
-                                "Approved"
-                            )
-                            st.success("Selected PTO requests approved.")
-                            st.rerun()
-            
-                with c2:
-                    if st.button(
-                        "❌ Deny Selected PTO",
-                        key="deny_pto"
-                    ):
-                        if pto_selected:
-                            bulk_update_requests(
-                                pto_selected,
-                                "Rejected"
-                            )
-                            st.success("Selected PTO requests denied.")
-                            st.rerun()
-            
-            else:
-                st.write("No pending PTO requests.")
+                        if st.button(
+                            "❌ Deny Selected PTO",
+                            key="deny_pto"
+                        ):
+                            if pto_selected:
+                                bulk_update_requests(
+                                    pto_selected,
+                                    "Rejected"
+                                )
+                                st.success("Selected PTO requests denied.")
+                                st.rerun()
+                
+                else:
+                    st.write("No pending PTO requests.")
 
             st.divider()
 
