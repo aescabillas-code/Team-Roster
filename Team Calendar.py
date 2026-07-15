@@ -1095,7 +1095,6 @@ with tab_case:
         # Download button for KB
         csv = df_cases.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Download Knowledge Base CSV", csv, "kb_export.csv", "text/csv")
-        st.dataframe(df_cases)
 
     f1, f2, f3, f4 = st.columns(4)
 
