@@ -41,9 +41,12 @@ def load_leave_limits():
         "Wellness_per_day": 1
     }
 
-def save_leave_limits():
+def save_leave_limits(limit_date):
     collection.update_one(
-        {"type": "Leave_limits"},
+        {
+            "type": "Leave_limits",
+            "date": str(limit_date)
+        },
         {
             "$set": {
                 "PTO_per_day": int(
@@ -56,13 +59,6 @@ def save_leave_limits():
         },
         upsert=True
     )
-    
-if collection.count_documents({"type": "Leave_limits"}) == 0:
-    collection.insert_one({
-        "type": "Leave_limits",
-        "PTO_per_day": 1,
-        "Wellness_per_day": 1
-    })
 
 def load_data_from_db():
     if "staff_roster" not in st.session_state:
@@ -165,8 +161,11 @@ def save_request_to_db(req, request_type):
     collection.insert_one(req)
     st.cache_data.clear()
 
-def get_request_limits():
-    doc = collection.find_one({"type": "Leave_limits"})
+def get_request_limits(req_date):
+    doc = collection.find_one({
+        "type": "Leave_limits",
+        "date": str(req_date)
+    })
 
     if doc:
         return {
@@ -717,7 +716,7 @@ with tab_req:
         
         if st.form_submit_button("Submit Request"):
             # Fetch limit ceilings directly from DB configuration
-            limits = get_request_limits()
+            limits = get_request_limits(req_date)
             
             # Count records on specified target date using explicit string conversions
             count_on_date = collection.count_documents({"type": req_type,"date": str(req_date),"status": {"$in": ["Pending", "Approved"]}})
@@ -1807,7 +1806,26 @@ with tab_adm:
             # --- DAILY CONFIG ---
             st.subheader("Configuration")
             st.session_state.selected_admin_date = st.date_input("Select Date to View/Edit", date.today(), key="cfg_view_edit_date")
+
+            limit_doc = collection.find_one({
+                "type": "Leave_limits",
+                "date": str(st.session_state.selected_admin_date)
+            })
             
+            if limit_doc:
+                st.session_state.limits["PTO_per_day"] = limit_doc.get(
+                    "PTO_per_day",
+                    1
+                )
+            
+                st.session_state.limits["Wellness_per_day"] = limit_doc.get(
+                    "Wellness_per_day",
+                    1
+                )
+            else:
+                st.session_state.limits["PTO_per_day"] = 1
+                st.session_state.limits["Wellness_per_day"] = 1
+    
             st.markdown("---")
             st.subheader("Important Notifications")
             target_d = st.date_input("Target Date", key="config_target_date")
@@ -1898,7 +1916,9 @@ with tab_adm:
                     {"$set": {"data": serializable_data}},
                     upsert=True
                 )
-                save_leave_limits()
+                save_leave_limits(
+                    st.session_state.selected_admin_date
+                )
                 
                 st.cache_data.clear()
                 st.success("Configuration saved to database!")
