@@ -479,36 +479,52 @@ with tab_cal:
             d_data = st.session_state.calendar_data.get(str(view_date), {})
         
         st.markdown(f"### Date: {view_date.strftime('%B %d, %Y')}")
-        st.markdown(f"**Setup:** {d_data.get('status', 'Not Set')} | **Shift:** {d_data.get('shift', '--')}")
+        
         st.divider()
         
         st.write("**Today's Schedule:**")
-        roles = ["call", "chat", "mfq", "sme"]
-
-        
+        roles = ["team_manager", "call", "chat", "mfq", "sme"]
         approved_requests = fetch_approved_requests_from_db()
         
+        # Build tabular structured schedule data
+        sched_rows = []
         for name in st.session_state.staff_roster:
             # Check for approved requests matching the active daily view date using string matching
             p_status = [
-                    r["type"]
-                    for r in approved_requests
-                    if str(r["date"]) == str(view_date)
-                    and r["name"] == name
-                ]
+                r["type"]
+                for r in approved_requests
+                if str(r["date"]) == str(view_date)
+                and r["name"] == name
+            ]
+            
+            # Setup & Shift representations
+            setup_display = d_data.get('status', 'Not Set') if d_data else 'Not Set'
+            shift_display = d_data.get('shift', '--') if d_data else '--'
+            
             if p_status:
-                st.write(f"- **{name}**: {p_status[0].upper()}")
+                role_display = p_status[0].upper()
             else:
                 assigned_roles = [
-                    r.upper()
+                    r.upper().replace("_", " ")
                     for r in roles
-                    if name in d_data.get(r, [])]
+                    if name in d_data.get(r, [])
+                ]
+                role_display = ", ".join(assigned_roles) if assigned_roles else "UNASSIGNED"
+                
+            sched_rows.append({
+                "Name": name,
+                "Work Setup": setup_display,
+                "Shift Schedule": shift_display,
+                "Role": role_display
+            })
             
-                shift_role = ", ".join(assigned_roles) if assigned_roles else "Unassigned"
-                st.write(f"- **{name}**: {shift_role}")
+        if sched_rows:
+            sched_df = pd.DataFrame(sched_rows)
+            st.table(sched_df)
+        else:
+            st.write("*No staff configured in the system.*")
 
         st.markdown('</div>', unsafe_allow_html=True)
-
     # 5. Render interactive monthly calendar grid block
     with col_main:
         # Fetch current roster directly from the database document to align nickname matching
@@ -1807,6 +1823,7 @@ with tab_adm:
 
             available = [n for n in roster.keys() if n not in unavailable] if roster else []
             
+            team_manager = st.selectbox("Assign Team Manager", [""] + available, key="sb_assign_team_manager")
             call = st.multiselect("Assign Call", available, key="ms_assign_call")
             chat = st.multiselect("Assign Chat", available, key="ms_assign_chat")
             mfq = st.multiselect("Assign MFQ", available, key="ms_assign_mfq")
@@ -1817,6 +1834,7 @@ with tab_adm:
                     st.session_state.calendar_data[d] = {
                         "shift": shift_display, 
                         "status": setup, 
+                        "team_manager": [team_manager] if team_manager else [],
                         "call": call, 
                         "chat": chat,
                         "mfq": mfq,
@@ -1833,7 +1851,7 @@ with tab_adm:
                 )
                 st.success("Configuration saved to database!")
                 st.rerun()
-        
+                
         with col2:
             st.subheader("Approval Center")
             # Always pull latest pending requests from MongoDB
