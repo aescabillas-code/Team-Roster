@@ -1,4 +1,4 @@
-from datetime import datetime, time, date
+from datetime import datetime, time, date, timedelta
 import streamlit as st
 from pymongo import MongoClient
 import calendar
@@ -7,8 +7,8 @@ import holidays
 import sys
 from types import ModuleType
 import pytz
-from datetime import datetime, timedelta
 import re
+import io
 
 # --- MOCK GMAIL BARD MODULE IF NOT LOCALLY INSTALLED ---
 if "gmail_bard" not in sys.modules:
@@ -50,17 +50,21 @@ def get_staff_list():
 def save_staff(name, data):
     st.session_state.staff_roster[name] = data
     collection.update_one({"type": "roster_list"}, {"$set": {"data": st.session_state.staff_roster}}, upsert=True)
+    st.cache_data.clear()
 
 def delete_staff(name):
     collection.delete_one({"type": "roster_list", "name": name})
     if name in st.session_state.staff_roster: 
         del st.session_state.staff_roster[name]
+    st.cache_data.clear()
 
 def update_staff_in_db(name, update_dict):
     collection.update_one({"type": "roster_list", "name": name}, {"$set": update_dict})
     if name in st.session_state.staff_roster:
         st.session_state.staff_roster[name].update(update_dict)
+    st.cache_data.clear()
 
+@st.cache_data(ttl=15)
 def get_cases_from_db():
     try:
         return list(collection.find({"type": "case"}))
@@ -70,7 +74,9 @@ def get_cases_from_db():
 def save_case_to_db(case_data):
     case_data["type"] = "case"
     collection.insert_one(case_data)
+    st.cache_data.clear()
 
+@st.cache_data(ttl=15)
 def fetch_deviations_from_db():
     try:
         return list(collection.find({"type": "deviation"}))
@@ -80,25 +86,32 @@ def fetch_deviations_from_db():
 def save_deviation_to_db(data):
     data["type"] = "deviation"
     collection.insert_one(data)
+    st.cache_data.clear()
 
 def update_deviation_in_db(id, update_dict):
     collection.update_one({"_id": id}, {"$set": update_dict})
+    st.cache_data.clear()
 
 def delete_deviation_from_db(id):
     collection.delete_one({"_id": id})
+    st.cache_data.clear()
 
 def delete_request_from_db(req):
     collection.delete_one({"_id": req["_id"]})
+    st.cache_data.clear()
 
 def update_request_status_in_db(req, status):
     collection.update_one({"_id": req["_id"]}, {"$set": {"status": status}})
+    st.cache_data.clear()
 
+@st.cache_data(ttl=15)
 def fetch_approved_requests_from_db():
     return list(collection.find({
         "type": {"$in": ["PTO", "Wellness"]}, 
         "status": "Approved"
     }))
 
+@st.cache_data(ttl=15)
 def fetch_pending_requests_from_db():
     return list(collection.find({
         "type": {"$in": ["PTO", "Wellness"]}, 
@@ -111,12 +124,14 @@ def save_request_to_db(req, request_type):
     """
     req["type"] = request_type
     collection.insert_one(req)
+    st.cache_data.clear()
 
 def get_request_limits():
     return st.session_state.get("limits", {"PTO": 1, "Wellness": 1})
 
 def save_masterfile_to_db(df):
     collection.update_one({"type": "masterfile"}, {"$set": {"data": df.to_dict(orient="records")}}, upsert=True)
+    st.cache_data.clear()
 
 def send_request_notification(recipient_email, status, request_type, date_val):
     # Email notifications disabled as per user request
@@ -397,10 +412,10 @@ tab_cal, tab_req, tab_prod, tab_case, tab_dev, tab_adm = st.tabs([
 # --- TAB 1: CALENDAR ---
 with tab_cal:
     
-    # 2. Define structural page layout allocation matrix columns
+    # Define structural page layout allocation matrix columns
     col_main, col_side = st.columns([4, 1])
     
-    # 3. Use col_main for the top filters
+    # Use col_main for the top filters
     with col_main:
         c1, c2 = st.columns([1, 1])
         year = c1.selectbox("Year", [2026, 2027, 2028], key="cal_y")
@@ -416,7 +431,7 @@ with tab_cal:
     roster_doc = collection.find_one({"type": "roster_list"})
     roster = roster_doc.get("data", {}) if roster_doc else {}
 
-    # 4. Use col_side for the summary/sidebar
+    # Use col_side for the summary/sidebar
     with col_side:
         st.markdown('<div class="side-block">', unsafe_allow_html=True)
         st.subheader("Monthly Summary")
@@ -441,11 +456,11 @@ with tab_cal:
             st.write("No holidays this month.")
         
         st.subheader("Daily View")
-        # 1. Safely extract the date object and ensure it is a standard datetime.date object
+        # Safely extract the date object and ensure it is a standard datetime.date object
         raw_view_date = st.session_state.get('selected_admin_date', current_date)
         view_date = raw_view_date.date() if hasattr(raw_view_date, 'date') else raw_view_date
 
-        # 2. Look up the calendar data matching either the date object, its string representation, or direct from DB
+        # Look up the calendar data matching either the date object, its string representation, or direct from DB
         d_data = None
         if hasattr(st.session_state, 'calendar_data') and st.session_state.calendar_data:
             d_data = st.session_state.calendar_data.get(view_date)
@@ -498,7 +513,6 @@ with tab_cal:
             
             if sched_rows:
                 sched_df = pd.DataFrame(sched_rows)
-                # Removed numbering/index via hide_index=True
                 st.dataframe(sched_df, hide_index=True, use_container_width=True)
             else:
                 st.write("*No staff configured in the system.*")
@@ -537,6 +551,10 @@ with tab_cal:
                             assigned_roles.append(r.upper().replace("_", " "))
                             
                     role_display = ", ".join(assigned_roles) if assigned_roles else "UNASSIGNED"
+                
+                # EXCLUDE TEAM MANAGER (If the role is or contains Team Manager, skip adding name/role)
+                if "TEAM MANAGER" in role_display or name == tm_name:
+                    continue
                     
                 sched_rows.append({
                     "Name": name,
@@ -545,14 +563,13 @@ with tab_cal:
                 
             if sched_rows:
                 sched_df = pd.DataFrame(sched_rows)
-                # Removed numbering/index via hide_index=True
                 st.dataframe(sched_df, hide_index=True, use_container_width=True)
             else:
                 st.write("*No staff configured in the system.*")
 
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # 5. Render interactive monthly calendar grid block
+    # Render interactive monthly calendar grid block
     with col_main:
         cols = st.columns(7)
         for i, d_name in enumerate(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]):
@@ -607,11 +624,11 @@ with tab_req:
     st.subheader("PTO/Wellness Request")
     
     with st.form("request_form", clear_on_submit=True):
-        # 1. Fetch current roster directly from the database document
+        # Fetch current roster directly from the database document
         roster_doc = collection.find_one({"type": "roster_list"})
         staff_data = roster_doc.get("data", {}) if roster_doc else {}
         
-        # 2. Extract available names or fallback to session state
+        # Extract available names or fallback to session state
         available_names = list(staff_data.keys()) if staff_data else list(st.session_state.staff_roster.keys())
         name = st.selectbox("Name", available_names)
         
@@ -619,7 +636,7 @@ with tab_req:
         req_type = st.selectbox("Type", ["PTO", "Wellness"])
         
         if st.form_submit_button("Submit Request"):
-            # 2. Fetch limit ceilings directly from DB configuration
+            # Fetch limit ceilings directly from DB configuration
             limits = get_request_limits()
             
             # Count records on specified target date using explicit string conversions
@@ -636,7 +653,7 @@ with tab_req:
                 }
             ) > 0
             
-            # 3. Validation and Submission Logic Flow
+            # Validation and Submission Logic Flow
             if is_already_requested:
                 st.warning(f"⚠️ A request for {name} on {req_date} already exists.")
             limit_value = (
@@ -906,9 +923,7 @@ with tab_case:
         "Values"
     ].iloc[0].split(",")
 
-    # -----------------------------
     # Fetch Roster
-    # -----------------------------
     roster_doc = collection.find_one(
         {"type": "roster_list"}
     )
@@ -925,9 +940,7 @@ with tab_case:
     if not owner_list:
         owner_list = ["Unknown"]
 
-    # -----------------------------
     # Case Form
-    # -----------------------------
     c1, c2 = st.columns(2)
 
     c_type = c1.selectbox(
@@ -1004,8 +1017,7 @@ with tab_case:
             "Desc": desc,
             "Steps": steps,
             "Has_Screenshot": uploaded_file is not None,
-            "Screenshot": uploaded_file.getvalue()
-            if uploaded_file else None,
+            "Screenshot": uploaded_file.getvalue() if uploaded_file else None,
             "Status": status,
             "Extra": extra
         }
@@ -1023,9 +1035,7 @@ with tab_case:
 
     st.divider()
 
-    # -----------------------------
     # Knowledge Base
-    # -----------------------------
     st.subheader("Knowledge Base")
 
     cases_list = get_cases_from_db()
@@ -1165,9 +1175,7 @@ with tab_case:
                         key=f"action_{case['_id']}"
                     )
 
-            # -----------------------------
             # EDIT
-            # -----------------------------
             if action == "Edit":
                 with st.container():
                     st.markdown(
@@ -1294,6 +1302,7 @@ with tab_case:
                                     }
                                 }
                             )
+                            st.cache_data.clear()
                             st.success(
                                 "Case updated successfully!"
                             )
@@ -1306,9 +1315,7 @@ with tab_case:
                         ):
                             st.rerun()
 
-            # -----------------------------
             # DELETE
-            # -----------------------------
             elif action == "Delete":
                 st.warning(
                     "⚠️ Supervisor authorization required."
@@ -1331,6 +1338,7 @@ with tab_case:
                             collection.delete_one(
                                 {"_id": case["_id"]}
                             )
+                            st.cache_data.clear()
                             st.success(
                                 "Case deleted successfully."
                             )
@@ -1363,11 +1371,11 @@ with tab_dev:
             target_date = st.date_input("Target Date", value=date.today())
             manager = st.text_input("Manager", value="Jeff Bote")
             
-            # 1. Fetch current roster directly from the database document
+            # Fetch current roster directly from the database document
             roster_doc = collection.find_one({"type": "roster_list"})
             staff_data = roster_doc.get("data", {}) if roster_doc else {}
             
-            # 2. Extract available names or fallback to session state
+            # Extract available names or fallback to session state
             available_names = list(staff_data.keys()) if staff_data else list(st.session_state.staff_roster.keys())
             name = st.selectbox("Name", available_names, key="dev_name_box")
             
@@ -1757,6 +1765,7 @@ with tab_adm:
                     {"$set": {"data": serializable_data}},
                     upsert=True
                 )
+                st.cache_data.clear()
                 st.success("Configuration saved to database!")
                 st.rerun()
                 
