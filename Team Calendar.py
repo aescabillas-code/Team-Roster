@@ -25,6 +25,45 @@ client = MongoClient(uri)
 db = client["my_database"] 
 collection = db["my_collection"]
 
+# --- LEAVE LIMITS HELPERS ---
+
+def load_leave_limits():
+    doc = collection.find_one({"type": "Leave_limits"})
+
+    if doc:
+        return {
+            "PTO_per_day": int(doc.get("PTO_per_day", 1)),
+            "Wellness_per_day": int(doc.get("Wellness_per_day", 1))
+        }
+
+    return {
+        "PTO_per_day": 1,
+        "Wellness_per_day": 1
+    }
+
+def save_leave_limits():
+    collection.update_one(
+        {"type": "Leave_limits"},
+        {
+            "$set": {
+                "PTO_per_day": int(
+                    st.session_state.limits["PTO_per_day"]
+                ),
+                "Wellness_per_day": int(
+                    st.session_state.limits["Wellness_per_day"]
+                )
+            }
+        },
+        upsert=True
+    )
+    
+if collection.count_documents({"type": "Leave_limits"}) == 0:
+    collection.insert_one({
+        "type": "Leave_limits",
+        "PTO_per_day": 1,
+        "Wellness_per_day": 1
+    })
+
 def load_data_from_db():
     if "staff_roster" not in st.session_state:
         roster_doc = collection.find_one({"type": "roster_list"})
@@ -127,7 +166,18 @@ def save_request_to_db(req, request_type):
     st.cache_data.clear()
 
 def get_request_limits():
-    return st.session_state.get("limits", {"PTO": 1, "Wellness": 1})
+    doc = collection.find_one({"type": "Leave_limits"})
+
+    if doc:
+        return {
+            "PTO_per_day": int(doc.get("PTO_per_day", 1)),
+            "Wellness_per_day": int(doc.get("Wellness_per_day", 1))
+        }
+
+    return {
+        "PTO_per_day": 1,
+        "Wellness_per_day": 1
+    }
 
 def save_masterfile_to_db(df):
     collection.update_one({"type": "masterfile"}, {"$set": {"data": df.to_dict(orient="records")}}, upsert=True)
@@ -154,7 +204,8 @@ if "admin_authenticated" not in st.session_state: st.session_state.admin_authent
 if "staff_roster" not in st.session_state: 
     st.session_state.staff_roster = {}
 if "calendar_data" not in st.session_state: st.session_state.calendar_data = {}
-if "limits" not in st.session_state: st.session_state.limits = {"PTO_per_day": 1,"Wellness_per_day": 1}
+if "limits" not in st.session_state:
+    st.session_state.limits = load_leave_limits()
 if "notifications" not in st.session_state: st.session_state.notifications = []
 if "master_data" not in st.session_state: 
     st.session_state.master_data = pd.DataFrame({
@@ -1847,6 +1898,8 @@ with tab_adm:
                     {"$set": {"data": serializable_data}},
                     upsert=True
                 )
+                save_leave_limits()
+                
                 st.cache_data.clear()
                 st.success("Configuration saved to database!")
                 st.rerun()
