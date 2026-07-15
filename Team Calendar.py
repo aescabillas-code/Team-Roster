@@ -688,27 +688,25 @@ with tab_req:
                 st.rerun()
 
     # --- ADDED: REQUEST TAB APPROVAL VIEWPORT AND HISTORY RENDER ---
-    st.subheader("Pending Requests Overview")
-        
-        all_pending = fetch_pending_requests_from_db()
-        c1, c2 = st.columns(2)
-        
-        with c1:
-            st.markdown("### 🌿 Wellness Pending")
-            wellness_reqs = [r for r in all_pending if r['type'] == 'Wellness']
-            if wellness_reqs:
-                st.table(pd.DataFrame(wellness_reqs)[["name", "date"]])
-            else:
-                st.caption("No pending wellness requests.")
-                
-        with c2:
-            st.markdown("### ✈️ PTO Pending")
-            pto_reqs = [r for r in all_pending if r['type'] == 'PTO']
-            if pto_reqs:
-                st.table(pd.DataFrame(pto_reqs)[["name", "date"]])
-            else:
-                st.caption("No pending PTO requests.")
-        
+    st.subheader("Pending Requests Overview")    
+    all_pending = fetch_pending_requests_from_db()
+    c1, c2 = st.columns(2)
+    
+    with c1:
+        st.markdown("### 🌿 Wellness Pending")
+        wellness_reqs = [r for r in all_pending if r['type'] == 'Wellness']
+        if wellness_reqs:
+            st.table(pd.DataFrame(wellness_reqs)[["name", "date"]])
+        else:
+            st.caption("No pending wellness requests.")
+            
+    with c2:
+        st.markdown("### ✈️ PTO Pending")
+        pto_reqs = [r for r in all_pending if r['type'] == 'PTO']
+        if pto_reqs:
+            st.table(pd.DataFrame(pto_reqs)[["name", "date"]])
+        else:
+            st.caption("No pending PTO requests.")        
     st.divider()
     st.subheader("Approved History")
     f_c1, f_c2 = st.columns(2)
