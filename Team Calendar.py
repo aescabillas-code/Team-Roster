@@ -483,7 +483,7 @@ with tab_cal:
         st.divider()
         
         st.write("**Today's Schedule:**")
-        roles = ["call", "chat", "mfq", "sme"]
+        roles = ["team_manager","call", "chat", "mfq", "sme"]
 
         
         approved_requests = fetch_approved_requests_from_db()
@@ -500,7 +500,7 @@ with tab_cal:
                 st.write(f"- **{name}**: {p_status[0].upper()}")
             else:
                 assigned_roles = [
-                    r.upper()
+                    r.upper().replace("_", " ")
                     for r in roles
                     if name in d_data.get(r, [])]
             
