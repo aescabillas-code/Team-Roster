@@ -46,6 +46,13 @@ def save_leave_limits(limit_date):
         upsert=True
     )
 
+def bulk_update_requests(request_ids, status):
+    collection.update_many(
+        {"_id": {"$in": request_ids}},
+        {"$set": {"status": status}}
+    )
+    st.cache_data.clear()
+
 def load_data_from_db():
     if "staff_roster" not in st.session_state:
         roster_doc = collection.find_one({"type": "roster_list"})
@@ -1948,22 +1955,136 @@ with tab_adm:
                     st.rerun()
 
             st.markdown("### 🌿 Wellness Requests")
-            wellness_pending = [ r for r in all_pending_requests if r.get("type") == "Wellness"]
-
+            wellness_pending = [
+                r for r in all_pending_requests
+                if r.get("type") == "Wellness"
+            ]
+            
+            wellness_selected = []
+            
             if wellness_pending:
-                for idx, req in enumerate(wellness_pending):
-                    unique_key = f"wellness_{req.get('name')}_{req.get('date')}_{idx}"
-                    render_request(req, unique_key)
+            
+                select_all_wellness = st.checkbox(
+                    "Select All Wellness",
+                    key="select_all_wellness"
+                )
+            
+                for req in wellness_pending:
+            
+                    req_id = str(req["_id"])
+            
+                    c1, c2 = st.columns([1, 8])
+            
+                    with c1:
+                        checked = st.checkbox(
+                            "",
+                            value=select_all_wellness,
+                            key=f"wellness_chk_{req_id}"
+                        )
+            
+                    with c2:
+                        st.write(
+                            f"{req['name']} | {req['date']} | {req['status']}"
+                        )
+            
+                    if checked:
+                        wellness_selected.append(req["_id"])
+            
+                c1, c2 = st.columns(2)
+            
+                with c1:
+                    if st.button(
+                        "✅ Approve Selected Wellness",
+                        key="approve_wellness"
+                    ):
+                        if wellness_selected:
+                            bulk_update_requests(
+                                wellness_selected,
+                                "Approved"
+                            )
+                            st.success("Selected wellness requests approved.")
+                            st.rerun()
+            
+                with c2:
+                    if st.button(
+                        "❌ Deny Selected Wellness",
+                        key="deny_wellness"
+                    ):
+                        if wellness_selected:
+                            bulk_update_requests(
+                                wellness_selected,
+                                "Rejected"
+                            )
+                            st.success("Selected wellness requests denied.")
+                            st.rerun()
+            
             else:
                 st.write("No pending Wellness requests.")
 
-            st.markdown("### ✈️ PTO Requests")
-            pto_pending = [r for r in all_pending_requests if r.get("type") == "PTO"]
-
+           st.markdown("### ✈️ PTO Requests")
+            pto_pending = [
+                r for r in all_pending_requests
+                if r.get("type") == "PTO"
+            ]
+            
+            pto_selected = []
+            
             if pto_pending:
-                for idx, req in enumerate(pto_pending):
-                    unique_key = f"pto_{req.get('name')}_{req.get('date')}_{idx}"
-                    render_request(req, unique_key)
+            
+                select_all_pto = st.checkbox(
+                    "Select All PTO",
+                    key="select_all_pto"
+                )
+            
+                for req in pto_pending:
+            
+                    req_id = str(req["_id"])
+            
+                    c1, c2 = st.columns([1, 8])
+            
+                    with c1:
+                        checked = st.checkbox(
+                            "",
+                            value=select_all_pto,
+                            key=f"pto_chk_{req_id}"
+                        )
+            
+                    with c2:
+                        st.write(
+                            f"{req['name']} | {req['date']} | {req['status']}"
+                        )
+            
+                    if checked:
+                        pto_selected.append(req["_id"])
+            
+                c1, c2 = st.columns(2)
+            
+                with c1:
+                    if st.button(
+                        "✅ Approve Selected PTO",
+                        key="approve_pto"
+                    ):
+                        if pto_selected:
+                            bulk_update_requests(
+                                pto_selected,
+                                "Approved"
+                            )
+                            st.success("Selected PTO requests approved.")
+                            st.rerun()
+            
+                with c2:
+                    if st.button(
+                        "❌ Deny Selected PTO",
+                        key="deny_pto"
+                    ):
+                        if pto_selected:
+                            bulk_update_requests(
+                                pto_selected,
+                                "Rejected"
+                            )
+                            st.success("Selected PTO requests denied.")
+                            st.rerun()
+            
             else:
                 st.write("No pending PTO requests.")
 
