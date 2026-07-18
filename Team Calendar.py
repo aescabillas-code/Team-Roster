@@ -9,6 +9,7 @@ from types import ModuleType
 import pytz
 import re
 import io
+import altair as alt # Ensure altair is imported
 
 # --- DATABASE HELPERS & CONNECTION ---
 uri = st.secrets["mongo"]["uri"] 
@@ -746,7 +747,14 @@ with tab_prod:
         st.markdown("## Overall Issue Analysis")
         overall_issue = df["Issue"].value_counts().reset_index()
         overall_issue.columns = ["Issue", "Count"]
-        st.bar_chart(overall_issue.set_index("Issue")["Count"])
+
+        # Create chart with slanted labels
+        issue_chart = alt.Chart(overall_issue).mark_bar().encode(
+            x=alt.X("Issue", axis=alt.Axis(labelAngle=-45)),
+            y="Count"
+        )
+        st.altair_chart(issue_chart, use_container_width=True)
+        
         i_height = min(1000, max(100, len(overall_issue) * 35 + 38))
         st.dataframe(overall_issue, use_container_width=True, height=i_height)
 
@@ -755,7 +763,14 @@ with tab_prod:
         st.markdown("## Overall Product Analysis")
         overall_product = df["Product Group"].value_counts().reset_index()
         overall_product.columns = ["Product Group", "Count"]
-        st.bar_chart(overall_product.set_index("Product Group")["Count"])
+
+        # Create chart with slanted labels
+        product_chart = alt.Chart(overall_product).mark_bar().encode(
+            x=alt.X("Product Group", axis=alt.Axis(labelAngle=-45)),
+            y="Count"
+        )
+        st.altair_chart(product_chart, use_container_width=True)
+
         p_height = min(1000, max(100, len(overall_product) * 35 + 38))
         st.dataframe(overall_product, use_container_width=True, height=p_height)
 
