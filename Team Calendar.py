@@ -9,7 +9,7 @@ from types import ModuleType
 import pytz
 import re
 import io
-import altair as alt # Ensure altair is imported
+import altair as alt
 
 # --- DATABASE HELPERS & CONNECTION ---
 uri = st.secrets["mongo"]["uri"] 
@@ -773,6 +773,22 @@ with tab_prod:
 
         p_height = min(1000, max(100, len(overall_product) * 35 + 38))
         st.dataframe(overall_product, use_container_width=True, height=p_height)
+        st.divider()
+
+        st.markdown("## Overall Queue Analysis (Contact Type)")
+        overall_queue = df["Type"].value_counts().reset_index()
+        overall_queue.columns = ["Contact Type", "Count"]
+
+        # Create chart for Queue/Contact Type
+        queue_chart = alt.Chart(overall_queue).mark_bar().encode(
+            x=alt.X("Contact Type", axis=alt.Axis(labelAngle=-45)),
+            y="Count",
+            color="Contact Type"
+        )
+        st.altair_chart(queue_chart, use_container_width=True)
+        
+        q_height = min(1000, max(100, len(overall_queue) * 35 + 38))
+        st.dataframe(overall_queue, use_container_width=True, height=q_height)
 
 # --- TAB 4: CASE TRACKER ---
 with tab_case:
