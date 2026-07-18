@@ -312,7 +312,7 @@ def render_request(req, key_prefix):
             st.rerun()
 
 # --- TABS WORKSPACE ---
-tab_cal, tab_req, tab_prod, tab_case, tab_dev, tab_adm = st.tabs([
+tab_cal, tab_req, tab_prod, , tab_dev, tab_adm = st.tabs([
     "📅 Calendar", "📝 Request", "📈 Productivity Monitoring", "🔍 Case Tracker", "🔀 Deviation", "🔑 Admin"
 ])
 
@@ -800,13 +800,22 @@ with tab_case:
     # Excel-style Input Table
     for i, entry in enumerate(st.session_state.case_entries):
         cols = st.columns([1.5, 1.5, 1.5, 1.5, 1.5, 1])
-        with cols[0]: entry["owner"] = st.selectbox("Owner", owner_list, key=f"own_{i}")
-        with cols[1]: entry["c_type"] = st.selectbox("Type", c_types, key=f"type_{i}")
-        with cols[2]: entry["case_number"] = st.text_input("Case #", key=f"num_{i}")
-        with cols[3]: entry["issue"] = st.selectbox("Issue", issues, key=f"iss_{i}")
-        with cols[4]: entry["prod"] = st.selectbox("Prod", prods, key=f"prod_{i}")
-        with cols[5]: entry["status"] = st.selectbox("Status", ["Resolved", "Pending/Monitoring", "Routed"], key=f"stat_{i}")
-        entry["desc"] = st.text_area("Description", key=f"desc_{i}")
+        
+        # Use a more descriptive, unique key prefix
+        with cols[0]: 
+            entry["owner"] = st.selectbox("Owner", owner_list, key=f"case_input_owner_{i}")
+        with cols[1]: 
+            entry["c_type"] = st.selectbox("Type", c_types, key=f"case_input_type_{i}")
+        with cols[2]: 
+            entry["case_number"] = st.text_input("Case #", key=f"case_input_num_{i}")
+        with cols[3]: 
+            entry["issue"] = st.selectbox("Issue", issues, key=f"case_input_iss_{i}")
+        with cols[4]: 
+            entry["prod"] = st.selectbox("Prod", prods, key=f"case_input_prod_{i}")
+        with cols[5]: 
+            entry["status"] = st.selectbox("Status", ["Resolved", "Pending/Monitoring", "Routed"], key=f"case_input_stat_{i}")
+        
+        entry["desc"] = st.text_area("Description", key=f"case_input_desc_{i}")
 
     if st.button("➕ Add Row"):
         st.session_state.case_entries.append({"c_type": "", "owner": "", "case_number": "", "issue": "", "prod": "", "desc": "", "steps": "", "status": "Resolved", "extra": "", "comment": ""})
