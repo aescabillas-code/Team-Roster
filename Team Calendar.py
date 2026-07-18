@@ -395,6 +395,8 @@ with tab_cal:
             sched_rows = [{"Name": name, "Role": "REST DAY"} for name in roster.keys()]
             if sched_rows:
                 sched_df = pd.DataFrame(sched_rows)
+                # Sort by Role, then by Name for fallback alphabetical sorting
+                sched_df = sched_df.sort_values(by=["Role", "Name"], ascending=True)
                 st.dataframe(sched_df, hide_index=True, use_container_width=True, height=min(1000, max(100, len(sched_df) * 35 + 38)))
             else:
                 st.write("*No staff configured in the system.*")
@@ -422,6 +424,8 @@ with tab_cal:
                 
             if sched_rows:
                 sched_df = pd.DataFrame(sched_rows)
+                # Fix: Sort rows primarily by Role, falling back to Name alphabetically
+                sched_df = sched_df.sort_values(by=["Role", "Name"], ascending=True)
                 st.dataframe(sched_df, hide_index=True, use_container_width=True, height=min(1000, max(100, len(sched_df) * 35 + 38)))
             else:
                 st.write("*No staff configured in the system.*")
@@ -550,7 +554,7 @@ with tab_cal:
 
     # 3. Render Team Manager Banner (Large Font Size, Capitalized Label)
     tm_display_string = ", ".join(set(weekly_tms)).upper() if weekly_tms else "NONE ASSIGNED"
-    st.markdown(f"## 👑 TEAM MANAGER: {tm_display_string}")
+    st.markdown(f"## TEAM MANAGER: {tm_display_string}")
     st.write("")
 
     # 4. Process, Sort, and Style Grid Data
