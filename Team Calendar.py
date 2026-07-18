@@ -108,14 +108,14 @@ def update_request_status_in_db(req, status):
 @st.cache_data(ttl=15)
 def fetch_approved_requests_from_db():
     return list(collection.find({
-        "type": {"$in": ["PTO", "Wellness","Sick Leave"]}, 
+        "type": {"$in": ["PTO", "Wellness", "Sick Leave"]}, 
         "status": "Approved"
     }))
 
 @st.cache_data(ttl=15)
 def fetch_pending_requests_from_db():
     return list(collection.find({
-        "type": {"$in": ["PTO", "Wellness","Sick Leave"]}, 
+        "type": {"$in": ["PTO", "Wellness", "Sick Leave"]}, 
         "status": "Pending"
     }))
 
@@ -352,14 +352,12 @@ with tab_cal:
             st.write("No holidays this month.")
         
         st.subheader("Daily View")
-        # Automatically defaults to today's date context
         view_date = current_date.date() if hasattr(current_date, 'date') else current_date
 
         d_data = None
         if hasattr(st.session_state, 'calendar_data') and st.session_state.calendar_data:
             d_data = st.session_state.calendar_data.get(view_date) or st.session_state.calendar_data.get(str(view_date))
         if not d_data:
-            # Fallback to direct singular collection query if session mapping state is unpopulated
             d_data = collection.find_one({"type": "calendar_day", "date": str(view_date)})
             if not d_data:
                 calendar_doc = collection.find_one({"type": "calendar_data"})
@@ -466,25 +464,18 @@ with tab_cal:
                 else:
                     cols[i].markdown('<div class="day-block day-block-outside"></div>', unsafe_allow_html=True)
                     
-    # =====================================================================
-    # WEEKLY VIEW GRID AT THE BOTTOM OF THE ENTIRE TAB
-    # =====================================================================
     st.markdown("<br>", unsafe_allow_html=True)
     st.divider()
     st.subheader("📆 Weekly Roster")
     
-    # Dynamically anchors dropdown options starting from the first day of the top selected calendar month/year
     month_start_date = date(year, month, 1)
     base_sunday = month_start_date - timedelta(days=(month_start_date.weekday() + 1) if month_start_date.weekday() != 6 else 0)
     
-    # Generates selection options encompassing all weeks touching the active chosen month view
     sunday_options = [base_sunday + timedelta(weeks=i) for i in range(0, 6)]
     
-    # Calculate the Sunday of the current week (today)
     today_date = current_date.date() if hasattr(current_date, 'date') else current_date
     today_sunday = today_date - timedelta(days=(today_date.weekday() + 1) if today_date.weekday() != 6 else 0)
     
-    # Determine the index for today's Sunday; fallback to 0 if it's outside the generated month scope
     default_week_index = sunday_options.index(today_sunday) if today_sunday in sunday_options else 0
     
     selected_week_start = st.selectbox(
@@ -589,11 +580,9 @@ with tab_cal:
 with tab_req:
     st.subheader("PTO/Wellness/SL Request")
 
-    # Initialize a counter in session state to track how many requests to show
     if "request_count" not in st.session_state:
         st.session_state.request_count = 1
 
-    # Fetch roster for name selection
     roster_doc = collection.find_one({"type": "roster_list"})
     staff_data = roster_doc.get("data", {}) if roster_doc else {}
     available_names = list(staff_data.keys()) if staff_data else list(st.session_state.staff_roster.keys())
@@ -606,14 +595,12 @@ with tab_req:
             with cols[1]:
                 st.date_input("Date", key=f"date_{i}")
             with cols[2]:
-                st.selectbox("Type", ["PTO", "Wellness","Sick Leave"], key=f"type_{i}")
+                st.selectbox("Type", ["PTO", "Wellness", "Sick Leave"], key=f"type_{i}")
 
-        # Button to add another row
         if st.form_submit_button("➕ Add Another Request"):
             st.session_state.request_count += 1
             st.rerun()
 
-        # Final Submit Button
         if st.form_submit_button("✅ Submit All Requests"):
             for i in range(st.session_state.request_count):
                 name = st.session_state[f"name_{i}"]
@@ -640,7 +627,6 @@ with tab_req:
             st.session_state.request_count = 1 
             st.rerun()
 
-    # --- Pending Requests Overview ---
     st.subheader("Pending Requests Overview")    
     all_pending = fetch_pending_requests_from_db()
     c1, c2 = st.columns(2)
@@ -661,30 +647,21 @@ with tab_req:
             
     st.divider()
     
-    # --- Approved History ---
     st.subheader("Approved History")
     f_c1, f_c2 = st.columns(2)
     
-    # Define month names using the calendar module
-    import calendar
     month_names = list(calendar.month_name)[1:]
-    
-    # Selectbox displays month names; maps to 1-12 integer for logic
     selected_month_name = f_c1.selectbox("Month", month_names, index=current_date.month-1, key="history_month_select")
     f_m = month_names.index(selected_month_name) + 1
     
     f_y = f_c2.number_input("Year", value=current_date.year, key="history_year_select")
     
     app_reqs = fetch_approved_requests_from_db()
-    
-    # Filter logic: matches integer month and year
     filtered_app = [r for r in app_reqs if int(r['date'].split('-')[1]) == f_m and int(r['date'].split('-')[0]) == f_y]
     
     if filtered_app: 
-        # Create display dataframe and rename columns
         df_display = pd.DataFrame(filtered_app)[['name', 'date', 'type']]
         df_display.columns = ["Name", "Date", "Type"]
-        # Index hidden and container width applied
         st.dataframe(df_display, hide_index=True, use_container_width=True)
     else: 
         st.write("No records found.")
@@ -712,7 +689,6 @@ with tab_prod:
         df["Year"] = df["Date"].dt.year
         df["Day"] = df["Date"].dt.date
 
-        # --- Monthly Productivity ---
         st.markdown("## Monthly Productivity")
         col1, col2 = st.columns(2)
         years = sorted(df["Year"].dropna().unique())
@@ -725,15 +701,12 @@ with tab_prod:
             monthly_summary = monthly_df.groupby(["Owner", "Type"]).size().unstack(fill_value=0)
             monthly_summary["Total Cases"] = monthly_summary.sum(axis=1)
             m_height = min(1000, max(100, len(monthly_summary) * 35 + 38))
-            
-            # Using hide_index=True to force removal of row numbers
             st.dataframe(monthly_summary.reset_index(), use_container_width=True, height=m_height, hide_index=True)
         else:
             st.info("No cases found for selected month.")
 
         st.divider()
 
-        # --- Daily Productivity ---
         st.markdown("## Daily Productivity")
         selected_day = st.date_input("Select Day", value=date.today(), key="prod_day")
         daily_df = df[df["Day"] == selected_day]
@@ -742,14 +715,12 @@ with tab_prod:
             daily_summary = daily_df.groupby(["Owner", "Type"]).size().unstack(fill_value=0)
             daily_summary["Total Cases"] = daily_summary.sum(axis=1)
             d_height = min(1000, max(100, len(daily_summary) * 35 + 38))
-            
             st.dataframe(daily_summary.reset_index(), use_container_width=True, height=d_height, hide_index=True)
         else:
             st.info("No cases found for selected day.")
 
         st.divider()
 
-        # --- Overall Issue Analysis ---
         st.markdown("## Overall Issue Analysis")
         overall_issue = df["Issue"].value_counts().reset_index()
         overall_issue.columns = ["Issue", "Count"]
@@ -765,7 +736,6 @@ with tab_prod:
 
         st.divider()
 
-        # --- Overall Product Analysis ---
         st.markdown("## Overall Product Analysis")
         overall_product = df["Product Group"].value_counts().reset_index()
         overall_product.columns = ["Product Group", "Count"]
@@ -919,7 +889,6 @@ with tab_case:
                 save_col, _ = st.columns([1, 4])      
                 with save_col:
                     if st.button("Save Changes", key=f"save_ed_{case['_id']}"):
-                        # ... (your update logic) ...
                         collection.update_one(
                             {"_id": case["_id"]},
                             {"$set": {
@@ -1405,5 +1374,5 @@ with tab_adm:
                 st.markdown("#### Approved Sick Leave")
                 sl_height = min(1000, max(100, len(app_sl) * 35 + 38))
                 st.dataframe(pd.DataFrame(app_sl).drop(columns=['_id', 'type'], errors='ignore'), hide_index=True, use_container_width=True, height=sl_height)
-            if not app_wellness and not app_pto:
+            if not app_wellness and not app_pto and not app_sl:
                 st.write("No approved requests for this month.")
