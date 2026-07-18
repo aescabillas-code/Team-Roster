@@ -778,22 +778,21 @@ with tab_prod:
 
         p_height = min(1000, max(100, len(overall_product) * 35 + 38))
         st.dataframe(overall_product, use_container_width=True, height=p_height, hide_index=True)
+        st.divider()
 
 # --- TAB 4: CASE TRACKER ---
 with tab_case:
     st.subheader("Log New Case")
-    
-    # 1. Initialize session state for batch processing
-    if "pending_entries" not in st.session_state:
-        st.session_state["pending_entries"] = []
-
-    # 2. Setup Data Sources
     cases_list = get_cases_from_db() 
+
     masterfile_doc = collection.find_one({"type": "masterfile"})
-    master_df = pd.DataFrame(masterfile_doc["data"]) if masterfile_doc and "data" in masterfile_doc else pd.DataFrame({
-        "Category": ["Contact Type", "Issue", "Product Group"],
-        "Values": ["Call,Chat,Email", "Tech,Billing", "Hardware,Soft"]
-    })
+    if masterfile_doc and "data" in masterfile_doc:
+        master_df = pd.DataFrame(masterfile_doc["data"])
+    else:
+        master_df = pd.DataFrame({
+            "Category": ["Contact Type", "Issue", "Product Group"],
+            "Values": ["Call,Chat,Email", "Tech,Billing", "Hardware,Soft"]
+        })
 
     c_types = master_df.loc[master_df["Category"] == "Contact Type", "Values"].iloc[0].split(",")
     issues = master_df.loc[master_df["Category"] == "Issue", "Values"].iloc[0].split(",")
@@ -801,78 +800,165 @@ with tab_case:
 
     roster_doc = collection.find_one({"type": "roster_list"})
     staff_data = roster_doc.get("data", {}) if roster_doc else {}
-    owner_list = sorted(list(staff_data.keys())) or ["Unknown"]
+    owner_list = sorted(list(staff_data.keys()))
+    if not owner_list:
+        owner_list = ["Unknown"]
 
-    # 3. Dynamic Form with Role-based Contact Type
     c1, c2 = st.columns(2)
-    selected_owner = c2.selectbox("Owner", owner_list, key="case_form_owner")
-    
-    # Logic: Map role to contact type
-    role = staff_data.get(selected_owner, {}).get("Role", "General")
-    role_types = {"Support": ["Chat", "Email"], "Sales": ["Call"], "General": c_types}
-    available_types = role_types.get(role, c_types)
-    c_type = c1.selectbox("Contact Type", available_types, key="case_form_type")
-
+    c_type = c1.selectbox("Contact Type", c_types, key="case_form_type")
+    case_owner = c2.selectbox("Owner", owner_list, key="case_form_owner")
     case_number = c1.text_input("Case Number", key="case_form_case_number")
     issue = c1.selectbox("Issue", issues, key="case_form_issue")
     prod = c2.selectbox("Product Group", prods, key="case_form_product")
     desc = st.text_area("Issue Description", key="case_form_desc")
     steps = st.text_area("Steps Taken", key="case_form_steps")
+    uploaded_file = st.file_uploader("Upload Screenshot", type=["png", "jpg", "jpeg"])
     status = st.selectbox("Status", ["Resolved", "Pending/Monitoring", "Routed"], key="case_form_status")
 
-    if st.button("Add to Batch"):
-        st.session_state["pending_entries"].append({
-            "Date": str(date.today()), "Owner": selected_owner, "Type": c_type,
-            "Case Number": case_number, "Issue": issue, "Product Group": prod,
-            "Desc": desc, "Steps": steps, "Status": status
-        })
+    extra = ""
+    if status == "Pending/Monitoring":
+        extra = st.text_input("Pending/Monitoring Reason", key="case_form_pending")
+    elif status == "Routed":
+        extra = st.text_input("Queue Destination", key="case_form_routed")
 
-    if st.session_state["pending_entries"]:
-        st.write(f"Pending Entries to Submit: {len(st.session_state['pending_entries'])}")
-        if st.button("Submit All"):
-            for entry in st.session_state["pending_entries"]:
-                save_case_to_db(entry)
-            st.session_state["pending_entries"] = []
-            st.rerun()
+    if st.button("Log Case"):
+        new_case = {
+            "Date": str(date.today()),
+            "Owner": case_owner,
+            "Type": c_type,
+            "Case Number": case_number,
+            "Issue": issue,
+            "Product Group": prod,
+            "Desc": desc,
+            "Steps": steps,
+            "Has_Screenshot": uploaded_file is not None,
+            "Screenshot": uploaded_file.getvalue() if uploaded_file else None,
+            "Status": status,
+            "Extra": extra
+        }
+        save_case_to_db(new_case)
+        for key in list(st.session_state.keys()):
+            if key.startswith("case_form_"):
+                del st.session_state[key]
+        st.success("Case logged to database successfully!")
+        st.rerun()
 
     st.divider()
     st.subheader("Knowledge Base")
 
-    # 4. Display Logic with Toggle and Comments
     if cases_list:
-        for case in reversed(cases_list):
-            st.markdown(f"**Case #{case.get('Case Number')}**")
-            
-            # Comment Section
-            with st.expander("💬 Add Comment"):
-                new_comment = st.text_area("Comment", key=f"comment_{case['_id']}")
-                if st.button("Post Comment", key=f"post_{case['_id']}"):
-                    # Insert your logic for saving comments to the DB here
-                    st.rerun()
+        df_cases = pd.DataFrame(cases_list)
+        csv = df_cases.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Download Knowledge Base CSV", csv, "kb_export.csv", "text/csv")
 
-            # View/Edit/Delete Toggle
-            action = st.radio("Action", ["View", "Edit", "Delete"], horizontal=True, key=f"action_{case['_id']}")
+    f1, f2, f3, f4 = st.columns(4)
+    f_issue = f1.multiselect("Filter by Issue", issues)
+    f_prod = f2.multiselect("Filter by Product Group", prods)
+    f_case = f3.text_input("Filter by Case #")
+    owners = sorted(list(set(case.get("Owner", "") for case in cases_list if case.get("Owner"))))
+    f_owner = f4.selectbox("Filter by Owner", ["All"] + owners)
 
-            if action == "View":
-                st.write(f"Owner: {case.get('Owner')} | Status: {case.get('Status')}")
-                st.write(f"Description: {case.get('Desc')}")
+    filtered_cases = []
+    for case in reversed(cases_list):
+        matches_issue = not f_issue or case.get("Issue") in f_issue
+        matches_prod = not f_prod or case.get("Product Group") in f_prod
+        matches_case = not f_case or f_case.lower() in str(case.get("Case Number", "")).lower()
+        matches_owner = f_owner == "All" or case.get("Owner", "") == f_owner
 
-            elif action == "Edit":
-                edit_owner = st.selectbox("Owner", owner_list, index=owner_list.index(case.get("Owner")) if case.get("Owner") in owner_list else 0, key=f"owner_{case['_id']}")
-                edit_desc = st.text_area("Description", value=case.get("Desc", ""), key=f"ed_desc_{case['_id']}")
-                if st.button("Save Changes", key=f"save_ed_{case['_id']}"):
-                    collection.update_one({"_id": case["_id"]}, {"$set": {"Owner": edit_owner, "Desc": edit_desc}})
-                    st.rerun()
+        if matches_issue and matches_prod and matches_case and matches_owner:
+            filtered_cases.append(case)
+
+    if filtered_cases:
+        for case in filtered_cases:
+            entry_col, action_col = st.columns([9, 1])
+            with entry_col:
+                with st.expander(f"Case #{case.get('Case Number','')} | {case.get('Desc','')[:80]}", expanded=False):
+                    st.markdown(f"""
+                        **Owner:** {case.get('Owner','')}
+                        **Date:** {case.get('Date','')}
+                        **Contact Type:** {case.get('Type','')}
+                        **Case Number:** {case.get('Case Number','')}
+                        **Status:** {case.get('Status','')}
+                        **Issue:** {case.get('Issue','')}
+                        **Product Group:** {case.get('Product Group','')}
+                        """)
+                    st.markdown("### Issue Description")
+                    st.write(case.get("Desc", ""))
+                    st.markdown("### Steps Taken")
+                    st.write(case.get("Steps", ""))
+                    if case.get("Extra"):
+                        st.markdown("### Additional Information")
+                        st.write(case.get("Extra", ""))
+                    if case.get("Has_Screenshot") and case.get("Screenshot"):
+                        st.image(case["Screenshot"], caption="Attached Screenshot", use_container_width=True)
+                    elif case.get("Has_Screenshot"):
+                        st.caption("📎 Screenshot attached to this record.")
+
+            with action_col:
+                pop = st.popover("⋮", help="Actions")
+                with pop:
+                    action = st.selectbox("Action", ["None", "Edit", "Delete"], key=f"action_{case['_id']}")
+
+            if action == "Edit":
+                with st.container():
+                    st.markdown(f"### Editing Case #{case.get('Case Number','')}")
+                    edit_date = st.text_input("Date", value=case.get("Date", ""), key=f"date_{case['_id']}")
+                    edit_owner = st.selectbox("Owner", owner_list, index=owner_list.index(case.get("Owner")) if case.get("Owner") in owner_list else 0, key=f"owner_{case['_id']}")
+                    edit_type = st.selectbox("Contact Type", c_types, index=c_types.index(case.get("Type")) if case.get("Type") in c_types else 0, key=f"type_{case['_id']}")
+                    edit_case_number = st.text_input("Case Number", value=case.get("Case Number", ""), key=f"case_num_{case['_id']}")
+                    edit_issue = st.selectbox("Issue", issues, index=issues.index(case.get("Issue")) if case.get("Issue") in issues else 0, key=f"issue_{case['_id']}")
+                    edit_product = st.selectbox("Product Group", prods, index=prods.index(case.get("Product Group")) if case.get("Product Group") in prods else 0, key=f"prod_{case['_id']}")
+                    
+                    status_options = ["Resolved", "Pending/Monitoring", "Routed"]
+                    current_status = case.get("Status", "Resolved")
+                    edit_status = st.selectbox("Status", status_options, index=status_options.index(current_status) if current_status in status_options else 0, key=f"status_{case['_id']}")
+                    edit_extra = st.text_input("Extra Information", value=case.get("Extra", ""), key=f"extra_{case['_id']}")
+                    edit_desc = st.text_area("Issue Description", value=case.get("Desc", ""), key=f"ed_desc_{case['_id']}")
+                    edit_steps = st.text_area("Steps Taken", value=case.get("Steps", ""), key=f"ed_step_{case['_id']}")
+
+                    save_col, cancel_col = st.columns(2)
+                    with save_col:
+                        if st.button("Save Changes", key=f"save_ed_{case['_id']}"):
+                            collection.update_one(
+                                {"_id": case["_id"]},
+                                {"$set": {
+                                    "Date": edit_date, "Owner": edit_owner, "Type": edit_type,
+                                    "Case Number": edit_case_number, "Issue": edit_issue,
+                                    "Product Group": edit_product, "Status": edit_status,
+                                    "Extra": edit_extra, "Desc": edit_desc, "Steps": edit_steps
+                                }}
+                            )
+                            st.cache_data.clear()
+                            st.success("Case updated successfully!")
+                            st.rerun()
+                    with cancel_col:
+                        if st.button("Cancel", key=f"cancel_edit_{case['_id']}"):
+                            if f"action_{case['_id']}" in st.session_state:
+                                st.session_state[f"action_{case['_id']}"] = "None"
+                            st.rerun()
 
             elif action == "Delete":
                 st.warning("⚠️ Supervisor authorization required.")
-                del_password = st.text_input("Admin Password", type="password", key=f"pwd_{case['_id']}")
-                if st.button("Confirm Delete", key=f"conf_del_{case['_id']}"):
-                    if del_password == "Password1234":
-                        collection.delete_one({"_id": case["_id"]})
+                del_password = st.text_input("Enter Admin Password", type="password", key=f"pwd_del_{case['_id']}")
+                del_col, cancel_col = st.columns(2)
+                with del_col:
+                    if st.button("Confirm Delete", key=f"conf_del_{case['_id']}"):
+                        if del_password == "Password1234":
+                            collection.delete_one({"_id": case["_id"]})
+                            st.cache_data.clear()
+                            st.success("Case deleted successfully.")
+                            st.rerun()
+                        else:
+                            st.error("Incorrect Password.")
+                with cancel_col:
+                    if st.button("Cancel", key=f"cancel_del_w_{case['_id']}"):
+                        if f"action_{case['_id']}" in st.session_state:
+                            st.session_state[f"action_{case['_id']}"] = "None"
                         st.rerun()
             st.divider()
-            
+    else:
+        st.info("No cases match the selected filters.")
+
 # --- TAB 5: DEVIATION ---
 with tab_dev:
     st.subheader("Submit Deviation Request")
