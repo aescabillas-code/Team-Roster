@@ -476,16 +476,20 @@ with tab_cal:
     st.divider()
     st.subheader("📆 Weekly Roster Matrix")
     
-    # 1. Add Filter for Week Beginning (Forces Selection to Sundays)
+    # 1. Generate a clean dropdown sequence of alternative Sundays (e.g., last 4 weeks to next 8 weeks)
     current_sunday = view_date - timedelta(days=(view_date.weekday() + 1) if view_date.weekday() != 6 else 0)
-    selected_week_start = st.date_input(
+    sunday_options = [current_sunday + timedelta(weeks=i) for i in range(-4, 9)]
+    
+    selected_week_start = st.selectbox(
         "Select Week Beginning (Sunday):", 
-        value=current_sunday,
-        key="weekly_view_lookup_start"
+        options=sunday_options,
+        index=4,  # Auto-focuses on the current relative week sunday
+        format_func=lambda d: d.strftime("%B %d, %Y"),
+        key="weekly_view_lookup_start_select"
     )
-    selected_week_start = pd.to_datetime(selected_week_start).date()
-    days_since_sunday = (selected_week_start.weekday() + 1) if selected_week_start.weekday() != 6 else 0
-    week_start_sunday = selected_week_start - timedelta(days=days_since_sunday)
+    
+    # Ensure standard date type object mapping
+    week_start_sunday = pd.to_datetime(selected_week_start).date()
     
     # Generate Mon-Fri range
     week_days = [week_start_sunday + timedelta(days=idx) for idx in range(1, 6)]
