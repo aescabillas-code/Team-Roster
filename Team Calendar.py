@@ -916,20 +916,22 @@ with tab_case:
                     edit_desc = st.text_area("Issue Description", value=case.get("Desc", ""), key=f"ed_desc_{case['_id']}")
                     edit_steps = st.text_area("Steps Taken", value=case.get("Steps", ""), key=f"ed_step_{case['_id']}")
                     
+                save_col, _ = st.columns([1, 4])      
                 with save_col:
-                        if st.button("Save Changes", key=f"save_ed_{case['_id']}"):
-                            collection.update_one(
-                                {"_id": case["_id"]},
-                                {"$set": {
-                                    "Date": edit_date, "Owner": edit_owner, "Type": edit_type,
-                                    "Case Number": edit_case_number, "Issue": edit_issue,
-                                    "Product Group": edit_product, "Status": edit_status,
-                                    "Extra": edit_extra, "Desc": edit_desc, "Steps": edit_steps
-                                }}
-                            )
-                            st.cache_data.clear()
-                            st.success("Case updated successfully!")
-                            st.rerun()
+                    if st.button("Save Changes", key=f"save_ed_{case['_id']}"):
+                        # ... (your update logic) ...
+                        collection.update_one(
+                            {"_id": case["_id"]},
+                            {"$set": {
+                                "Date": edit_date, "Owner": edit_owner, "Type": edit_type,
+                                "Case Number": edit_case_number, "Issue": edit_issue,
+                                "Product Group": edit_product, "Status": edit_status,
+                                "Extra": edit_extra, "Desc": edit_desc, "Steps": edit_steps
+                            }}
+                        )
+                        st.cache_data.clear()
+                        st.success("Case updated successfully!")
+                        st.rerun()
                     
             elif action == "Delete":
                 st.warning("⚠️ Supervisor authorization required.")
