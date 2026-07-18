@@ -470,12 +470,7 @@ with tab_cal:
     # =====================================================================
     st.markdown("<br>", unsafe_allow_html=True)
     st.divider()
-    
-    # Styled table label: Bold, bigger, and teal
-    st.markdown(
-        '<h3 style="color: #008080; font-weight: bold; margin-bottom: 15px;">📆 Weekly Roster</h3>', 
-        unsafe_allow_html=True
-    )
+    st.subheader("📆 Weekly Roster")
     
     # Dynamically anchors dropdown options starting from the first day of the top selected calendar month/year
     month_start_date = date(year, month, 1)
@@ -509,19 +504,14 @@ with tab_cal:
     shift_row = {"Staff Name": "⏰ SHIFT"}
     weekly_tms = []
     
-    # Pre-fetch and cache day configurations to prevent redundant DB hits in the loops
-    cached_day_configs = {}
     for day in week_days:
+        col_name = day.strftime("%A (%m/%d)")
+        
         day_config = None
         if hasattr(st.session_state, 'calendar_data') and st.session_state.calendar_data:
             day_config = st.session_state.calendar_data.get(day) or st.session_state.calendar_data.get(str(day))
         if not day_config:
             day_config = collection.find_one({"type": "calendar_day", "date": str(day)}) or {}
-        cached_day_configs[str(day)] = day_config
-
-    for day in week_days:
-        col_name = day.strftime("%A (%m/%d)")
-        day_config = cached_day_configs[str(day)]
         
         setup_row[col_name] = str(day_config.get('status', 'Not Set')).upper()
         shift_row[col_name] = str(day_config.get('shift', '--')).upper()
@@ -542,7 +532,11 @@ with tab_cal:
             if p_status:
                 staff_row[col_name] = p_status[0].upper()
             else:
-                day_config = cached_day_configs[str(day)]
+                day_config = None
+                if hasattr(st.session_state, 'calendar_data') and st.session_state.calendar_data:
+                    day_config = st.session_state.calendar_data.get(day) or st.session_state.calendar_data.get(str(day))
+                if not day_config:
+                    day_config = collection.find_one({"type": "calendar_day", "date": str(day)}) or {}
                     
                 assigned_roles = []
                 for r in roles:
