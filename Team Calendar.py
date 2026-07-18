@@ -561,13 +561,13 @@ with tab_cal:
         # Concatenate metadata rows at the top, followed by sorted staff rows
         weekly_df = pd.concat([meta_df, staff_df], ignore_index=True)
         
-        # Dynamically center-align all columns EXCEPT "Staff Name"
+        # Fix: Configuration formatting using proper dictionary key mappings
         column_configurations = {
-            "Staff Name": st.column_config.TextColumn(alignment="left")
+            "Staff Name": {"alignment": "left"}
         }
         for day in week_days:
             c_name = day.strftime("%A (%m/%d)")
-            column_configurations[c_name] = st.column_config.TextColumn(alignment="center")
+            column_configurations[c_name] = {"alignment": "center"}
 
         st.dataframe(
             weekly_df, 
