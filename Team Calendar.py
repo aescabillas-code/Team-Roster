@@ -483,23 +483,35 @@ with tab_cal:
         value=current_sunday,
         key="weekly_view_lookup_start"
     )
-    # Ensure standard date type and align selection back to Sunday if a user picks mid-week
     selected_week_start = pd.to_datetime(selected_week_start).date()
     days_since_sunday = (selected_week_start.weekday() + 1) if selected_week_start.weekday() != 6 else 0
     week_start_sunday = selected_week_start - timedelta(days=days_since_sunday)
     
-    # Generate Mon-Fri range (skipping Sunday index 0 and Saturday index 6 of the true week)
+    # Generate Mon-Fri range
     week_days = [week_start_sunday + timedelta(days=idx) for idx in range(1, 6)]
     
     # 2. Performance Cache Pre-fetch
     approved_requests = fetch_approved_requests_from_db()
     roles = ["team_manager", "call", "chat", "mfq", "sme"]
     
-    # Track metadata elements across weekdays to display above the grid
-    weekly_setups = []
-    weekly_shifts = []
+    # Pre-build daily metadata mappings to insert at the top of the table later
+    setup_row = {"Staff Name": "🛠️ WORK SETUP"}
+    shift_row = {"Staff Name": "⏰ SHIFT"}
     weekly_tms = []
     
+    # Gather day-by-day meta configurations
+    for day in week_days:
+        col_name = day.strftime("%A (%m/%d)")
+        day_config = st.session_state.calendar_data.get(day) or st.session_state.calendar_data.get(str(day)) or {}
+        
+        setup_row[col_name] = str(day_config.get('status', 'Not Set')).upper()
+        shift_row[col_name] = str(day_config.get('shift', '--')).upper()
+        
+        tm_found = day_config.get('team_manager', [])
+        if tm_found and tm_found[0] not in weekly_tms:
+            weekly_tms.append(tm_found[0])
+
+    # Loop staff roster data
     weekly_rows = []
     for name in roster.keys():
         staff_row = {"Staff Name": name}
@@ -508,24 +520,11 @@ with tab_cal:
         for day in week_days:
             col_name = day.strftime("%A (%m/%d)")
             
-            # Check Leave Status
             p_status = [r["type"] for r in approved_requests if str(r["date"]) == str(day) and r["name"] == name]
             if p_status:
                 staff_row[col_name] = p_status[0].upper()
             else:
-                # Resolve configurations safely
                 day_config = st.session_state.calendar_data.get(day) or st.session_state.calendar_data.get(str(day)) or {}
-                
-                # Document metadata rules seamlessly for unique targets once per day loop
-                if name == list(roster.keys())[0]: 
-                    if day_config.get('status') and day_config.get('status') not in weekly_setups:
-                        weekly_setups.append(f"{day.strftime('%a')}: {day_config.get('status')}")
-                    if day_config.get('shift') and day_config.get('shift') not in weekly_shifts:
-                        weekly_shifts.append(f"{day.strftime('%a')}: {day_config.get('shift')}")
-                    tm_found = day_config.get('team_manager', [])
-                    if tm_found and tm_found[0] not in weekly_tms:
-                        weekly_tms.append(tm_found[0])
-
                 assigned_roles = []
                 for r in roles:
                     assigned_list = day_config.get(r, [])
@@ -548,26 +547,31 @@ with tab_cal:
     # 3. Render Team Manager Banner (Large Font Size, Capitalized Label)
     tm_display_string = ", ".join(set(weekly_tms)).upper() if weekly_tms else "NONE ASSIGNED"
     st.markdown(f"## 👑 TEAM MANAGER: {tm_display_string}")
-    
-    # Render Work Setup and Shift Details directly above the table
-    meta_c1, meta_c2 = st.columns(2)
-    with meta_c1:
-        st.markdown(f"**Work Setup:** {', '.join(weekly_setups) if weekly_setups else 'Not Configured'}")
-    with meta_c2:
-        st.markdown(f"**Shift Details:** {', '.join(weekly_shifts) if weekly_shifts else 'Not Configured'}")
-        
     st.write("")
 
-    # 4. Render and Sort Grid Data
+    # 4. Process, Sort, and Style Grid Data
     if weekly_rows:
-        weekly_df = pd.DataFrame(weekly_rows)
-        
-        # Sort logic: primary sort on Monday column alphabetically, falling back to staff names 
+        # Sort the actual staff rows first (so metadata doesn't mix into sorting logic)
         first_day_col = week_days[0].strftime("%A (%m/%d)")
-        weekly_df = weekly_df.sort_values(by=[first_day_col, "Staff Name"], ascending=True)
+        staff_df = pd.DataFrame(weekly_rows).sort_values(by=[first_day_col, "Staff Name"], ascending=True)
         
+        # Build metadata rows dataframe
+        meta_df = pd.DataFrame([setup_row, shift_row])
+        
+        # Concatenate metadata rows at the top, followed by sorted staff rows
+        weekly_df = pd.concat([meta_df, staff_df], ignore_index=True)
+        
+        # Dynamically center-align all columns EXCEPT "Staff Name"
+        column_configurations = {
+            "Staff Name": st.column_config.TextColumn(alignment="left")
+        }
+        for day in week_days:
+            c_name = day.strftime("%A (%m/%d)")
+            column_configurations[c_name] = st.column_config.TextColumn(alignment="center")
+
         st.dataframe(
             weekly_df, 
+            column_config=column_configurations,
             hide_index=True, 
             use_container_width=True, 
             height=min(1000, max(100, len(weekly_df) * 35 + 38))
