@@ -726,7 +726,8 @@ with tab_prod:
             monthly_summary["Total Cases"] = monthly_summary.sum(axis=1)
             m_height = min(1000, max(100, len(monthly_summary) * 35 + 38))
             
-            st.dataframe(monthly_summary.reset_index().style.hide(axis="index"), use_container_width=True, height=m_height)
+            # Using hide_index=True to force removal of row numbers
+            st.dataframe(monthly_summary.reset_index(), use_container_width=True, height=m_height, hide_index=True)
         else:
             st.info("No cases found for selected month.")
 
@@ -742,7 +743,7 @@ with tab_prod:
             daily_summary["Total Cases"] = daily_summary.sum(axis=1)
             d_height = min(1000, max(100, len(daily_summary) * 35 + 38))
             
-            st.dataframe(daily_summary.reset_index().style.hide(axis="index"), use_container_width=True, height=d_height)
+            st.dataframe(daily_summary.reset_index(), use_container_width=True, height=d_height, hide_index=True)
         else:
             st.info("No cases found for selected day.")
 
@@ -760,7 +761,7 @@ with tab_prod:
         st.altair_chart(issue_chart, use_container_width=True)
         
         i_height = min(1000, max(100, len(overall_issue) * 35 + 38))
-        st.dataframe(overall_issue.style.hide(axis="index"), use_container_width=True, height=i_height)
+        st.dataframe(overall_issue, use_container_width=True, height=i_height, hide_index=True)
 
         st.divider()
 
@@ -776,7 +777,7 @@ with tab_prod:
         st.altair_chart(product_chart, use_container_width=True)
 
         p_height = min(1000, max(100, len(overall_product) * 35 + 38))
-        st.dataframe(overall_product.style.hide(axis="index"), use_container_width=True, height=p_height)
+        st.dataframe(overall_product, use_container_width=True, height=p_height, hide_index=True)
         st.divider()
 
 # --- TAB 4: CASE TRACKER ---
