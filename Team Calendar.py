@@ -594,39 +594,53 @@ with tab_req:
         available_names = list(staff_data.keys()) if staff_data else list(st.session_state.staff_roster.keys())
         name = st.selectbox("Name", available_names)
         
-        req_date = st.date_input("Request Date")
+        # Multiselect allows selecting multiple dates at once cleanly
+        req_dates = st.multiselect(
+            "Request Dates", 
+            options=pd.date_range(start=current_date.date(), periods=90).date,
+            format_func=lambda d: d.strftime("%B %d, %Y")
+        )
         req_type = st.selectbox("Type", ["PTO", "Wellness"])
         
         if st.form_submit_button("Submit Request"):
-            limits = get_request_limits(req_date)
-            count_on_date = collection.count_documents({"type": req_type, "date": str(req_date), "status": {"$in": ["Pending", "Approved"]}})
-            
-            is_already_requested = collection.count_documents({
-                "name": name,
-                "date": str(req_date),
-                "status": {"$in": ["Pending", "Approved"]}
-            }) > 0
-            
-            if is_already_requested:
-                st.warning(f"⚠️ A request for {name} on {req_date} already exists.")
-            
-            limit_value = limits["PTO_per_day"] if req_type == "PTO" else limits["Wellness_per_day"]
-            
-            if count_on_date >= limit_value:
-                st.error(f"❌ Limit reached for {req_type} on {req_date}.")
+            if not req_dates:
+                st.error("❌ Please select at least one date.")
             else:
-                new_req = {
-                    "name": name, 
-                    "date": str(req_date), 
-                    "type": req_type, 
-                    "status": "Pending", 
-                    "email": "",
-                    "viewed": False
-                }
-                save_request_to_db(new_req, req_type)
-                st.session_state.pending_requests.append(new_req)
-                st.success("Request submitted successfully.")
-                st.rerun()
+                success_count = 0
+                for req_date in req_dates:
+                    limits = get_request_limits(req_date)
+                    count_on_date = collection.count_documents({"type": req_type, "date": str(req_date), "status": {"$in": ["Pending", "Approved"]}})
+                    
+                    is_already_requested = collection.count_documents({
+                        "name": name,
+                        "date": str(req_date),
+                        "status": {"$in": ["Pending", "Approved"]}
+                    }) > 0
+                    
+                    if is_already_requested:
+                        st.warning(f"⚠️ A request for {name} on {req_date} already exists. Skipping.")
+                        continue
+                    
+                    limit_value = limits["PTO_per_day"] if req_type == "PTO" else limits["Wellness_per_day"]
+                    
+                    if count_on_date >= limit_value:
+                        st.error(f"❌ Limit reached for {req_type} on {req_date}. Skipping.")
+                    else:
+                        new_req = {
+                            "name": name, 
+                            "date": str(req_date), 
+                            "type": req_type, 
+                            "status": "Pending", 
+                            "email": "",
+                            "viewed": False
+                        }
+                        save_request_to_db(new_req, req_type)
+                        st.session_state.pending_requests.append(new_req)
+                        success_count += 1
+                
+                if success_count > 0:
+                    st.success(f"Successfully submitted {success_count} request(s).")
+                    st.rerun()
 
     st.subheader("Pending Requests Overview")    
     all_pending = fetch_pending_requests_from_db()
@@ -657,10 +671,24 @@ with tab_req:
     f_c1, f_c2 = st.columns(2)
     f_m = f_c1.selectbox("Month", range(1, 13), index=current_date.month-1, key="history_month_select")
     f_y = f_c2.number_input("Year", value=current_date.year, key="history_year_select")
+    
     app_reqs = fetch_approved_requests_from_db()
-    filtered_app = [r for r in app_reqs if int(r['date'].split('-')[1])==f_m and int(r['date'].split('-')[0])==f_y]
+    
+    # Safe date evaluation logic applied here
+    filtered_app = []
+    for r in app_reqs:
+        try:
+            parsed_date = pd.to_datetime(r['date']).date()
+            if parsed_date.month == f_m and parsed_date.year == f_y:
+                filtered_app.append(r)
+        except Exception:
+            # Handle fallback gracefully if malformed dates exist
+            continue
+
     if filtered_app: 
-        st.dataframe(pd.DataFrame(filtered_app)[['name', 'date', 'type']])
+        df_app = pd.DataFrame(filtered_app)[['name', 'date', 'type']]
+        df_app.columns = ["Name", "Date", "Type"]
+        st.dataframe(df_app, hide_index=True, use_container_width=True)
     else: 
         st.write("No records found.")
         
