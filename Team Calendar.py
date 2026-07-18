@@ -547,7 +547,7 @@ with tab_cal:
             meta_df = pd.DataFrame([setup_row, shift_row])
             weekly_df = pd.concat([meta_df, staff_df], ignore_index=True)
             
-            column_configurations = {"Staff Name": st.column_config.Column(alignment="left")}
+            column_configurations = {"Staff Name": st.column_config.TextColumn(alignment="left")}
             for day in week_days:
                 column_configurations[day.strftime("%A (%m/%d)")] = st.column_config.Column(alignment="center")
 
