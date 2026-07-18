@@ -1553,7 +1553,6 @@ with tab_dev:
         filter_year = f_col2.number_input("Year", value=date.today().year, key="dev_f_year")
         filter_date = f_col3.date_input("Specific Date (Optional)", value=None, key="dev_f_date")
         apply_filter = st.button("Apply Filter")
-        st.rerun()
 
     dev_data = fetch_deviations_from_db()
     if dev_data:
