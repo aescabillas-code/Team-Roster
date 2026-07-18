@@ -119,9 +119,6 @@ def fetch_pending_requests_from_db():
     }))
 
 def save_request_to_db(req, request_type):
-    """
-    Saves a request payload to the MongoDB collection with a dynamic type designation.
-    """
     req["type"] = request_type
     collection.insert_one(req)
     st.cache_data.clear()
@@ -131,10 +128,7 @@ def get_request_limits(req_date):
     selected_config = {}
     
     if calendar_doc:
-        selected_config = calendar_doc.get(
-            "data",
-            {}
-        ).get(
+        selected_config = calendar_doc.get("data", {}).get(
             str(st.session_state.get("selected_admin_date", date.today())),
             {}
         )
@@ -148,14 +142,12 @@ def save_masterfile_to_db(df):
     st.cache_data.clear()
 
 def send_request_notification(recipient_email, status, request_type, date_val):
-    # Email notifications disabled as per user request
     pass
 
 # --- INITIAL CONFIG & STATE ---
 st.set_page_config(layout="wide")
 st.title("📊 Team Operations Management System (TOMS)")
 
-# Define your country's local timezone (Philippines / PHT)
 local_tz = pytz.timezone("Asia/Manila") 
 current_date = datetime.now(local_tz).date()
 
@@ -165,8 +157,7 @@ if "approved_requests" not in st.session_state:
     approved_requests = fetch_approved_requests_from_db()
 if "admin_password" not in st.session_state: st.session_state.admin_password = "Password1234"
 if "admin_authenticated" not in st.session_state: st.session_state.admin_authenticated = False
-if "staff_roster" not in st.session_state: 
-    st.session_state.staff_roster = {}
+if "staff_roster" not in st.session_state: st.session_state.staff_roster = {}
 if "calendar_data" not in st.session_state: st.session_state.calendar_data = {}
 if "limits" not in st.session_state:
     st.session_state.limits = {
@@ -181,14 +172,12 @@ if "master_data" not in st.session_state:
     })
 
 # --- DATA MIGRATION ---
-# Force type conversions during load transitions safely
 if "staff_roster" in st.session_state:
     for name, value in st.session_state.staff_roster.items():
         if isinstance(value, dict) and isinstance(value.get("bday"), date) and not isinstance(value.get("bday"), datetime):
             d = value["bday"]
             value["bday"] = datetime(d.year, d.month, d.day)
 
-# SAFE SYSTEM REFRESH IF THE DATE HAS SHIFTED TO A NEW DAY
 if "last_tracked_date" not in st.session_state or st.session_state.last_tracked_date != current_date:
     st.session_state.last_tracked_date = current_date
     st.session_state.calendar_data = {} 
@@ -199,13 +188,9 @@ st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght=400;600&display=swap');
     html, body, [class*="css"] { font-family: 'Quicksand', sans-serif !important; }
-    
-    /* All headers forced to Teal color */
     h1, h2, h3, .header-cell { font-family: 'Quicksand', sans-serif !important; font-weight: 600; color: #008080 !important; }
-    
     .side-block { font-family: 'Quicksand', sans-serif !important; font-size: 10px !important; line-height: 1.2; }
     
-    /* Calendar Day Block: Combined together dynamically in a uniform strip layout with no margins */
     .day-block { 
         border-radius: 0px; 
         padding: 10px; 
@@ -214,116 +199,59 @@ st.markdown("""
         font-size: 11px; 
         background-color: rgba(0, 128, 128, 0.75); 
         color: #ffffff !important;
-        border: 1px solid #ffffff !important; /* Solid white border for calendar days within the month */
+        border: 1px solid #ffffff !important;
         margin: 0px; 
         display: flex; 
         flex-direction: column; 
         box-sizing: border-box;
     }
 
-    /* Target state for blocks that fall outside the current month's active days */
-    .day-block-outside,
-    .day-block:empty {
-        background-color: rgba(230, 242, 242, 0.85) !important; /* Baby teal design background */
-        border: 1px solid #008080 !important; /* Teal border profile */
+    .day-block-outside, .day-block:empty {
+        background-color: rgba(230, 242, 242, 0.85) !important;
+        border: 1px solid #008080 !important;
         color: #008080 !important;
     }
 
-    /* Force text elements inside outside-month/empty blocks to color match the teal theme */
-    .day-block-outside *, .day-block:empty * {
-        color: #008080 !important;
-    }
-    
-    /* Strict layout equalization to combine calendar blocks side-by-side cleanly without separation gaps */
-    div[data-testid="stHorizontalBlock"] {
-        gap: 0px !important;
-    }
-
-    /* Adjust structural layouts containing the calendar elements to enforce a flawless square/rectangular block alignment */
-    div[data-testid="stHorizontalBlock"]:has(.day-block) {
-        margin: 0px !important;
-        padding: 0px !important;
-    }
-
-    /* Target the column block layout structure containing the calendar grid to separate it from the summary panel on the right */
-    div[data-testid="stColumn"]:has(.day-block),
-    div[data-testid="stColumn"]:has(.day-block-outside) {
-        padding-right: 4px !important; /* Generates a precise structural gap layout of at least 1.5px to the summary block */
-    }
-
-    /* Provide a structured spatial separation gap between the calendar container and the monthly/daily summaries below it */
-    div[data-testid="stHorizontalBlock"]:has(.day-block),
-    div[data-testid="stHorizontalBlock"]:has(.day-block-outside) {
-        margin-bottom: 25px !important; /* Provides clear separation space layout above the summary modules */
-    }
-    
-    /* Make the date inside the day block noticeably bigger than the rest of the content */
-    .day-block > b:first-of-type {
-        font-size: 16px !important;
-        display: block;
-        margin-bottom: 2px;
-    }
-    
-    /* Force internal day text links and components to honor the white text profile */
-    .day-block u, .day-block center, .day-block b {
-        color: #ffffff !important;
-    }
-    
+    .day-block-outside *, .day-block:empty * { color: #008080 !important; }
+    div[data-testid="stHorizontalBlock"] { gap: 0px !important; }
+    div[data-testid="stHorizontalBlock"]:has(.day-block) { margin: 0px !important; padding: 0px !important; }
+    div[data-testid="stColumn"]:has(.day-block), div[data-testid="stColumn"]:has(.day-block-outside) { padding-right: 4px !important; }
+    div[data-testid="stHorizontalBlock"]:has(.day-block), div[data-testid="stHorizontalBlock"]:has(.day-block-outside) { margin-bottom: 25px !important; }
+    .day-block > b:first-of-type { font-size: 16px !important; display: block; margin-bottom: 2px; }
+    .day-block u, .day-block center, .day-block b { color: #ffffff !important; }
     .calendar-divider { border-top: 1px solid rgba(255, 255, 255, 0.4); margin: 5px 0; width: 100%; }
     div.stButton > button { background: linear-gradient(90deg, #7b61ff 0%, #3b82f6 100%); color: white; border-radius: 12px; font-weight: 600; }
     .header-cell { font-weight: bold; text-align: center; padding-bottom: 10px; }
     .alert-container { border-radius: 20px; border: 2px solid #ff4d4d; padding: 15px; background-color: #fff5f5; margin-bottom: 20px; }
     .flash-red { color: #ff4d4d; font-weight: bold; text-align: center; }
     
-    /* Selectboxes / Dropdowns targeted to display as translucent teal with white font */
     div[data-baseweb="select"] > div {
         background-color: rgba(0, 128, 128, 0.75) !important;
         color: #ffffff !important;
         border-radius: 8px;
         border: 1px solid #00aaaa !important;
     }
-    
-    /* Ensures selection text strings inside dropdown elements render cleanly in white */
-    div[data-baseweb="select"] * {
-        color: #ffffff !important;
-    }
+    div[data-baseweb="select"] * { color: #ffffff !important; }
+    div[data-baseweb="menu"] { background-color: rgba(0, 128, 128, 0.95) !important; border: 1px solid #00aaaa !important; }
+    div[data-baseweb="menu"] li { color: #ffffff !important; background-color: transparent !important; }
+    div[data-baseweb="menu"] li:hover { background-color: rgba(0, 170, 170, 0.4) !important; }
 
-    /* Target the dropdown popover list options to also be translucent teal with white font */
-    div[data-baseweb="menu"] {
-        background-color: rgba(0, 128, 128, 0.95) !important; 
-        border: 1px solid #00aaaa !important;
-    }
-    
-    div[data-baseweb="menu"] li {
-        color: #ffffff !important;
-        background-color: transparent !important;
-    }
-
-    /* Hover effect for items inside the dropdown menu */
-    div[data-baseweb="menu"] li:hover {
-        background-color: rgba(0, 170, 170, 0.4) !important;
-    }
-
-    /* Header Tab Bar Restyling: Ombre teal background, white text labels, and larger font sizing */
     div[data-testid="stTabs"] button {
         background: linear-gradient(90deg, #004d4d 0%, #008080 100%) !important;
         color: #ffffff !important;
-        font-size: 18px !important; /* Noticeably bigger in size */
+        font-size: 18px !important;
         font-weight: 600 !important;
         padding: 12px 24px !important;
         border-radius: 8px 8px 0px 0px !important;
         border: 1px solid rgba(255, 255, 255, 0.1) !important;
         margin-right: 4px !important;
     }
-    
-    /* Active highlighted tab indicator color override */
     div[data-testid="stTabs"] button[aria-selected="true"] {
         background: linear-gradient(90deg, #008080 0%, #00bcbc 100%) !important;
         color: #ffffff !important;
         border-bottom: 3px solid #ffffff !important;
     }
 
-    /* Translucent teal entry boxes and white font applied to all forms and their nested standard input tags */
     div[data-testid="stForm"] input, 
     div[data-testid="stForm"] textarea,
     div[data-testid="stForm"] .stTextInput div div,
@@ -334,38 +262,15 @@ st.markdown("""
         color: #ffffff !important;
         border: 1px solid #00aaaa !important;
     }
-    
-    /* Ensure typed text and placeholders inside forms present cleanly in white */
-    div[data-testid="stForm"] input {
-        -webkit-text-fill-color: #ffffff !important;
-        color: #ffffff !important;
-    }
-    
-    /* General input label text color overrides inside interactive form view blocks */
-    div[data-testid="stForm"] label, div[data-testid="stForm"] p {
-        color: #008080 !important;
-        font-weight: 600;
-    }
+    div[data-testid="stForm"] input { -webkit-text-fill-color: #ffffff !important; color: #ffffff !important; }
+    div[data-testid="stForm"] label, div[data-testid="stForm"] p { color: #008080 !important; font-weight: 600; }
 
-    /* Table alternate grid styles (skipping the main calendar layout) */
-    div[data-testid="stTable"] tr:nth-child(even) {
-        background-color: rgba(0, 128, 128, 0.85) !important;
-    }
-    div[data-testid="stTable"] tr:nth-child(even) td {
-        color: #ffffff !important;
-    }
-    div[data-testid="stTable"] tr:nth-child(odd) {
-        background-color: #ffffff !important;
-    }
-    div[data-testid="stTable"] tr:nth-child(odd) td {
-        color: #008080 !important;
-        font-weight: 600;
-    }
-    div[data-testid="stTable"] th {
-        background-color: #004d4d !important;
-        color: #ffffff !important;
-    }
-    </style>
+    div[data-testid="stTable"] tr:nth-child(even) { background-color: rgba(0, 128, 128, 0.85) !important; }
+    div[data-testid="stTable"] tr:nth-child(even) td { color: #ffffff !important; }
+    div[data-testid="stTable"] tr:nth-child(odd) { background-color: #ffffff !important; }
+    div[data-testid="stTable"] tr:nth-child(odd) td { color: #008080 !important; font-weight: 600; }
+    div[data-testid="stTable"] th { background-color: #004d4d !important; color: #ffffff !important; }
+    </style> subscription-tracker
 """, unsafe_allow_html=True)
 
 # --- NOTIFICATION BAR ---
@@ -381,74 +286,47 @@ def render_request(req, key_prefix):
     unique_id = str(req.get('_id', 'fallback'))
     denial_key = f"denying_{key_prefix}_{unique_id}"
     
-    st.info(f"""
-    Name: {req.get('name')}
-    Type: {req.get('type')}
-    Date: {req.get('date')}
-    Status: {req.get('status')}
-    """)
+    st.info(f"Name: {req.get('name')}\nType: {req.get('type')}\nDate: {req.get('date')}\nStatus: {req.get('status')}")
     
-    # Render primary action buttons only if the denial process has NOT been triggered
     if not st.session_state.get(denial_key):
         c1, c2 = st.columns(2)
-            
         if c1.button("Approve", key=f"app_{key_prefix}_{unique_id}"):
             update_request_status_in_db(req, "Approved")
             st.success("Approved!")
             st.rerun()
-
         if c2.button("Deny", key=f"den_{key_prefix}_{unique_id}"):
             st.session_state[denial_key] = True
             st.rerun()
 
-    # Render denial follow-up flow elements when triggered
     if st.session_state.get(denial_key):
         reason = st.text_input("Reason for denial", key=f"reason_{key_prefix}_{unique_id}")
         col1, col2 = st.columns(2)
-        
         if col1.button("Proceed Denial", key=f"confirm_{key_prefix}_{unique_id}"):
             update_request_status_in_db(req, "Rejected")
             st.session_state[denial_key] = False
             st.success("Request denied.")
             st.rerun()
-
         if col2.button("Cancel", key=f"cancel_{key_prefix}_{unique_id}"):
             st.session_state[denial_key] = False
             st.rerun()
 
 # --- TABS WORKSPACE ---
 tab_cal, tab_req, tab_prod, tab_case, tab_dev, tab_adm = st.tabs([
-    "📅 Calendar",
-    "📝 Request",
-    "📈 Productivity Monitoring",
-    "🔍 Case Tracker",
-    "🔀 Deviation",
-    "🔑 Admin"
+    "📅 Calendar", "📝 Request", "📈 Productivity Monitoring", "🔍 Case Tracker", "🔀 Deviation", "🔑 Admin"
 ])
 
 # --- TAB 1: CALENDAR ---
 with tab_cal:
-    
-    # Define structural page layout allocation matrix columns
     col_main, col_side = st.columns([4, 1])
     
-    # Use col_main for the top filters
     with col_main:
         c1, c2 = st.columns([1, 1])
         year = c1.selectbox("Year", [2026, 2027, 2028], key="cal_y")
-        month = c2.selectbox(
-            "Month", 
-            range(1, 13), 
-            format_func=lambda x: calendar.month_name[x], 
-            index=current_date.month - 1, 
-            key="cal_m"
-        )
+        month = c2.selectbox("Month", range(1, 13), format_func=lambda x: calendar.month_name[x], index=current_date.month - 1, key="cal_m")
 
-    # Fetch current roster directly from the database document to avoid empty st.session_state fallbacks
     roster_doc = collection.find_one({"type": "roster_list"})
     roster = roster_doc.get("data", {}) if roster_doc else {}
 
-    # Use col_side for the summary/sidebar
     with col_side:
         st.markdown('<div class="side-block">', unsafe_allow_html=True)
         st.subheader("Monthly Summary")
@@ -473,113 +351,61 @@ with tab_cal:
             st.write("No holidays this month.")
         
         st.subheader("Daily View")
-        # Safely extract the date object and ensure it is a standard datetime.date object
         raw_view_date = st.session_state.get('selected_admin_date', current_date)
         view_date = raw_view_date.date() if hasattr(raw_view_date, 'date') else raw_view_date
 
-        # Look up the calendar data matching either the date object, its string representation, or direct from DB
         d_data = None
         if hasattr(st.session_state, 'calendar_data') and st.session_state.calendar_data:
-            d_data = st.session_state.calendar_data.get(view_date)
-            if not d_data:
-                d_data = st.session_state.calendar_data.get(str(view_date))
-        
-        # Fallback: Query direct database if session state does not have it configured
+            d_data = st.session_state.calendar_data.get(view_date) or st.session_state.calendar_data.get(str(view_date))
         if not d_data:
-            d_data = collection.find_one({"type": "calendar_day", "date": str(view_date)})
-        if not d_data:
-            d_data = {}
+            d_data = collection.find_one({"type": "calendar_day", "date": str(view_date)}) or {}
         
-        # --- TOP HEADER: Date, Status, and Shift ---
         st.markdown(f"### Date: {view_date.strftime('%B %d, %Y')}")
         
-        # Extract general status and shift for this selected date
         if view_date.weekday() in [5, 6]:
-            day_status = "REST DAY"
-            day_shift = "--"
+            day_status, day_shift = "REST DAY", "--"
         else:
             day_status = d_data.get('status', 'Not Set')
             day_shift = d_data.get('shift', '--')
 
         st.markdown(f"**Work Setup:** `{day_status}`")
         st.markdown(f"**Shift:** `{day_shift}`")
-        
         st.divider()
         
-        # Date Filter
-        selected_date = st.date_input(
-            "Select Date",
-            value=view_date if 'view_date' in locals() else date.today()
-        )
-        
+        selected_date = st.date_input("Select Date", value=view_date)
         view_date = pd.to_datetime(selected_date).date()
 
-        # Reload schedule data based on selected date
         d_data = None
-        
         if st.session_state.calendar_data:
-            d_data = st.session_state.calendar_data.get(view_date)
-            if not d_data:
-                d_data = st.session_state.calendar_data.get(str(view_date))
-        
-        # Fallback to database
+            d_data = st.session_state.calendar_data.get(view_date) or st.session_state.calendar_data.get(str(view_date))
         if not d_data:
             calendar_doc = collection.find_one({"type": "calendar_data"})
             if calendar_doc:
                 d_data = calendar_doc.get("data", {}).get(str(view_date))
-        
-        if not d_data:
-            d_data = {}
+        d_data = d_data or {}
 
-        # Team Manager for selected date
         tm_list = d_data.get('team_manager', [])
         tm_name = tm_list[0] if (isinstance(tm_list, list) and tm_list) else ""
-        
         if tm_name:
             st.write(f"**Team Manager:** {tm_name}")
         
         st.write("**Today's Schedule:**")
-
-        # Check if the selected date is a weekend (weekday 5 = Saturday, 6 = Sunday)
         if view_date.weekday() in [5, 6]:
             st.info("📊 **Rest Day** — Weekend Schedule")
-            
-            # Show standard rest day table layout for everyone
-            sched_rows = []
-            for name in roster.keys():
-                sched_rows.append({
-                    "Name": name,
-                    "Role": "REST DAY"
-                })
-            
+            sched_rows = [{"Name": name, "Role": "REST DAY"} for name in roster.keys()]
             if sched_rows:
                 sched_df = pd.DataFrame(sched_rows)
-                df_height = min(1000, max(100, len(sched_df) * 35 + 38))
-                st.dataframe(sched_df, hide_index=True, use_container_width=True, height=df_height)
+                st.dataframe(sched_df, hide_index=True, use_container_width=True, height=min(1000, max(100, len(sched_df) * 35 + 38)))
             else:
                 st.write("*No staff configured in the system.*")
-                
         else:
             roles = ["team_manager", "call", "chat", "mfq", "sme"]
             approved_requests = fetch_approved_requests_from_db()
-            
-            # Build tabular structured schedule data
             sched_rows = []
             for name in roster.keys():
-                p_status = [
-                    r["type"]
-                    for r in approved_requests
-                    if str(r["date"]) == str(view_date)
-                    and r["name"] == name
-                ]
-                
-                setup_display = day_status
-                shift_display = day_shift
-                
+                p_status = [r["type"] for r in approved_requests if str(r["date"]) == str(view_date) and r["name"] == name]
                 if p_status:
                     role_display = p_status[0].upper()
-                    setup_display = p_status[0].upper()
-                    shift_display = "--"
                 else:
                     assigned_roles = []
                     for r in roles:
@@ -588,27 +414,19 @@ with tab_cal:
                             assigned_roles.append(r.upper().replace("_", " "))
                         elif isinstance(assigned_list, dict) and name in assigned_list.keys():
                             assigned_roles.append(r.upper().replace("_", " "))
-                            
                     role_display = ", ".join(assigned_roles) if assigned_roles else "UNASSIGNED"
                 
                 if "TEAM MANAGER" in role_display or name == tm_name:
                     continue
-                    
-                sched_rows.append({
-                    "Name": name,
-                    "Role": role_display
-                })
+                sched_rows.append({"Name": name, "Role": role_display})
                 
             if sched_rows:
                 sched_df = pd.DataFrame(sched_rows)
-                df_height = min(1000, max(100, len(sched_df) * 35 + 38))
-                st.dataframe(sched_df, hide_index=True, use_container_width=True, height=df_height)
+                st.dataframe(sched_df, hide_index=True, use_container_width=True, height=min(1000, max(100, len(sched_df) * 35 + 38)))
             else:
                 st.write("*No staff configured in the system.*")
-
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Render interactive monthly calendar grid block
     with col_main:
         cols = st.columns(7)
         for i, d_name in enumerate(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]):
@@ -631,13 +449,9 @@ with tab_cal:
                     
                     grid_data = None
                     if hasattr(st.session_state, 'calendar_data') and st.session_state.calendar_data:
-                        grid_data = st.session_state.calendar_data.get(d)
-                        if not grid_data:
-                            grid_data = st.session_state.calendar_data.get(str(d))
+                        grid_data = st.session_state.calendar_data.get(d) or st.session_state.calendar_data.get(str(d))
                     if not grid_data:
-                        grid_data = collection.find_one({"type": "calendar_day", "date": str(d)})
-                    if not grid_data:
-                        grid_data = {}
+                        grid_data = collection.find_one({"type": "calendar_day", "date": str(d)}) or {}
                     
                     if d.weekday() in [5, 6]:
                         content = f"<b>{day}</b><div class='calendar-divider'></div><br><center><b>REST DAY</b></center>"
@@ -652,7 +466,9 @@ with tab_cal:
                                    f"SME: {get_filtered_nicks(grid_data.get('sme', []))}")
                     
                     cols[i].markdown(f'<div class="day-block">{content}</div>', unsafe_allow_html=True)
-                    
+                else:
+                    cols[i].markdown('<div class="day-block day-block-outside"></div>', unsafe_allow_html=True)
+
 # --- TAB 2: REQUEST FORM ---
 with tab_req:
     st.subheader("PTO/Wellness Request")
@@ -1223,22 +1039,21 @@ with tab_adm:
                     st.session_state.new_staff_entries.append({"name": "", "nick": "", "bday": date.today(), "rest_days": []})
                     st.rerun()
             with col_save:
-                if st.button("💾 Save Staff Entries", key="btn_save_multiple_staff"):
-                    added_count = 0
-                    for staff in st.session_state.new_staff_entries:
-                        if not staff["name"]:
-                            continue
-                        bday_datetime = datetime(staff["bday"].year, staff["bday"].month, staff["bday"].day)
-                        save_staff(staff["name"], {
-                            "bday": bday_datetime,
-                            "nick": staff["nick"] if staff["nick"] else staff["name"],
-                            "rest_days": staff["rest_days"]
-                        })
-                        added_count += 1
+                added_count = 0
+                for staff in st.session_state.new_staff_entries:
+                    if not staff["name"]:
+                        continue
+                    bday_datetime = datetime(staff["bday"].year, staff["bday"].month, staff["bday"].day)
+                    save_staff(staff["name"], {
+                        "bday": bday_datetime,
+                        "nick": staff["nick"] if staff["nick"] else staff["name"],
+                        "rest_days": staff["rest_days"]
+                    })
+                    added_count += 1
             
-                    st.success(f"{added_count} staff record(s) saved successfully!")
-                    st.session_state.new_staff_entries = [{"name": "", "nick": "", "bday": date.today(), "rest_days": []}]
-                    st.rerun()
+                st.success(f"{added_count} staff record(s) saved successfully!")
+                st.session_state.new_staff_entries = [{"name": "", "nick": "", "bday": date.today(), "rest_days": []}]
+                st.rerun()
             st.divider()
     
             st.subheader("Configuration")
