@@ -1,3 +1,4 @@
+import time
 from datetime import datetime, time, date, timedelta
 import streamlit as st
 from pymongo import MongoClient
@@ -1647,6 +1648,7 @@ with tab_dev:
                             # Explicitly clear selection tracking key to drop back to standard table view
                             if f"act_dev_{dev['_id']}" in st.session_state:
                                 st.session_state[f"act_dev_{dev['_id']}"] = "View"
+                            time.sleep(0.05)  # Gives the SessionInfo thread 50ms to finish initializing
                             st.rerun()
                       
             elif action == "Delete":
