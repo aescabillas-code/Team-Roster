@@ -724,7 +724,9 @@ with tab_prod:
             monthly_summary = monthly_df.groupby(["Owner", "Type"]).size().unstack(fill_value=0)
             monthly_summary["Total Cases"] = monthly_summary.sum(axis=1)
             m_height = min(1000, max(100, len(monthly_summary) * 35 + 38))
-            st.dataframe(monthly_summary, use_container_width=True, height=m_height)
+            
+            # Reset index then hide for clean display
+            st.dataframe(monthly_summary.reset_index().style.hide(axis="index"), use_container_width=True, height=m_height)
         else:
             st.info("No cases found for selected month.")
 
@@ -738,7 +740,9 @@ with tab_prod:
             daily_summary = daily_df.groupby(["Owner", "Type"]).size().unstack(fill_value=0)
             daily_summary["Total Cases"] = daily_summary.sum(axis=1)
             d_height = min(1000, max(100, len(daily_summary) * 35 + 38))
-            st.dataframe(daily_summary, use_container_width=True, height=d_height)
+            
+            # Reset index then hide for clean display
+            st.dataframe(daily_summary.reset_index().style.hide(axis="index"), use_container_width=True, height=d_height)
         else:
             st.info("No cases found for selected day.")
 
@@ -748,7 +752,6 @@ with tab_prod:
         overall_issue = df["Issue"].value_counts().reset_index()
         overall_issue.columns = ["Issue", "Count"]
 
-        # Create chart with slanted labels
         issue_chart = alt.Chart(overall_issue).mark_bar().encode(
             x=alt.X("Issue", axis=alt.Axis(labelAngle=-45)),
             y="Count"
@@ -756,7 +759,8 @@ with tab_prod:
         st.altair_chart(issue_chart, use_container_width=True)
         
         i_height = min(1000, max(100, len(overall_issue) * 35 + 38))
-        st.dataframe(overall_issue, use_container_width=True, height=i_height)
+        # Hide index from Styler object
+        st.dataframe(overall_issue.style.hide(axis="index"), use_container_width=True, height=i_height)
 
         st.divider()
 
@@ -764,7 +768,6 @@ with tab_prod:
         overall_product = df["Product Group"].value_counts().reset_index()
         overall_product.columns = ["Product Group", "Count"]
 
-        # Create chart with slanted labels
         product_chart = alt.Chart(overall_product).mark_bar().encode(
             x=alt.X("Product Group", axis=alt.Axis(labelAngle=-45)),
             y="Count"
@@ -772,30 +775,9 @@ with tab_prod:
         st.altair_chart(product_chart, use_container_width=True)
 
         p_height = min(1000, max(100, len(overall_product) * 35 + 38))
-        st.dataframe(overall_product, use_container_width=True, height=p_height)
+        # Hide index from Styler object
+        st.dataframe(overall_product.style.hide(axis="index"), use_container_width=True, height=p_height)
         st.divider()
-
-        st.divider()
-
-        st.markdown("## Overall Queue Analysis (Extra if Routed)")
-        
-        # Filter for 'Routed' types only
-        routed_df = df[df["Type"] == "Routed"]
-        
-        # Group by the 'Extra' column
-        routed_queue = routed_df["Extra"].value_counts().reset_index()
-        routed_queue.columns = ["Extra Detail", "Count"]
-
-        # Create chart
-        queue_chart = alt.Chart(routed_queue).mark_bar().encode(
-            x=alt.X("Extra Detail", axis=alt.Axis(labelAngle=-45)),
-            y="Count",
-            color="Extra Detail"
-        )
-        st.altair_chart(queue_chart, use_container_width=True)
-        
-        q_height = min(1000, max(100, len(routed_queue) * 35 + 38))
-        st.dataframe(routed_queue, use_container_width=True, height=q_height)
 
 # --- TAB 4: CASE TRACKER ---
 with tab_case:
