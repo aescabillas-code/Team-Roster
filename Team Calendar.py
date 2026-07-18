@@ -476,38 +476,55 @@ with tab_cal:
     st.divider()
     st.subheader("📆 Weekly Roster Matrix")
     
-    # 1. Generate the Mon-Sun range matching the chosen view_date's week
-    start_of_week = view_date - timedelta(days=view_date.weekday())
-    week_days = [start_of_week + timedelta(days=idx) for idx in range(7)]
+    # 1. Add Filter for Week Beginning (Forces Selection to Mondays)
+    current_monday = view_date - timedelta(days=view_date.weekday())
+    selected_week_start = st.date_input(
+        "Select Week Beginning (Monday):", 
+        value=current_monday,
+        key="weekly_view_lookup_start"
+    )
+    # Ensure standard date type and align selection back to Monday if a user picks mid-week
+    selected_week_start = pd.to_datetime(selected_week_start).date()
+    week_start_monday = selected_week_start - timedelta(days=selected_week_start.weekday())
     
-    # 2. Extract approved calendar details once for performance
+    # Generate Mon-Fri range (omitting Sat/Sun index 5 and 6)
+    week_days = [week_start_monday + timedelta(days=idx) for idx in range(5)]
+    
+    # 2. Performance Cache Pre-fetch
     approved_requests = fetch_approved_requests_from_db()
     roles = ["team_manager", "call", "chat", "mfq", "sme"]
     
+    # Track metadata elements across weekdays to display above the grid
+    weekly_setups = []
+    weekly_shifts = []
+    weekly_tms = []
+    
     weekly_rows = []
     for name in roster.keys():
-        if name == tm_name:
-            continue
-            
         staff_row = {"Staff Name": name}
         is_tm_somewhere = False
         
         for day in week_days:
             col_name = day.strftime("%A (%m/%d)")
             
-            # Check Weekend Rest Days
-            if day.weekday() in [5, 6]:
-                staff_row[col_name] = "REST DAY"
-                continue
-            
             # Check Leave Status
             p_status = [r["type"] for r in approved_requests if str(r["date"]) == str(day) and r["name"] == name]
             if p_status:
                 staff_row[col_name] = p_status[0].upper()
             else:
-                # Resolve day-specific configurations safely
+                # Resolve configurations safely
                 day_config = st.session_state.calendar_data.get(day) or st.session_state.calendar_data.get(str(day)) or {}
                 
+                # Document metadata rules seamlessly for unique targets once per day loop
+                if name == list(roster.keys())[0]: 
+                    if day_config.get('status') and day_config.get('status') not in weekly_setups:
+                        weekly_setups.append(f"{day.strftime('%a')}: {day_config.get('status')}")
+                    if day_config.get('shift') and day_config.get('shift') not in weekly_shifts:
+                        weekly_shifts.append(f"{day.strftime('%a')}: {day_config.get('shift')}")
+                    tm_found = day_config.get('team_manager', [])
+                    if tm_found and tm_found[0] not in weekly_tms:
+                        weekly_tms.append(tm_found[0])
+
                 assigned_roles = []
                 for r in roles:
                     assigned_list = day_config.get(r, [])
@@ -527,8 +544,25 @@ with tab_cal:
         if not is_tm_somewhere:
             weekly_rows.append(staff_row)
 
+    # 3. Render Metadata Layout Directly Above Table Grid
+    meta_c1, meta_c2, meta_c3 = st.columns(3)
+    with meta_c1:
+        st.markdown(f"**Work Setup:** \n\n {', '.join(weekly_setups) if weekly_setups else 'Not Configured'}")
+    with meta_c2:
+        st.markdown(f"**Shift Details:** \n\n {', '.join(weekly_shifts) if weekly_shifts else 'Not Configured'}")
+    with meta_c3:
+        st.markdown(f"**Active Team Managers:** \n\n {', '.join(set(weekly_tms)) if weekly_tms else 'None Assigned'}")
+        
+    st.write("")
+
+    # 4. Render and Sort Grid Data
     if weekly_rows:
         weekly_df = pd.DataFrame(weekly_rows)
+        
+        # Sort logic: primary sort on Monday column alphabetically, falling back to staff names 
+        first_day_col = week_days[0].strftime("%A (%m/%d)")
+        weekly_df = weekly_df.sort_values(by=[first_day_col, "Staff Name"], ascending=True)
+        
         st.dataframe(
             weekly_df, 
             hide_index=True, 
