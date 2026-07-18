@@ -564,8 +564,6 @@ with tab_cal:
             for name in roster.keys():
                 sched_rows.append({
                     "Name": name,
-                    "Work Setup": "REST DAY",
-                    "Shift Schedule": "--",
                     "Role": "REST DAY"
                 })
             
@@ -666,11 +664,13 @@ with tab_cal:
                     if not grid_data:
                         grid_data = {}
                     
-                    # WEEKEND INSTRUCTION: Block out Saturday (5) and Sunday (6) explicitly as REST DAY
+                     # WEEKEND INSTRUCTION: Block out Saturday (5) and Sunday (6) explicitly as REST DAY
                     if d.weekday() in [5, 6]:
                         content = f"<b>{day}</b><div class='calendar-divider'></div><br><center><b>REST DAY</b></center>"
                     else:
                         content = (f"<b>{day}</b><div class='calendar-divider'></div>"
+                                   f"<u>{grid_data.get('status', '-')}</u><div class='calendar-divider'></div>"
+                                   f"{grid_data.get('shift', '-')}<div class='calendar-divider'></div>"
                                    f"PTO/Wellness: {req_display}<div class='calendar-divider'></div>"
                                    f"Call: {get_filtered_nicks(grid_data.get('call', []))}<div class='calendar-divider'></div>"
                                    f"Chat: {get_filtered_nicks(grid_data.get('chat', []))}<div class='calendar-divider'></div>"
