@@ -135,19 +135,13 @@ def get_request_limits(req_date):
             "data",
             {}
         ).get(
-            str(st.session_state.selected_admin_date),
+            str(st.session_state.get("selected_admin_date", date.today())),
             {}
         )
     
-    st.session_state.limits["PTO_per_day"] = selected_config.get(
-        "PTO_per_day",
-        1
-    )
-    
-    st.session_state.limits["Wellness_per_day"] = selected_config.get(
-        "Wellness_per_day",
-        1
-    )
+    st.session_state.limits["PTO_per_day"] = selected_config.get("PTO_per_day", 1)
+    st.session_state.limits["Wellness_per_day"] = selected_config.get("Wellness_per_day", 1)
+    return st.session_state.limits
 
 def save_masterfile_to_db(df):
     collection.update_one({"type": "masterfile"}, {"$set": {"data": df.to_dict(orient="records")}}, upsert=True)
@@ -560,7 +554,6 @@ with tab_cal:
             
             if sched_rows:
                 sched_df = pd.DataFrame(sched_rows)
-                # Sized dynamically to prevent scrolling
                 df_height = min(1000, max(100, len(sched_df) * 35 + 38))
                 st.dataframe(sched_df, hide_index=True, use_container_width=True, height=df_height)
             else:
@@ -573,7 +566,6 @@ with tab_cal:
             # Build tabular structured schedule data
             sched_rows = []
             for name in roster.keys():
-                # Check for approved requests matching the active daily view date
                 p_status = [
                     r["type"]
                     for r in approved_requests
@@ -581,7 +573,6 @@ with tab_cal:
                     and r["name"] == name
                 ]
                 
-                # Rows inherit the day's global setup and shift configuration
                 setup_display = day_status
                 shift_display = day_shift
                 
@@ -590,7 +581,6 @@ with tab_cal:
                     setup_display = p_status[0].upper()
                     shift_display = "--"
                 else:
-                    # Dynamically check if this person has been assigned to ANY role
                     assigned_roles = []
                     for r in roles:
                         assigned_list = d_data.get(r, [])
@@ -601,7 +591,6 @@ with tab_cal:
                             
                     role_display = ", ".join(assigned_roles) if assigned_roles else "UNASSIGNED"
                 
-                # EXCLUDE TEAM MANAGER (If the role is or contains Team Manager, skip adding name/role)
                 if "TEAM MANAGER" in role_display or name == tm_name:
                     continue
                     
@@ -612,7 +601,6 @@ with tab_cal:
                 
             if sched_rows:
                 sched_df = pd.DataFrame(sched_rows)
-                # Sized dynamically to prevent scrolling
                 df_height = min(1000, max(100, len(sched_df) * 35 + 38))
                 st.dataframe(sched_df, hide_index=True, use_container_width=True, height=df_height)
             else:
@@ -632,19 +620,15 @@ with tab_cal:
                 if day != 0:
                     d = date(year, month, day)
                     approved_requests = fetch_approved_requests_from_db()
-                    approved = [r for r in approved_requests
-                        if str(r["date"]) == str(d)]
+                    approved = [r for r in approved_requests if str(r["date"]) == str(d)]
                     away_names = [r['name'] for r in approved]
                     
-                    # Look up nicknames from the active roster configuration list instead of full names
                     def get_filtered_nicks(full_names):
                         active = [n for n in full_names if n not in away_names]
                         return ", ".join([roster.get(x, {}).get("nick", x) for x in active])
                     
-                    # Mapping nickname profile directly onto the requested leave items
                     req_display = "<br>".join([f"{roster.get(r['name'], {}).get('nick', r['name'])}({r['type']})" for r in approved])
                     
-                    # Look up calendar grid data with direct DB fallback as well to prevent empty renders
                     grid_data = None
                     if hasattr(st.session_state, 'calendar_data') and st.session_state.calendar_data:
                         grid_data = st.session_state.calendar_data.get(d)
@@ -655,7 +639,6 @@ with tab_cal:
                     if not grid_data:
                         grid_data = {}
                     
-                     # WEEKEND INSTRUCTION: Block out Saturday (5) and Sunday (6) explicitly as REST DAY
                     if d.weekday() in [5, 6]:
                         content = f"<b>{day}</b><div class='calendar-divider'></div><br><center><b>REST DAY</b></center>"
                     else:
@@ -675,11 +658,8 @@ with tab_req:
     st.subheader("PTO/Wellness Request")
     
     with st.form("request_form", clear_on_submit=True):
-        # Fetch current roster directly from the database document
         roster_doc = collection.find_one({"type": "roster_list"})
         staff_data = roster_doc.get("data", {}) if roster_doc else {}
-        
-        # Extract available names or fallback to session state
         available_names = list(staff_data.keys()) if staff_data else list(st.session_state.staff_roster.keys())
         name = st.selectbox("Name", available_names)
         
@@ -687,38 +667,23 @@ with tab_req:
         req_type = st.selectbox("Type", ["PTO", "Wellness"])
         
         if st.form_submit_button("Submit Request"):
-            # Fetch limit ceilings directly from DB configuration
             limits = get_request_limits(req_date)
+            count_on_date = collection.count_documents({"type": req_type, "date": str(req_date), "status": {"$in": ["Pending", "Approved"]}})
             
-            # Count records on specified target date using explicit string conversions
-            count_on_date = collection.count_documents({"type": req_type,"date": str(req_date),"status": {"$in": ["Pending", "Approved"]}})
+            is_already_requested = collection.count_documents({
+                "name": name,
+                "date": str(req_date),
+                "status": {"$in": ["Pending", "Approved"]}
+            }) > 0
             
-            # Double Booking Duplicate Verification Check
-            is_already_requested = collection.count_documents(
-                {
-                    "name": name,
-                    "date": str(req_date),
-                    "status": {
-                        "$in": ["Pending", "Approved"]
-                    }
-                }
-            ) > 0
-            
-            # Validation and Submission Logic Flow
             if is_already_requested:
                 st.warning(f"⚠️ A request for {name} on {req_date} already exists.")
-            limit_value = (
-                limits["PTO_per_day"]
-                if req_type == "PTO"
-                else limits["Wellness_per_day"])
+            
+            limit_value = limits["PTO_per_day"] if req_type == "PTO" else limits["Wellness_per_day"]
             
             if count_on_date >= limit_value:
-                st.error(
-                    f"❌ Limit reached for {req_type} on {req_date}."
-                )
-
+                st.error(f"❌ Limit reached for {req_type} on {req_date}.")
             else:
-                # Construct combined document payload without email Option
                 new_req = {
                     "name": name, 
                     "date": str(req_date), 
@@ -727,15 +692,11 @@ with tab_req:
                     "email": "",
                     "viewed": False
                 }
-                
-                # --- UPDATED DB SAVE FUNCTION CALL ---
                 save_request_to_db(new_req, req_type)
-                
                 st.session_state.pending_requests.append(new_req)
                 st.success("Request submitted successfully.")
                 st.rerun()
 
-    # --- ADDED: REQUEST TAB APPROVAL VIEWPORT AND HISTORY RENDER ---
     st.subheader("Pending Requests Overview")    
     all_pending = fetch_pending_requests_from_db()
     c1, c2 = st.columns(2)
@@ -746,7 +707,6 @@ with tab_req:
         if wellness_reqs:
             df_w = pd.DataFrame(wellness_reqs)[["name", "date"]]
             df_w.columns = ["Name", "Date"]
-            # Use st.dataframe with hide_index=True to remove numbering
             st.dataframe(df_w, hide_index=True, use_container_width=True)
         else:
             st.caption("No pending wellness requests.")
@@ -757,355 +717,133 @@ with tab_req:
         if pto_reqs:
             df_p = pd.DataFrame(pto_reqs)[["name", "date"]]
             df_p.columns = ["Name", "Date"]
-            # Use st.dataframe with hide_index=True to remove numbering
             st.dataframe(df_p, hide_index=True, use_container_width=True)
         else:
             st.caption("No pending PTO requests.")        
+            
     st.divider()
     st.subheader("Approved History")
     f_c1, f_c2 = st.columns(2)
-    f_m = f_c1.selectbox("Month", range(1, 13), index=current_date.month-1)
-    f_y = f_c2.number_input("Year", value=current_date.year)
+    f_m = f_c1.selectbox("Month", range(1, 13), index=current_date.month-1, key="history_month_select")
+    f_y = f_c2.number_input("Year", value=current_date.year, key="history_year_select")
     app_reqs = fetch_approved_requests_from_db()
     filtered_app = [r for r in app_reqs if int(r['date'].split('-')[1])==f_m and int(r['date'].split('-')[0])==f_y]
-    if filtered_app: st.dataframe(pd.DataFrame(filtered_app)[['name', 'date', 'type']])
-    else: st.write("No records found.")
+    if filtered_app: 
+        st.dataframe(pd.DataFrame(filtered_app)[['name', 'date', 'type']])
+    else: 
+        st.write("No records found.")
         
 # --- TAB 3: PRODUCTIVITY MONITORING ---
 with tab_prod:
-
     st.subheader("📈 Productivity Monitoring")
-
-    cases = list(
-        collection.find(
-            {"type": "case"}
-        )
-    )
+    cases = list(collection.find({"type": "case"}))
 
     if not cases:
         st.info("No case records found.")
     else:
         df = pd.DataFrame(cases)
-
         if "_id" in df.columns:
             df = df.drop(columns=["_id"])
 
-        required_cols = [
-            "Date",
-            "Owner",
-            "Type",
-            "Issue",
-            "Product Group"
-        ]
-
+        required_cols = ["Date", "Owner", "Type", "Issue", "Product Group"]
         for col in required_cols:
             if col not in df.columns:
                 df[col] = "Unknown"
 
-        df["Date"] = pd.to_datetime(
-            df["Date"],
-            errors="coerce"
-        )
-
+        df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
         df = df.dropna(subset=["Date"])
-
         df["Month"] = df["Date"].dt.month
         df["Year"] = df["Date"].dt.year
         df["Day"] = df["Date"].dt.date
 
-        # =============================
-        # MONTHLY PRODUCTIVITY
-        # =============================
         st.markdown("## Monthly Productivity")
-
         col1, col2 = st.columns(2)
+        years = sorted(df["Year"].dropna().unique())
+        selected_year = col1.selectbox("Year", years, key="prod_year")
+        selected_month = col2.selectbox("Month", range(1, 13), format_func=lambda x: calendar.month_name[x], index=current_date.month - 1, key="prod_monitor_month")
 
-        years = sorted(
-            df["Year"].dropna().unique()
-        )
-
-        selected_year = col1.selectbox(
-            "Year",
-            years,
-            key="prod_year"
-        )
-
-        selected_month = col2.selectbox(
-            "Month", 
-            range(1, 13), 
-            format_func=lambda x: calendar.month_name[x], 
-            index=current_date.month - 1, 
-            key="prod_monitor_month"
-        )
-
-        monthly_df = df[
-            (df["Year"] == selected_year)
-            &
-            (df["Month"] == selected_month)
-        ]
+        monthly_df = df[(df["Year"] == selected_year) & (df["Month"] == selected_month)]
 
         if not monthly_df.empty:
-            monthly_summary = (
-                monthly_df.groupby(
-                    ["Owner", "Type"]
-                )
-                .size()
-                .unstack(fill_value=0)
-            )
-
-            monthly_summary["Total Cases"] = (
-                monthly_summary.sum(axis=1)
-            )
-
-            # Sized dynamically to prevent scrollbars
+            monthly_summary = monthly_df.groupby(["Owner", "Type"]).size().unstack(fill_value=0)
+            monthly_summary["Total Cases"] = monthly_summary.sum(axis=1)
             m_height = min(1000, max(100, len(monthly_summary) * 35 + 38))
-            st.dataframe(
-                monthly_summary,
-                use_container_width=True,
-                height=m_height
-            )
+            st.dataframe(monthly_summary, use_container_width=True, height=m_height)
         else:
-            st.info(
-                "No cases found for selected month."
-            )
+            st.info("No cases found for selected month.")
 
         st.divider()
 
-        # =============================
-        # DAILY PRODUCTIVITY
-        # =============================
         st.markdown("## Daily Productivity")
-
-        selected_day = st.date_input(
-            "Select Day",
-            value=date.today(),
-            key="prod_day"
-        )
-
-        daily_df = df[
-            df["Day"] == selected_day
-        ]
+        selected_day = st.date_input("Select Day", value=date.today(), key="prod_day")
+        daily_df = df[df["Day"] == selected_day]
 
         if not daily_df.empty:
-            daily_summary = (
-                daily_df.groupby(
-                    ["Owner", "Type"]
-                )
-                .size()
-                .unstack(fill_value=0)
-            )
-
-            daily_summary["Total Cases"] = (
-                daily_summary.sum(axis=1)
-            )
-
-            # Sized dynamically to prevent scrollbars
+            daily_summary = daily_df.groupby(["Owner", "Type"]).size().unstack(fill_value=0)
+            daily_summary["Total Cases"] = daily_summary.sum(axis=1)
             d_height = min(1000, max(100, len(daily_summary) * 35 + 38))
-            st.dataframe(
-                daily_summary,
-                use_container_width=True,
-                height=d_height
-            )
+            st.dataframe(daily_summary, use_container_width=True, height=d_height)
         else:
-            st.info(
-                "No cases found for selected day."
-            )
+            st.info("No cases found for selected day.")
 
         st.divider()
 
-        # =============================
-        # OVERALL ISSUE ANALYSIS
-        # =============================
-        st.markdown(
-            "## Overall Most Common Issues"
-        )
-
-        overall_issue = (
-            df["Issue"]
-            .value_counts()
-            .reset_index()
-        )
-
-        overall_issue.columns = [
-            "Issue",
-            "Count"
-        ]
-
-        st.bar_chart(
-            overall_issue.set_index(
-                "Issue"
-            )["Count"]
-        )
-
-        # Sized dynamically to prevent scrollbars
+        st.markdown("## Overall Issue Analysis")
+        overall_issue = df["Issue"].value_counts().reset_index()
+        overall_issue.columns = ["Issue", "Count"]
+        st.bar_chart(overall_issue.set_index("Issue")["Count"])
         i_height = min(1000, max(100, len(overall_issue) * 35 + 38))
-        st.dataframe(
-            overall_issue,
-            use_container_width=True,
-            height=i_height
-        )
+        st.dataframe(overall_issue, use_container_width=True, height=i_height)
 
         st.divider()
 
-        # =============================
-        # OVERALL PRODUCT ANALYSIS
-        # =============================
-        st.markdown(
-            "## Overall Most Common Product Groups"
-        )
-
-        overall_product = (
-            df["Product Group"]
-            .value_counts()
-            .reset_index()
-        )
-
-        overall_product.columns = [
-            "Product Group",
-            "Count"
-        ]
-
-        st.bar_chart(
-            overall_product.set_index(
-                "Product Group"
-            )["Count"]
-        )
-
-        # Sized dynamically to prevent scrollbars
+        st.markdown("## Overall Product Analysis")
+        overall_product = df["Product Group"].value_counts().reset_index()
+        overall_product.columns = ["Product Group", "Count"]
+        st.bar_chart(overall_product.set_index("Product Group")["Count"])
         p_height = min(1000, max(100, len(overall_product) * 35 + 38))
-        st.dataframe(
-            overall_product,
-            use_container_width=True,
-            height=p_height
-        )
+        st.dataframe(overall_product, use_container_width=True, height=p_height)
 
 # --- TAB 4: CASE TRACKER ---
 with tab_case:
     st.subheader("Log New Case")
-
-    # Change this from collection.find to your cached function
     cases_list = get_cases_from_db() 
-    cases = cases_list # Unify both variables so they use the same cleared cache data
 
     masterfile_doc = collection.find_one({"type": "masterfile"})
-
     if masterfile_doc and "data" in masterfile_doc:
-        master_df = pd.DataFrame(
-            masterfile_doc["data"]
-        )
+        master_df = pd.DataFrame(masterfile_doc["data"])
     else:
-        master_df = pd.DataFrame(
-            {
-                "Category": [
-                    "Contact Type",
-                    "Issue",
-                    "Product Group"
-                ],
-                "Values": [
-                    "Call,Chat,Email",
-                    "Tech,Billing",
-                    "Hardware,Soft"
-                ]
-            }
-        )
+        master_df = pd.DataFrame({
+            "Category": ["Contact Type", "Issue", "Product Group"],
+            "Values": ["Call,Chat,Email", "Tech,Billing", "Hardware,Soft"]
+        })
 
-    c_types = master_df.loc[
-        master_df["Category"] == "Contact Type",
-        "Values"
-    ].iloc[0].split(",")
+    c_types = master_df.loc[master_df["Category"] == "Contact Type", "Values"].iloc[0].split(",")
+    issues = master_df.loc[master_df["Category"] == "Issue", "Values"].iloc[0].split(",")
+    prods = master_df.loc[master_df["Category"] == "Product Group", "Values"].iloc[0].split(",")
 
-    issues = master_df.loc[
-        master_df["Category"] == "Issue",
-        "Values"
-    ].iloc[0].split(",")
-
-    prods = master_df.loc[
-        master_df["Category"] == "Product Group",
-        "Values"
-    ].iloc[0].split(",")
-
-    # Fetch Roster
-    roster_doc = collection.find_one(
-        {"type": "roster_list"}
-    )
-
-    staff_data = (
-        roster_doc.get("data", {})
-        if roster_doc else {}
-    )
-
-    owner_list = sorted(
-        list(staff_data.keys())
-    )
-
+    roster_doc = collection.find_one({"type": "roster_list"})
+    staff_data = roster_doc.get("data", {}) if roster_doc else {}
+    owner_list = sorted(list(staff_data.keys()))
     if not owner_list:
         owner_list = ["Unknown"]
 
-    # Case Form
     c1, c2 = st.columns(2)
-
-    c_type = c1.selectbox(
-        "Contact Type",
-        c_types,
-        key="case_form_type"
-    )
-
-    case_owner = c2.selectbox(
-        "Owner",
-        owner_list,
-        key="case_form_owner"
-    )
-
-    case_number = c1.text_input(
-        "Case Number",
-        key="case_form_case_number"
-    )
-
-    issue = c1.selectbox(
-        "Issue",
-        issues,
-        key="case_form_issue"
-    )
-
-    prod = c2.selectbox(
-        "Product Group",
-        prods,
-        key="case_form_product"
-    )
-
-    desc = st.text_area(
-        "Issue Description",
-        key="case_form_desc"
-    )
-
-    steps = st.text_area(
-        "Steps Taken",
-        key="case_form_steps"
-    )
-
-    uploaded_file = st.file_uploader(
-        "Upload Screenshot",
-        type=["png", "jpg", "jpeg"]
-    )
-
-    status = st.selectbox(
-        "Status",
-        ["Resolved", "Pending/Monitoring", "Routed"],
-        key="case_form_status"
-    )
+    c_type = c1.selectbox("Contact Type", c_types, key="case_form_type")
+    case_owner = c2.selectbox("Owner", owner_list, key="case_form_owner")
+    case_number = c1.text_input("Case Number", key="case_form_case_number")
+    issue = c1.selectbox("Issue", issues, key="case_form_issue")
+    prod = c2.selectbox("Product Group", prods, key="case_form_product")
+    desc = st.text_area("Issue Description", key="case_form_desc")
+    steps = st.text_area("Steps Taken", key="case_form_steps")
+    uploaded_file = st.file_uploader("Upload Screenshot", type=["png", "jpg", "jpeg"])
+    status = st.selectbox("Status", ["Resolved", "Pending/Monitoring", "Routed"], key="case_form_status")
 
     extra = ""
-
     if status == "Pending/Monitoring":
-        extra = st.text_input(
-            "Pending/Monitoring Reason",
-            key="case_form_pending"
-        )
+        extra = st.text_input("Pending/Monitoring Reason", key="case_form_pending")
     elif status == "Routed":
-        extra = st.text_input(
-            "Queue Destination",
-            key="case_form_routed"
-        )
+        extra = st.text_input("Queue Destination", key="case_form_routed")
 
     if st.button("Log Case"):
         new_case = {
@@ -1122,111 +860,44 @@ with tab_case:
             "Status": status,
             "Extra": extra
         }
-
         save_case_to_db(new_case)
-
         for key in list(st.session_state.keys()):
             if key.startswith("case_form_"):
                 del st.session_state[key]
-
-        st.success(
-            "Case logged to database successfully!"
-        )
+        st.success("Case logged to database successfully!")
         st.rerun()
 
     st.divider()
-
-    # Knowledge Base
     st.subheader("Knowledge Base")
 
-    # Change df_cases = pd.DataFrame(cases) to cases_list
     if cases_list:
         df_cases = pd.DataFrame(cases_list)
-        # Download button for KB
         csv = df_cases.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Download Knowledge Base CSV", csv, "kb_export.csv", "text/csv")
 
     f1, f2, f3, f4 = st.columns(4)
-
-    f_issue = f1.multiselect(
-        "Filter by Issue",
-        issues
-    )
-
-    f_prod = f2.multiselect(
-        "Filter by Product Group",
-        prods
-    )
-
-    f_case = f3.text_input(
-        "Filter by Case #"
-    )
-
-    owners = sorted(
-        list(
-            set(
-                case.get("Owner", "")
-                for case in cases_list
-                if case.get("Owner")
-            )
-        )
-    )
-
-    f_owner = f4.selectbox(
-        "Filter by Owner",
-        ["All"] + owners
-    )
+    f_issue = f1.multiselect("Filter by Issue", issues)
+    f_prod = f2.multiselect("Filter by Product Group", prods)
+    f_case = f3.text_input("Filter by Case #")
+    owners = sorted(list(set(case.get("Owner", "") for case in cases_list if case.get("Owner"))))
+    f_owner = f4.selectbox("Filter by Owner", ["All"] + owners)
 
     filtered_cases = []
-
     for case in reversed(cases_list):
-        matches_issue = (
-            not f_issue
-            or case.get("Issue") in f_issue
-        )
+        matches_issue = not f_issue or case.get("Issue") in f_issue
+        matches_prod = not f_prod or case.get("Product Group") in f_prod
+        matches_case = not f_case or f_case.lower() in str(case.get("Case Number", "")).lower()
+        matches_owner = f_owner == "All" or case.get("Owner", "") == f_owner
 
-        matches_prod = (
-            not f_prod
-            or case.get("Product Group") in f_prod
-        )
-
-        matches_case = (
-            not f_case
-            or f_case.lower()
-            in str(
-                case.get(
-                    "Case Number",
-                    ""
-                )
-            ).lower()
-        )
-
-        matches_owner = (
-            f_owner == "All"
-            or case.get("Owner", "")
-            == f_owner
-        )
-
-        if (
-            matches_issue
-            and matches_prod
-            and matches_case
-            and matches_owner
-        ):
+        if matches_issue and matches_prod and matches_case and matches_owner:
             filtered_cases.append(case)
 
     if filtered_cases:
         for case in filtered_cases:
             entry_col, action_col = st.columns([9, 1])
-
             with entry_col:
-                with st.expander(
-                    f"Case #{case.get('Case Number','')} | "
-                    f"{case.get('Desc','')[:80]}",
-                    expanded=False
-                ):
-                    st.markdown(
-                        f"""
+                with st.expander(f"Case #{case.get('Case Number','')} | {case.get('Desc','')[:80]}", expanded=False):
+                    st.markdown(f"""
                         **Owner:** {case.get('Owner','')}
                         **Date:** {case.get('Date','')}
                         **Contact Type:** {case.get('Type','')}
@@ -1234,237 +905,83 @@ with tab_case:
                         **Status:** {case.get('Status','')}
                         **Issue:** {case.get('Issue','')}
                         **Product Group:** {case.get('Product Group','')}
-                        """
-                    )
-
+                        """)
                     st.markdown("### Issue Description")
                     st.write(case.get("Desc", ""))
-
                     st.markdown("### Steps Taken")
                     st.write(case.get("Steps", ""))
-
                     if case.get("Extra"):
-                        st.markdown(
-                            "### Additional Information"
-                        )
-                        st.write(
-                            case.get("Extra", "")
-                        )
-
-                    if (
-                        case.get("Has_Screenshot")
-                        and case.get("Screenshot")
-                    ):
-                        st.image(
-                            case["Screenshot"],
-                            caption="Attached Screenshot",
-                            use_container_width=True
-                        )
+                        st.markdown("### Additional Information")
+                        st.write(case.get("Extra", ""))
+                    if case.get("Has_Screenshot") and case.get("Screenshot"):
+                        st.image(case["Screenshot"], caption="Attached Screenshot", use_container_width=True)
                     elif case.get("Has_Screenshot"):
-                        st.caption(
-                            "📎 Screenshot attached to this record."
-                        )
+                        st.caption("📎 Screenshot attached to this record.")
 
             with action_col:
-                pop = st.popover(
-                    "⋮",
-                    help="Actions"
-                )
+                pop = st.popover("⋮", help="Actions")
                 with pop:
-                    action = st.selectbox(
-                        "Action",
-                        [
-                            "None",
-                            "Edit",
-                            "Delete"
-                        ],
-                        key=f"action_{case['_id']}"
-                    )
+                    action = st.selectbox("Action", ["None", "Edit", "Delete"], key=f"action_{case['_id']}")
 
-            # EDIT
             if action == "Edit":
                 with st.container():
-                    st.markdown(
-                        f"### Editing Case #{case.get('Case Number','')}"
-                    )
-
-                    edit_date = st.text_input(
-                        "Date",
-                        value=case.get("Date", ""),
-                        key=f"date_{case['_id']}"
-                    )
-
-                    edit_owner = st.selectbox(
-                        "Owner",
-                        owner_list,
-                        index=owner_list.index(
-                            case.get("Owner")
-                        )
-                        if case.get("Owner") in owner_list
-                        else 0,
-                        key=f"owner_{case['_id']}"
-                    )
-
-                    edit_type = st.selectbox(
-                        "Contact Type",
-                        c_types,
-                        index=c_types.index(
-                            case.get("Type")
-                        )
-                        if case.get("Type") in c_types
-                        else 0,
-                        key=f"type_{case['_id']}"
-                    )
-
-                    edit_case_number = st.text_input(
-                        "Case Number",
-                        value=case.get("Case Number", ""),
-                        key=f"case_num_{case['_id']}"
-                    )
-
-                    edit_issue = st.selectbox(
-                        "Issue",
-                        issues,
-                        index=issues.index(
-                            case.get("Issue")
-                        )
-                        if case.get("Issue") in issues
-                        else 0,
-                        key=f"issue_{case['_id']}"
-                    )
-
-                    edit_product = st.selectbox(
-                        "Product Group",
-                        prods,
-                        index=prods.index(
-                            case.get("Product Group")
-                        )
-                        if case.get("Product Group") in prods
-                        else 0,
-                        key=f"prod_{case['_id']}"
-                    )
-
-                    status_options = [
-                        "Resolved",
-                        "Pending/Monitoring",
-                        "Routed"
-                    ]
-
-                    current_status = case.get(
-                        "Status",
-                        "Resolved"
-                    )
-
-                    edit_status = st.selectbox(
-                        "Status",
-                        status_options,
-                        index=status_options.index(
-                            current_status
-                        )
-                        if current_status in status_options
-                        else 0,
-                        key=f"status_{case['_id']}"
-                    )
-
-                    edit_extra = st.text_input(
-                        "Extra Information",
-                        value=case.get("Extra", ""),
-                        key=f"extra_{case['_id']}"
-                    )
-
-                    edit_desc = st.text_area(
-                        "Issue Description",
-                        value=case.get("Desc", ""),
-                        key=f"ed_desc_{case['_id']}"
-                    )
-
-                    edit_steps = st.text_area(
-                        "Steps Taken",
-                        value=case.get("Steps", ""),
-                        key=f"ed_step_{case['_id']}"
-                    )
+                    st.markdown(f"### Editing Case #{case.get('Case Number','')}")
+                    edit_date = st.text_input("Date", value=case.get("Date", ""), key=f"date_{case['_id']}")
+                    edit_owner = st.selectbox("Owner", owner_list, index=owner_list.index(case.get("Owner")) if case.get("Owner") in owner_list else 0, key=f"owner_{case['_id']}")
+                    edit_type = st.selectbox("Contact Type", c_types, index=c_types.index(case.get("Type")) if case.get("Type") in c_types else 0, key=f"type_{case['_id']}")
+                    edit_case_number = st.text_input("Case Number", value=case.get("Case Number", ""), key=f"case_num_{case['_id']}")
+                    edit_issue = st.selectbox("Issue", issues, index=issues.index(case.get("Issue")) if case.get("Issue") in issues else 0, key=f"issue_{case['_id']}")
+                    edit_product = st.selectbox("Product Group", prods, index=prods.index(case.get("Product Group")) if case.get("Product Group") in prods else 0, key=f"prod_{case['_id']}")
+                    
+                    status_options = ["Resolved", "Pending/Monitoring", "Routed"]
+                    current_status = case.get("Status", "Resolved")
+                    edit_status = st.selectbox("Status", status_options, index=status_options.index(current_status) if current_status in status_options else 0, key=f"status_{case['_id']}")
+                    edit_extra = st.text_input("Extra Information", value=case.get("Extra", ""), key=f"extra_{case['_id']}")
+                    edit_desc = st.text_area("Issue Description", value=case.get("Desc", ""), key=f"ed_desc_{case['_id']}")
+                    edit_steps = st.text_area("Steps Taken", value=case.get("Steps", ""), key=f"ed_step_{case['_id']}")
 
                     save_col, cancel_col = st.columns(2)
-
                     with save_col:
-                        if st.button(
-                            "Save Changes",
-                            key=f"save_ed_{case['_id']}"
-                        ):
+                        if st.button("Save Changes", key=f"save_ed_{case['_id']}"):
                             collection.update_one(
                                 {"_id": case["_id"]},
-                                {
-                                    "$set": {
-                                        "Date": edit_date,
-                                        "Owner": edit_owner,
-                                        "Type": edit_type,
-                                        "Case Number": edit_case_number,
-                                        "Issue": edit_issue,
-                                        "Product Group": edit_product,
-                                        "Status": edit_status,
-                                        "Extra": edit_extra,
-                                        "Desc": edit_desc,
-                                        "Steps": edit_steps
-                                    }
-                                }
+                                {"$set": {
+                                    "Date": edit_date, "Owner": edit_owner, "Type": edit_type,
+                                    "Case Number": edit_case_number, "Issue": edit_issue,
+                                    "Product Group": edit_product, "Status": edit_status,
+                                    "Extra": edit_extra, "Desc": edit_desc, "Steps": edit_steps
+                                }}
                             )
                             st.cache_data.clear()
-                            st.success(
-                                "Case updated successfully!"
-                            )
+                            st.success("Case updated successfully!")
                             st.rerun()
-
                     with cancel_col:
                         if st.button("Cancel", key=f"cancel_edit_{case['_id']}"):
-                            # Clear the selection widget key explicitly from session state
                             if f"action_{case['_id']}" in st.session_state:
                                 st.session_state[f"action_{case['_id']}"] = "None"
                             st.rerun()
 
-            # DELETE
             elif action == "Delete":
-                st.warning(
-                    "⚠️ Supervisor authorization required."
-                )
-
-                del_password = st.text_input(
-                    "Enter Admin Password",
-                    type="password",
-                    key=f"pwd_del_{case['_id']}"
-                )
-
+                st.warning("⚠️ Supervisor authorization required.")
+                del_password = st.text_input("Enter Admin Password", type="password", key=f"pwd_del_{case['_id']}")
                 del_col, cancel_col = st.columns(2)
-
                 with del_col:
-                    if st.button(
-                        "Confirm Delete",
-                        key=f"conf_del_{case['_id']}"
-                    ):
+                    if st.button("Confirm Delete", key=f"conf_del_{case['_id']}"):
                         if del_password == "Password1234":
-                            collection.delete_one(
-                                {"_id": case["_id"]}
-                            )
+                            collection.delete_one({"_id": case["_id"]})
                             st.cache_data.clear()
-                            st.success(
-                                "Case deleted successfully."
-                            )
+                            st.success("Case deleted successfully.")
                             st.rerun()
                         else:
-                            st.error(
-                                "Incorrect Password.")
-
+                            st.error("Incorrect Password.")
                 with cancel_col:
-                        if st.button("Cancel", key=f"cancel_edit_{case['_id']}"):
-                            # Clear the selection widget key explicitly from session state
-                            if f"action_{case['_id']}" in st.session_state:
-                                st.session_state[f"action_{case['_id']}"] = "None"
-                            st.rerun()
-
+                    if st.button("Cancel", key=f"cancel_del_w_{case['_id']}"):
+                        if f"action_{case['_id']}" in st.session_state:
+                            st.session_state[f"action_{case['_id']}"] = "None"
+                        st.rerun()
             st.divider()
     else:
-        st.info(
-            "No cases match the selected filters."
-        )
+        st.info("No cases match the selected filters.")
 
 # --- TAB 5: DEVIATION ---
 with tab_dev:
@@ -1476,17 +993,12 @@ with tab_dev:
             target_date = st.date_input("Target Date", value=date.today())
             manager = st.text_input("Manager", value="Jeff Bote")
             
-            # Fetch current roster directly from the database document
             roster_doc = collection.find_one({"type": "roster_list"})
             staff_data = roster_doc.get("data", {}) if roster_doc else {}
-            
-            # Extract available names or fallback to session state
             available_names = list(staff_data.keys()) if staff_data else list(st.session_state.staff_roster.keys())
             name = st.selectbox("Name", available_names, key="dev_name_box")
             
-            # Restored calendar shift time calculations dynamically from MongoDB
             calendar_doc = collection.find_one({"type": "calendar_data"})
-            
             if calendar_doc:
                 date_str = str(target_date)
                 shift_time = calendar_doc.get("data", {}).get(date_str, {}).get("shift") or \
@@ -1503,12 +1015,10 @@ with tab_dev:
             
             start_time = start_time_input.strip()
             end_time = end_time_input.strip()
-            
             duration_raw = duration_input.lower().strip()
             
             hrs_match = re.search(r'(\d+)\s*h', duration_raw)
             mins_match = re.search(r'(\d+)\s*m', duration_raw)
-            
             parsed_hrs = int(hrs_match.group(1)) if hrs_match else 0
             parsed_mins = int(mins_match.group(1)) if mins_match else 0
             
@@ -1517,11 +1027,6 @@ with tab_dev:
             else:
                 total_mins = (parsed_hrs * 60) + parsed_mins
                 
-            if total_mins >= 60:
-                display_duration = f"{total_mins // 60}h {total_mins % 60}m"
-            else:
-                display_duration = f"{total_mins}m"
-            
             aux = st.text_input("Aux")
             reason = st.text_area("Reason of Deviation")
             
@@ -1557,13 +1062,11 @@ with tab_dev:
                 df = df[(df['Date'].apply(lambda x: x.month) == filter_month) & (df['Date'].apply(lambda x: x.year) == filter_year)]
         
         filtered_records = df.to_dict(orient="records")
-        
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button("Extract Report as CSV", csv, "deviation_report.csv", "text/csv")
         st.write("## Deviation Records")
         
         col_widths = [1.2, 1.2, 1.2, 1.2, 1.0, 1.0, 0.8, 0.8, 2.0, 1.0]
-        
         h_cols = st.columns(col_widths)
         headers = ["Date", "Manager", "Name", "Shift Time", "Start Time", "End Time", "Total Mins", "Aux", "Reason of Deviation", "Action"]
         for idx, header_title in enumerate(headers):
@@ -1572,7 +1075,6 @@ with tab_dev:
         
         for dev in reversed(filtered_records):
             r_cols = st.columns(col_widths)
-            
             r_cols[0].write(str(dev.get('Date', '')))
             r_cols[1].write(str(dev.get('Manager', '')))
             r_cols[2].write(str(dev.get('Name', '')))
@@ -1591,12 +1093,9 @@ with tab_dev:
             if action == "Edit":
                 with st.container():
                     st.markdown(f"#### Edit Deviation Request for {dev.get('Name', '')}")
-                    
-                    # 1. Date & Employee Core Info
                     edit_date = st.date_input("Update Target Date", value=pd.to_datetime(dev.get('Date')).date(), key=f"ed_date_{dev['_id']}")
                     edit_manager = st.text_input("Update Manager", value=dev.get('Manager', ''), key=f"ed_mgr_{dev['_id']}")
                     
-                    # Staff list names can be retrieved dynamically
                     roster_doc = collection.find_one({"type": "roster_list"})
                     staff_names = list(roster_doc.get("data", {}).keys()) if roster_doc else [dev.get('Name', '')]
                     if dev.get('Name') not in staff_names:
@@ -1605,13 +1104,11 @@ with tab_dev:
                     edit_name = st.selectbox("Update Name", staff_names, index=staff_names.index(dev.get('Name')), key=f"ed_name_{dev['_id']}")
                     edit_shift = st.text_input("Update Shift Time", value=dev.get('Shift Time', 'Not Set'), key=f"ed_shift_{dev['_id']}")
                     
-                    # 2. Time Alignment & Duration Specs
                     c1, c2, c3 = st.columns(3)
                     edit_start = c1.text_input("Update Start Time", value=dev.get('Start Time', '00:00'), key=f"ed_start_{dev['_id']}")
                     edit_end = c2.text_input("Update End Time", value=dev.get('End Time', '00:00'), key=f"ed_end_{dev['_id']}")
                     edit_mins = c3.number_input("Update Total Mins", value=int(dev.get('Total Mins', 0)), min_value=0, key=f"ed_mins_{dev['_id']}")
                     
-                    # 3. Aux & Context
                     edit_aux = st.text_input("Update Aux", value=dev.get('Aux', ''), key=f"ed_aux_{dev['_id']}")
                     edit_reason = st.text_area("Update Reason of Deviation", value=dev.get('Reason', ''), key=f"ed_reas_{dev['_id']}")
 
@@ -1619,22 +1116,15 @@ with tab_dev:
                     with save_col:
                         if st.button("Save Changes", key=f"save_ed_dev_{dev['_id']}"):
                             update_deviation_in_db(dev["_id"], {
-                                "Date": str(edit_date),
-                                "Manager": edit_manager,
-                                "Name": edit_name,
-                                "Shift Time": edit_shift,
-                                "Start Time": str(edit_start),
-                                "End Time": str(edit_end),
-                                "Total Mins": edit_mins,
-                                "Aux": edit_aux,
-                                "Reason": edit_reason
+                                "Date": str(edit_date), "Manager": edit_manager, "Name": edit_name,
+                                "Shift Time": edit_shift, "Start Time": str(edit_start),
+                                "End Time": str(edit_end), "Total Mins": edit_mins,
+                                "Aux": edit_aux, "Reason": edit_reason
                             })
                             st.success("Deviation record updated completely!")
                             st.rerun()
-
                     with cancel_col:
                         if st.button("Cancel", key=f"cancel_ed_dev_{dev['_id']}"):
-                            # Explicitly clear selection tracking key to drop back to standard table view
                             if f"act_dev_{dev['_id']}" in st.session_state:
                                 st.session_state[f"act_dev_{dev['_id']}"] = "View"
                             st.rerun()
@@ -1643,10 +1133,7 @@ with tab_dev:
                 with st.container():
                     st.warning("⚠️ This action requires supervisor authorization.")
                     del_password = st.text_input("Enter Admin Password to confirm delete", type="password", key=f"pwd_del_dev_{dev['_id']}")
-                    
-                    # FIXED: Added the column definitions here so the with block does not crash
                     del_col, cancel_del_col = st.columns(2)
-                    
                     with del_col:
                         if st.button("Confirm Delete", key=f"conf_del_dev_{dev['_id']}"):
                             if del_password == "Password1234":
@@ -1655,14 +1142,11 @@ with tab_dev:
                                 st.rerun()
                             else:
                                 st.error("Incorrect Password. Action denied.")
-                                
                     with cancel_del_col:
                         if st.button("Cancel", key=f"cancel_del_dev_{dev['_id']}"):
-                            # Explicitly clear selection tracking key to drop back to standard table view
                             if f"act_dev_{dev['_id']}" in st.session_state:
                                 st.session_state[f"act_dev_{dev['_id']}"] = "View"
                             st.rerun()
-                            
             st.markdown("---")
     else:
         st.write("No deviation requests found.")
@@ -1675,7 +1159,6 @@ with tab_adm:
             st.rerun()
     else:
         st.subheader("Admin Panel")
-        
         pending_count = len(fetch_pending_requests_from_db())
 
         if pending_count > 0:
@@ -1686,10 +1169,8 @@ with tab_adm:
         st.divider()
 
         col1, col2 = st.columns(2)
-    
         with col1:
             st.subheader("Roster Management")
-                
             roster_doc = collection.find_one({"type": "roster_list"})
             roster = roster_doc.get("data", {}) if roster_doc else {}
                 
@@ -1723,129 +1204,51 @@ with tab_adm:
     
             st.markdown("### Add Multiple Staff")
             if "new_staff_entries" not in st.session_state:
-                st.session_state.new_staff_entries = [
-                    {
-                        "name": "",
-                        "nick": "",
-                        "bday": date.today(),
-                        "rest_days": []
-                    }
-                ]
+                st.session_state.new_staff_entries = [{"name": "", "nick": "", "bday": date.today(), "rest_days": []}]
             
             for idx, staff in enumerate(st.session_state.new_staff_entries):
                 st.markdown(f"#### Staff #{idx + 1}")
-            
                 c1, c2 = st.columns(2)
-            
                 with c1:
-                    staff["name"] = st.text_input(
-                        "Staff Name",
-                        value=staff["name"],
-                        key=f"multi_staff_name_{idx}"
-                    )
-            
-                    staff["nick"] = st.text_input(
-                        "Nickname",
-                        value=staff["nick"],
-                        key=f"multi_staff_nick_{idx}"
-                    )
-            
+                    staff["name"] = st.text_input("Staff Name", value=staff["name"], key=f"multi_staff_name_{idx}")
+                    staff["nick"] = st.text_input("Nickname", value=staff["nick"], key=f"multi_staff_nick_{idx}")
                 with c2:
-                    staff["bday"] = st.date_input(
-                        "Birthday",
-                        value=staff["bday"],
-                        min_value=date(1950, 1, 1),
-                        key=f"multi_staff_bday_{idx}"
-                    )
-            
-                    staff["rest_days"] = st.multiselect(
-                        "Select Rest Days",
-                        ["Monday", "Tuesday", "Wednesday", "Thursday",
-                         "Friday", "Saturday", "Sunday"],
-                        default=staff["rest_days"],
-                        key=f"multi_staff_rest_{idx}"
-                    )
-            
+                    staff["bday"] = st.date_input("Birthday", value=staff["bday"], min_value=date(1950, 1, 1), key=f"multi_staff_bday_{idx}")
+                    staff["rest_days"] = st.multiselect("Select Rest Days", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], default=staff["rest_days"], key=f"multi_staff_rest_{idx}")
                 st.divider()
             
             col_add, col_save = st.columns(2)
-            
             with col_add:
                 if st.button("➕ Add Another Staff", key="btn_add_staff_row"):
-                    st.session_state.new_staff_entries.append(
-                        {
-                            "name": "",
-                            "nick": "",
-                            "bday": date.today(),
-                            "rest_days": []
-                        }
-                    )
+                    st.session_state.new_staff_entries.append({"name": "", "nick": "", "bday": date.today(), "rest_days": []})
                     st.rerun()
-            
             with col_save:
                 if st.button("💾 Save Staff Entries", key="btn_save_multiple_staff"):
                     added_count = 0
-            
                     for staff in st.session_state.new_staff_entries:
                         if not staff["name"]:
                             continue
-            
-                        bday_datetime = datetime(
-                            staff["bday"].year,
-                            staff["bday"].month,
-                            staff["bday"].day
-                        )
-            
-                        save_staff(
-                            staff["name"],
-                            {
-                                "bday": bday_datetime,
-                                "nick": staff["nick"] if staff["nick"] else staff["name"],
-                                "rest_days": staff["rest_days"]
-                            }
-                        )
-            
+                        bday_datetime = datetime(staff["bday"].year, staff["bday"].month, staff["bday"].day)
+                        save_staff(staff["name"], {
+                            "bday": bday_datetime,
+                            "nick": staff["nick"] if staff["nick"] else staff["name"],
+                            "rest_days": staff["rest_days"]
+                        })
                         added_count += 1
             
                     st.success(f"{added_count} staff record(s) saved successfully!")
-            
-                    st.session_state.new_staff_entries = [
-                        {
-                            "name": "",
-                            "nick": "",
-                            "bday": date.today(),
-                            "rest_days": []
-                        }
-                    ]
-            
+                    st.session_state.new_staff_entries = [{"name": "", "nick": "", "bday": date.today(), "rest_days": []}]
                     st.rerun()
             st.divider()
     
-            # --- DAILY CONFIG ---
             st.subheader("Configuration")
             st.session_state.selected_admin_date = st.date_input("Select Date to View/Edit", date.today(), key="cfg_view_edit_date")
 
             calendar_doc = collection.find_one({"type": "calendar_data"})
-
             if calendar_doc:
-                selected_config = calendar_doc.get(
-                    "data",
-                    {}
-                ).get(
-                    str(st.session_state.selected_admin_date),
-                    {}
-                )
-            
-                st.session_state.limits["PTO_per_day"] = selected_config.get(
-                    "PTO_per_day",
-                    1
-                )
-            
-                st.session_state.limits["Wellness_per_day"] = selected_config.get(
-                    "Wellness_per_day",
-                    1
-                )
-
+                selected_config = calendar_doc.get("data", {}).get(str(st.session_state.selected_admin_date), {})
+                st.session_state.limits["PTO_per_day"] = selected_config.get("PTO_per_day", 1)
+                st.session_state.limits["Wellness_per_day"] = selected_config.get("Wellness_per_day", 1)
     
             st.markdown("---")
             st.subheader("Important Notifications")
@@ -1874,25 +1277,8 @@ with tab_adm:
                 target_dates = pd.date_range(f"{sm.year}-{sm.month}-01", periods=31).date
                 target_dates = [d for d in target_dates if d.month == sm.month]
     
-            st.session_state.limits["PTO_per_day"] = st.number_input(
-                "Max PTO Per Day",
-                min_value=1,
-                value=st.session_state.limits.get(
-                    "PTO_per_day",
-                    1
-                ),
-                key="num_max_pto_per_day"
-            )
-            
-            st.session_state.limits["Wellness_per_day"] = st.number_input(
-                "Max Wellness Per Day",
-                min_value=1,
-                value=st.session_state.limits.get(
-                    "Wellness_per_day",
-                    1
-                ),
-                key="num_max_well_per_day"
-            )
+            st.session_state.limits["PTO_per_day"] = st.number_input("Max PTO Per Day", min_value=1, value=st.session_state.limits.get("PTO_per_day", 1), key="num_max_pto_per_day")
+            st.session_state.limits["Wellness_per_day"] = st.number_input("Max Wellness Per Day", min_value=1, value=st.session_state.limits.get("Wellness_per_day", 1), key="num_max_well_per_day")
 
             start_t = st.time_input("Shift Start", value=time(9, 0), key="time_shift_start")
             end_t = st.time_input("Shift End", value=time(18, 0), key="time_shift_end")
@@ -1900,16 +1286,12 @@ with tab_adm:
             
             shift_display = f"{start_t.strftime('%I:%M %p')} - {end_t.strftime('%I:%M %p')} {timezone}"
             st.write(f"Selected Shift: **{shift_display}**")
-            
             setup = st.selectbox("Status", ["PROD - ONSITE", "PROD - WAH", "HOLIDAY"], key="sb_daily_status_setup")
             
             safe_target_dates = target_dates if isinstance(target_dates, (list, tuple)) else []
             base_date = safe_target_dates[0] if len(safe_target_dates) > 0 else date.today()
             approved_requests = fetch_approved_requests_from_db()   
-            unavailable = [r["name"]
-                for r in approved_requests
-                if str(r["date"]) == str(base_date)]
-
+            unavailable = [r["name"] for r in approved_requests if str(r["date"]) == str(base_date)]
             available = [n for n in roster.keys() if n not in unavailable] if roster else []
             
             team_manager = st.selectbox("Assign Team Manager", [""] + available, key="sb_assign_team_manager")
@@ -1921,25 +1303,14 @@ with tab_adm:
             if st.button("Save Config", key="btn_save_daily_config"):
                 for d in target_dates:
                     st.session_state.calendar_data[d] = {
-                        "shift": shift_display,
-                        "status": setup,
+                        "shift": shift_display, "status": setup,
                         "team_manager": [team_manager] if team_manager else [],
-                        "call": call,
-                        "chat": chat,
-                        "mfq": mfq,
-                        "sme": sme,
+                        "call": call, "chat": chat, "mfq": mfq, "sme": sme,
                         "PTO_per_day": st.session_state.limits["PTO_per_day"],
                         "Wellness_per_day": st.session_state.limits["Wellness_per_day"]
                     }
-                
                 serializable_data = {str(k): v for k, v in st.session_state.calendar_data.items()}
-                
-                collection.update_one(
-                    {"type": "calendar_data"},
-                    {"$set": {"data": serializable_data}},
-                    upsert=True
-                )
-                
+                collection.update_one({"type": "calendar_data"}, {"$set": {"data": serializable_data}}, upsert=True)
                 st.cache_data.clear()
                 st.success("Configuration saved to database!")
                 st.rerun()
@@ -1952,178 +1323,93 @@ with tab_adm:
                 st.session_state.admin_msg = None
             if st.session_state.admin_msg:
                 msg_type, msg_text = st.session_state.admin_msg
-                if msg_type == "success": 
-                    st.success(msg_text)
-                else: 
-                    st.warning(msg_text)
-                    
+                if msg_type == "success": st.success(msg_text)
+                else: st.warning(msg_text)
                 if st.button("Clear Notification", key="clear_admin_notif"):
                     st.session_state.admin_msg = None
                     st.rerun()
 
             st.markdown("### 🌿 Wellness Requests")
-            wellness_pending = [
-                r for r in all_pending_requests
-                if r.get("type") == "Wellness"
-            ]
-            
+            wellness_pending = [r for r in all_pending_requests if r.get("type") == "Wellness"]
             wellness_selected = []
             
             if wellness_pending:
-            
-                select_all_wellness = st.checkbox(
-                    "Select All Wellness",
-                    key="select_all_wellness"
-                )
-            
+                select_all_wellness = st.checkbox("Select All Wellness", key="select_all_wellness")
                 for req in wellness_pending:
-            
                     req_id = str(req["_id"])
-            
                     c1, c2 = st.columns([1, 8])
-            
                     with c1:
-                        checked = st.checkbox(
-                            "",
-                            value=select_all_wellness,
-                            key=f"wellness_chk_{req_id}"
-                        )
-            
+                        checked = st.checkbox("", value=select_all_wellness, key=f"wellness_chk_{req_id}")
                     with c2:
-                        st.write(
-                            f"{req['name']} | {req['date']} | {req['status']}"
-                        )
-            
+                        st.write(f"{req['name']} | {req['date']} | {req['status']}")
                     if checked:
                         wellness_selected.append(req["_id"])
             
                 c1, c2 = st.columns(2)
-            
                 with c1:
-                    if st.button(
-                        "✅ Approve Selected Wellness",
-                        key="approve_wellness"
-                    ):
+                    if st.button("✅ Approve Selected Wellness", key="approve_wellness"):
                         if wellness_selected:
-                            bulk_update_requests(
-                                wellness_selected,
-                                "Approved"
-                            )
+                            bulk_update_requests(wellness_selected, "Approved")
                             st.success("Selected wellness requests approved.")
                             st.rerun()
-            
                 with c2:
-                    if st.button(
-                        "❌ Deny Selected Wellness",
-                        key="deny_wellness"
-                    ):
+                    if st.button("❌ Deny Selected Wellness", key="deny_wellness"):
                         if wellness_selected:
-                            bulk_update_requests(
-                                wellness_selected,
-                                "Rejected"
-                            )
+                            bulk_update_requests(wellness_selected, "Rejected")
                             st.success("Selected wellness requests denied.")
                             st.rerun()
-            
             else:
                 st.write("No pending Wellness requests.")
 
             st.markdown("### ✈️ PTO Requests")
-
-            pto_pending = [
-                r for r in all_pending_requests
-                if r.get("type") == "PTO"
-            ]
-
+            pto_pending = [r for r in all_pending_requests if r.get("type") == "PTO"]
             pto_selected = []
 
             if pto_pending:
-
-                select_all_pto = st.checkbox(
-                    "Select All PTO",
-                    key="select_all_pto"
-                )
-
+                select_all_pto = st.checkbox("Select All PTO", key="select_all_pto")
                 for req in pto_pending:
-
                     req_id = str(req["_id"])
-
                     c1, c2 = st.columns([1, 8])
-
                     with c1:
-                        checked = st.checkbox(
-                            "",
-                            value=select_all_pto,
-                            key=f"pto_chk_{req_id}"
-                        )
-
+                        checked = st.checkbox("", value=select_all_pto, key=f"pto_chk_{req_id}")
                     with c2:
-                        st.write(
-                            f"{req['name']} | {req['date']} | {req['status']}"
-                        )
-
+                        st.write(f"{req['name']} | {req['date']} | {req['status']}")
                     if checked:
                         pto_selected.append(req["_id"])
 
                 c1, c2 = st.columns(2)
-
                 with c1:
-                    if st.button(
-                        "✅ Approve Selected PTO",
-                        key="approve_pto"
-                    ):
+                    if st.button("✅ Approve Selected PTO", key="approve_pto"):
                         if pto_selected:
-                            bulk_update_requests(
-                                pto_selected,
-                                "Approved"
-                            )
-                            st.success(
-                                "Selected PTO requests approved."
-                            )
+                            bulk_update_requests(pto_selected, "Approved")
+                            st.success("Selected PTO requests approved.")
                             st.rerun()
-
                 with c2:
-                    if st.button(
-                        "❌ Deny Selected PTO",
-                        key="deny_pto"
-                    ):
+                    if st.button("❌ Deny Selected PTO", key="deny_pto"):
                         if pto_selected:
-                            bulk_update_requests(
-                                pto_selected,
-                                "Rejected"
-                            )
-                            st.success(
-                                "Selected PTO requests denied."
-                            )
+                            bulk_update_requests(pto_selected, "Rejected")
+                            st.success("Selected PTO requests denied.")
                             st.rerun()
-
             else:
                 st.write("No pending PTO requests.")
 
             st.divider()
-
             st.subheader("✅ Approved History")
             
             filter_col1, filter_col2 = st.columns(2)
             with filter_col1:
                 month_options = {
-                    1: "January", 2: "February", 3: "March", 4: "April", 
-                    5: "May", 6: "June", 7: "July", 8: "August", 
-                    9: "September", 10: "October", 11: "November", 12: "December"
+                    1: "January", 2: "February", 3: "March", 4: "April", 5: "May", 6: "June",
+                    7: "July", 8: "August", 9: "September", 10: "October", 11: "November", 12: "December"
                 }
                 default_month = st.session_state.get("cal_m", date.today().month)
                 selected_month = st.selectbox("Filter by Month", options=list(month_options.keys()), format_func=lambda x: month_options[x], index=list(month_options.keys()).index(default_month), key="history_filter_month")
-            
             with filter_col2:
                 current_year = date.today().year
                 year_options = list(range(current_year - 5, current_year + 6))
                 selected_year = st.selectbox("Filter by Year", options=year_options, index=year_options.index(current_year), key="history_filter_year")
 
             all_approved_from_db = fetch_approved_requests_from_db()
-            
-            month_to_filter = selected_month
-            year_to_filter = selected_year
-            
             app_wellness = []
             app_pto = []
             
@@ -2134,20 +1420,16 @@ with tab_adm:
                         date_val = datetime.strptime(date_val.split("T")[0], "%Y-%m-%d").date()
                     except ValueError:
                         continue
-                if date_val.month == month_to_filter and date_val.year == year_to_filter:
-                    if r.get('type') == "Wellness":
-                        app_wellness.append(r)
-                    elif r.get('type') == "PTO":
-                        app_pto.append(r)
+                if date_val.month == selected_month and date_val.year == selected_year:
+                    if r.get('type') == "Wellness": app_wellness.append(r)
+                    elif r.get('type') == "PTO": app_pto.append(r)
             
             if app_wellness:
                 st.markdown("#### Approved Wellness")
-                # Sized dynamically to prevent scrollbars
                 w_height = min(1000, max(100, len(app_wellness) * 35 + 38))
                 st.dataframe(pd.DataFrame(app_wellness).drop(columns=['_id', 'type'], errors='ignore'), hide_index=True, use_container_width=True, height=w_height)
             if app_pto:
                 st.markdown("#### Approved PTO")
-                # Sized dynamically to prevent scrollbars
                 p_height = min(1000, max(100, len(app_pto) * 35 + 38))
                 st.dataframe(pd.DataFrame(app_pto).drop(columns=['_id', 'type'], errors='ignore'), hide_index=True, use_container_width=True, height=p_height)
             if not app_wellness and not app_pto:
