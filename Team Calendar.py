@@ -270,7 +270,7 @@ st.markdown("""
     div[data-testid="stTable"] tr:nth-child(odd) { background-color: #ffffff !important; }
     div[data-testid="stTable"] tr:nth-child(odd) td { color: #008080 !important; font-weight: 600; }
     div[data-testid="stTable"] th { background-color: #004d4d !important; color: #ffffff !important; }
-    </style> subscription-tracker
+    </style>
 """, unsafe_allow_html=True)
 
 # --- NOTIFICATION BAR ---
@@ -470,7 +470,7 @@ with tab_cal:
     # =====================================================================
     st.markdown("<br>", unsafe_allow_html=True)
     st.divider()
-    st.subheader("📆 Weekly Roster Matrix")
+    st.subheader("📆 Weekly Roster")
     
     # Dynamically anchors dropdown options starting from the first day of the top selected calendar month/year
     month_start_date = date(year, month, 1)
@@ -479,10 +479,17 @@ with tab_cal:
     # Generates selection options encompassing all weeks touching the active chosen month view
     sunday_options = [base_sunday + timedelta(weeks=i) for i in range(0, 6)]
     
+    # Calculate the Sunday of the current week (today)
+    today_date = current_date.date() if hasattr(current_date, 'date') else current_date
+    today_sunday = today_date - timedelta(days=(today_date.weekday() + 1) if today_date.weekday() != 6 else 0)
+    
+    # Determine the index for today's Sunday; fallback to 0 if it's outside the generated month scope
+    default_week_index = sunday_options.index(today_sunday) if today_sunday in sunday_options else 0
+    
     selected_week_start = st.selectbox(
         "Select Week Beginning (Sunday):", 
         options=sunday_options,
-        index=0,
+        index=default_week_index,
         format_func=lambda d: d.strftime("%B %d, %Y"),
         key="weekly_view_lookup_start_select"
     )
