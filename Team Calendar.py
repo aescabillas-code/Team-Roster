@@ -712,6 +712,7 @@ with tab_prod:
         df["Year"] = df["Date"].dt.year
         df["Day"] = df["Date"].dt.date
 
+        # --- Monthly Productivity ---
         st.markdown("## Monthly Productivity")
         col1, col2 = st.columns(2)
         years = sorted(df["Year"].dropna().unique())
@@ -725,13 +726,13 @@ with tab_prod:
             monthly_summary["Total Cases"] = monthly_summary.sum(axis=1)
             m_height = min(1000, max(100, len(monthly_summary) * 35 + 38))
             
-            # Reset index then hide for clean display
             st.dataframe(monthly_summary.reset_index().style.hide(axis="index"), use_container_width=True, height=m_height)
         else:
             st.info("No cases found for selected month.")
 
         st.divider()
 
+        # --- Daily Productivity ---
         st.markdown("## Daily Productivity")
         selected_day = st.date_input("Select Day", value=date.today(), key="prod_day")
         daily_df = df[df["Day"] == selected_day]
@@ -741,13 +742,13 @@ with tab_prod:
             daily_summary["Total Cases"] = daily_summary.sum(axis=1)
             d_height = min(1000, max(100, len(daily_summary) * 35 + 38))
             
-            # Reset index then hide for clean display
             st.dataframe(daily_summary.reset_index().style.hide(axis="index"), use_container_width=True, height=d_height)
         else:
             st.info("No cases found for selected day.")
 
         st.divider()
 
+        # --- Overall Issue Analysis ---
         st.markdown("## Overall Issue Analysis")
         overall_issue = df["Issue"].value_counts().reset_index()
         overall_issue.columns = ["Issue", "Count"]
@@ -759,11 +760,11 @@ with tab_prod:
         st.altair_chart(issue_chart, use_container_width=True)
         
         i_height = min(1000, max(100, len(overall_issue) * 35 + 38))
-        # Hide index from Styler object
         st.dataframe(overall_issue.style.hide(axis="index"), use_container_width=True, height=i_height)
 
         st.divider()
 
+        # --- Overall Product Analysis ---
         st.markdown("## Overall Product Analysis")
         overall_product = df["Product Group"].value_counts().reset_index()
         overall_product.columns = ["Product Group", "Count"]
@@ -775,7 +776,6 @@ with tab_prod:
         st.altair_chart(product_chart, use_container_width=True)
 
         p_height = min(1000, max(100, len(overall_product) * 35 + 38))
-        # Hide index from Styler object
         st.dataframe(overall_product.style.hide(axis="index"), use_container_width=True, height=p_height)
         st.divider()
 
