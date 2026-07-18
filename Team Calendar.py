@@ -468,6 +468,75 @@ with tab_cal:
                     cols[i].markdown(f'<div class="day-block">{content}</div>', unsafe_allow_html=True)
                 else:
                     cols[i].markdown('<div class="day-block day-block-outside"></div>', unsafe_allow_html=True)
+                    
+# =====================================================================
+    # NEW PLACEMENT: WEEKLY VIEW GRID AT THE BOTTOM OF THE ENTIRE TAB
+    # =====================================================================
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.divider()
+    st.subheader("📆 Weekly Roster Matrix")
+    
+    # 1. Generate the Mon-Sun range matching the chosen view_date's week
+    start_of_week = view_date - timedelta(days=view_date.weekday())
+    week_days = [start_of_week + timedelta(days=idx) for idx in range(7)]
+    
+    # 2. Extract approved calendar details once for performance
+    approved_requests = fetch_approved_requests_from_db()
+    roles = ["team_manager", "call", "chat", "mfq", "sme"]
+    
+    weekly_rows = []
+    for name in roster.keys():
+        if name == tm_name:
+            continue
+            
+        staff_row = {"Staff Name": name}
+        is_tm_somewhere = False
+        
+        for day in week_days:
+            col_name = day.strftime("%A (%m/%d)")
+            
+            # Check Weekend Rest Days
+            if day.weekday() in [5, 6]:
+                staff_row[col_name] = "REST DAY"
+                continue
+            
+            # Check Leave Status
+            p_status = [r["type"] for r in approved_requests if str(r["date"]) == str(day) and r["name"] == name]
+            if p_status:
+                staff_row[col_name] = p_status[0].upper()
+            else:
+                # Resolve day-specific configurations safely
+                day_config = st.session_state.calendar_data.get(day) or st.session_state.calendar_data.get(str(day)) or {}
+                
+                assigned_roles = []
+                for r in roles:
+                    assigned_list = day_config.get(r, [])
+                    if isinstance(assigned_list, list) and name in assigned_list:
+                        assigned_roles.append(r.upper().replace("_", " "))
+                    elif isinstance(assigned_list, dict) and name in assigned_list.keys():
+                        assigned_roles.append(r.upper().replace("_", " "))
+                
+                role_display = ", ".join(assigned_roles) if assigned_roles else "UNASSIGNED"
+                
+                if "TEAM MANAGER" in role_display:
+                    is_tm_somewhere = True
+                    break
+                    
+                staff_row[col_name] = role_display
+        
+        if not is_tm_somewhere:
+            weekly_rows.append(staff_row)
+
+    if weekly_rows:
+        weekly_df = pd.DataFrame(weekly_rows)
+        st.dataframe(
+            weekly_df, 
+            hide_index=True, 
+            use_container_width=True, 
+            height=min(1000, max(100, len(weekly_df) * 35 + 38))
+        )
+    else:
+        st.write("*No scheduled staff found for this week.*")
 
 # --- TAB 2: REQUEST FORM ---
 with tab_req:
