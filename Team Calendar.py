@@ -916,7 +916,7 @@ with tab_case:
                     edit_desc = st.text_area("Issue Description", value=case.get("Desc", ""), key=f"ed_desc_{case['_id']}")
                     edit_steps = st.text_area("Steps Taken", value=case.get("Steps", ""), key=f"ed_step_{case['_id']}")
                     
-                    with save_col:
+                with save_col:
                         if st.button("Save Changes", key=f"save_ed_{case['_id']}"):
                             collection.update_one(
                                 {"_id": case["_id"]},
