@@ -671,8 +671,6 @@ with tab_cal:
                         content = f"<b>{day}</b><div class='calendar-divider'></div><br><center><b>REST DAY</b></center>"
                     else:
                         content = (f"<b>{day}</b><div class='calendar-divider'></div>"
-                                   f"<u>{grid_data.get('status', '-')}</u><div class='calendar-divider'></div>"
-                                   f"{grid_data.get('shift', '-')}<div class='calendar-divider'></div>"
                                    f"PTO/Wellness: {req_display}<div class='calendar-divider'></div>"
                                    f"Call: {get_filtered_nicks(grid_data.get('call', []))}<div class='calendar-divider'></div>"
                                    f"Chat: {get_filtered_nicks(grid_data.get('chat', []))}<div class='calendar-divider'></div>"
@@ -994,9 +992,11 @@ with tab_prod:
 with tab_case:
     st.subheader("Log New Case")
 
-    masterfile_doc = collection.find_one(
-        {"type": "masterfile"}
-    )
+    # Change this from collection.find to your cached function
+    cases_list = get_cases_from_db() 
+    cases = cases_list # Unify both variables so they use the same cleared cache data
+
+    masterfile_doc = collection.find_one({"type": "masterfile"})
 
     if masterfile_doc and "data" in masterfile_doc:
         master_df = pd.DataFrame(
@@ -1148,9 +1148,9 @@ with tab_case:
     # Knowledge Base
     st.subheader("Knowledge Base")
 
-    cases_list = get_cases_from_db()
-    if cases:
-        df_cases = pd.DataFrame(cases)
+    # Change df_cases = pd.DataFrame(cases) to cases_list
+    if cases_list:
+        df_cases = pd.DataFrame(cases_list)
         # Download button for KB
         csv = df_cases.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Download Knowledge Base CSV", csv, "kb_export.csv", "text/csv")
@@ -1424,10 +1424,10 @@ with tab_case:
                             st.rerun()
 
                     with cancel_col:
-                        if st.button(
-                            "Cancel",
-                            key=f"cancel_edit_{case['_id']}"
-                        ):
+                        if st.button("Cancel", key=f"cancel_edit_{case['_id']}"):
+                            # Clear the selection widget key explicitly from session state
+                            if f"action_{case['_id']}" in st.session_state:
+                                st.session_state[f"action_{case['_id']}"] = "None"
                             st.rerun()
 
             # DELETE
@@ -1460,15 +1460,14 @@ with tab_case:
                             st.rerun()
                         else:
                             st.error(
-                                "Incorrect Password."
-                            )
+                                "Incorrect Password.")
 
                 with cancel_col:
-                    if st.button(
-                        "Cancel",
-                        key=f"cancel_del_{case['_id']}"
-                    ):
-                        st.rerun()
+                        if st.button("Cancel", key=f"cancel_edit_{case['_id']}"):
+                            # Clear the selection widget key explicitly from session state
+                            if f"action_{case['_id']}" in st.session_state:
+                                st.session_state[f"action_{case['_id']}"] = "None"
+                            st.rerun()
 
             st.divider()
     else:
@@ -1554,6 +1553,7 @@ with tab_dev:
         filter_year = f_col2.number_input("Year", value=date.today().year, key="dev_f_year")
         filter_date = f_col3.date_input("Specific Date (Optional)", value=None, key="dev_f_date")
         apply_filter = st.button("Apply Filter")
+            st.rerun()
 
     dev_data = fetch_deviations_from_db()
     if dev_data:
@@ -1600,34 +1600,79 @@ with tab_dev:
             
             if action == "Edit":
                 with st.container():
-                    st.markdown("#### Edit Deviation Request")
+                    st.markdown(f"#### Edit Deviation Request for {dev.get('Name', '')}")
+                    
+                    # 1. Date & Employee Core Info
+                    edit_date = st.date_input("Update Target Date", value=pd.to_datetime(dev.get('Date')).date(), key=f"ed_date_{dev['_id']}")
                     edit_manager = st.text_input("Update Manager", value=dev.get('Manager', ''), key=f"ed_mgr_{dev['_id']}")
-                    edit_mins = st.number_input("Update Total Mins", value=int(dev.get('Total Mins', 0)), min_value=0, key=f"ed_mins_{dev['_id']}")
+                    
+                    # Staff list names can be retrieved dynamically
+                    roster_doc = collection.find_one({"type": "roster_list"})
+                    staff_names = list(roster_doc.get("data", {}).keys()) if roster_doc else [dev.get('Name', '')]
+                    if dev.get('Name') not in staff_names:
+                        staff_names.append(dev.get('Name'))
+                        
+                    edit_name = st.selectbox("Update Name", staff_names, index=staff_names.index(dev.get('Name')), key=f"ed_name_{dev['_id']}")
+                    edit_shift = st.text_input("Update Shift Time", value=dev.get('Shift Time', 'Not Set'), key=f"ed_shift_{dev['_id']}")
+                    
+                    # 2. Time Alignment & Duration Specs
+                    c1, c2, c3 = st.columns(3)
+                    edit_start = c1.text_input("Update Start Time", value=dev.get('Start Time', '00:00'), key=f"ed_start_{dev['_id']}")
+                    edit_end = c2.text_input("Update End Time", value=dev.get('End Time', '00:00'), key=f"ed_end_{dev['_id']}")
+                    edit_mins = c3.number_input("Update Total Mins", value=int(dev.get('Total Mins', 0)), min_value=0, key=f"ed_mins_{dev['_id']}")
+                    
+                    # 3. Aux & Context
                     edit_aux = st.text_input("Update Aux", value=dev.get('Aux', ''), key=f"ed_aux_{dev['_id']}")
                     edit_reason = st.text_area("Update Reason of Deviation", value=dev.get('Reason', ''), key=f"ed_reas_{dev['_id']}")
-                    
-                    if st.button("Save Changes", key=f"save_ed_dev_{dev['_id']}"):
-                        update_deviation_in_db(dev["_id"], {
-                            "Manager": edit_manager,
-                            "Total Mins": edit_mins,
-                            "Aux": edit_aux,
-                            "Reason": edit_reason
-                        })
-                        st.success("Deviation record updated successfully!")
-                        st.rerun()
-                        
+
+                    save_col, cancel_col = st.columns(2)
+                    with save_col:
+                        if st.button("Save Changes", key=f"save_ed_dev_{dev['_id']}"):
+                            update_deviation_in_db(dev["_id"], {
+                                "Date": str(edit_date),
+                                "Manager": edit_manager,
+                                "Name": edit_name,
+                                "Shift Time": edit_shift,
+                                "Start Time": str(edit_start),
+                                "End Time": str(edit_end),
+                                "Total Mins": edit_mins,
+                                "Aux": edit_aux,
+                                "Reason": edit_reason
+                            })
+                            st.success("Deviation record updated completely!")
+                            st.rerun()
+
+                    with cancel_col:
+                        if st.button("Cancel", key=f"cancel_ed_dev_{dev['_id']}"):
+                            # Explicitly clear selection tracking key to drop back to standard table view
+                            if f"act_dev_{dev['_id']}" in st.session_state:
+                                st.session_state[f"act_dev_{dev['_id']}"] = "View"
+                            st.rerun()
+                      
             elif action == "Delete":
                 with st.container():
                     st.warning("⚠️ This action requires supervisor authorization.")
                     del_password = st.text_input("Enter Admin Password to confirm delete", type="password", key=f"pwd_del_dev_{dev['_id']}")
-                    if st.button("Confirm Delete", key=f"conf_del_dev_{dev['_id']}"):
-                        if del_password == "Password1234":
-                            delete_deviation_from_db(dev["_id"])
-                            st.success("Deviation record removed.")
+                    
+                    # FIXED: Added the column definitions here so the with block does not crash
+                    del_col, cancel_del_col = st.columns(2)
+                    
+                    with del_col:
+                        if st.button("Confirm Delete", key=f"conf_del_dev_{dev['_id']}"):
+                            if del_password == "Password1234":
+                                delete_deviation_from_db(dev["_id"])
+                                st.success("Deviation record removed.")
+                                st.rerun()
+                            else:
+                                st.error("Incorrect Password. Action denied.")
+                                
+                    with cancel_del_col:
+                        if st.button("Cancel", key=f"cancel_del_dev_{dev['_id']}"):
+                            # Explicitly clear selection tracking key to drop back to standard table view
+                            if f"act_dev_{dev['_id']}" in st.session_state:
+                                st.session_state[f"act_dev_{dev['_id']}"] = "View"
                             st.rerun()
-                        else:
-                            st.error("Incorrect Password. Action denied.")
-            
+                            
             st.markdown("---")
     else:
         st.write("No deviation requests found.")
