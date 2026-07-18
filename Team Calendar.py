@@ -10,15 +10,6 @@ import pytz
 import re
 import io
 
-# --- MOCK GMAIL BARD MODULE IF NOT LOCALLY INSTALLED ---
-if "gmail_bard" not in sys.modules:
-    mock_gmail = ModuleType("gmail_bard")
-    def send_message(to, subject, body):
-        # Console confirmation fallback log
-        print(f"[Mock Mail] Sent to {to}: {subject}")
-    mock_gmail.send_message = send_message
-    sys.modules["gmail_bard"] = mock_gmail
-
 # --- DATABASE HELPERS & CONNECTION ---
 uri = st.secrets["mongo"]["uri"] 
 client = MongoClient(uri)
