@@ -108,14 +108,14 @@ def update_request_status_in_db(req, status):
 @st.cache_data(ttl=15)
 def fetch_approved_requests_from_db():
     return list(collection.find({
-        "type": {"$in": ["PTO", "Wellness"]}, 
+        "type": {"$in": ["PTO", "Wellness","Sick Leave"]}, 
         "status": "Approved"
     }))
 
 @st.cache_data(ttl=15)
 def fetch_pending_requests_from_db():
     return list(collection.find({
-        "type": {"$in": ["PTO", "Wellness"]}, 
+        "type": {"$in": ["PTO", "Wellness","Sick Leave"]}, 
         "status": "Pending"
     }))
 
@@ -456,7 +456,7 @@ with tab_cal:
                         content = (f"<b>{day}</b><div class='calendar-divider'></div>"
                                    f"<u>{grid_data.get('status', '-')}</u><div class='calendar-divider'></div>"
                                    f"{grid_data.get('shift', '-')}<div class='calendar-divider'></div>"
-                                   f"PTO/Wellness: {req_display}<div class='calendar-divider'></div>"
+                                   f"PTO/Wellness/SL: {req_display}<div class='calendar-divider'></div>"
                                    f"Call: {get_filtered_nicks(grid_data.get('call', []))}<div class='calendar-divider'></div>"
                                    f"Chat: {get_filtered_nicks(grid_data.get('chat', []))}<div class='calendar-divider'></div>"
                                    f"MFQ: {get_filtered_nicks(grid_data.get('mfq', []))}<div class='calendar-divider'></div>"
@@ -587,7 +587,7 @@ with tab_cal:
         
 # --- TAB 2: REQUEST FORM ---
 with tab_req:
-    st.subheader("PTO/Wellness Request")
+    st.subheader("PTO/Wellness/SL Request")
 
     # Initialize a counter in session state to track how many requests to show
     if "request_count" not in st.session_state:
@@ -606,7 +606,7 @@ with tab_req:
             with cols[1]:
                 st.date_input("Date", key=f"date_{i}")
             with cols[2]:
-                st.selectbox("Type", ["PTO", "Wellness"], key=f"type_{i}")
+                st.selectbox("Type", ["PTO", "Wellness","Sick Leave"], key=f"type_{i}")
 
         # Button to add another row
         if st.form_submit_button("➕ Add Another Request"):
@@ -1378,6 +1378,7 @@ with tab_adm:
             all_approved_from_db = fetch_approved_requests_from_db()
             app_wellness = []
             app_pto = []
+            app_sl = []
             
             for r in all_approved_from_db:
                 date_val = r.get('date')
@@ -1389,6 +1390,8 @@ with tab_adm:
                 if date_val.month == selected_month and date_val.year == selected_year:
                     if r.get('type') == "Wellness": app_wellness.append(r)
                     elif r.get('type') == "PTO": app_pto.append(r)
+                    elif r.get('type') == "Sick Leave": 
+                        app_sl.append(r)
             
             if app_wellness:
                 st.markdown("#### Approved Wellness")
@@ -1398,5 +1401,9 @@ with tab_adm:
                 st.markdown("#### Approved PTO")
                 p_height = min(1000, max(100, len(app_pto) * 35 + 38))
                 st.dataframe(pd.DataFrame(app_pto).drop(columns=['_id', 'type'], errors='ignore'), hide_index=True, use_container_width=True, height=p_height)
+            if app_sl:
+                st.markdown("#### Approved Sick Leave")
+                sl_height = min(1000, max(100, len(app_sl) * 35 + 38))
+                st.dataframe(pd.DataFrame(app_sl).drop(columns=['_id', 'type'], errors='ignore'), hide_index=True, use_container_width=True, height=sl_height)
             if not app_wellness and not app_pto:
                 st.write("No approved requests for this month.")
