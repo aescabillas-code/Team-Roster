@@ -470,7 +470,12 @@ with tab_cal:
                     cols[i].markdown('<div class="day-block day-block-outside"></div>', unsafe_allow_html=True)
                     
 # 4. Process, Sort, and Style Grid Data
-    if weekly_rows:
+    # Initialize empty list to guarantee it exists regardless of conditional paths
+    staff_df = pd.DataFrame()
+    meta_df = pd.DataFrame()
+    weekly_df = pd.DataFrame()
+
+    if 'weekly_rows' in locals() and weekly_rows:
         # Sort the actual staff rows first (so metadata doesn't mix into sorting logic)
         first_day_col = week_days[0].strftime("%A (%m/%d)")
         staff_df = pd.DataFrame(weekly_rows).sort_values(by=[first_day_col, "Staff Name"], ascending=True)
