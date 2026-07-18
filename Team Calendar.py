@@ -663,14 +663,28 @@ with tab_req:
     # --- Approved History ---
     st.subheader("Approved History")
     f_c1, f_c2 = st.columns(2)
-    f_m = f_c1.selectbox("Month", range(1, 13), index=current_date.month-1, key="history_month_select")
+    
+    # Define month names using the calendar module
+    import calendar
+    month_names = list(calendar.month_name)[1:]
+    
+    # Selectbox displays month names; maps to 1-12 integer for logic
+    selected_month_name = f_c1.selectbox("Month", month_names, index=current_date.month-1, key="history_month_select")
+    f_m = month_names.index(selected_month_name) + 1
+    
     f_y = f_c2.number_input("Year", value=current_date.year, key="history_year_select")
+    
     app_reqs = fetch_approved_requests_from_db()
-    filtered_app = [r for r in app_reqs if int(r['date'].split('-')[1])==f_m and int(r['date'].split('-')[0])==f_y]
+    
+    # Filter logic: matches integer month and year
+    filtered_app = [r for r in app_reqs if int(r['date'].split('-')[1]) == f_m and int(r['date'].split('-')[0]) == f_y]
     
     if filtered_app: 
-        # Index hidden as requested
-        st.dataframe(pd.DataFrame(filtered_app)[['name', 'date', 'type']], hide_index=True, use_container_width=True)
+        # Create display dataframe and rename columns
+        df_display = pd.DataFrame(filtered_app)[['name', 'date', 'type']]
+        df_display.columns = ["Name", "Date", "Type"]
+        # Index hidden and container width applied
+        st.dataframe(df_display, hide_index=True, use_container_width=True)
     else: 
         st.write("No records found.")
         
