@@ -442,7 +442,8 @@ with tab_cal:
                         active = [n for n in full_names if n not in away_names]
                         return ", ".join([roster.get(x, {}).get("nick", x) for x in active])
                     
-                    req_display = "<br>".join([f"{roster.get(r['name'], {}).get('nick', r['name'])}({r['type']})" for r in approved])
+                    req_display = "<br>".join([f"{roster.get(r['name'], {}).get('nick', r['name'])}({r['type']})" 
+                                               for r in approved])
                     
                     grid_data = None
                     if hasattr(st.session_state, 'calendar_data') and st.session_state.calendar_data:
@@ -606,37 +607,65 @@ with tab_req:
             with cols[1]:
                 st.date_input("Date", key=f"date_{i}")
             with cols[2]:
-                st.selectbox("Type", ["PTO", "Wellness"], key=f"type_{i}")
+                st.selectbox("Type", ["PTO", "Wellness", "Sick Leave"], key=f"type_{i}")
 
         # Button to add another row
         if st.form_submit_button("➕ Add Another Request"):
             st.session_state.request_count += 1
             st.rerun()
 
-        # Final Submit Button
+        # --- Updated Submit Logic with Validation and Auto-Approval ---
         if st.form_submit_button("✅ Submit All Requests"):
             for i in range(st.session_state.request_count):
                 name = st.session_state[f"name_{i}"]
                 req_date = st.session_state[f"date_{i}"]
                 req_type = st.session_state[f"type_{i}"]
                 
-                limits = get_request_limits(req_date)
-                count_on_date = collection.count_documents({"type": req_type, "date": str(req_date), "status": {"$in": ["Pending", "Approved"]}})
-                is_already_requested = collection.count_documents({"name": name, "date": str(req_date), "status": {"$in": ["Pending", "Approved"]}}) > 0
+                # 1. Check for duplicates
+                is_already_requested = collection.count_documents({
+                    "name": name, 
+                    "date": str(req_date), 
+                    "status": {"$in": ["Pending", "Approved"]}
+                }) > 0
                 
                 if is_already_requested:
                     st.warning(f"⚠️ A request for {name} on {req_date} already exists.")
                     continue
+                    
+                # 2. Check limits (only for PTO/Wellness, or define a limit for Sick Leave if needed)
+                if req_type in ["PTO", "Wellness"]:
+                    limits = get_request_limits(req_date)
+                    limit_value = limits["PTO_per_day"] if req_type == "PTO" else limits["Wellness_per_day"]
+                    count_on_date = collection.count_documents({
+                        "type": req_type, 
+                        "date": str(req_date), 
+                        "status": {"$in": ["Pending", "Approved"]}
+                    })
+                    
+                    if count_on_date >= limit_value:
+                        st.error(f"❌ Limit reached for {req_type} on {req_date}.")
+                        continue # Skip this specific request
                 
-                limit_value = limits["PTO_per_day"] if req_type == "PTO" else limits["Wellness_per_day"]
-                if count_on_date >= limit_value:
-                    st.error(f"❌ Limit reached for {req_type} on {req_date}.")
-                else:
-                    new_req = {"name": name, "date": str(req_date), "type": req_type, "status": "Pending", "email": "", "viewed": False}
-                    save_request_to_db(new_req, req_type)
+                # 3. Apply Auto-approve logic
+                status = "Approved" if req_type == "Sick Leave" else "Pending"
+                
+                new_req = {
+                    "name": name, 
+                    "date": str(req_date), 
+                    "type": req_type, 
+                    "status": status, 
+                    "email": "", 
+                    "viewed": False
+                }
+                
+                # 4. Save to DB
+                save_request_to_db(new_req, req_type)
+                
+                # 5. Update UI state
+                if status == "Pending":
                     st.session_state.pending_requests.append(new_req)
             
-            st.success("All requests processed!")
+            st.success("Requests processed! (Sick Leave auto-approved)")
             st.session_state.request_count = 1 
             st.rerun()
 
