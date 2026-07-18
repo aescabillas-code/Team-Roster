@@ -594,20 +594,26 @@ with tab_req:
         available_names = list(staff_data.keys()) if staff_data else list(st.session_state.staff_roster.keys())
         name = st.selectbox("Name", available_names)
         
-        # Multiselect allows selecting multiple dates at once cleanly
+        # Multiselect for bulk requests: generated as strings to ensure form stability
+        date_options = [str(d.date()) for d in pd.date_range(start=current_date, periods=90)]
+        
         req_dates = st.multiselect(
             "Request Dates", 
-            options=pd.date_range(start=current_date.date(), periods=90).date,
-            format_func=lambda d: d.strftime("%B %d, %Y")
+            options=date_options,
+            format_func=lambda d: pd.to_datetime(d).strftime("%B %d, %Y")
         )
         req_type = st.selectbox("Type", ["PTO", "Wellness"])
         
-        if st.form_submit_button("Submit Request"):
+        # Explicitly defined form submit button
+        submit_btn = st.form_submit_button("Submit Request")
+        
+        if submit_btn:
             if not req_dates:
                 st.error("❌ Please select at least one date.")
             else:
                 success_count = 0
-                for req_date in req_dates:
+                for req_date_str in req_dates:
+                    req_date = pd.to_datetime(req_date_str).date()
                     limits = get_request_limits(req_date)
                     count_on_date = collection.count_documents({"type": req_type, "date": str(req_date), "status": {"$in": ["Pending", "Approved"]}})
                     
@@ -674,7 +680,7 @@ with tab_req:
     
     app_reqs = fetch_approved_requests_from_db()
     
-    # Safe date evaluation logic applied here
+    # Safe date evaluation for filtering
     filtered_app = []
     for r in app_reqs:
         try:
@@ -682,12 +688,12 @@ with tab_req:
             if parsed_date.month == f_m and parsed_date.year == f_y:
                 filtered_app.append(r)
         except Exception:
-            # Handle fallback gracefully if malformed dates exist
             continue
 
     if filtered_app: 
         df_app = pd.DataFrame(filtered_app)[['name', 'date', 'type']]
         df_app.columns = ["Name", "Date", "Type"]
+        # Hide index to remove row numbering
         st.dataframe(df_app, hide_index=True, use_container_width=True)
     else: 
         st.write("No records found.")
