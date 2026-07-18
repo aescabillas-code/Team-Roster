@@ -915,8 +915,7 @@ with tab_case:
                     edit_extra = st.text_input("Extra Information", value=case.get("Extra", ""), key=f"extra_{case['_id']}")
                     edit_desc = st.text_area("Issue Description", value=case.get("Desc", ""), key=f"ed_desc_{case['_id']}")
                     edit_steps = st.text_area("Steps Taken", value=case.get("Steps", ""), key=f"ed_step_{case['_id']}")
-
-                    save_col, cancel_col = st.columns(2)
+                    
                     with save_col:
                         if st.button("Save Changes", key=f"save_ed_{case['_id']}"):
                             collection.update_one(
@@ -931,12 +930,7 @@ with tab_case:
                             st.cache_data.clear()
                             st.success("Case updated successfully!")
                             st.rerun()
-                    with cancel_col:
-                        if st.button("Cancel", key=f"cancel_edit_{case['_id']}"):
-                            if f"action_{case['_id']}" in st.session_state:
-                                st.session_state[f"action_{case['_id']}"] = "None"
-                            st.rerun()
-
+                    
             elif action == "Delete":
                 st.warning("⚠️ Supervisor authorization required.")
                 del_password = st.text_input("Enter Admin Password", type="password", key=f"pwd_del_{case['_id']}")
@@ -950,11 +944,6 @@ with tab_case:
                             st.rerun()
                         else:
                             st.error("Incorrect Password.")
-                with cancel_col:
-                    if st.button("Cancel", key=f"cancel_del_w_{case['_id']}"):
-                        if f"action_{case['_id']}" in st.session_state:
-                            st.session_state[f"action_{case['_id']}"] = "None"
-                        st.rerun()
             st.divider()
     else:
         st.info("No cases match the selected filters.")
