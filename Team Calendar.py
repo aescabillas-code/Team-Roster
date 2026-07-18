@@ -472,7 +472,7 @@ with tab_cal:
     st.subheader("📊 Roster Data Matrix")
     
     # 1. Choose View Type
-    view_mode = st.radio("Display Filter Layer:", ["Weekly Grid View", "Daily Breakdown View"], horizontal=True, key="matrix_scope_toggle")
+    view_mode = st.radio("Display Filter Layer:", [" View", "Daily Breakdown View"], horizontal=True, key="matrix_scope_toggle")
     
     # Dynamic Date Calculations mapped strictly from the main calendar month/year configurations
     base_sunday = first_of_month - timedelta(days=(first_of_month.weekday() + 1) if first_of_month.weekday() != 6 else 0)
@@ -547,11 +547,17 @@ with tab_cal:
             meta_df = pd.DataFrame([setup_row, shift_row])
             weekly_df = pd.concat([meta_df, staff_df], ignore_index=True)
             
-            column_configurations = {"Staff Name": st.column_config.TextColumn(alignment="left")}
+            column_configurations = {
+            "Staff Name": st.column_config.TextColumn()}
             for day in week_days:
-                column_configurations[day.strftime("%A (%m/%d)")] = st.column_config.Column(alignment="center")
-
-            st.dataframe(weekly_df, column_config=column_configurations, hide_index=True, use_container_width=True)
+                c_name = day.strftime("%A (%m/%d)")
+                column_configurations[c_name] = st.column_config.TextColumn()
+    
+            st.dataframe(
+                weekly_df, 
+                column_config=column_configurations,
+                hide_index=True, 
+                use_container_width=True)
         else:
             st.write("*No scheduled staff found.*")
 
@@ -588,13 +594,12 @@ with tab_cal:
             st.dataframe(
                 daily_df, 
                 column_config={
-                    "Staff Name": st.column_config.Column(alignment="left"), 
-                    "Assigned Role": st.column_config.Column(alignment="center"), 
-                    "Setup Context": st.column_config.Column(alignment="center")
+                    "Staff Name": st.column_config.TextColumn(), 
+                    "Assigned Role": st.column_config.TextColumn(), 
+                    "Setup Context": st.column_config.TextColumn()
                 }, 
                 hide_index=True, 
-                use_container_width=True
-            )
+                use_container_width=True)
         
 # --- TAB 2: REQUEST FORM ---
 with tab_req:
