@@ -775,20 +775,27 @@ with tab_prod:
         st.dataframe(overall_product, use_container_width=True, height=p_height)
         st.divider()
 
-        st.markdown("## Overall Queue Analysis (Contact Type)")
-        overall_queue = df["Type"].value_counts().reset_index()
-        overall_queue.columns = ["Contact Type", "Count"]
+        st.divider()
 
-        # Create chart for Queue/Contact Type
-        queue_chart = alt.Chart(overall_queue).mark_bar().encode(
-            x=alt.X("Contact Type", axis=alt.Axis(labelAngle=-45)),
+        st.markdown("## Overall Queue Analysis (Extra if Routed)")
+        
+        # Filter for 'Routed' types only
+        routed_df = df[df["Type"] == "Routed"]
+        
+        # Group by the 'Extra' column
+        routed_queue = routed_df["Extra"].value_counts().reset_index()
+        routed_queue.columns = ["Extra Detail", "Count"]
+
+        # Create chart
+        queue_chart = alt.Chart(routed_queue).mark_bar().encode(
+            x=alt.X("Extra Detail", axis=alt.Axis(labelAngle=-45)),
             y="Count",
-            color="Contact Type"
+            color="Extra Detail"
         )
         st.altair_chart(queue_chart, use_container_width=True)
         
-        q_height = min(1000, max(100, len(overall_queue) * 35 + 38))
-        st.dataframe(overall_queue, use_container_width=True, height=q_height)
+        q_height = min(1000, max(100, len(routed_queue) * 35 + 38))
+        st.dataframe(routed_queue, use_container_width=True, height=q_height)
 
 # --- TAB 4: CASE TRACKER ---
 with tab_case:
