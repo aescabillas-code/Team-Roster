@@ -476,19 +476,20 @@ with tab_cal:
     st.divider()
     st.subheader("📆 Weekly Roster Matrix")
     
-    # 1. Add Filter for Week Beginning (Forces Selection to Mondays)
-    current_monday = view_date - timedelta(days=view_date.weekday())
+    # 1. Add Filter for Week Beginning (Forces Selection to Sundays)
+    current_sunday = view_date - timedelta(days=(view_date.weekday() + 1) if view_date.weekday() != 6 else 0)
     selected_week_start = st.date_input(
-        "Select Week Beginning (Monday):", 
-        value=current_monday,
+        "Select Week Beginning (Sunday):", 
+        value=current_sunday,
         key="weekly_view_lookup_start"
     )
-    # Ensure standard date type and align selection back to Monday if a user picks mid-week
+    # Ensure standard date type and align selection back to Sunday if a user picks mid-week
     selected_week_start = pd.to_datetime(selected_week_start).date()
-    week_start_monday = selected_week_start - timedelta(days=selected_week_start.weekday())
+    days_since_sunday = (selected_week_start.weekday() + 1) if selected_week_start.weekday() != 6 else 0
+    week_start_sunday = selected_week_start - timedelta(days=days_since_sunday)
     
-    # Generate Mon-Fri range (omitting Sat/Sun index 5 and 6)
-    week_days = [week_start_monday + timedelta(days=idx) for idx in range(5)]
+    # Generate Mon-Fri range (skipping Sunday index 0 and Saturday index 6 of the true week)
+    week_days = [week_start_sunday + timedelta(days=idx) for idx in range(1, 6)]
     
     # 2. Performance Cache Pre-fetch
     approved_requests = fetch_approved_requests_from_db()
@@ -544,14 +545,16 @@ with tab_cal:
         if not is_tm_somewhere:
             weekly_rows.append(staff_row)
 
-    # 3. Render Metadata Layout Directly Above Table Grid
-    meta_c1, meta_c2, meta_c3 = st.columns(3)
+    # 3. Render Team Manager Banner (Large Font Size, Capitalized Label)
+    tm_display_string = ", ".join(set(weekly_tms)).upper() if weekly_tms else "NONE ASSIGNED"
+    st.markdown(f"## 👑 TEAM MANAGER: {tm_display_string}")
+    
+    # Render Work Setup and Shift Details directly above the table
+    meta_c1, meta_c2 = st.columns(2)
     with meta_c1:
-        st.markdown(f"**Work Setup:** \n\n {', '.join(weekly_setups) if weekly_setups else 'Not Configured'}")
+        st.markdown(f"**Work Setup:** {', '.join(weekly_setups) if weekly_setups else 'Not Configured'}")
     with meta_c2:
-        st.markdown(f"**Shift Details:** \n\n {', '.join(weekly_shifts) if weekly_shifts else 'Not Configured'}")
-    with meta_c3:
-        st.markdown(f"**Active Team Managers:** \n\n {', '.join(set(weekly_tms)) if weekly_tms else 'None Assigned'}")
+        st.markdown(f"**Shift Details:** {', '.join(weekly_shifts) if weekly_shifts else 'Not Configured'}")
         
     st.write("")
 
@@ -571,7 +574,7 @@ with tab_cal:
         )
     else:
         st.write("*No scheduled staff found for this week.*")
-
+        
 # --- TAB 2: REQUEST FORM ---
 with tab_req:
     st.subheader("PTO/Wellness Request")
