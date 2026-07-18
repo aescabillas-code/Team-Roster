@@ -351,14 +351,20 @@ with tab_cal:
             st.write("No holidays this month.")
         
         st.subheader("Daily View")
-        raw_view_date = st.session_state.get('selected_admin_date', current_date)
-        view_date = raw_view_date.date() if hasattr(raw_view_date, 'date') else raw_view_date
+        # Automatically defaults to today's date context
+        view_date = current_date.date() if hasattr(current_date, 'date') else current_date
 
         d_data = None
         if hasattr(st.session_state, 'calendar_data') and st.session_state.calendar_data:
             d_data = st.session_state.calendar_data.get(view_date) or st.session_state.calendar_data.get(str(view_date))
         if not d_data:
-            d_data = collection.find_one({"type": "calendar_day", "date": str(view_date)}) or {}
+            # Fallback to direct singular collection query if session mapping state is unpopulated
+            d_data = collection.find_one({"type": "calendar_day", "date": str(view_date)})
+            if not d_data:
+                calendar_doc = collection.find_one({"type": "calendar_data"})
+                if calendar_doc:
+                    d_data = calendar_doc.get("data", {}).get(str(view_date))
+        d_data = d_data or {}
         
         st.markdown(f"### Date: {view_date.strftime('%B %d, %Y')}")
         
@@ -371,18 +377,6 @@ with tab_cal:
         st.markdown(f"**Work Setup:** `{day_status}`")
         st.markdown(f"**Shift:** `{day_shift}`")
         st.divider()
-        
-        selected_date = st.date_input("Select Date", value=view_date)
-        view_date = pd.to_datetime(selected_date).date()
-
-        d_data = None
-        if st.session_state.calendar_data:
-            d_data = st.session_state.calendar_data.get(view_date) or st.session_state.calendar_data.get(str(view_date))
-        if not d_data:
-            calendar_doc = collection.find_one({"type": "calendar_data"})
-            if calendar_doc:
-                d_data = calendar_doc.get("data", {}).get(str(view_date))
-        d_data = d_data or {}
 
         tm_list = d_data.get('team_manager', [])
         tm_name = tm_list[0] if (isinstance(tm_list, list) and tm_list) else ""
@@ -395,7 +389,6 @@ with tab_cal:
             sched_rows = [{"Name": name, "Role": "REST DAY"} for name in roster.keys()]
             if sched_rows:
                 sched_df = pd.DataFrame(sched_rows)
-                # Sort by Role, then by Name for fallback alphabetical sorting
                 sched_df = sched_df.sort_values(by=["Role", "Name"], ascending=True)
                 st.dataframe(sched_df, hide_index=True, use_container_width=True, height=min(1000, max(100, len(sched_df) * 35 + 38)))
             else:
@@ -424,7 +417,6 @@ with tab_cal:
                 
             if sched_rows:
                 sched_df = pd.DataFrame(sched_rows)
-                # Fix: Sort rows primarily by Role, falling back to Name alphabetically
                 sched_df = sched_df.sort_values(by=["Role", "Name"], ascending=True)
                 st.dataframe(sched_df, hide_index=True, use_container_width=True, height=min(1000, max(100, len(sched_df) * 35 + 38)))
             else:
@@ -473,44 +465,46 @@ with tab_cal:
                 else:
                     cols[i].markdown('<div class="day-block day-block-outside"></div>', unsafe_allow_html=True)
                     
-# =====================================================================
-    # NEW PLACEMENT: WEEKLY VIEW GRID AT THE BOTTOM OF THE ENTIRE TAB
+    # =====================================================================
+    # WEEKLY VIEW GRID AT THE BOTTOM OF THE ENTIRE TAB
     # =====================================================================
     st.markdown("<br>", unsafe_allow_html=True)
     st.divider()
     st.subheader("📆 Weekly Roster Matrix")
     
-    # 1. Generate a clean dropdown sequence of alternative Sundays (e.g., last 4 weeks to next 8 weeks)
-    current_sunday = view_date - timedelta(days=(view_date.weekday() + 1) if view_date.weekday() != 6 else 0)
-    sunday_options = [current_sunday + timedelta(weeks=i) for i in range(-4, 9)]
+    # Dynamically anchors dropdown options starting from the first day of the top selected calendar month/year
+    month_start_date = date(year, month, 1)
+    base_sunday = month_start_date - timedelta(days=(month_start_date.weekday() + 1) if month_start_date.weekday() != 6 else 0)
+    
+    # Generates selection options encompassing all weeks touching the active chosen month view
+    sunday_options = [base_sunday + timedelta(weeks=i) for i in range(0, 6)]
     
     selected_week_start = st.selectbox(
         "Select Week Beginning (Sunday):", 
         options=sunday_options,
-        index=4,  # Auto-focuses on the current relative week sunday
+        index=0,
         format_func=lambda d: d.strftime("%B %d, %Y"),
         key="weekly_view_lookup_start_select"
     )
     
-    # Ensure standard date type object mapping
     week_start_sunday = pd.to_datetime(selected_week_start).date()
-    
-    # Generate Mon-Fri range
     week_days = [week_start_sunday + timedelta(days=idx) for idx in range(1, 6)]
     
-    # 2. Performance Cache Pre-fetch
     approved_requests = fetch_approved_requests_from_db()
     roles = ["team_manager", "call", "chat", "mfq", "sme"]
     
-    # Pre-build daily metadata mappings to insert at the top of the table later
     setup_row = {"Staff Name": "🛠️ WORK SETUP"}
     shift_row = {"Staff Name": "⏰ SHIFT"}
     weekly_tms = []
     
-    # Gather day-by-day meta configurations
     for day in week_days:
         col_name = day.strftime("%A (%m/%d)")
-        day_config = st.session_state.calendar_data.get(day) or st.session_state.calendar_data.get(str(day)) or {}
+        
+        day_config = None
+        if hasattr(st.session_state, 'calendar_data') and st.session_state.calendar_data:
+            day_config = st.session_state.calendar_data.get(day) or st.session_state.calendar_data.get(str(day))
+        if not day_config:
+            day_config = collection.find_one({"type": "calendar_day", "date": str(day)}) or {}
         
         setup_row[col_name] = str(day_config.get('status', 'Not Set')).upper()
         shift_row[col_name] = str(day_config.get('shift', '--')).upper()
@@ -519,7 +513,6 @@ with tab_cal:
         if tm_found and tm_found[0] not in weekly_tms:
             weekly_tms.append(tm_found[0])
 
-    # Loop staff roster data
     weekly_rows = []
     for name in roster.keys():
         staff_row = {"Staff Name": name}
@@ -532,7 +525,12 @@ with tab_cal:
             if p_status:
                 staff_row[col_name] = p_status[0].upper()
             else:
-                day_config = st.session_state.calendar_data.get(day) or st.session_state.calendar_data.get(str(day)) or {}
+                day_config = None
+                if hasattr(st.session_state, 'calendar_data') and st.session_state.calendar_data:
+                    day_config = st.session_state.calendar_data.get(day) or st.session_state.calendar_data.get(str(day))
+                if not day_config:
+                    day_config = collection.find_one({"type": "calendar_day", "date": str(day)}) or {}
+                    
                 assigned_roles = []
                 for r in roles:
                     assigned_list = day_config.get(r, [])
@@ -552,30 +550,22 @@ with tab_cal:
         if not is_tm_somewhere:
             weekly_rows.append(staff_row)
 
-    # 3. Render Team Manager Banner (Large Font Size, Capitalized Label)
     tm_display_string = ", ".join(set(weekly_tms)).upper() if weekly_tms else "NONE ASSIGNED"
     st.markdown(f"## TEAM MANAGER: {tm_display_string}")
     st.write("")
 
-    # 4. Process, Sort, and Style Grid Data
     if weekly_rows:
-        # Sort the actual staff rows first (so metadata doesn't mix into sorting logic)
         first_day_col = week_days[0].strftime("%A (%m/%d)")
         staff_df = pd.DataFrame(weekly_rows).sort_values(by=[first_day_col, "Staff Name"], ascending=True)
-        
-        # Build metadata rows dataframe
         meta_df = pd.DataFrame([setup_row, shift_row])
-        
-        # Concatenate metadata rows at the top, followed by sorted staff rows
         weekly_df = pd.concat([meta_df, staff_df], ignore_index=True)
         
-        # Fix: Configuration formatting using proper dictionary key mappings
         column_configurations = {
-            "Staff Name": {"alignment": "left"}
+            "Staff Name": st.column_config.TextColumn(label="Staff Name")
         }
         for day in week_days:
             c_name = day.strftime("%A (%m/%d)")
-            column_configurations[c_name] = {"alignment": "center"}
+            column_configurations[c_name] = st.column_config.TextColumn(label=c_name)
 
         st.dataframe(
             weekly_df, 
