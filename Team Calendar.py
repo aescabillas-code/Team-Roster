@@ -270,7 +270,7 @@ st.markdown("""
     div[data-testid="stTable"] tr:nth-child(odd) { background-color: #ffffff !important; }
     div[data-testid="stTable"] tr:nth-child(odd) td { color: #008080 !important; font-weight: 600; }
     div[data-testid="stTable"] th { background-color: #004d4d !important; color: #ffffff !important; }
-    </style> subscription-tracker
+    </style> 
 """, unsafe_allow_html=True)
 
 # --- NOTIFICATION BAR ---
@@ -327,6 +327,9 @@ with tab_cal:
     roster_doc = collection.find_one({"type": "roster_list"})
     roster = roster_doc.get("data", {}) if roster_doc else {}
 
+    # Calculate fallback view dates tied strictly to top selected Month/Year
+    first_of_month = date(year, month, 1)
+    
     with col_side:
         st.markdown('<div class="side-block">', unsafe_allow_html=True)
         st.subheader("Monthly Summary")
@@ -351,8 +354,12 @@ with tab_cal:
             st.write("No holidays this month.")
         
         st.subheader("Daily View")
-        raw_view_date = st.session_state.get('selected_admin_date', current_date)
+        raw_view_date = st.session_state.get('selected_admin_date', first_of_month)
         view_date = raw_view_date.date() if hasattr(raw_view_date, 'date') else raw_view_date
+        
+        # Keep side metrics locked safely to current viewing month logic
+        if view_date.month != month or view_date.year != year:
+            view_date = first_of_month
 
         d_data = None
         if hasattr(st.session_state, 'calendar_data') and st.session_state.calendar_data:
@@ -371,18 +378,6 @@ with tab_cal:
         st.markdown(f"**Work Setup:** `{day_status}`")
         st.markdown(f"**Shift:** `{day_shift}`")
         st.divider()
-        
-        selected_date = st.date_input("Select Date", value=view_date)
-        view_date = pd.to_datetime(selected_date).date()
-
-        d_data = None
-        if st.session_state.calendar_data:
-            d_data = st.session_state.calendar_data.get(view_date) or st.session_state.calendar_data.get(str(view_date))
-        if not d_data:
-            calendar_doc = collection.find_one({"type": "calendar_data"})
-            if calendar_doc:
-                d_data = calendar_doc.get("data", {}).get(str(view_date))
-        d_data = d_data or {}
 
         tm_list = d_data.get('team_manager', [])
         tm_name = tm_list[0] if (isinstance(tm_list, list) and tm_list) else ""
@@ -394,9 +389,7 @@ with tab_cal:
             st.info("📊 **Rest Day** — Weekend Schedule")
             sched_rows = [{"Name": name, "Role": "REST DAY"} for name in roster.keys()]
             if sched_rows:
-                sched_df = pd.DataFrame(sched_rows)
-                # Sort by Role, then by Name for fallback alphabetical sorting
-                sched_df = sched_df.sort_values(by=["Role", "Name"], ascending=True)
+                sched_df = pd.DataFrame(sched_rows).sort_values(by=["Role", "Name"], ascending=True)
                 st.dataframe(sched_df, hide_index=True, use_container_width=True, height=min(1000, max(100, len(sched_df) * 35 + 38)))
             else:
                 st.write("*No staff configured in the system.*")
@@ -423,9 +416,7 @@ with tab_cal:
                 sched_rows.append({"Name": name, "Role": role_display})
                 
             if sched_rows:
-                sched_df = pd.DataFrame(sched_rows)
-                # Fix: Sort rows primarily by Role, falling back to Name alphabetically
-                sched_df = sched_df.sort_values(by=["Role", "Name"], ascending=True)
+                sched_df = pd.DataFrame(sched_rows).sort_values(by=["Role", "Name"], ascending=True)
                 st.dataframe(sched_df, hide_index=True, use_container_width=True, height=min(1000, max(100, len(sched_df) * 35 + 38)))
             else:
                 st.write("*No staff configured in the system.*")
@@ -473,66 +464,115 @@ with tab_cal:
                 else:
                     cols[i].markdown('<div class="day-block day-block-outside"></div>', unsafe_allow_html=True)
                     
-# =====================================================================
-    # NEW PLACEMENT: WEEKLY VIEW GRID AT THE BOTTOM OF THE ENTIRE TAB
+    # =====================================================================
+    # MATRIX BLOCK: SWITCHABLE VIEW MODE (CONNECTED TO TOP MONTH/YEAR)
     # =====================================================================
     st.markdown("<br>", unsafe_allow_html=True)
     st.divider()
-    st.subheader("📆 Weekly Roster Matrix")
+    st.subheader("📊 Roster Data Matrix")
     
-    # 1. Generate a clean dropdown sequence of alternative Sundays (e.g., last 4 weeks to next 8 weeks)
-    current_sunday = view_date - timedelta(days=(view_date.weekday() + 1) if view_date.weekday() != 6 else 0)
-    sunday_options = [current_sunday + timedelta(weeks=i) for i in range(-4, 9)]
+    # 1. Choose View Type
+    view_mode = st.radio("Display Filter Layer:", ["Weekly Grid View", "Daily Breakdown View"], horizontal=True, key="matrix_scope_toggle")
     
-    selected_week_start = st.selectbox(
-        "Select Week Beginning (Sunday):", 
-        options=sunday_options,
-        index=4,  # Auto-focuses on the current relative week sunday
-        format_func=lambda d: d.strftime("%B %d, %Y"),
-        key="weekly_view_lookup_start_select"
-    )
+    # Dynamic Date Calculations mapped strictly from the main calendar month/year configurations
+    base_sunday = first_of_month - timedelta(days=(first_of_month.weekday() + 1) if first_of_month.weekday() != 6 else 0)
+    available_weeks = []
     
-    # Ensure standard date type object mapping
-    week_start_sunday = pd.to_datetime(selected_week_start).date()
-    
-    # Generate Mon-Fri range
-    week_days = [week_start_sunday + timedelta(days=idx) for idx in range(1, 6)]
-    
-    # 2. Performance Cache Pre-fetch
-    approved_requests = fetch_approved_requests_from_db()
-    roles = ["team_manager", "call", "chat", "mfq", "sme"]
-    
-    # Pre-build daily metadata mappings to insert at the top of the table later
-    setup_row = {"Staff Name": "🛠️ WORK SETUP"}
-    shift_row = {"Staff Name": "⏰ SHIFT"}
-    weekly_tms = []
-    
-    # Gather day-by-day meta configurations
-    for day in week_days:
-        col_name = day.strftime("%A (%m/%d)")
-        day_config = st.session_state.calendar_data.get(day) or st.session_state.calendar_data.get(str(day)) or {}
-        
-        setup_row[col_name] = str(day_config.get('status', 'Not Set')).upper()
-        shift_row[col_name] = str(day_config.get('shift', '--')).upper()
-        
-        tm_found = day_config.get('team_manager', [])
-        if tm_found and tm_found[0] not in weekly_tms:
-            weekly_tms.append(tm_found[0])
+    # Generate choices for all weeks traversing the chosen target active month context
+    loop_week = base_sunday
+    while loop_week <= date(year, month, calendar.monthrange(year, month)[1]):
+        available_weeks.append(loop_week)
+        loop_week += timedelta(weeks=1)
 
-    # Loop staff roster data
-    weekly_rows = []
-    for name in roster.keys():
-        staff_row = {"Staff Name": name}
-        is_tm_somewhere = False
+    if view_mode == "Weekly Grid View":
+        selected_week = st.selectbox(
+            "Select Week Scope:", 
+            options=available_weeks,
+            format_func=lambda d: f"Week of {d.strftime('%B %d, %Y')}",
+            key="matrix_week_selector"
+        )
+        week_days = [selected_week + timedelta(days=idx) for idx in range(1, 6)]
+        
+        approved_requests = fetch_approved_requests_from_db()
+        roles = ["team_manager", "call", "chat", "mfq", "sme"]
+        
+        setup_row = {"Staff Name": "🛠️ WORK SETUP"}
+        shift_row = {"Staff Name": "⏰ SHIFT"}
+        weekly_tms = []
         
         for day in week_days:
             col_name = day.strftime("%A (%m/%d)")
+            day_config = st.session_state.calendar_data.get(day) or st.session_state.calendar_data.get(str(day)) or {}
+            setup_row[col_name] = str(day_config.get('status', 'Not Set')).upper()
+            shift_row[col_name] = str(day_config.get('shift', '--')).upper()
             
-            p_status = [r["type"] for r in approved_requests if str(r["date"]) == str(day) and r["name"] == name]
+            tm_found = day_config.get('team_manager', [])
+            if tm_found and tm_found[0] not in weekly_tms:
+                weekly_tms.append(tm_found[0])
+
+        weekly_rows = []
+        for name in roster.keys():
+            staff_row = {"Staff Name": name}
+            is_tm_somewhere = False
+            
+            for day in week_days:
+                col_name = day.strftime("%A (%m/%d)")
+                p_status = [r["type"] for r in approved_requests if str(r["date"]) == str(day) and r["name"] == name]
+                if p_status:
+                    staff_row[col_name] = p_status[0].upper()
+                else:
+                    day_config = st.session_state.calendar_data.get(day) or st.session_state.calendar_data.get(str(day)) or {}
+                    assigned_roles = []
+                    for r in roles:
+                        assigned_list = day_config.get(r, [])
+                        if isinstance(assigned_list, list) and name in assigned_list:
+                            assigned_roles.append(r.upper().replace("_", " "))
+                        elif isinstance(assigned_list, dict) and name in assigned_list.keys():
+                            assigned_roles.append(r.upper().replace("_", " "))
+                    role_display = ", ".join(assigned_roles) if assigned_roles else "UNASSIGNED"
+                    if "TEAM MANAGER" in role_display:
+                        is_tm_somewhere = True
+                        break
+                    staff_row[col_name] = role_display
+            
+            if not is_tm_somewhere:
+                weekly_rows.append(staff_row)
+
+        tm_display_string = ", ".join(set(weekly_tms)).upper() if weekly_tms else "NONE ASSIGNED"
+        st.markdown(f"### 👑 WEEKLY TEAM MANAGER: {tm_display_string}")
+
+        if weekly_rows:
+            first_day_col = week_days[0].strftime("%A (%m/%d)")
+            staff_df = pd.DataFrame(weekly_rows).sort_values(by=[first_day_col, "Staff Name"], ascending=True)
+            meta_df = pd.DataFrame([setup_row, shift_row])
+            weekly_df = pd.concat([meta_df, staff_df], ignore_index=True)
+            
+            column_configurations = {"Staff Name": st.column_config.Column(alignment="left")}
+            for day in week_days:
+                column_configurations[day.strftime("%A (%m/%d)")] = st.column_config.Column(alignment="center")
+
+            st.dataframe(weekly_df, column_config=column_configurations, hide_index=True, use_container_width=True)
+        else:
+            st.write("*No scheduled staff found.*")
+
+    else:
+        # Daily Breakdown matrix logic context
+        total_days = calendar.monthrange(year, month)[1]
+        target_day = st.selectbox("Select Target Active Day:", range(1, total_days + 1), format_func=lambda x: f"{calendar.month_name[month]} {x:02d}, {year}")
+        active_date = date(year, month, target_day)
+        
+        day_config = st.session_state.calendar_data.get(active_date) or st.session_state.calendar_data.get(str(active_date)) or {}
+        st.markdown(f"#### 📋 Shifts Overview: {active_date.strftime('%A — %B %d, %Y')}")
+        
+        daily_rows = []
+        roles = ["team_manager", "call", "chat", "mfq", "sme"]
+        approved_requests = fetch_approved_requests_from_db()
+        
+        for name in roster.keys():
+            p_status = [r["type"] for r in approved_requests if str(r["date"]) == str(active_date) and r["name"] == name]
             if p_status:
-                staff_row[col_name] = p_status[0].upper()
+                role_display = p_status[0].upper()
             else:
-                day_config = st.session_state.calendar_data.get(day) or st.session_state.calendar_data.get(str(day)) or {}
                 assigned_roles = []
                 for r in roles:
                     assigned_list = day_config.get(r, [])
@@ -540,52 +580,21 @@ with tab_cal:
                         assigned_roles.append(r.upper().replace("_", " "))
                     elif isinstance(assigned_list, dict) and name in assigned_list.keys():
                         assigned_roles.append(r.upper().replace("_", " "))
-                
                 role_display = ", ".join(assigned_roles) if assigned_roles else "UNASSIGNED"
-                
-                if "TEAM MANAGER" in role_display:
-                    is_tm_somewhere = True
-                    break
-                    
-                staff_row[col_name] = role_display
-        
-        if not is_tm_somewhere:
-            weekly_rows.append(staff_row)
-
-    # 3. Render Team Manager Banner (Large Font Size, Capitalized Label)
-    tm_display_string = ", ".join(set(weekly_tms)).upper() if weekly_tms else "NONE ASSIGNED"
-    st.markdown(f"## TEAM MANAGER: {tm_display_string}")
-    st.write("")
-
-    # 4. Process, Sort, and Style Grid Data
-    if weekly_rows:
-        # Sort the actual staff rows first (so metadata doesn't mix into sorting logic)
-        first_day_col = week_days[0].strftime("%A (%m/%d)")
-        staff_df = pd.DataFrame(weekly_rows).sort_values(by=[first_day_col, "Staff Name"], ascending=True)
-        
-        # Build metadata rows dataframe
-        meta_df = pd.DataFrame([setup_row, shift_row])
-        
-        # Concatenate metadata rows at the top, followed by sorted staff rows
-        weekly_df = pd.concat([meta_df, staff_df], ignore_index=True)
-        
-        # Fix: Configuration formatting using proper dictionary key mappings
-        column_configurations = {
-            "Staff Name": {"alignment": "left"}
-        }
-        for day in week_days:
-            c_name = day.strftime("%A (%m/%d)")
-            column_configurations[c_name] = {"alignment": "center"}
-
-        st.dataframe(
-            weekly_df, 
-            column_config=column_configurations,
-            hide_index=True, 
-            use_container_width=True, 
-            height=min(1000, max(100, len(weekly_df) * 35 + 38))
-        )
-    else:
-        st.write("*No scheduled staff found for this week.*")
+            daily_rows.append({"Staff Name": name, "Assigned Role": role_display, "Setup Context": str(day_config.get('status', 'N/A')).upper()})
+            
+        if daily_rows:
+            daily_df = pd.DataFrame(daily_rows).sort_values(by=["Assigned Role", "Staff Name"])
+            st.dataframe(
+                daily_df, 
+                column_config={
+                    "Staff Name": st.column_config.Column(alignment="left"), 
+                    "Assigned Role": st.column_config.Column(alignment="center"), 
+                    "Setup Context": st.column_config.Column(alignment="center")
+                }, 
+                hide_index=True, 
+                use_container_width=True
+            )
         
 # --- TAB 2: REQUEST FORM ---
 with tab_req:
