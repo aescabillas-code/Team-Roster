@@ -587,51 +587,62 @@ with tab_cal:
 # --- TAB 2: REQUEST FORM ---
 with tab_req:
     st.subheader("PTO/Wellness Request")
-    
-    with st.form("request_form", clear_on_submit=True):
-        roster_doc = collection.find_one({"type": "roster_list"})
-        staff_data = roster_doc.get("data", {}) if roster_doc else {}
-        available_names = list(staff_data.keys()) if staff_data else list(st.session_state.staff_roster.keys())
-        name = st.selectbox("Name", available_names)
-        
-        req_date = st.date_input("Request Date")
-        req_type = st.selectbox("Type", ["PTO", "Wellness"])
-        
-        if st.form_submit_button("Submit Request"):
-            limits = get_request_limits(req_date)
-            count_on_date = collection.count_documents({"type": req_type, "date": str(req_date), "status": {"$in": ["Pending", "Approved"]}})
-            
-            is_already_requested = collection.count_documents({
-                "name": name,
-                "date": str(req_date),
-                "status": {"$in": ["Pending", "Approved"]}
-            }) > 0
-            
-            if is_already_requested:
-                st.warning(f"⚠️ A request for {name} on {req_date} already exists.")
-            
-            limit_value = limits["PTO_per_day"] if req_type == "PTO" else limits["Wellness_per_day"]
-            
-            if count_on_date >= limit_value:
-                st.error(f"❌ Limit reached for {req_type} on {req_date}.")
-            else:
-                new_req = {
-                    "name": name, 
-                    "date": str(req_date), 
-                    "type": req_type, 
-                    "status": "Pending", 
-                    "email": "",
-                    "viewed": False
-                }
-                save_request_to_db(new_req, req_type)
-                st.session_state.pending_requests.append(new_req)
-                st.success("Request submitted successfully.")
-                st.rerun()
 
+    # Initialize a counter in session state to track how many requests to show
+    if "request_count" not in st.session_state:
+        st.session_state.request_count = 1
+
+    # Fetch roster for name selection
+    roster_doc = collection.find_one({"type": "roster_list"})
+    staff_data = roster_doc.get("data", {}) if roster_doc else {}
+    available_names = list(staff_data.keys()) if staff_data else list(st.session_state.staff_roster.keys())
+
+    with st.form("bulk_request_form"):
+        for i in range(st.session_state.request_count):
+            cols = st.columns([2, 2, 1])
+            with cols[0]:
+                st.selectbox("Name", available_names, key=f"name_{i}")
+            with cols[1]:
+                st.date_input("Date", key=f"date_{i}")
+            with cols[2]:
+                st.selectbox("Type", ["PTO", "Wellness"], key=f"type_{i}")
+
+        # Button to add another row
+        if st.form_submit_button("➕ Add Another Request"):
+            st.session_state.request_count += 1
+            st.rerun()
+
+        # Final Submit Button
+        if st.form_submit_button("✅ Submit All Requests"):
+            for i in range(st.session_state.request_count):
+                name = st.session_state[f"name_{i}"]
+                req_date = st.session_state[f"date_{i}"]
+                req_type = st.session_state[f"type_{i}"]
+                
+                limits = get_request_limits(req_date)
+                count_on_date = collection.count_documents({"type": req_type, "date": str(req_date), "status": {"$in": ["Pending", "Approved"]}})
+                is_already_requested = collection.count_documents({"name": name, "date": str(req_date), "status": {"$in": ["Pending", "Approved"]}}) > 0
+                
+                if is_already_requested:
+                    st.warning(f"⚠️ A request for {name} on {req_date} already exists.")
+                    continue
+                
+                limit_value = limits["PTO_per_day"] if req_type == "PTO" else limits["Wellness_per_day"]
+                if count_on_date >= limit_value:
+                    st.error(f"❌ Limit reached for {req_type} on {req_date}.")
+                else:
+                    new_req = {"name": name, "date": str(req_date), "type": req_type, "status": "Pending", "email": "", "viewed": False}
+                    save_request_to_db(new_req, req_type)
+                    st.session_state.pending_requests.append(new_req)
+            
+            st.success("All requests processed!")
+            st.session_state.request_count = 1 
+            st.rerun()
+
+    # --- Pending Requests Overview ---
     st.subheader("Pending Requests Overview")    
     all_pending = fetch_pending_requests_from_db()
     c1, c2 = st.columns(2)
-    
     with c1:
         st.markdown("### 🌿 Wellness Pending")
         wellness_reqs = [r for r in all_pending if r['type'] == 'Wellness']
@@ -639,9 +650,6 @@ with tab_req:
             df_w = pd.DataFrame(wellness_reqs)[["name", "date"]]
             df_w.columns = ["Name", "Date"]
             st.dataframe(df_w, hide_index=True, use_container_width=True)
-        else:
-            st.caption("No pending wellness requests.")
-            
     with c2:
         st.markdown("### ✈️ PTO Pending")
         pto_reqs = [r for r in all_pending if r['type'] == 'PTO']
@@ -649,18 +657,20 @@ with tab_req:
             df_p = pd.DataFrame(pto_reqs)[["name", "date"]]
             df_p.columns = ["Name", "Date"]
             st.dataframe(df_p, hide_index=True, use_container_width=True)
-        else:
-            st.caption("No pending PTO requests.")        
             
     st.divider()
+    
+    # --- Approved History ---
     st.subheader("Approved History")
     f_c1, f_c2 = st.columns(2)
     f_m = f_c1.selectbox("Month", range(1, 13), index=current_date.month-1, key="history_month_select")
     f_y = f_c2.number_input("Year", value=current_date.year, key="history_year_select")
     app_reqs = fetch_approved_requests_from_db()
     filtered_app = [r for r in app_reqs if int(r['date'].split('-')[1])==f_m and int(r['date'].split('-')[0])==f_y]
+    
     if filtered_app: 
-        st.dataframe(pd.DataFrame(filtered_app)[['name', 'date', 'type']])
+        # Index hidden as requested
+        st.dataframe(pd.DataFrame(filtered_app)[['name', 'date', 'type']], hide_index=True, use_container_width=True)
     else: 
         st.write("No records found.")
         
