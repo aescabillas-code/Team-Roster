@@ -1065,7 +1065,7 @@ with tab_dev:
         with row_cols[3]:
             entry["aux"] = st.text_input("Aux", value=entry["aux"], label_visibility="collapsed", key=f"dev_matrix_aux_{idx}")
         with row_cols[4]:
-            entry["reason"] = st.text_area("Reason", value=entry["reason"], label_visibility="collapsed", key=f"dev_matrix_reas_{idx}", height=35)
+            entry["reason"] = st.text_area("Reason", value=entry["reason"], label_visibility="collapsed", key=f"dev_matrix_reas_{idx}", height=68)
 
     # Matrix Action Controls
     ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([2, 2, 4])
@@ -1163,14 +1163,14 @@ with tab_dev:
             r_cols[7].write(str(dev.get('Aux', 'N/A')))
             r_cols[8].write(str(dev.get('Reason', '')))
             
-            with r_cols[9]:
-                # Dynamic toggle matrix view replace options
-                t_edit = st.toggle("✏️ Edit", key=f"t_edit_dev_{dev['_id']}")
-                t_del = st.toggle("🗑️ Del", key=f"t_del_dev_{dev['_id']}")
+            with r_cols[10]:
+                # Action Options via Toggles
+                t_edit = st.toggle("✏️ Edit", key=f"t_edit_{dev['_id']}")
+                t_del = st.toggle("🗑️ Del", key=f"t_del_{dev['_id']}")
             
             if t_edit:
                 with st.container(border=True):
-                    st.markdown(f"#### Edit Deviation Request for {dev.get('Name', '')}")
+                    st.markdown(f"#### Edit Properties Frame For Record Line Item #{entry_number}")
                     edit_date = st.date_input("Update Target Date", value=pd.to_datetime(dev.get('Date')).date(), key=f"ed_date_{dev['_id']}")
                     edit_manager = st.text_input("Update Manager", value=dev.get('Manager', ''), key=f"ed_mgr_{dev['_id']}")
                     
@@ -1200,11 +1200,11 @@ with tab_dev:
                         st.success("Deviation record updated completely!")
                         st.rerun()
                         
-            elif t_del:
+            if t_del:
                 with st.container(border=True):
-                    st.warning("⚠️ This action requires supervisor authorization.")
+                    st.warning("⚠️ This action requires supervisor authorization credentials verification validation.")
                     del_password = st.text_input("Enter Admin Password to confirm delete", type="password", key=f"pwd_del_dev_{dev['_id']}")
-                    if st.button("Confirm Delete", key=f"conf_del_dev_{dev['_id']}"):
+                    if st.button("Confirm Purge Selection Action", key=f"conf_del_dev_{dev['_id']}"):
                         if del_password == "Password1234":
                             delete_deviation_from_db(dev["_id"])
                             st.success("Deviation record removed.")
