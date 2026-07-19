@@ -312,9 +312,20 @@ def render_request(req, key_prefix):
             st.rerun()
 
 # --- TABS WORKSPACE ---
-tab_cal, tab_req, tab_prod, tab_case, tab_dev, tab_adm = st.tabs([
-    "📅 Calendar", "📝 Request", "📈 Productivity Monitoring", "🔍 Case Tracker", "🔀 Deviation", "🔑 Admin"
-])
+
+# 1. Define the tab names first so you can reference them safely
+tab_names = [
+    "📅 Calendar", "📝 Request", "📈 Productivity Monitoring", 
+    "🔍 Case Tracker", "🔀 Deviation", "🔑 Admin"]
+
+# 2. Initialize the session state properly using the defined list
+if "current_tab" not in st.session_state:
+    st.session_state.current_tab = tab_names[0]
+
+# 3. Render the tabs 
+# Note: To prevent a tab from resetting during form submissions inside it,
+# make sure every widget inside these tabs has a unique `key="something"` assigned!
+tab_cal, tab_req, tab_prod, tab_case, tab_dev, tab_adm = st.tabs(tab_names)
 
 # --- TAB 1: CALENDAR ---
 with tab_cal:
