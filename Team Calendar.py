@@ -1278,24 +1278,50 @@ with tab_adm:
             config_mode = st.radio("Target Scope Selection:", ["Single Date", "Date Range", "Full Month"], key="radio_cfg_mode")
             
             if config_mode == "Single Date": 
-                target_dates = [st.date_input("Target Date Scope", key="cfg_d")]
+                target_date = st.date_input("Target Date Scope", value=date.today(), key="cfg_d")
+                target_dates = [target_date]
+                # Use the explicitly selected single date for the DB lookup
+                lookup_date_str = str(target_date)
             elif config_mode == "Date Range": 
                 dr = st.date_input("Target Date Range", [], key="cfg_dr")
                 target_dates = pd.date_range(dr[0], dr[1]).date if len(dr) == 2 else []
+                # Fallback to the first date of the range, or today if not yet picked
+                lookup_date_str = str(dr[0]) if len(dr) == 2 else str(date.today())
             else:
                 sm = st.date_input("Target Operational Month Selector", value=date.today(), key="cfg_m")
                 target_dates = pd.date_range(f"{sm.year}-{sm.month}-01", periods=31).date
                 target_dates = [d for d in target_dates if d.month == sm.month]
-
+                # Fallback to today's date for month lookups
+                lookup_date_str = str(date.today())
+            
+            # Ensure the limits dictionary exists in session state before modifying it
+            if "limits" not in st.session_state:
+                st.session_state.limits = {}
+            
+            # --- Safe Database Lookup (Fixes the AttributeError) ---
             calendar_doc = collection.find_one({"type": "calendar_data"})
             if calendar_doc:
-                selected_config = calendar_doc.get("data", {}).get(str(st.session_state.selected_admin_date), {})
+                # Safely checks if selected_admin_date exists, otherwise uses our calculated target string
+                target_key = str(st.session_state.get("selected_admin_date", lookup_date_str))
+                selected_config = calendar_doc.get("data", {}).get(target_key, {})
+                
                 st.session_state.limits["PTO_per_day"] = selected_config.get("PTO_per_day", 1)
                 st.session_state.limits["Wellness_per_day"] = selected_config.get("Wellness_per_day", 1)
-    
-            st.session_state.limits["PTO_per_day"] = st.number_input("Max Allowable PTO Allocations Per Day", min_value=1, value=st.session_state.limits.get("PTO_per_day", 1), key="num_max_pto_per_day")
-            st.session_state.limits["Wellness_per_day"] = st.number_input("Max Allowable Wellness Allocations Per Day", min_value=1, value=st.session_state.limits.get("Wellness_per_day", 1), key="num_max_well_per_day")
-
+            
+            # --- Number Inputs loaded dynamically from session state limits ---
+            st.session_state.limits["PTO_per_day"] = st.number_input(
+                "Max Allowable PTO Allocations Per Day", 
+                min_value=1, 
+                value=st.session_state.limits.get("PTO_per_day", 1), 
+                key="num_max_pto_per_day"
+            )
+            st.session_state.limits["Wellness_per_day"] = st.number_input(
+                "Max Allowable Wellness Allocations Per Day", 
+                min_value=1, 
+                value=st.session_state.limits.get("Wellness_per_day", 1), 
+                key="num_max_well_per_day"
+            )
+            
             start_t = st.time_input("Shift Operational Start Window", value=time(9, 0), key="time_shift_start")
             end_t = st.time_input("Shift Operational End Window", value=time(18, 0), key="time_shift_end")
             timezone = "PHT"
