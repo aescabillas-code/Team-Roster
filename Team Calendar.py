@@ -1499,17 +1499,20 @@ with tab_adm:
                         for req in group["requests"]:
                             req_id = str(req["_id"])
                             
-                            with st.container(border=True):
-                                # Create side-by-side layout inside the container
-                                chk_col, text_col = st.columns([0.15, 0.85])
-                                with chk_col:
-                                    is_checked = st.checkbox(
-                                        f"Select Request from {req['name']}", 
-                                        value=select_all, 
-                                        key=f"chk_well_{req_id}",
-                                        label_visibility="collapsed"
-                                    )
-                                with text_col:
+                            # Checkbox sits outside and to the left of the container
+                            chk_col, container_col = st.columns([0.12, 0.88])
+                            
+                            with chk_col:
+                                # Vertical alignment tweak for the checkbox
+                                st.markdown("<div style='padding-top: 15px;'></div>", unsafe_allow_html=True)
+                                is_checked = st.checkbox(
+                                    f"Select Request from {req['name']}", 
+                                    value=select_all, 
+                                    key=f"chk_well_{req_id}",
+                                    label_visibility="collapsed"
+                                )
+                            with container_col:
+                                with st.container(border=True):
                                     st.markdown(f"**{req['name']}** | {req['date']} | `{req['status']}`")
                             
                             if is_checked:
@@ -1530,17 +1533,20 @@ with tab_adm:
                         for req in group["requests"]:
                             req_id = str(req["_id"])
                             
-                            with st.container(border=True):
-                                # Create side-by-side layout inside the container
-                                chk_col, text_col = st.columns([0.15, 0.85])
-                                with chk_col:
-                                    is_checked = st.checkbox(
-                                        f"Select Request from {req['name']}", 
-                                        value=select_all, 
-                                        key=f"chk_pto_{req_id}",
-                                        label_visibility="collapsed"
-                                    )
-                                with text_col:
+                            # Checkbox sits outside and to the left of the container
+                            chk_col, container_col = st.columns([0.12, 0.88])
+                            
+                            with chk_col:
+                                # Vertical alignment tweak for the checkbox
+                                st.markdown("<div style='padding-top: 15px;'></div>", unsafe_allow_html=True)
+                                is_checked = st.checkbox(
+                                    f"Select Request from {req['name']}", 
+                                    value=select_all, 
+                                    key=f"chk_pto_{req_id}",
+                                    label_visibility="collapsed"
+                                )
+                            with container_col:
+                                with st.container(border=True):
                                     st.markdown(f"**{req['name']}** | {req['date']} | `{req['status']}`")
                             
                             if is_checked:
