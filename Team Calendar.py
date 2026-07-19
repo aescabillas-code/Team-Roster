@@ -782,7 +782,7 @@ with tab_case:
         global_owner = st.selectbox("Global Case Owner", owner_list, key="case_global_owner")
 
     st.divider()
-    st.markdown("### 📊 Case Entry Grid")
+    st.markdown("### 📊 Case Entry")
 
     # Initialize batch session state storage
     if "batch_case_entries" not in st.session_state:
@@ -826,7 +826,7 @@ with tab_case:
     # Grid management actions
     ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([2, 2, 4])
     with ctrl_col1:
-        if st.button("➕ Add Entry Row", key="btn_add_matrix_row"):
+        if st.button("➕ Add Row", key="btn_add_matrix_row"):
             st.session_state.batch_case_entries.append({"case_number": "", "prod": prods[0], "issue": issues[0], "desc": "", "status": "Resolved", "extra": ""})
             st.rerun()
     with ctrl_col2:
@@ -912,7 +912,6 @@ with tab_case:
                         st.write(case.get("Steps", ""))
 
             with action_col:
-                # FIXED: Stacked vertically within one single column
                 t_edit = st.toggle("✏️ Edit", key=f"t_edit_{case['_id']}")
                 t_del = st.toggle("🗑️ Del", key=f"t_del_{case['_id']}")
                 t_comm = st.toggle("💬 Comment", key=f"t_comm_{case['_id']}")
@@ -966,35 +965,27 @@ with tab_case:
                     current_comment = case.get("Comment", "")
                     new_comment_str = st.text_area("Work Item Comm Note Ledger", value=current_comment, key=f"input_comment_{case['_id']}")
                     
-                    # Security validation required before updating or deleting comments
-                    comm_password = st.text_input("Admin Authorization Password", type="password", key=f"pwd_comm_{case['_id']}")
-                    
+                    # FIXED: Removed st.text_input validation logic for the comment password requirement
                     c_btn1, c_btn2 = st.columns(2)
                     with c_btn1:
                         if st.button("💾 Save Comment", key=f"btn_save_comm_{case['_id']}"):
-                            if comm_password == "Password1234":
-                                collection.update_one(
-                                    {"_id": case["_id"]},
-                                    {"$set": {"Comment": new_comment_str}}
-                                )
-                                st.cache_data.clear()
-                                st.success("Comment applied successfully.")
-                                st.rerun()
-                            else:
-                                st.error("Incorrect password credentials.")
+                            collection.update_one(
+                                {"_id": case["_id"]},
+                                {"$set": {"Comment": new_comment_str}}
+                            )
+                            st.cache_data.clear()
+                            st.success("Comment applied successfully.")
+                            st.rerun()
                                 
                     with c_btn2:
                         if st.button("🗑️ Delete Comment", key=f"btn_del_comm_{case['_id']}"):
-                            if comm_password == "Password1234":
-                                collection.update_one(
-                                    {"_id": case["_id"]},
-                                    {"$set": {"Comment": ""}}
-                                )
-                                st.cache_data.clear()
-                                st.success("Comment cleared successfully.")
-                                st.rerun()
-                            else:
-                                st.error("Incorrect password credentials.")
+                            collection.update_one(
+                                {"_id": case["_id"]},
+                                {"$set": {"Comment": ""}}
+                            )
+                            st.cache_data.clear()
+                            st.success("Comment cleared successfully.")
+                            st.rerun()
             st.divider()
     else:
         st.info("No active system case records match filter parameters.")
