@@ -630,7 +630,6 @@ with tab_req:
         header_cols = st.columns([1, 1])
         header_cols[0].markdown("**Date**")
         header_cols[1].markdown("**Request Type**")
-        st.divider()
 
         # Generate Data Input Rows Dynamically
         for i in range(st.session_state.request_count):
@@ -715,8 +714,7 @@ with tab_req:
         st.dataframe(df_display, hide_index=True, use_container_width=True)
     else: 
         st.write("No records found.")
-        
-    st.divider()
+
     st.subheader("📥 Pending Requests Overview")    
     
     # 2. Unified Pending Request Table (Filters for Wellness and PTO only)
