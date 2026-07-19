@@ -318,9 +318,7 @@ tab_names = [
     "🔍 Case Tracker", "🔀 Deviation", "🔑 Admin"
 ]
 
-tab_cal, tab_req, tab_prod, tab_case, tab_dev, tab_adm = st.tabs(
-    tab_names, 
-    key="active_tab"
+tab_cal, tab_req, tab_prod, tab_case, tab_dev, tab_adm = st.tabs(tab_names, key="active_tab")
 
 # Initialize state tracker
 if "active_tab" not in st.session_state:
