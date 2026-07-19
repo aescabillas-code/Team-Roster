@@ -752,7 +752,7 @@ with tab_prod:
 
 # --- TAB 4: CASE TRACKER ---
 with tab_case:
-    st.subheader("Log New Case")
+    st.subheader("📝 Bulk Log New Cases")
     cases_list = get_cases_from_db() 
 
     masterfile_doc = collection.find_one({"type": "masterfile"})
@@ -774,47 +774,91 @@ with tab_case:
     if not owner_list:
         owner_list = ["Unknown"]
 
-    c1, c2 = st.columns(2)
-    c_type = c1.selectbox("Contact Type", c_types, key="case_form_type")
-    case_owner = c2.selectbox("Owner", owner_list, key="case_form_owner")
-    case_number = c1.text_input("Case Number", key="case_form_case_number")
-    issue = c1.selectbox("Issue", issues, key="case_form_issue")
-    prod = c2.selectbox("Product Group", prods, key="case_form_product")
-    desc = st.text_area("Issue Description", key="case_form_desc")
-    steps = st.text_area("Steps Taken", key="case_form_steps")
-    uploaded_file = st.file_uploader("Upload Screenshot", type=["png", "jpg", "jpeg"])
-    status = st.selectbox("Status", ["Resolved", "Pending/Monitoring", "Routed"], key="case_form_status")
-
-    extra = ""
-    if status == "Pending/Monitoring":
-        extra = st.text_input("Pending/Monitoring Reason", key="case_form_pending")
-    elif status == "Routed":
-        extra = st.text_input("Queue Destination", key="case_form_routed")
-
-    if st.button("Log Case"):
-        new_case = {
-            "Date": str(date.today()),
-            "Owner": case_owner,
-            "Type": c_type,
-            "Case Number": case_number,
-            "Issue": issue,
-            "Product Group": prod,
-            "Desc": desc,
-            "Steps": steps,
-            "Has_Screenshot": uploaded_file is not None,
-            "Screenshot": uploaded_file.getvalue() if uploaded_file else None,
-            "Status": status,
-            "Extra": extra
-        }
-        save_case_to_db(new_case)
-        for key in list(st.session_state.keys()):
-            if key.startswith("case_form_"):
-                del st.session_state[key]
-        st.success("Case logged to database successfully!")
-        st.rerun()
+    # 1. Global Fields (Set once, applies to all entries)
+    g_col1, g_col2 = st.columns(2)
+    with g_col1:
+        global_c_type = st.selectbox("Global Contact Type", c_types, key="case_global_type")
+    with g_col2:
+        global_owner = st.selectbox("Global Case Owner", owner_list, key="case_global_owner")
 
     st.divider()
-    st.subheader("Knowledge Base")
+    st.markdown("### 📊 Case Entry Grid Matrix")
+
+    # Initialize batch session state storage
+    if "batch_case_entries" not in st.session_state:
+        st.session_state.batch_case_entries = [{"case_number": "", "prod": prods[0], "issue": issues[0], "desc": "", "status": "Resolved", "extra": ""}]
+
+    # Excel-style Table Headers
+    header_cols = st.columns([2, 2, 2, 4, 2])
+    header_cols[0].markdown("**Case #**")
+    header_cols[1].markdown("**Product Group**")
+    header_cols[2].markdown("**Issue**")
+    header_cols[3].markdown("**Note / Description**")
+    header_cols[4].markdown("**Status**")
+
+    # Render data entry rows dynamically
+    for idx, entry in enumerate(st.session_state.batch_case_entries):
+        row_cols = st.columns([2, 2, 2, 4, 2])
+        
+        with row_cols[0]:
+            entry["case_number"] = st.text_input("Case Number", value=entry["case_number"], label_visibility="collapsed", key=f"grid_case_num_{idx}")
+        with row_cols[1]:
+            entry["prod"] = st.selectbox("Product", prods, index=prods.index(entry["prod"]) if entry["prod"] in prods else 0, label_visibility="collapsed", key=f"grid_prod_{idx}")
+        with row_cols[2]:
+            entry["issue"] = st.selectbox("Issue", issues, index=issues.index(entry["issue"]) if entry["issue"] in issues else 0, label_visibility="collapsed", key=f"grid_issue_{idx}")
+        with row_cols[3]:
+            entry["desc"] = st.text_input("Note", value=entry["desc"], label_visibility="collapsed", key=f"grid_desc_{idx}")
+        with row_cols[4]:
+            entry["status"] = st.selectbox("Status", ["Resolved", "Pending/Monitoring", "Routed"], index=["Resolved", "Pending/Monitoring", "Routed"].index(entry["status"]), label_visibility="collapsed", key=f"grid_status_{idx}")
+
+        # Dynamic conditional input field depending on selection profile
+        if entry["status"] == "Pending/Monitoring":
+            indent_cols = st.columns([6, 6])
+            with indent_cols[1]:
+                entry["extra"] = st.text_input("Pending/Monitoring Reason", value=entry.get("extra", ""), key=f"grid_extra_reason_{idx}")
+        elif entry["status"] == "Routed":
+            indent_cols = st.columns([6, 6])
+            with indent_cols[1]:
+                entry["extra"] = st.text_input("Queue Destination Target", value=entry.get("extra", ""), key=f"grid_extra_queue_{idx}")
+        else:
+            entry["extra"] = ""
+
+    # Grid management actions
+    ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([2, 2, 4])
+    with ctrl_col1:
+        if st.button("➕ Add Matrix Entry Row", key="btn_add_matrix_row"):
+            st.session_state.batch_case_entries.append({"case_number": "", "prod": prods[0], "issue": issues[0], "desc": "", "status": "Resolved", "extra": ""})
+            st.rerun()
+    with ctrl_col2:
+        if st.button("💾 Submit All Grid Cases", key="btn_save_batch_cases"):
+            cases_saved = 0
+            for entry in st.session_state.batch_case_entries:
+                if not entry["case_number"]:
+                    continue
+                new_case = {
+                    "Date": str(date.today()),
+                    "Owner": global_owner,
+                    "Type": global_c_type,
+                    "Case Number": entry["case_number"],
+                    "Issue": entry["issue"],
+                    "Product Group": entry["prod"],
+                    "Desc": entry["desc"],
+                    "Steps": "",
+                    "Has_Screenshot": False,
+                    "Screenshot": None,
+                    "Status": entry["status"],
+                    "Extra": entry["extra"],
+                    "Comment": ""
+                }
+                save_case_to_db(new_case)
+                cases_saved += 1
+            
+            st.success(f"Batch execution complete! {cases_saved} cases recorded.")
+            st.session_state.batch_case_entries = [{"case_number": "", "prod": prods[0], "issue": issues[0], "desc": "", "status": "Resolved", "extra": ""}]
+            st.rerun()
+
+    st.divider()
+    st.subheader("📚 Knowledge Base Database Sync")
 
     if cases_list:
         df_cases = pd.DataFrame(cases_list)
@@ -840,7 +884,8 @@ with tab_case:
 
     if filtered_cases:
         for case in filtered_cases:
-            entry_col, action_col = st.columns([9, 1])
+            entry_col, action_col = st.columns([7, 3])
+            
             with entry_col:
                 with st.expander(f"Case #{case.get('Case Number','')} | {case.get('Desc','')[:80]}", expanded=False):
                     st.markdown(f"""
@@ -849,75 +894,87 @@ with tab_case:
                         **Contact Type:** {case.get('Type','')}
                         **Case Number:** {case.get('Case Number','')}
                         **Status:** {case.get('Status','')}
-                        **Issue:** {case.get('Issue','')}
-                        **Product Group:** {case.get('Product Group','')}
                         """)
-                    st.markdown("### Issue Description")
-                    st.write(case.get("Desc", ""))
-                    st.markdown("### Steps Taken")
-                    st.write(case.get("Steps", ""))
+                    
                     if case.get("Extra"):
-                        st.markdown("### Additional Information")
-                        st.write(case.get("Extra", ""))
-                    if case.get("Has_Screenshot") and case.get("Screenshot"):
-                        st.image(case["Screenshot"], caption="Attached Screenshot", use_container_width=True)
-                    elif case.get("Has_Screenshot"):
-                        st.caption("📎 Screenshot attached to this record.")
+                        st.markdown(f"**Additional Context / Reason:** {case.get('Extra')}")
+                    if case.get("Comment"):
+                        st.info(f"💬 **Internal Work Note:** {case.get('Comment')}")
+                        
+                    st.markdown("### Issue Note / Summary")
+                    st.write(case.get("Desc", ""))
+                    if case.get("Steps"):
+                        st.markdown("### Steps Action Logs")
+                        st.write(case.get("Steps", ""))
 
             with action_col:
-                pop = st.popover("⋮", help="Actions")
-                with pop:
-                    action = st.selectbox("Action", ["None", "Edit", "Delete"], key=f"action_{case['_id']}")
+                # Local toggle action switches
+                st.write("")
+                t_col1, t_col2, t_col3 = st.columns(3)
+                t_edit = t_col1.toggle("✏️ Edit", key=f"t_edit_{case['_id']}")
+                t_del = t_col2.toggle("🗑️ Del", key=f"t_del_{case['_id']}")
+                t_comm = t_col3.toggle("💬 Comment", key=f"t_comm_{case['_id']}")
 
-            if action == "Edit":
-                with st.container():
-                    st.markdown(f"### Editing Case #{case.get('Case Number','')}")
-                    edit_date = st.text_input("Date", value=case.get("Date", ""), key=f"date_{case['_id']}")
-                    edit_owner = st.selectbox("Owner", owner_list, index=owner_list.index(case.get("Owner")) if case.get("Owner") in owner_list else 0, key=f"owner_{case['_id']}")
-                    edit_type = st.selectbox("Contact Type", c_types, index=c_types.index(case.get("Type")) if case.get("Type") in c_types else 0, key=f"type_{case['_id']}")
-                    edit_case_number = st.text_input("Case Number", value=case.get("Case Number", ""), key=f"case_num_{case['_id']}")
-                    edit_issue = st.selectbox("Issue", issues, index=issues.index(case.get("Issue")) if case.get("Issue") in issues else 0, key=f"issue_{case['_id']}")
-                    edit_product = st.selectbox("Product Group", prods, index=prods.index(case.get("Product Group")) if case.get("Product Group") in prods else 0, key=f"prod_{case['_id']}")
+            # Dynamic Execution Containers matching active toggles
+            if t_edit:
+                with st.container(border=True):
+                    st.markdown(f"#### Edit Case #{case.get('Case Number','')}")
+                    edit_date = st.text_input("Date Stamp", value=case.get("Date", ""), key=f"date_{case['_id']}")
+                    edit_owner = st.selectbox("Record Assignment Owner", owner_list, index=owner_list.index(case.get("Owner")) if case.get("Owner") in owner_list else 0, key=f"owner_{case['_id']}")
+                    edit_type = st.selectbox("Interaction Channel Profile", c_types, index=c_types.index(case.get("Type")) if case.get("Type") in c_types else 0, key=f"type_{case['_id']}")
+                    edit_case_number = st.text_input("Identified Case Identifier", value=case.get("Case Number", ""), key=f"case_num_{case['_id']}")
+                    edit_issue = st.selectbox("Classified Issue Context", issues, index=issues.index(case.get("Issue")) if case.get("Issue") in issues else 0, key=f"issue_{case['_id']}")
+                    edit_product = st.selectbox("Assigned System Group", prods, index=prods.index(case.get("Product Group")) if case.get("Product Group") in prods else 0, key=f"prod_{case['_id']}")
                     
                     status_options = ["Resolved", "Pending/Monitoring", "Routed"]
-                    current_status = case.get("Status", "Resolved")
-                    edit_status = st.selectbox("Status", status_options, index=status_options.index(current_status) if current_status in status_options else 0, key=f"status_{case['_id']}")
-                    edit_extra = st.text_input("Extra Information", value=case.get("Extra", ""), key=f"extra_{case['_id']}")
-                    edit_desc = st.text_area("Issue Description", value=case.get("Desc", ""), key=f"ed_desc_{case['_id']}")
-                    edit_steps = st.text_area("Steps Taken", value=case.get("Steps", ""), key=f"ed_step_{case['_id']}")
+                    edit_status = st.selectbox("Pipeline Resolution Status", status_options, index=status_options.index(case.get("Status", "Resolved")) if case.get("Status", "Resolved") in status_options else 0, key=f"status_{case['_id']}")
+                    edit_extra = st.text_input("Status Secondary Attributes", value=case.get("Extra", ""), key=f"extra_{case['_id']}")
+                    edit_desc = st.text_area("Detailed Log Notes", value=case.get("Desc", ""), key=f"ed_desc_{case['_id']}")
                     
-                save_col, _ = st.columns([1, 4])      
-                with save_col:
-                    if st.button("Save Changes", key=f"save_ed_{case['_id']}"):
+                    if st.button("Save Record Configuration", key=f"save_ed_{case['_id']}"):
                         collection.update_one(
                             {"_id": case["_id"]},
                             {"$set": {
                                 "Date": edit_date, "Owner": edit_owner, "Type": edit_type,
                                 "Case Number": edit_case_number, "Issue": edit_issue,
                                 "Product Group": edit_product, "Status": edit_status,
-                                "Extra": edit_extra, "Desc": edit_desc, "Steps": edit_steps
+                                "Extra": edit_extra, "Desc": edit_desc
                             }}
                         )
                         st.cache_data.clear()
-                        st.success("Case updated successfully!")
+                        st.success("Case profile properties modified successfully.")
                         st.rerun()
-                    
-            elif action == "Delete":
-                st.warning("⚠️ Supervisor authorization required.")
-                del_password = st.text_input("Enter Admin Password", type="password", key=f"pwd_del_{case['_id']}")
-                del_col, cancel_col = st.columns(2)
-                with del_col:
-                    if st.button("Confirm Delete", key=f"conf_del_{case['_id']}"):
+
+            if t_del:
+                with st.container(border=True):
+                    st.warning("⚠️ Supervised Destruction Operations Requesting Credentials")
+                    del_password = st.text_input("Security Authorization Vector Password", type="password", key=f"pwd_del_{case['_id']}")
+                    if st.button("Purge Permanent Record", key=f"conf_del_{case['_id']}"):
                         if del_password == "Password1234":
                             collection.delete_one({"_id": case["_id"]})
                             st.cache_data.clear()
-                            st.success("Case deleted successfully.")
+                            st.success("Database entity stripped completely.")
                             st.rerun()
                         else:
-                            st.error("Incorrect Password.")
+                            st.error("Credential confirmation mismatch validation failure.")
+
+            if t_comm:
+                with st.container(border=True):
+                    st.markdown("#### Append Workflow Communication Entry")
+                    current_comment = case.get("Comment", "")
+                    new_comment_str = st.text_area("Work Item Comm Note Ledger", value=current_comment, key=f"input_comment_{case['_id']}")
+                    
+                    if st.button("Push Comment Entry Update", key=f"btn_save_comm_{case['_id']}"):
+                        collection.update_one(
+                            {"_id": case["_id"]},
+                            {"$set": {"Comment": new_comment_str}}
+                        )
+                        st.cache_data.clear()
+                        st.success("Comments array stream successfully appended.")
+                        st.rerun()
             st.divider()
     else:
-        st.info("No cases match the selected filters.")
+        st.info("No active system case records match filter parameters.")
 
 # --- TAB 5: DEVIATION ---
 with tab_dev:
