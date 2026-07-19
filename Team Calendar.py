@@ -49,7 +49,7 @@ def load_data_from_db():
     else:
         st.session_state.calendar_data = {}
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=2)
 def get_staff_list():
     try:
         cursor = collection.find({"type": "roster_list"})
@@ -74,7 +74,7 @@ def update_staff_in_db(name, update_dict):
         st.session_state.staff_roster[name].update(update_dict)
     st.cache_data.clear()
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=2)
 def get_cases_from_db():
     try:
         return list(collection.find({"type": "case"}))
@@ -86,7 +86,7 @@ def save_case_to_db(case_data):
     collection.insert_one(case_data)
     st.cache_data.clear()
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=2)
 def fetch_deviations_from_db():
     try:
         return list(collection.find({"type": "deviation"}))
@@ -114,14 +114,14 @@ def update_request_status_in_db(req, status):
     collection.update_one({"_id": req["_id"]}, {"$set": {"status": status}})
     st.cache_data.clear()
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=2)
 def fetch_approved_requests_from_db():
     return list(collection.find({
         "type": {"$in": ["PTO", "Wellness", "Sick Leave"]}, 
         "status": "Approved"
     }))
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=2)
 def fetch_pending_requests_from_db():
     return list(collection.find({
         "type": {"$in": ["PTO", "Wellness", "Sick Leave"]}, 
