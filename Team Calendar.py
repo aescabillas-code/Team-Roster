@@ -1137,13 +1137,7 @@ with tab_dev:
             count_df = df.groupby("Name").size().reset_index(name="Deviation Count")
             count_df = count_df.sort_values(by="Deviation Count", ascending=False)
             
-            # Apply center alignment styling to the specific column
-            styled_df = count_df.style.set_properties(
-                subset=["Deviation Count"], 
-                **{"text-align": "center"}
-            )
-            
-            st.dataframe(styled_df, hide_index=True, use_container_width=True)
+            st.dataframe(count_df, hide_index=True, use_container_width=True)
         else:
             st.info("No records match filter bounds for summary processing.")
         
