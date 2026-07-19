@@ -313,20 +313,35 @@ def render_request(req, key_prefix):
 
 # --- TABS WORKSPACE ---
 
-# 1. Define the tab names first so you can reference them safely
 tab_names = [
     "📅 Calendar", "📝 Request", "📈 Productivity Monitoring", 
-    "🔍 Case Tracker", "🔀 Deviation", "🔑 Admin"]
+    "🔍 Case Tracker", "🔀 Deviation", "🔑 Admin"
+]
 
-# 2. Initialize the session state properly using the defined list
-if "current_tab" not in st.session_state:
-    st.session_state.current_tab = tab_names[0]
+# Initialize state tracker
+if "active_tab" not in st.session_state:
+    st.session_state.active_tab = tab_names[0]
 
-# 3. Render the tabs 
-tab_cal, tab_req, tab_prod, tab_case, tab_dev, tab_adm = st.tabs(
-    tab_names, 
-    key="active_tab", 
-    on_change="rerun")
+# Render horizontal pills (acts like an indestructible tab bar)
+selected_tab = st.pills(
+    "Navigation", 
+    options=tab_names, 
+    selection_mode="single",
+    default=st.session_state.active_tab,
+    label_visibility="collapsed" # Hides the label text
+)
+
+# Update state immediately when clicked
+if selected_tab:
+    st.session_state.active_tab = selected_tab
+
+# Build out your tabs logically using standard conditions:
+if st.session_state.active_tab == "📅 Calendar":
+    st.subheader("📅 Calendar View")
+    # Your calendar code...
+
+elif st.session_state.active_tab == "📝 Request":
+    st.subheader("📝 Request Form")
 
 # --- TAB 1: CALENDAR ---
 with tab_cal:
