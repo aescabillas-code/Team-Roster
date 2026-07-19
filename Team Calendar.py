@@ -652,7 +652,8 @@ with tab_req:
                 if count_on_date >= limit_value:
                     st.error(f"❌ Limit reached for {req_type} on {req_date}.")
                 else:
-                    new_req = {"name": name, "date": str(req_date), "type": req_type, "status": "Pending", "email": "", "viewed": False}
+                    initial_status = "Approved" if req_type == "Sick Leave" else "Pending"
+                    new_req = {"name": name, "date": str(req_date), "type": req_type, "status": initial_status}
                     save_request_to_db(new_req, req_type)
             
             st.success("All requests processed!")
