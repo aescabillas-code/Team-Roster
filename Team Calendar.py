@@ -1488,78 +1488,78 @@ with tab_adm:
         
             # --- SIDE-BY-SIDE PENDING REQUESTS LAYOUT ---
             pending_col_left, pending_col_right = st.columns(2)
-            
             with pending_col_left:
                 st.markdown("### 🌿 Pending Wellness")
-                wellness_months = get_monthly_grouped_requests(global_pending_requests, "Wellness")
+                wellness_df = get_requests_dataframe(global_pending_requests, "Wellness")
                 
-                if wellness_months:
-                    for group in wellness_months:
-                        st.markdown(f"##### 📅 {group['label']}")
-                        for req in group["requests"]:
-                            req_id = str(req["_id"])
-                            
-                            # Checkbox sits outside and to the left of the container
-                            chk_col, container_col = st.columns([0.12, 0.88])
-                            
-                            with chk_col:
-                                # Vertical alignment tweak for the checkbox
-                                st.markdown("<div style='padding-top: 15px;'></div>", unsafe_allow_html=True)
-                                is_checked = st.checkbox(
-                                    f"Select Request from {req['name']}", 
-                                    value=select_all, 
-                                    key=f"chk_well_{req_id}",
-                                    label_visibility="collapsed"
-                                )
-                            with container_col:
-                                with st.container(border=True):
-                                    st.markdown(f"**{req['name']}** | {req['date']} | `{req['status']}`")
-                            
-                            if is_checked:
-                                if bulk_action == "Approve Selected":
-                                    approve_queue.append(req["_id"])
-                                else:
-                                    reject_queue.append(req["_id"])
+                if not wellness_df.empty:
+                    # Configures the grid table with interactive columns
+                    edited_well_df = st.data_editor(
+                        wellness_df,
+                        hide_index=True,
+                        column_config={
+                            "Select": st.column_config.CheckboxColumn(default=False),
+                            "Name": st.column_config.TextColumn(disabled=True),
+                            "Date": st.column_config.TextColumn(disabled=True),
+                            "Status": st.column_config.TextColumn(disabled=True),
+                            "_id": None # Keeps the database ID hidden from user view
+                        },
+                        use_container_width=True,
+                        key="editor_wellness"
+                    )
                 else:
-                    st.write("*No pending Wellness requests matching conditions.*")
+                    st.write("*No pending Wellness requests.*")
         
             with pending_col_right:
                 st.markdown("### ✈️ Pending PTO")
-                pto_months = get_monthly_grouped_requests(global_pending_requests, "PTO")
+                pto_df = get_requests_dataframe(global_pending_requests, "PTO")
         
-                if pto_months:
-                    for group in pto_months:
-                        st.markdown(f"##### 📅 {group['label']}")
-                        for req in group["requests"]:
-                            req_id = str(req["_id"])
-                            
-                            # Checkbox sits outside and to the left of the container
-                            chk_col, container_col = st.columns([0.12, 0.88])
-                            
-                            with chk_col:
-                                # Vertical alignment tweak for the checkbox
-                                st.markdown("<div style='padding-top: 15px;'></div>", unsafe_allow_html=True)
-                                is_checked = st.checkbox(
-                                    f"Select Request from {req['name']}", 
-                                    value=select_all, 
-                                    key=f"chk_pto_{req_id}",
-                                    label_visibility="collapsed"
-                                )
-                            with container_col:
-                                with st.container(border=True):
-                                    st.markdown(f"**{req['name']}** | {req['date']} | `{req['status']}`")
-                            
-                            if is_checked:
-                                if bulk_action == "Approve Selected":
-                                    approve_queue.append(req["_id"])
-                                else:
-                                    reject_queue.append(req["_id"])
+                if not pto_df.empty:
+                    # Configures the grid table with interactive columns
+                    edited_pto_df = st.data_editor(
+                        pto_df,
+                        hide_index=True,
+                        column_config={
+                            "Select": st.column_config.CheckboxColumn(default=False),
+                            "Name": st.column_config.TextColumn(disabled=True),
+                            "Date": st.column_config.TextColumn(disabled=True),
+                            "Status": st.column_config.TextColumn(disabled=True),
+                            "_id": None # Keeps the database ID hidden from user view
+                        },
+                        use_container_width=True,
+                        key="editor_pto"
+                    )
                 else:
-                    st.write("*No pending PTO requests matching conditions.*")
+                    st.write("*No pending PTO requests.*")
         
-            # --- GLOBAL DEFERRED SUBMIT BUTTON ---
-            if wellness_months or pto_months:
-                st.markdown("###")
+            # --- GLOBAL BULK ACTION CONTROLS ---
+            st.markdown("---")
+            bulk_cols = st.columns([1, 1])
+            with bulk_cols[0]:
+                bulk_action = st.selectbox(
+                    "Action for Selections", 
+                    options=["Approve Selected", "Deny Selected"], 
+                    key="global_bulk_action"
+                )
+            
+            # --- DEFERRED SUBMIT BUTTON ---
+            # Aggregate selected rows dynamically from data_editor states
+            approve_queue = []
+            reject_queue = []
+            
+            if not wellness_df.empty:
+                selected_well = edited_well_df[edited_well_df["Select"] == True]
+                for _, row in selected_well.iterrows():
+                    if bulk_action == "Approve Selected": approve_queue.append(row["_id"])
+                    else: reject_queue.append(row["_id"])
+                    
+            if not pto_df.empty:
+                selected_pto = edited_pto_df[edited_pto_df["Select"] == True]
+                for _, row in selected_pto.iterrows():
+                    if bulk_action == "Approve Selected": approve_queue.append(row["_id"])
+                    else: reject_queue.append(row["_id"])
+
+            if not wellness_df.empty or not pto_df.empty:
                 if st.button("💾 Save Approval Decisions", type="primary", use_container_width=True):
                     if approve_queue or reject_queue:
                         if approve_queue:
@@ -1574,8 +1574,8 @@ with tab_adm:
                         st.cache_data.clear()
                         st.rerun()
                     else:
-                        st.warning("No selections made. Please check rows or select all before saving.")
-
+                        st.warning("No selections made. Please select checkbox rows before saving.")
+                        
             st.divider()
             st.subheader("Approved History")
             
