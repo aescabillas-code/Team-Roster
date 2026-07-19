@@ -782,7 +782,7 @@ with tab_case:
         global_owner = st.selectbox("Global Case Owner", owner_list, key="case_global_owner")
 
     st.divider()
-    st.markdown("### 📊 Case Entry Grid Matrix")
+    st.markdown("### 📊 Case Entry Grid")
 
     # Initialize batch session state storage
     if "batch_case_entries" not in st.session_state:
@@ -826,11 +826,18 @@ with tab_case:
     # Grid management actions
     ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([2, 2, 4])
     with ctrl_col1:
-        if st.button("➕ Add Matrix Entry Row", key="btn_add_matrix_row"):
+        if st.button("➕ Add Entry Row", key="btn_add_matrix_row"):
             st.session_state.batch_case_entries.append({"case_number": "", "prod": prods[0], "issue": issues[0], "desc": "", "status": "Resolved", "extra": ""})
             st.rerun()
     with ctrl_col2:
-        if st.button("💾 Submit All Grid Cases", key="btn_save_batch_cases"):
+        if st.button("🗑️ Remove Last Row", key="btn_remove_matrix_row"):
+            if len(st.session_state.batch_case_entries) > 1:
+                st.session_state.batch_case_entries.pop()
+                st.rerun()
+            else:
+                st.warning("Cannot remove row. Minimum of 1 entry line required.")
+    with ctrl_col3:
+        if st.button("💾 Submit All Cases", key="btn_save_batch_cases"):
             cases_saved = 0
             for entry in st.session_state.batch_case_entries:
                 if not entry["case_number"]:
@@ -843,9 +850,6 @@ with tab_case:
                     "Issue": entry["issue"],
                     "Product Group": entry["prod"],
                     "Desc": entry["desc"],
-                    "Steps": "",
-                    "Has_Screenshot": False,
-                    "Screenshot": None,
                     "Status": entry["status"],
                     "Extra": entry["extra"],
                     "Comment": ""
@@ -858,7 +862,7 @@ with tab_case:
             st.rerun()
 
     st.divider()
-    st.subheader("📚 Knowledge Base Database Sync")
+    st.subheader("📚 Knowledge Base")
 
     if cases_list:
         df_cases = pd.DataFrame(cases_list)
@@ -884,7 +888,7 @@ with tab_case:
 
     if filtered_cases:
         for case in filtered_cases:
-            entry_col, action_col = st.columns([7, 3])
+            entry_col, action_col = st.columns([8, 2])
             
             with entry_col:
                 with st.expander(f"Case #{case.get('Case Number','')} | {case.get('Desc','')[:80]}", expanded=False):
@@ -908,12 +912,10 @@ with tab_case:
                         st.write(case.get("Steps", ""))
 
             with action_col:
-                # Local toggle action switches
-                st.write("")
-                t_col1, t_col2, t_col3 = st.columns(3)
-                t_edit = t_col1.toggle("✏️ Edit", key=f"t_edit_{case['_id']}")
-                t_del = t_col2.toggle("🗑️ Del", key=f"t_del_{case['_id']}")
-                t_comm = t_col3.toggle("💬 Comment", key=f"t_comm_{case['_id']}")
+                # FIXED: Stacked vertically within one single column
+                t_edit = st.toggle("✏️ Edit", key=f"t_edit_{case['_id']}")
+                t_del = st.toggle("🗑️ Del", key=f"t_del_{case['_id']}")
+                t_comm = st.toggle("💬 Comment", key=f"t_comm_{case['_id']}")
 
             # Dynamic Execution Containers matching active toggles
             if t_edit:
@@ -960,18 +962,39 @@ with tab_case:
 
             if t_comm:
                 with st.container(border=True):
-                    st.markdown("#### Append Workflow Communication Entry")
+                    st.markdown("#### Workflow Communication Entry")
                     current_comment = case.get("Comment", "")
                     new_comment_str = st.text_area("Work Item Comm Note Ledger", value=current_comment, key=f"input_comment_{case['_id']}")
                     
-                    if st.button("Push Comment Entry Update", key=f"btn_save_comm_{case['_id']}"):
-                        collection.update_one(
-                            {"_id": case["_id"]},
-                            {"$set": {"Comment": new_comment_str}}
-                        )
-                        st.cache_data.clear()
-                        st.success("Comments array stream successfully appended.")
-                        st.rerun()
+                    # Security validation required before updating or deleting comments
+                    comm_password = st.text_input("Admin Authorization Password", type="password", key=f"pwd_comm_{case['_id']}")
+                    
+                    c_btn1, c_btn2 = st.columns(2)
+                    with c_btn1:
+                        if st.button("💾 Save Comment", key=f"btn_save_comm_{case['_id']}"):
+                            if comm_password == "Password1234":
+                                collection.update_one(
+                                    {"_id": case["_id"]},
+                                    {"$set": {"Comment": new_comment_str}}
+                                )
+                                st.cache_data.clear()
+                                st.success("Comment applied successfully.")
+                                st.rerun()
+                            else:
+                                st.error("Incorrect password credentials.")
+                                
+                    with c_btn2:
+                        if st.button("🗑️ Delete Comment", key=f"btn_del_comm_{case['_id']}"):
+                            if comm_password == "Password1234":
+                                collection.update_one(
+                                    {"_id": case["_id"]},
+                                    {"$set": {"Comment": ""}}
+                                )
+                                st.cache_data.clear()
+                                st.success("Comment cleared successfully.")
+                                st.rerun()
+                            else:
+                                st.error("Incorrect password credentials.")
             st.divider()
     else:
         st.info("No active system case records match filter parameters.")
