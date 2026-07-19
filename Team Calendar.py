@@ -1416,7 +1416,7 @@ with tab_adm:
                 
         with col_right:
             st.subheader("📥 Approval Center")
-
+        
             if "admin_msg" not in st.session_state: 
                 st.session_state.admin_msg = None
             if st.session_state.admin_msg:
@@ -1426,70 +1426,84 @@ with tab_adm:
                 if st.button("Clear Processing Session Prompt", key="clear_admin_notif"):
                     st.session_state.admin_msg = None
                     st.rerun()
-
-            st.markdown("### 🌿 Pending Wellness Requests")
-            wellness_pending = [r for r in global_pending_requests if r.get("type") == "Wellness"]
-            wellness_selected = []
-            
-            if wellness_pending:
-                select_all_wellness = st.checkbox("Toggle Mass Select (Wellness)", key="select_all_wellness")
-                for req in wellness_pending:
-                    req_id = str(req["_id"])
-                    item_cols = st.columns([1, 8])
-                    with item_cols[0]:
-                        checked = st.checkbox("", value=select_all_wellness, key=f"wellness_chk_{req_id}")
-                    with item_cols[1]:
+        
+            # Track structural arrays to batch update database elements upon explicit submission save
+            approve_queue = []
+            reject_queue = []
+        
+            # Layout: Create side-by-side columns for Wellness and PTO
+            col_wellness, col_pto = st.columns(2)
+        
+            # --- WELLNESS SECTION ---
+            with col_wellness:
+                st.markdown("### 🌿 Pending Wellness Requests")
+                # Filter and sort from oldest to newest based on date string
+                wellness_pending = [r for r in global_pending_requests if r.get("type") == "Wellness"]
+                wellness_pending.sort(key=lambda r: r.get("date", ""))
+                
+                if wellness_pending:
+                    for req in wellness_pending:
+                        req_id = str(req["_id"])
                         st.write(f"👤 {req['name']} | 📅 {req['date']} | Status: `{req['status']}`")
-                    if checked:
-                        wellness_selected.append(req["_id"])
-            
-                btn_cols = st.columns(2)
-                with btn_cols[0]:
-                    if st.button("✅ Approve Selected Wellness Tickets", key="approve_wellness"):
-                        if wellness_selected:
-                            bulk_update_requests(wellness_selected, "Approved")
-                            st.success("Authorized selection update rules successfully matched.")
-                            st.rerun()
-                with btn_cols[1]:
-                    if st.button("❌ Reject Selected Wellness Tickets", key="deny_wellness"):
-                        if wellness_selected:
-                            bulk_update_requests(wellness_selected, "Rejected")
-                            st.success("Denial authorization sequence evaluated completely.")
-                            st.rerun()
-            else:
-                st.write("*No pending Wellness requests matching conditions.*")
-
-            st.markdown("### ✈️ Pending Paid Time Off (PTO) Requests")
-            pto_pending = [r for r in global_pending_requests if r.get("type") == "PTO"]
-            pto_selected = []
-
-            if pto_pending:
-                select_all_pto = st.checkbox("Toggle Mass Select (PTO)", key="select_all_pto")
-                for req in pto_pending:
-                    req_id = str(req["_id"])
-                    item_cols = st.columns([1, 8])
-                    with item_cols[0]:
-                        checked = st.checkbox("", value=select_all_pto, key=f"pto_chk_{req_id}")
-                    with item_cols[1]:
+                        
+                        # Dynamic Toggle Component implementation (Off = Deny, On = Approve)
+                        is_approved = st.toggle(
+                            "Approve / Deny", 
+                            value=False, 
+                            key=f"toggle_wellness_{req_id}"
+                        )
+                        
+                        if is_approved:
+                            approve_queue.append(req["_id"])
+                        else:
+                            reject_queue.append(req["_id"])
+                        st.markdown("---")
+                else:
+                    st.write("*No pending Wellness requests matching conditions.*")
+        
+            # --- PTO SECTION ---
+            with col_pto:
+                st.markdown("### ✈️ Pending Paid Time Off (PTO) Requests")
+                # Filter and sort from oldest to newest based on date string
+                pto_pending = [r for r in global_pending_requests if r.get("type") == "PTO"]
+                pto_pending.sort(key=lambda r: r.get("date", ""))
+        
+                if pto_pending:
+                    for req in pto_pending:
+                        req_id = str(req["_id"])
                         st.write(f"👤 {req['name']} | 📅 {req['date']} | Status: `{req['status']}`")
-                    if checked:
-                        pto_selected.append(req["_id"])
-
-                btn_cols = st.columns(2)
-                with btn_cols[0]:
-                    if st.button("✅ Approve Selected PTO Tickets", key="approve_pto"):
-                        if pto_selected:
-                            bulk_update_requests(pto_selected, "Approved")
-                            st.success("Authorized selection update rules successfully matched.")
-                            st.rerun()
-                with btn_cols[1]:
-                    if st.button("❌ Reject Selected PTO Tickets", key="deny_pto"):
-                        if pto_selected:
-                            bulk_update_requests(pto_selected, "Rejected")
-                            st.success("Denial authorization sequence evaluated completely.")
-                            st.rerun()
-            else:
-                st.write("*No pending PTO requests matching conditions.*")
+                        
+                        # Dynamic Toggle Component implementation (Off = Deny, On = Approve)
+                        is_approved = st.toggle(
+                            "Approve / Deny", 
+                            value=False, 
+                            key=f"toggle_pto_{req_id}"
+                        )
+                        
+                        if is_approved:
+                            approve_queue.append(req["_id"])
+                        else:
+                            reject_queue.append(req["_id"])
+                        st.markdown("---")
+                else:
+                    st.write("*No pending PTO requests matching conditions.*")
+        
+            # --- GLOBAL DEFERRED SUBMIT BUTTON ---
+            if wellness_pending or pto_pending:
+                st.markdown("###")
+                if st.button("💾 Save Approval Decisions", type="primary", use_container_width=True):
+                    # Batch write pipeline changes to MongoDB safely on structural confirm action
+                    if approve_queue:
+                        bulk_update_requests(approve_queue, "Approved")
+                    if reject_queue:
+                        bulk_update_requests(reject_queue, "Rejected")
+                    
+                    st.session_state.admin_msg = (
+                        "success", 
+                        f"Decisions saved completely! Authorized {len(approve_queue)} approvals and evaluated {len(reject_queue)} denial structures successfully."
+                    )
+                    st.cache_data.clear()
+                    st.rerun()
 
             st.divider()
             st.subheader("Approved History")
