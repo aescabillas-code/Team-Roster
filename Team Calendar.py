@@ -1051,6 +1051,7 @@ with tab_case:
                             st.cache_data.clear()
                             st.success("Comment cleared successfully.")
                             st.rerun()
+        st.divider()
     else:
         st.info("No active system case records match filter parameters.")
 
