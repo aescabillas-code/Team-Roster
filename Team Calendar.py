@@ -1,4 +1,5 @@
 from datetime import datetime, time, date, timedelta
+from datetime import datetime
 import streamlit as st
 from pymongo import MongoClient
 import calendar
@@ -1413,7 +1414,7 @@ with tab_adm:
                 st.cache_data.clear()
                 st.success("Calendar timeline database parameters successfully updated!")
                 st.rerun()
-                
+    
         with col_right:
             st.subheader("📥 Approval Center")
         
@@ -1431,79 +1432,113 @@ with tab_adm:
             approve_queue = []
             reject_queue = []
         
+            # --- GLOBAL MASS ACTION CONTROLS ---
+            st.markdown("### ⚡ Bulk Actions")
+            bulk_cols = st.columns([1, 1])
+            with bulk_cols[0]:
+                select_all = st.checkbox("Select All Pending Requests", key="global_select_all")
+            with bulk_cols[1]:
+                bulk_action = st.selectbox(
+                    "Action for Selections", 
+                    options=["Approve Selected", "Deny Selected"], 
+                    key="global_bulk_action",
+                    label_visibility="collapsed"
+                )
+            
+            st.markdown("---")
+        
+            # Helper function to group and sort requests by month chronologically
+            def get_monthly_grouped_requests(requests_list, request_type):
+                # Filter by type
+                filtered = [r for r in requests_list if r.get("type") == request_type]
+                # Sort chronologically from oldest to newest by raw date string
+                filtered.sort(key=lambda r: r.get("date", ""))
+                
+                grouped = {}
+                for req in filtered:
+                    date_str = req.get("date", "")
+                    try:
+                        # Parse date to extract sorting key and formal label
+                        date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+                        sort_key = date_obj.strftime("%Y-%m")
+                        month_label = date_obj.strftime("%B %Y")
+                    except Exception:
+                        sort_key = "9999-12"
+                        month_label = "Other / Unspecified Date"
+                        
+                    if sort_key not in grouped:
+                        grouped[sort_key] = {"label": month_label, "requests": []}
+                    grouped[sort_key]["requests"].append(req)
+                    
+                # Sort groups chronologically by key (YYYY-MM)
+                sorted_groups = [grouped[k] for k in sorted(grouped.keys())]
+                return sorted_groups
+        
             # Layout: Create side-by-side columns for Wellness and PTO
             col_wellness, col_pto = st.columns(2)
         
             # --- WELLNESS SECTION ---
             with col_wellness:
                 st.markdown("### 🌿 Pending Wellness Requests")
-                # Filter and sort from oldest to newest based on date string
-                wellness_pending = [r for r in global_pending_requests if r.get("type") == "Wellness"]
-                wellness_pending.sort(key=lambda r: r.get("date", ""))
+                wellness_months = get_monthly_grouped_requests(global_pending_requests, "Wellness")
                 
-                if wellness_pending:
-                    for req in wellness_pending:
-                        req_id = str(req["_id"])
-                        st.write(f"👤 {req['name']} | 📅 {req['date']} | Status: `{req['status']}`")
-                        
-                        # Dynamic Toggle Component implementation (Off = Deny, On = Approve)
-                        is_approved = st.toggle(
-                            "Approve / Deny", 
-                            value=False, 
-                            key=f"toggle_wellness_{req_id}"
-                        )
-                        
-                        if is_approved:
-                            approve_queue.append(req["_id"])
-                        else:
-                            reject_queue.append(req["_id"])
-                        st.markdown("---")
+                if wellness_months:
+                    for group in wellness_months:
+                        st.markdown(f"##### 📅 {group['label']}")
+                        for req in group["requests"]:
+                            req_id = str(req["_id"])
+                            st.write(f"👤 {req['name']} | 📅 {req['date']} | Status: `{req['status']}`")
+                            
+                            is_checked = st.checkbox("Select Request", value=select_all, key=f"chk_well_{req_id}", label_visibility="collapsed")
+                            if is_checked:
+                                if bulk_action == "Approve Selected":
+                                    approve_queue.append(req["_id"])
+                                else:
+                                    reject_queue.append(req["_id"])
+                            st.markdown("---")
                 else:
                     st.write("*No pending Wellness requests matching conditions.*")
         
             # --- PTO SECTION ---
             with col_pto:
                 st.markdown("### ✈️ Pending Paid Time Off (PTO) Requests")
-                # Filter and sort from oldest to newest based on date string
-                pto_pending = [r for r in global_pending_requests if r.get("type") == "PTO"]
-                pto_pending.sort(key=lambda r: r.get("date", ""))
+                pto_months = get_monthly_grouped_requests(global_pending_requests, "PTO")
         
-                if pto_pending:
-                    for req in pto_pending:
-                        req_id = str(req["_id"])
-                        st.write(f"👤 {req['name']} | 📅 {req['date']} | Status: `{req['status']}`")
-                        
-                        # Dynamic Toggle Component implementation (Off = Deny, On = Approve)
-                        is_approved = st.toggle(
-                            "Approve / Deny", 
-                            value=False, 
-                            key=f"toggle_pto_{req_id}"
-                        )
-                        
-                        if is_approved:
-                            approve_queue.append(req["_id"])
-                        else:
-                            reject_queue.append(req["_id"])
-                        st.markdown("---")
+                if pto_months:
+                    for group in pto_months:
+                        st.markdown(f"##### 📅 {group['label']}")
+                        for req in group["requests"]:
+                            req_id = str(req["_id"])
+                            st.write(f"👤 {req['name']} | 📅 {req['date']} | Status: `{req['status']}`")
+                            
+                            is_checked = st.checkbox("Select Request", value=select_all, key=f"chk_pto_{req_id}", label_visibility="collapsed")
+                            if is_checked:
+                                if bulk_action == "Approve Selected":
+                                    approve_queue.append(req["_id"])
+                                else:
+                                    reject_queue.append(req["_id"])
+                            st.markdown("---")
                 else:
                     st.write("*No pending PTO requests matching conditions.*")
         
             # --- GLOBAL DEFERRED SUBMIT BUTTON ---
-            if wellness_pending or pto_pending:
+            if wellness_months or pto_months:
                 st.markdown("###")
                 if st.button("💾 Save Approval Decisions", type="primary", use_container_width=True):
-                    # Batch write pipeline changes to MongoDB safely on structural confirm action
-                    if approve_queue:
-                        bulk_update_requests(approve_queue, "Approved")
-                    if reject_queue:
-                        bulk_update_requests(reject_queue, "Rejected")
-                    
-                    st.session_state.admin_msg = (
-                        "success", 
-                        f"Decisions saved completely! Authorized {len(approve_queue)} approvals and evaluated {len(reject_queue)} denial structures successfully."
-                    )
-                    st.cache_data.clear()
-                    st.rerun()
+                    if approve_queue or reject_queue:
+                        if approve_queue:
+                            bulk_update_requests(approve_queue, "Approved")
+                        if reject_queue:
+                            bulk_update_requests(reject_queue, "Rejected")
+                        
+                        st.session_state.admin_msg = (
+                            "success", 
+                            f"Decisions saved completely! Processed {len(approve_queue)} approvals and {len(reject_queue)} denials successfully."
+                        )
+                        st.cache_data.clear()
+                        st.rerun()
+                    else:
+                        st.warning("No selections made. Please check rows or select all before saving.")
 
             st.divider()
             st.subheader("Approved History")
