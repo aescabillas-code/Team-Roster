@@ -710,7 +710,7 @@ with tab_req:
     
     if filtered_app: 
         df_display = pd.DataFrame(filtered_app)[['name', 'date', 'type']]
-        df_display.columns = ["Name", "Date", "Type"]
+        df_display.columns = ["Date", "Name", "Type"]
         st.dataframe(df_display, hide_index=True, use_container_width=True)
     else: 
         st.write("No records found.")
@@ -731,7 +731,7 @@ with tab_req:
             
             # Map structural preferences for UI display parameters
             df_pending_display = df_pending[["date", "type", "name"]].copy()
-            df_pending_display.columns = ["Date", "Type", "Employee Name"]
+            df_pending_display.columns = ["Date", "Name", "Type"]
             
             # Dynamic height auto-scales exactly to row length without a max threshold caps constraint
             calculated_height = (len(df_pending_display) * 35) + 45
@@ -1523,9 +1523,9 @@ with tab_adm:
                     hide_index=True,
                     column_config={
                         "Select": st.column_config.CheckboxColumn(default=False),
-                        "Type": st.column_config.TextColumn(disabled=True),
-                        "Name": st.column_config.TextColumn(disabled=True),
                         "Date": st.column_config.TextColumn(disabled=True),
+                        "Name": st.column_config.TextColumn(disabled=True),
+                        "Type": st.column_config.TextColumn(disabled=True),
                         "Status": st.column_config.TextColumn(disabled=True),
                         "_id": None # Keeps the database ID completely hidden
                     },
@@ -1627,22 +1627,32 @@ with tab_adm:
                 # Sort from oldest to newest using the temporary parsed_date column
                 history_df.sort_values(by="parsed_date", ascending=True, inplace=True)
                 
-                # Rename the column to match standard preferences
+                # Rename the type column to match UI preferences
                 if 'type' in history_df.columns:
                     history_df.rename(columns={'type': 'Request Type'}, inplace=True)
+                
+                # Capitalize the first letter of key columns if they aren't already to look uniform
+                for col in ['date', 'name', 'status']:
+                    if col in history_df.columns:
+                        history_df.rename(columns={col: col.capitalize()}, inplace=True)
                 
                 # Explicitly drop technical columns and internal flags universally across all types
                 columns_to_drop = ['_id', 'parsed_date', 'email', 'viewed']
                 history_display_df = history_df.drop(columns=columns_to_drop, errors='ignore')
                 
-                # Reorder columns to ensure "Request Type" sits cleanly at the front
-                all_cols = list(history_display_df.columns)
-                if 'Request Type' in all_cols:
-                    all_cols.insert(0, all_cols.pop(all_cols.index('Request Type')))
-                    history_display_df = history_display_df[all_cols]
+                # --- REARRANGE COLUMN ORDER ---
+                # Strictly mapping required layout dimensions: Date, Name, Request Type, Status
+                desired_order = ["Date", "Name", "Request Type", "Status"]
+                existing_cols = [c for c in desired_order if c in history_display_df.columns]
                 
-                # Dynamic height allocation tailored to fit the full item count seamlessly
-                history_height = min(1000, max(100, len(history_display_df) * 35 + 40))
+                # Capture any extra unexpected layout columns to prevent breaking or dropping data
+                extra_cols = [c for c in history_display_df.columns if c not in desired_order]
+                
+                # Construct final reordered DataFrame profile
+                history_display_df = history_display_df[existing_cols + extra_cols]
+                
+                # Dynamic height allocation tailored to fit the full item count seamlessly without arbitrary limit caps
+                history_height = (len(history_display_df) * 35) + 45
                 
                 st.dataframe(
                     history_display_df, 
