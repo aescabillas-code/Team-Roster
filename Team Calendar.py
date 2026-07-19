@@ -1486,55 +1486,58 @@ with tab_adm:
                 sorted_groups = [grouped[k] for k in sorted(grouped.keys())]
                 return sorted_groups
         
-            # To fix the nesting issue, we list categories sequentially rather than split column layout
-            st.markdown("### 🌿 Pending Wellness Requests")
-            wellness_months = get_monthly_grouped_requests(global_pending_requests, "Wellness")
+            # --- SIDE-BY-SIDE PENDING REQUESTS LAYOUT ---
+            pending_col_left, pending_col_right = st.columns(2)
             
-            if wellness_months:
-                for group in wellness_months:
-                    st.markdown(f"##### 📅 {group['label']}")
-                    for req in group["requests"]:
-                        req_id = str(req["_id"])
-                        
-                        # Legal 2-column inline format (Since we are inside col_right, this is only 2nd level nesting)
-                        row_cols = st.columns([1, 15])
-                        with row_cols[0]:
-                            is_checked = st.checkbox("", value=select_all, key=f"chk_well_{req_id}", label_visibility="collapsed")
-                        with row_cols[1]:
-                            st.markdown(f"👤 {req['name']} | 📅 {req['date']} | Status: `{req['status']}`")
-                        
-                        if is_checked:
-                            if bulk_action == "Approve Selected":
-                                approve_queue.append(req["_id"])
-                            else:
-                                reject_queue.append(req["_id"])
-            else:
-                st.write("*No pending Wellness requests matching conditions.*")
-    
-            st.markdown("---")
-            st.markdown("### ✈️ Pending Paid Time Off (PTO) Requests")
-            pto_months = get_monthly_grouped_requests(global_pending_requests, "PTO")
-    
-            if pto_months:
-                for group in pto_months:
-                    st.markdown(f"##### 📅 {group['label']}")
-                    for req in group["requests"]:
-                        req_id = str(req["_id"])
-                        
-                        # Legal 2-column inline format
-                        row_cols = st.columns([1, 15])
-                        with row_cols[0]:
-                            is_checked = st.checkbox("", value=select_all, key=f"chk_pto_{req_id}", label_visibility="collapsed")
-                        with row_cols[1]:
-                            st.markdown(f"👤 {req['name']} | 📅 {req['date']} | Status: `{req['status']}`")
-                        
-                        if is_checked:
-                            if bulk_action == "Approve Selected":
-                                approve_queue.append(req["_id"])
-                            else:
-                                reject_queue.append(req["_id"])
-            else:
-                st.write("*No pending PTO requests matching conditions.*")
+            with pending_col_left:
+                st.markdown("### 🌿 Pending Wellness")
+                wellness_months = get_monthly_grouped_requests(global_pending_requests, "Wellness")
+                
+                if wellness_months:
+                    for group in wellness_months:
+                        st.markdown(f"##### 📅 {group['label']}")
+                        for req in group["requests"]:
+                            req_id = str(req["_id"])
+                            
+                            row_cols = st.columns([1, 8])
+                            with row_cols[0]:
+                                is_checked = st.checkbox("", value=select_all, key=f"chk_well_{req_id}", label_visibility="collapsed")
+                            with row_cols[1]:
+                                # Re-included string details including request status
+                                st.markdown(f"👤 {req['name']} | 📅 {req['date']} | Status: `{req['status']}`")
+                            
+                            if is_checked:
+                                if bulk_action == "Approve Selected":
+                                    approve_queue.append(req["_id"])
+                                else:
+                                    reject_queue.append(req["_id"])
+                else:
+                    st.write("*No pending Wellness requests matching conditions.*")
+        
+            with pending_col_right:
+                st.markdown("### ✈️ Pending PTO")
+                pto_months = get_monthly_grouped_requests(global_pending_requests, "PTO")
+        
+                if pto_months:
+                    for group in pto_months:
+                        st.markdown(f"##### 📅 {group['label']}")
+                        for req in group["requests"]:
+                            req_id = str(req["_id"])
+                            
+                            row_cols = st.columns([1, 8])
+                            with row_cols[0]:
+                                is_checked = st.checkbox("", value=select_all, key=f"chk_pto_{req_id}", label_visibility="collapsed")
+                            with row_cols[1]:
+                                # Re-included string details including request status
+                                st.markdown(f"👤 {req['name']} | 📅 {req['date']} | Status: `{req['status']}`")
+                            
+                            if is_checked:
+                                if bulk_action == "Approve Selected":
+                                    approve_queue.append(req["_id"])
+                                else:
+                                    reject_queue.append(req["_id"])
+                else:
+                    st.write("*No pending PTO requests matching conditions.*")
         
             # --- GLOBAL DEFERRED SUBMIT BUTTON ---
             if wellness_months or pto_months:
@@ -1592,14 +1595,19 @@ with tab_adm:
                 st.markdown("#### Approved Wellness Requests Summary")
                 w_height = min(1000, max(100, len(app_wellness) * 35 + 38))
                 st.dataframe(pd.DataFrame(app_wellness).drop(columns=['_id', 'type'], errors='ignore'), hide_index=True, use_container_width=True, height=w_height)
+            
             if app_pto:
                 st.markdown("#### Approved PTO Requests Summary")
                 p_height = min(1000, max(100, len(app_pto) * 35 + 38))
-                st.dataframe(pd.DataFrame(app_pto).drop(columns=['_id', 'type'], errors='ignore'), hide_index=True, use_container_width=True, height=p_height)
+                # Explicitly dropped 'email' and 'viewed' from the display dataframe layout
+                pto_display_df = pd.DataFrame(app_pto).drop(columns=['_id', 'type', 'email', 'viewed'], errors='ignore')
+                st.dataframe(pto_display_df, hide_index=True, use_container_width=True, height=p_height)
+            
             if app_sl:
                 st.markdown("#### Approved Sick Leave Requests Summary")
                 sl_height = min(1000, max(100, len(app_sl) * 35 + 38))
                 st.dataframe(pd.DataFrame(app_sl).drop(columns=['_id', 'type'], errors='ignore'), hide_index=True, use_container_width=True, height=sl_height)
+            
             if not app_wellness and not app_pto and not app_sl:
                 st.write("*No verified history logs found matching calendar dimensions.*")
 
