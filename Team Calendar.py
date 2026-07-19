@@ -1509,7 +1509,7 @@ with tab_adm:
                                     label_visibility="collapsed"
                                 )
                                 # Markdown works correctly here to format the status backticks
-                                st.markdown(f"👤 {req['name']} | 📅 {req['date']} | Status: `{req['status']}`")
+                                st.markdown(f" {req['name']} |  {req['date']} | Status: `{req['status']}`")
                             
                             if is_checked:
                                 if bulk_action == "Approve Selected":
@@ -1538,7 +1538,7 @@ with tab_adm:
                                     label_visibility="collapsed"
                                 )
                                 # Markdown works correctly here to format the status backticks
-                                st.markdown(f"👤 {req['name']} | 📅 {req['date']} | Status: `{req['status']}`")
+                                st.markdown(f" {req['name']} |  {req['date']} | Status: `{req['status']}`")
                             
                             if is_checked:
                                 if bulk_action == "Approve Selected":
