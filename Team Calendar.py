@@ -11,6 +11,7 @@ import re
 import io
 import altair as alt
 import contextlib
+import streamlit.components.v1 as components
 
 # --- DATABASE HELPERS & CONNECTION ---
 uri = st.secrets["mongo"]["uri"] 
@@ -318,28 +319,39 @@ tab_names = [
     "🔍 Case Tracker", "🔀 Deviation", "🔑 Admin"
 ]
 
-# 1. Track the selected tab reliably in session state
-if "selected_tab" not in st.session_state:
-    st.session_state.selected_tab = tab_names[0]
+# 1. Track the active tab index in session state via query parameters
+if "active_tab" not in st.query_params:
+    st.query_params["active_tab"] = "0"
 
-# 2. Use a horizontal selector that perfectly remembers its state across clicks
-chosen_tab = st.radio(
-    "Navigation",
-    options=tab_names,
-    index=tab_names.index(st.session_state.selected_tab),
-    horizontal=True,
-    label_visibility="collapsed"
+active_index = int(st.query_params["active_tab"])
+
+# 2. Render the native st.tabs exactly how you want them
+tab_cal, tab_req, tab_prod, tab_case, tab_dev, tab_adm = st.tabs(tab_names)
+
+# 3. Inject a small piece of JavaScript to force the browser to click the active tab
+# This overrides the reset behavior and forces the native tab UI to stick!
+components.html(
+    f"""
+    <script>
+        window.parent.document.querySelectorAll('[data-baseweb="tab"]').forEach((tab, index) => {{
+            // Add a click listener so we can track when the user switches tabs manually
+            if (!tab.dataset.hasListener) {{
+                tab.dataset.hasListener = "true";
+                tab.addEventListener('click', () => {{
+                    const url = new URL(window.parent.location.href);
+                    url.searchParams.set('active_tab', index);
+                    window.parent.history.replaceState({{}}, '', url.href);
+                }});
+            }}
+            // Auto-click the tab that matched our session index on rerun
+            if (index === {active_index}) {{
+                setTimeout(() => tab.click(), 10);
+            }}
+        }});
+    </script>
+    """,
+    height=0,
 )
-st.session_state.selected_tab = chosen_tab
-
-# 3. Smart Mocking: Turn the active choice into a live container, 
-# and the others into empty contexts so your existing "with tab_..." blocks just work!
-tab_cal = st.container() if chosen_tab == "📅 Calendar" else contextlib.nullcontext()
-tab_req = st.container() if chosen_tab == "📝 Request" else contextlib.nullcontext()
-tab_prod = st.container() if chosen_tab == "📈 Productivity Monitoring" else contextlib.nullcontext()
-tab_case = st.container() if chosen_tab == "🔍 Case Tracker" else contextlib.nullcontext()
-tab_dev = st.container() if chosen_tab == "🔀 Deviation" else contextlib.nullcontext()
-tab_adm = st.container() if chosen_tab == "🔑 Admin" else contextlib.nullcontext()
 
 # --- TAB 1: CALENDAR ---
 with tab_cal:
