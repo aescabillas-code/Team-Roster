@@ -1435,21 +1435,25 @@ with tab_adm:
         with col_right:
             st.subheader("📥 Approval Center")
             
-            # --- 1. DEFINE THE HELPER FUNCTION FIRST ---
-            def get_requests_dataframe(requests_list, request_type, select_all_values=False):
-                filtered = [r for r in requests_list if r.get("type") == request_type]
+            # --- 1. DEFINE THE HELPER FUNCTION FOR A SINGLE UNIFIED DATAFRAME ---
+            def get_all_requests_dataframe(requests_list, select_all_values=False):
+                # Pull both Wellness and PTO requests into a single list
+                filtered = [r for r in requests_list if r.get("type") in ["Wellness", "PTO"]]
                 if not filtered:
                     return pd.DataFrame()
                 
                 data = {
-                    "Select": [select_all_values] * len(filtered), # Toggles default value based on "Select All"
+                    "Select": [select_all_values] * len(filtered),
+                    "Type": [r.get("type", "") for r in filtered],
                     "Name": [r.get("name", "") for r in filtered],
                     "Date": [r.get("date", "") for r in filtered],
                     "Status": [r.get("status", "") for r in filtered],
                     "_id": [r.get("_id") for r in filtered]
                 }
                 df = pd.DataFrame(data)
+                # Sort everything chronologically by date
                 df.sort_values(by="Date", inplace=True)
+                df.reset_index(drop=True, inplace=True)
                 return df
 
             # --- 2. HANDLE SESSION MESSAGES ---
@@ -1463,103 +1467,82 @@ with tab_adm:
                     st.session_state.admin_msg = None
                     st.rerun()
 
-            # --- 3. GLOBAL MASS ACTION INITIALIZERS ---
-            # Restores the missing "Select All" master checkbox functionality
-            mass_action_cols = st.columns([1, 1])
-            with mass_action_cols[0]:
-                select_all = st.checkbox("Select All Pending Requests", key="global_select_all")
-            
+            # --- 3. GLOBAL MASTER CHECKBOX ---
+            select_all = st.checkbox("Select All Pending Requests", key="global_select_all")
             st.markdown("---")
 
-            # --- 4. SIDE-BY-SIDE PENDING REQUESTS LAYOUT ---
-            pending_col_left, pending_col_right = st.columns(2)
+            # --- 4. UNIFIED PENDING REQUESTS DATA EDITOR WITH DYNAMIC HEIGHT ---
+            all_requests_df = get_all_requests_dataframe(global_pending_requests, select_all_values=select_all)
             
-            with pending_col_left:
-                st.markdown("### 🌿 Pending Wellness")
-                # Passes down select_all to instantly check boxes across the dynamic grid
-                wellness_df = get_requests_dataframe(global_pending_requests, "Wellness", select_all_values=select_all)
+            if not all_requests_df.empty:
+                # Dynamic height calculation: 40px for header + 35px per row. Min 150px, Max 800px.
+                calculated_height = max(150, min(800, (len(all_requests_df) * 35) + 40))
                 
-                if not wellness_df.empty:
-                    edited_well_df = st.data_editor(
-                        wellness_df,
-                        hide_index=True,
-                        column_config={
-                            "Select": st.column_config.CheckboxColumn(default=False),
-                            "Name": st.column_config.TextColumn(disabled=True),
-                            "Date": st.column_config.TextColumn(disabled=True),
-                            "Status": st.column_config.TextColumn(disabled=True),
-                            "_id": None 
-                        },
-                        use_container_width=True,
-                        key="editor_wellness"
-                    )
-                else:
-                    st.write("*No pending Wellness requests.*")
-        
-            with pending_col_right:
-                st.markdown("### ✈️ Pending PTO")
-                pto_df = get_requests_dataframe(global_pending_requests, "PTO", select_all_values=select_all)
-        
-                if not pto_df.empty:
-                    edited_pto_df = st.data_editor(
-                        pto_df,
-                        hide_index=True,
-                        column_config={
-                            "Select": st.column_config.CheckboxColumn(default=False),
-                            "Name": st.column_config.TextColumn(disabled=True),
-                            "Date": st.column_config.TextColumn(disabled=True),
-                            "Status": st.column_config.TextColumn(disabled=True),
-                            "_id": None 
-                        },
-                        use_container_width=True,
-                        key="editor_pto"
-                    )
-                else:
-                    st.write("*No pending PTO requests.*")
+                edited_df = st.data_editor(
+                    all_requests_df,
+                    hide_index=True,
+                    column_config={
+                        "Select": st.column_config.CheckboxColumn(default=False),
+                        "Type": st.column_config.TextColumn(disabled=True),
+                        "Name": st.column_config.TextColumn(disabled=True),
+                        "Date": st.column_config.TextColumn(disabled=True),
+                        "Status": st.column_config.TextColumn(disabled=True),
+                        "_id": None # Keeps the database ID completely hidden
+                    },
+                    use_container_width=True,
+                    height=calculated_height, # <-- Dynamically applies the height here
+                    key="editor_all_requests"
+                )
+            else:
+                st.write("*No pending Wellness or PTO requests.*")
 
             # --- 5. MASS ACTION ACTION SUBMISSION PANEL ---
-            st.markdown("---")
-            bulk_cols = st.columns([1, 1])
-            with bulk_cols[0]:
-                bulk_action = st.selectbox(
-                    "Action for Selections", 
-                    options=["Approve Selected", "Deny Selected"], 
-                    key="global_bulk_action"
-                )
-            
-            approve_queue = []
-            reject_queue = []
-            
-            # Extract updates dynamically from the data editor dataframes
-            if not wellness_df.empty:
-                selected_well = edited_well_df[edited_well_df["Select"] == True]
-                for _, row in selected_well.iterrows():
-                    if bulk_action == "Approve Selected": approve_queue.append(row["_id"])
-                    else: reject_queue.append(row["_id"])
+            if not all_requests_df.empty:
+                st.markdown("---")
+                
+                # Create side-by-side execution buttons
+                btn_col1, btn_col2 = st.columns(2)
+                
+                # Extract updates reliably by evaluating session state row alterations
+                def get_selected_ids(base_df, session_key):
+                    selected_ids = []
+                    current_select_states = base_df["Select"].tolist()
                     
-            if not pto_df.empty:
-                selected_pto = edited_pto_df[edited_pto_df["Select"] == True]
-                for _, row in selected_pto.iterrows():
-                    if bulk_action == "Approve Selected": approve_queue.append(row["_id"])
-                    else: reject_queue.append(row["_id"])
+                    # Intercept manual user row edits recorded in state
+                    if session_key in st.session_state and "edited_rows" in st.session_state[session_key]:
+                        edits = st.session_state[session_key]["edited_rows"]
+                        for row_idx, edit_dict in edits.items():
+                            if "Select" in edit_dict:
+                                current_select_states[int(row_idx)] = edit_dict["Select"]
+                    
+                    for idx, is_selected in enumerate(current_select_states):
+                        if is_selected:
+                            selected_ids.append(base_df.iloc[idx]["_id"])
+                    return selected_ids
 
-            # --- 6. DEFERRED SUBMIT SAVER ---
-            if not wellness_df.empty or not pto_df.empty:
-                if st.button("💾 Save Approval Decisions", type="primary", use_container_width=True):
-                    if approve_queue or reject_queue:
-                        if approve_queue:
-                            bulk_update_requests(approve_queue, "Approved")
-                        if reject_queue:
-                            bulk_update_requests(reject_queue, "Rejected")
-                        
-                        st.session_state.admin_msg = (
-                            "success", 
-                            f"Decisions saved completely! Processed {len(approve_queue)} approvals and {len(reject_queue)} denials successfully."
-                        )
-                        st.cache_data.clear()
-                        st.rerun()
-                    else:
-                        st.warning("No selections made. Please select checkbox rows before saving.")
+                with btn_col1:
+                    if st.button("✅ Approve Selected", type="primary", use_container_width=True):
+                        # Fetch targets inside the execution phase
+                        target_ids = get_selected_ids(all_requests_df, "editor_all_requests")
+                        if target_ids:
+                            bulk_update_requests(target_ids, "Approved")
+                            st.session_state.admin_msg = ("success", f"Successfully approved {len(target_ids)} requests!")
+                            st.cache_data.clear()
+                            st.rerun()
+                        else:
+                            st.warning("Please select at least one request to approve.")
+                            
+                with btn_col2:
+                    if st.button("❌ Deny Selected", type="secondary", use_container_width=True):
+                        # Fetch targets inside the execution phase
+                        target_ids = get_selected_ids(all_requests_df, "editor_all_requests")
+                        if target_ids:
+                            bulk_update_requests(target_ids, "Rejected")
+                            st.session_state.admin_msg = ("success", f"Successfully denied {len(target_ids)} requests!")
+                            st.cache_data.clear()
+                            st.rerun()
+                        else:
+                            st.warning("Please select at least one request to deny.")
                         
             st.divider()
             st.subheader("Approved History")
