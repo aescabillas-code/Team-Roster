@@ -1151,17 +1151,26 @@ with tab_dev:
             h_cols[idx].markdown(f"**{header_title}**")
         st.markdown("---")
         
-        for dev in reversed(filtered_records):
+        # Calculate total records to dynamically count down for the reversed display
+        total_records = len(filtered_records)
+        
+        for reverse_idx, dev in enumerate(reversed(filtered_records)):
+            # Computes the true chronological entry number (#1 for oldest record)
+            entry_number = total_records - reverse_idx
+            
             r_cols = st.columns(col_widths)
-            r_cols[0].write(str(dev.get('Date', '')))
-            r_cols[1].write(str(dev.get('Manager', '')))
-            r_cols[2].write(str(dev.get('Name', '')))
-            r_cols[3].write(str(dev.get('Shift Time', 'Not Set')))
-            r_cols[4].write(str(dev.get('Start Time', '')))
-            r_cols[5].write(str(dev.get('End Time', '')))
-            r_cols[6].write(str(dev.get('Total Mins', 0)))
-            r_cols[7].write(str(dev.get('Aux', 'N/A')))
-            r_cols[8].write(str(dev.get('Reason', '')))
+            r_cols[0].write(f"#{entry_number}")
+            r_cols[1].write(str(dev.get('Date', '')))
+            r_cols[2].write(str(dev.get('Manager', '')))
+            r_cols[3].write(str(dev.get('Name', '')))
+            r_cols[4].write(str(dev.get('Shift Time', 'Not Set')))
+            r_cols[5].write(str(dev.get('Start Time', '')))
+            r_cols[6].write(str(dev.get('End Time', '')))
+            r_cols[7].write(str(dev.get('Total Mins', 0)))
+            r_cols[8].write(str(dev.get('Aux', 'N/A')))
+            r_cols[9].write(str(dev.get('Reason', '')))
+            
+            # r_cols[10] remains reserved below for your Actions / Toggles
             
             with r_cols[10]:
                 # Action Options via Toggles
