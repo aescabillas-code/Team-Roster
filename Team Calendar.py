@@ -610,7 +610,7 @@ with tab_cal:
         
 # --- TAB 2: REQUEST FORM ---
 with tab_req:
-    st.subheader("PTO/Wellness/SL Request")
+    st.subheader("PTO / Wellness / SL Request Form")
 
     if "request_count" not in st.session_state:
         st.session_state.request_count = 1
@@ -619,64 +619,113 @@ with tab_req:
     staff_data = roster_doc.get("data", {}) if roster_doc else {}
     available_names = list(staff_data.keys()) if staff_data else list(st.session_state.staff_roster.keys())
 
-    with st.form("bulk_request_form"):
-        for i in range(st.session_state.request_count):
-            cols = st.columns([2, 2, 1])
-            with cols[0]:
-                st.selectbox("Name", available_names, key=f"name_{i}")
-            with cols[1]:
-                st.date_input("Date", key=f"date_{i}")
-            with cols[2]:
-                st.selectbox("Type", ["PTO", "Wellness", "Sick Leave"], key=f"type_{i}")
+    # 1. Global Name Selector (Applies to all sub-entries)
+    selected_name = st.selectbox("Select Employee Name:", available_names, key="bulk_request_global_name")
 
-        if st.form_submit_button("➕ Add Another Request"):
+    # Wrap the spreadsheet grid inside a standard form container
+    with st.form("bulk_request_form"):
+        st.markdown("### 📊 Request Entry Table")
+        
+        # Excel Table-style Headers
+        header_cols = st.columns([2, 2, 1])
+        header_cols[0].markdown("**Date**")
+        header_cols[1].markdown("**Request Type**")
+        header_cols[2].markdown("**Status**")
+        st.divider()
+
+        # Generate Data Input Rows Dynamically
+        for i in range(st.session_state.request_count):
+            row_cols = st.columns([2, 2, 1])
+            with row_cols[0]:
+                st.date_input("Date", label_visibility="collapsed", key=f"date_{i}")
+            with row_cols[1]:
+                st.selectbox("Type", ["PTO", "Wellness", "Sick Leave"], label_visibility="collapsed", key=f"type_{i}")
+            with row_cols[2]:
+                st.info("Ready")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # Action submission configuration array
+        action_cols = st.columns([1, 1, 2])
+        with action_cols[0]:
+            add_row_triggered = st.form_submit_button("➕ Add New Row")
+        with action_cols[1]:
+            submit_triggered = st.form_submit_button("✅ Submit Entries", type="primary")
+
+        # Handle row mutations outside evaluation loops
+        if add_row_triggered:
             st.session_state.request_count += 1
             st.rerun()
 
-        if st.form_submit_button("✅ Submit All Requests"):
+        if submit_triggered:
+            # Track counts locally during this batch processing loop to respect caps across identical dates
+            running_caps = {}
+            
             for i in range(st.session_state.request_count):
-                name = st.session_state[f"name_{i}"]
                 req_date = st.session_state[f"date_{i}"]
                 req_type = st.session_state[f"type_{i}"]
+                date_str = str(req_date)
                 
-                limits = get_request_limits(req_date)
-                count_on_date = collection.count_documents({"type": req_type, "date": str(req_date), "status": {"$in": ["Pending", "Approved"]}})
-                is_already_requested = collection.count_documents({"name": name, "date": str(req_date), "status": {"$in": ["Pending", "Approved"]}}) > 0
+                # Dynamic tracking key
+                cap_key = f"{req_type}_{date_str}"
                 
+                # Check duplication against existing records
+                is_already_requested = collection.count_documents({"name": selected_name, "date": date_str, "status": {"$in": ["Pending", "Approved"]}}) > 0
                 if is_already_requested:
-                    st.warning(f"⚠️ A request for {name} on {req_date} already exists.")
+                    st.warning(f"⚠️ A request for {selected_name} on {req_date} already exists.")
                     continue
                 
-                limit_value = limits["PTO_per_day"] if req_type == "PTO" else limits["Wellness_per_day"]
-                if count_on_date >= limit_value:
-                    st.error(f"❌ Limit reached for {req_type} on {req_date}.")
-                else:
-                    initial_status = "Approved" if req_type == "Sick Leave" else "Pending"
-                    new_req = {"name": name, "date": str(req_date), "type": req_type, "status": initial_status}
+                # Sick Leave auto-approves instantly and bypasses operational caps
+                if req_type == "Sick Leave":
+                    initial_status = "Approved"
+                    new_req = {"name": selected_name, "date": date_str, "type": req_type, "status": initial_status}
                     save_request_to_db(new_req, req_type)
+                else:
+                    limits = get_request_limits(req_date)
+                    limit_value = limits["PTO_per_day"] if req_type == "PTO" else limits["Wellness_per_day"]
+                    
+                    # Compute base database numbers if not calculated yet for this run loop context
+                    if cap_key not in running_caps:
+                        db_count = collection.count_documents({"type": req_type, "date": date_str, "status": {"$in": ["Pending", "Approved"]}})
+                        running_caps[cap_key] = db_count
+                        
+                    if running_caps[cap_key] >= limit_value:
+                        st.error(f"❌ Limit reached for {req_type} on {req_date}.")
+                    else:
+                        initial_status = "Pending"
+                        new_req = {"name": selected_name, "date": date_str, "type": req_type, "status": initial_status}
+                        save_request_to_db(new_req, req_type)
+                        running_caps[cap_key] += 1 # Increments tracking safely within multi-row batch
             
-            st.success("All requests processed!")
+            st.success("All operational entries successfully verified and processed!")
             st.session_state.request_count = 1 
             st.rerun()
 
-    st.subheader("Pending Requests Overview")    
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown("### 🌿 Wellness Pending")
-        wellness_reqs = [r for r in global_pending_requests if r['type'] == 'Wellness']
-        if wellness_reqs:
-            df_w = pd.DataFrame(wellness_reqs)[["name", "date"]]
-            df_w.columns = ["Name", "Date"]
-            st.dataframe(df_w, hide_index=True, use_container_width=True)
-    with c2:
-        st.markdown("### ✈️ PTO Pending")
-        pto_reqs = [r for r in global_pending_requests if r['type'] == 'PTO']
-        if pto_reqs:
-            df_p = pd.DataFrame(pto_reqs)[["name", "date"]]
-            df_p.columns = ["Name", "Date"]
-            st.dataframe(df_p, hide_index=True, use_container_width=True)
-            
     st.divider()
+    st.subheader("📥 Pending Requests Overview")    
+    
+    # 2. Unified Pending Request Table (Filters for Wellness and PTO only)
+    if global_pending_requests:
+        # Sick Leave is dropped here because auto-approved items are stored as "Approved" instead of "Pending"
+        unified_pending = [r for r in global_pending_requests if r.get('type') in ['Wellness', 'PTO']]
+        
+        if unified_pending:
+            df_pending = pd.DataFrame(unified_pending)
+            
+            # Chronological Sorting Implementation: Oldest Date to Newest Date
+            df_pending['sort_date'] = pd.to_datetime(df_pending['date'])
+            df_pending = df_pending.sort_values(by='sort_date', ascending=True)
+            
+            # Map structural preferences for UI display parameters
+            df_pending_display = df_pending[["date", "type", "name"]].copy()
+            df_pending_display.columns = ["Date", "Type", "Employee Name"]
+            
+            calculated_height = min(600, max(150, (len(df_pending_display) * 35) + 45))
+            st.dataframe(df_pending_display, hide_index=True, use_container_width=True, height=calculated_height)
+        else:
+            st.info("ℹ️ No pending Wellness or PTO requests found in queue parameters.")
+    else:
+        st.write("*No pending requests await administrator review authorization logs.*")
     
     st.subheader("Approved History")
     f_c1, f_c2 = st.columns(2)
