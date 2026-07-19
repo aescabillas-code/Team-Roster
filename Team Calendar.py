@@ -10,6 +10,7 @@ import pytz
 import re
 import io
 import altair as alt
+import contextlib
 
 # --- DATABASE HELPERS & CONNECTION ---
 uri = st.secrets["mongo"]["uri"] 
@@ -312,38 +313,33 @@ def render_request(req, key_prefix):
             st.rerun()
 
 # --- TABS WORKSPACE ---
-
 tab_names = [
     "📅 Calendar", "📝 Request", "📈 Productivity Monitoring", 
     "🔍 Case Tracker", "🔀 Deviation", "🔑 Admin"
 ]
 
-tab_cal, tab_req, tab_prod, tab_case, tab_dev, tab_adm = st.tabs(tab_names, key="active_tab")
+# 1. Track the selected tab reliably in session state
+if "selected_tab" not in st.session_state:
+    st.session_state.selected_tab = tab_names[0]
 
-# Initialize state tracker
-if "active_tab" not in st.session_state:
-    st.session_state.active_tab = tab_names[0]
-
-# Render horizontal pills (acts like an indestructible tab bar)
-selected_tab = st.pills(
-    "Navigation", 
-    options=tab_names, 
-    selection_mode="single",
-    default=st.session_state.active_tab,
-    label_visibility="collapsed" # Hides the label text
+# 2. Use a horizontal selector that perfectly remembers its state across clicks
+chosen_tab = st.radio(
+    "Navigation",
+    options=tab_names,
+    index=tab_names.index(st.session_state.selected_tab),
+    horizontal=True,
+    label_visibility="collapsed"
 )
+st.session_state.selected_tab = chosen_tab
 
-# Update state immediately when clicked
-if selected_tab:
-    st.session_state.active_tab = selected_tab
-
-# Build out your tabs logically using standard conditions:
-if st.session_state.active_tab == "📅 Calendar":
-    st.subheader("📅 Calendar View")
-    # Your calendar code...
-
-elif st.session_state.active_tab == "📝 Request":
-    st.subheader("📝 Request Form")
+# 3. Smart Mocking: Turn the active choice into a live container, 
+# and the others into empty contexts so your existing "with tab_..." blocks just work!
+tab_cal = st.container() if chosen_tab == "📅 Calendar" else contextlib.nullcontext()
+tab_req = st.container() if chosen_tab == "📝 Request" else contextlib.nullcontext()
+tab_prod = st.container() if chosen_tab == "📈 Productivity Monitoring" else contextlib.nullcontext()
+tab_case = st.container() if chosen_tab == "🔍 Case Tracker" else contextlib.nullcontext()
+tab_dev = st.container() if chosen_tab == "🔀 Deviation" else contextlib.nullcontext()
+tab_adm = st.container() if chosen_tab == "🔑 Admin" else contextlib.nullcontext()
 
 # --- TAB 1: CALENDAR ---
 with tab_cal:
