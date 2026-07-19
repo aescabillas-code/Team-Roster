@@ -14,8 +14,12 @@ import contextlib
 import streamlit.components.v1 as components
 
 # --- DATABASE HELPERS & CONNECTION ---
-uri = st.secrets["mongo"]["uri"] 
-client = MongoClient(uri)
+@st.cache_resource
+def get_mongo_client():
+    uri = st.secrets["mongo"]["uri"] 
+    return MongoClient(uri)
+
+client = get_mongo_client()
 db = client["my_database"] 
 collection = db["my_collection"]
 
@@ -26,6 +30,7 @@ def bulk_update_requests(request_ids, status):
         {"_id": {"$in": request_ids}},
         {"$set": {"status": status}}
     )
+    # Clear cache to reflect updates
     st.cache_data.clear()
 
 def load_data_from_db():
@@ -67,7 +72,7 @@ def update_staff_in_db(name, update_dict):
         st.session_state.staff_roster[name].update(update_dict)
     st.cache_data.clear()
 
-@st.cache_data(ttl=15)
+@st.cache_data(ttl=60)
 def get_cases_from_db():
     try:
         return list(collection.find({"type": "case"}))
@@ -79,7 +84,7 @@ def save_case_to_db(case_data):
     collection.insert_one(case_data)
     st.cache_data.clear()
 
-@st.cache_data(ttl=15)
+@st.cache_data(ttl=60)
 def fetch_deviations_from_db():
     try:
         return list(collection.find({"type": "deviation"}))
@@ -107,14 +112,14 @@ def update_request_status_in_db(req, status):
     collection.update_one({"_id": req["_id"]}, {"$set": {"status": status}})
     st.cache_data.clear()
 
-@st.cache_data(ttl=15)
+@st.cache_data(ttl=60)
 def fetch_approved_requests_from_db():
     return list(collection.find({
         "type": {"$in": ["PTO", "Wellness", "Sick Leave"]}, 
         "status": "Approved"
     }))
 
-@st.cache_data(ttl=15)
+@st.cache_data(ttl=60)
 def fetch_pending_requests_from_db():
     return list(collection.find({
         "type": {"$in": ["PTO", "Wellness", "Sick Leave"]}, 
@@ -154,10 +159,6 @@ st.title("📊 Team Operations Management System (TOMS)")
 local_tz = pytz.timezone("Asia/Manila") 
 current_date = datetime.now(local_tz).date()
 
-if "pending_requests" not in st.session_state: 
-    st.session_state.pending_requests = fetch_pending_requests_from_db()
-if "approved_requests" not in st.session_state: 
-    approved_requests = fetch_approved_requests_from_db()
 if "admin_password" not in st.session_state: st.session_state.admin_password = "Password1234"
 if "admin_authenticated" not in st.session_state: st.session_state.admin_authenticated = False
 if "staff_roster" not in st.session_state: st.session_state.staff_roster = {}
@@ -185,6 +186,10 @@ if "last_tracked_date" not in st.session_state or st.session_state.last_tracked_
     st.session_state.last_tracked_date = current_date
     st.session_state.calendar_data = {} 
     load_data_from_db()
+
+# Fetch heavy request datasets exactly *once* per runner cycle globally
+global_approved_requests = fetch_approved_requests_from_db()
+global_pending_requests = fetch_pending_requests_from_db()
 
 # --- GLOBAL CSS STYLING ---
 st.markdown("""
@@ -319,22 +324,16 @@ tab_names = [
     "🔍 Case Tracker", "🔀 Deviation", "🔑 Admin"
 ]
 
-# 1. Track the active tab index in session state via query parameters
 if "active_tab" not in st.query_params:
     st.query_params["active_tab"] = "0"
 
 active_index = int(st.query_params["active_tab"])
-
-# 2. Render the native st.tabs exactly how you want them
 tab_cal, tab_req, tab_prod, tab_case, tab_dev, tab_adm = st.tabs(tab_names)
 
-# 3. Inject a small piece of JavaScript to force the browser to click the active tab
-# This overrides the reset behavior and forces the native tab UI to stick!
 components.html(
     f"""
     <script>
         window.parent.document.querySelectorAll('[data-baseweb="tab"]').forEach((tab, index) => {{
-            // Add a click listener so we can track when the user switches tabs manually
             if (!tab.dataset.hasListener) {{
                 tab.dataset.hasListener = "true";
                 tab.addEventListener('click', () => {{
@@ -343,7 +342,6 @@ components.html(
                     window.parent.history.replaceState({{}}, '', url.href);
                 }});
             }}
-            // Auto-click the tab that matched our session index on rerun
             if (index === {active_index}) {{
                 setTimeout(() => tab.click(), 10);
             }}
@@ -431,10 +429,9 @@ with tab_cal:
                 st.write("*No staff configured in the system.*")
         else:
             roles = ["team_manager", "call", "chat", "mfq", "sme"]
-            approved_requests = fetch_approved_requests_from_db()
             sched_rows = []
             for name in roster.keys():
-                p_status = [r["type"] for r in approved_requests if str(r["date"]) == str(view_date) and r["name"] == name]
+                p_status = [r["type"] for r in global_approved_requests if str(r["date"]) == str(view_date) and r["name"] == name]
                 if p_status:
                     role_display = p_status[0].upper()
                 else:
@@ -469,8 +466,7 @@ with tab_cal:
             for i, day in enumerate(week):
                 if day != 0:
                     d = date(year, month, day)
-                    approved_requests = fetch_approved_requests_from_db()
-                    approved = [r for r in approved_requests if str(r["date"]) == str(d)]
+                    approved = [r for r in global_approved_requests if str(r["date"]) == str(d)]
                     away_names = [r['name'] for r in approved]
                     
                     def get_filtered_nicks(full_names):
@@ -526,7 +522,6 @@ with tab_cal:
     week_start_sunday = pd.to_datetime(selected_week_start).date()
     week_days = [week_start_sunday + timedelta(days=idx) for idx in range(1, 6)]
     
-    approved_requests = fetch_approved_requests_from_db()
     roles = ["team_manager", "call", "chat", "mfq", "sme"]
     
     setup_row = {"Staff Name": "🛠️ WORK SETUP"}
@@ -557,7 +552,7 @@ with tab_cal:
         for day in week_days:
             col_name = day.strftime("%A (%m/%d)")
             
-            p_status = [r["type"] for r in approved_requests if str(r["date"]) == str(day) and r["name"] == name]
+            p_status = [r["type"] for r in global_approved_requests if str(r["date"]) == str(day) and r["name"] == name]
             if p_status:
                 staff_row[col_name] = p_status[0].upper()
             else:
@@ -658,25 +653,23 @@ with tab_req:
                 else:
                     new_req = {"name": name, "date": str(req_date), "type": req_type, "status": "Pending", "email": "", "viewed": False}
                     save_request_to_db(new_req, req_type)
-                    st.session_state.pending_requests.append(new_req)
             
             st.success("All requests processed!")
             st.session_state.request_count = 1 
             st.rerun()
 
     st.subheader("Pending Requests Overview")    
-    all_pending = fetch_pending_requests_from_db()
     c1, c2 = st.columns(2)
     with c1:
         st.markdown("### 🌿 Wellness Pending")
-        wellness_reqs = [r for r in all_pending if r['type'] == 'Wellness']
+        wellness_reqs = [r for r in global_pending_requests if r['type'] == 'Wellness']
         if wellness_reqs:
             df_w = pd.DataFrame(wellness_reqs)[["name", "date"]]
             df_w.columns = ["Name", "Date"]
             st.dataframe(df_w, hide_index=True, use_container_width=True)
     with c2:
         st.markdown("### ✈️ PTO Pending")
-        pto_reqs = [r for r in all_pending if r['type'] == 'PTO']
+        pto_reqs = [r for r in global_pending_requests if r['type'] == 'PTO']
         if pto_reqs:
             df_p = pd.DataFrame(pto_reqs)[["name", "date"]]
             df_p.columns = ["Name", "Date"]
@@ -693,8 +686,7 @@ with tab_req:
     
     f_y = f_c2.number_input("Year", value=current_date.year, key="history_year_select")
     
-    app_reqs = fetch_approved_requests_from_db()
-    filtered_app = [r for r in app_reqs if int(r['date'].split('-')[1]) == f_m and int(r['date'].split('-')[0]) == f_y]
+    filtered_app = [r for r in global_approved_requests if int(r['date'].split('-')[1]) == f_m and int(r['date'].split('-')[0]) == f_y]
     
     if filtered_app: 
         df_display = pd.DataFrame(filtered_app)[['name', 'date', 'type']]
@@ -706,7 +698,7 @@ with tab_req:
 # --- TAB 3: PRODUCTIVITY MONITORING ---
 with tab_prod:
     st.subheader("📈 Productivity Monitoring")
-    cases = list(collection.find({"type": "case"}))
+    cases = get_cases_from_db()
 
     if not cases:
         st.info("No case records found.")
@@ -811,7 +803,6 @@ with tab_case:
     if not owner_list:
         owner_list = ["Unknown"]
 
-    # 1. Global Fields (Set once, applies to all entries)
     g_col1, g_col2 = st.columns(2)
     with g_col1:
         global_c_type = st.selectbox("Global Contact Type", c_types, key="case_global_type")
@@ -821,11 +812,9 @@ with tab_case:
     st.divider()
     st.markdown("### 📊 Case Entry")
 
-    # Initialize batch session state storage
     if "batch_case_entries" not in st.session_state:
         st.session_state.batch_case_entries = [{"case_number": "", "prod": prods[0], "issue": issues[0], "desc": "", "status": "Resolved", "extra": ""}]
 
-    # Excel-style Table Headers
     header_cols = st.columns([2, 2, 2, 4, 2])
     header_cols[0].markdown("**Case #**")
     header_cols[1].markdown("**Product Group**")
@@ -833,7 +822,6 @@ with tab_case:
     header_cols[3].markdown("**Note / Description**")
     header_cols[4].markdown("**Status**")
 
-    # Render data entry rows dynamically
     for idx, entry in enumerate(st.session_state.batch_case_entries):
         row_cols = st.columns([2, 2, 2, 4, 2])
         
@@ -848,7 +836,6 @@ with tab_case:
         with row_cols[4]:
             entry["status"] = st.selectbox("Status", ["Resolved", "Pending/Monitoring", "Routed"], index=["Resolved", "Pending/Monitoring", "Routed"].index(entry["status"]), label_visibility="collapsed", key=f"grid_status_{idx}")
 
-        # Dynamic conditional input field depending on selection profile
         if entry["status"] == "Pending/Monitoring":
             indent_cols = st.columns([6, 6])
             with indent_cols[1]:
@@ -860,7 +847,6 @@ with tab_case:
         else:
             entry["extra"] = ""
 
-    # Grid management actions
     ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([2, 2, 4])
     with ctrl_col1:
         if st.button("➕ Add Row", key="btn_add_matrix_row"):
@@ -953,7 +939,6 @@ with tab_case:
                 t_del = st.toggle("🗑️ Del", key=f"t_del_{case['_id']}")
                 t_comm = st.toggle("💬 Comment", key=f"t_comm_{case['_id']}")
 
-            # Dynamic Execution Containers matching active toggles
             if t_edit:
                 with st.container(border=True):
                     st.markdown(f"#### Edit Case #{case.get('Case Number','')}")
@@ -969,7 +954,7 @@ with tab_case:
                     edit_extra = st.text_input("Status Secondary Attributes", value=case.get("Extra", ""), key=f"extra_{case['_id']}")
                     edit_desc = st.text_area("Detailed Log Notes", value=case.get("Desc", ""), key=f"ed_desc_{case['_id']}")
                     
-                    if st.button("Save Record Configuration", key=f"save_ed_{case['_id']}"):
+                    if st.button("Save Record", key=f"save_ed_{case['_id']}"):
                         collection.update_one(
                             {"_id": case["_id"]},
                             {"$set": {
@@ -1002,7 +987,6 @@ with tab_case:
                     current_comment = case.get("Comment", "")
                     new_comment_str = st.text_area("Work Item Comm Note Ledger", value=current_comment, key=f"input_comment_{case['_id']}")
                     
-                    # FIXED: Removed st.text_input validation logic for the comment password requirement
                     c_btn1, c_btn2 = st.columns(2)
                     with c_btn1:
                         if st.button("💾 Save Comment", key=f"btn_save_comm_{case['_id']}"):
@@ -1156,9 +1140,7 @@ with tab_dev:
                     edit_aux = st.text_input("Update Aux", value=dev.get('Aux', ''), key=f"ed_aux_{dev['_id']}")
                     edit_reason = st.text_area("Update Reason of Deviation", value=dev.get('Reason', ''), key=f"ed_reas_{dev['_id']}")
 
-                    save_col, cancel_col = st.columns(2)
-                    with save_col:
-                        if st.button("Save Changes", key=f"save_ed_dev_{dev['_id']}"):
+                    if st.button("Save Changes", key=f"save_ed_dev_{dev['_id']}"):
                             update_deviation_in_db(dev["_id"], {
                                 "Date": str(edit_date), "Manager": edit_manager, "Name": edit_name,
                                 "Shift Time": edit_shift, "Start Time": str(edit_start),
@@ -1167,30 +1149,21 @@ with tab_dev:
                             })
                             st.success("Deviation record updated completely!")
                             st.rerun()
-                    with cancel_col:
-                        if st.button("Cancel", key=f"cancel_ed_dev_{dev['_id']}"):
-                            if f"act_dev_{dev['_id']}" in st.session_state:
-                                st.session_state[f"act_dev_{dev['_id']}"] = "View"
-                            st.rerun()
+                        
                       
             elif action == "Delete":
                 with st.container():
                     st.warning("⚠️ This action requires supervisor authorization.")
                     del_password = st.text_input("Enter Admin Password to confirm delete", type="password", key=f"pwd_del_dev_{dev['_id']}")
-                    del_col, cancel_del_col = st.columns(2)
-                    with del_col:
-                        if st.button("Confirm Delete", key=f"conf_del_dev_{dev['_id']}"):
+                    del_col = st.columns(1)
+                    if st.button("Confirm Delete", key=f"conf_del_dev_{dev['_id']}"):
                             if del_password == "Password1234":
                                 delete_deviation_from_db(dev["_id"])
                                 st.success("Deviation record removed.")
                                 st.rerun()
                             else:
                                 st.error("Incorrect Password. Action denied.")
-                    with cancel_del_col:
-                        if st.button("Cancel", key=f"cancel_del_dev_{dev['_id']}"):
-                            if f"act_dev_{dev['_id']}" in st.session_state:
-                                st.session_state[f"act_dev_{dev['_id']}"] = "View"
-                            st.rerun()
+
             st.markdown("---")
     else:
         st.write("No deviation requests found.")
@@ -1203,7 +1176,7 @@ with tab_adm:
             st.rerun()
     else:
         st.subheader("🔑 System Administrator Workspace")
-        pending_count = len(fetch_pending_requests_from_db())
+        pending_count = len(global_pending_requests)
 
         if pending_count > 0:
             st.info(f"⚠️ You have {pending_count} pending request(s) waiting in the queue below.")
@@ -1212,10 +1185,8 @@ with tab_adm:
             st.success("Admin configuration saved.")
         st.divider()
 
-        # Clean top-level split for Roster Management & Approval Center
         col_left, col_right = st.columns(2)
         
-        # --- LEFT SIDE: ROSTER & SYSTEM CONFIGURATION ---
         with col_left:
             st.subheader("👥 Roster Management")
             roster_doc = collection.find_one({"type": "roster_list"})
@@ -1266,12 +1237,11 @@ with tab_adm:
             
             col_add, col_save = st.columns(2)
             with col_add:
-                if st.button("➕ Add Another Entry Row", key="btn_add_staff_row"):
+                if st.button("➕ Add Row", key="btn_add_staff_row"):
                     st.session_state.new_staff_entries.append({"name": "", "nick": "", "bday": date.today(), "rest_days": []})
                     st.rerun()
             with col_save:
-                # FIXED: Wrapped in an active button click check block
-                if st.button("💾 Save All Added Entries", key="btn_save_multi_staff"):
+                if st.button("💾 Save All Entries", key="btn_save_multi_staff"):
                     added_count = 0
                     for staff in st.session_state.new_staff_entries:
                         if not staff["name"]:
@@ -1287,19 +1257,10 @@ with tab_adm:
                     st.success(f"{added_count} staff record(s) saved successfully!")
                     st.session_state.new_staff_entries = [{"name": "", "nick": "", "bday": date.today(), "rest_days": []}]
                     st.rerun()
-            st.divider()
-    
-            st.subheader("⚙️ System Operational Parameters")
-            st.session_state.selected_admin_date = st.date_input("Select Target Adjustment Date", date.today(), key="cfg_view_edit_date")
-
-            calendar_doc = collection.find_one({"type": "calendar_data"})
-            if calendar_doc:
-                selected_config = calendar_doc.get("data", {}).get(str(st.session_state.selected_admin_date), {})
-                st.session_state.limits["PTO_per_day"] = selected_config.get("PTO_per_day", 1)
-                st.session_state.limits["Wellness_per_day"] = selected_config.get("Wellness_per_day", 1)
+            st.divider() 
     
             st.markdown("---")
-            st.subheader("📢 Broadcast Announcements")
+            st.subheader("📢 Announcements")
             target_d = st.date_input("Announcement Release Date", key="config_target_date")
             admin_sender_email = st.text_input("Your System Email Alias", key="cfg_admin_sender_email")
             
@@ -1324,6 +1285,12 @@ with tab_adm:
                 sm = st.date_input("Target Operational Month Selector", value=date.today(), key="cfg_m")
                 target_dates = pd.date_range(f"{sm.year}-{sm.month}-01", periods=31).date
                 target_dates = [d for d in target_dates if d.month == sm.month]
+
+            calendar_doc = collection.find_one({"type": "calendar_data"})
+            if calendar_doc:
+                selected_config = calendar_doc.get("data", {}).get(str(st.session_state.selected_admin_date), {})
+                st.session_state.limits["PTO_per_day"] = selected_config.get("PTO_per_day", 1)
+                st.session_state.limits["Wellness_per_day"] = selected_config.get("Wellness_per_day", 1)
     
             st.session_state.limits["PTO_per_day"] = st.number_input("Max Allowable PTO Allocations Per Day", min_value=1, value=st.session_state.limits.get("PTO_per_day", 1), key="num_max_pto_per_day")
             st.session_state.limits["Wellness_per_day"] = st.number_input("Max Allowable Wellness Allocations Per Day", min_value=1, value=st.session_state.limits.get("Wellness_per_day", 1), key="num_max_well_per_day")
@@ -1338,15 +1305,14 @@ with tab_adm:
             
             safe_target_dates = target_dates if isinstance(target_dates, (list, tuple)) else []
             base_date = safe_target_dates[0] if len(safe_target_dates) > 0 else date.today()
-            approved_requests = fetch_approved_requests_from_db()   
-            unavailable = [r["name"] for r in approved_requests if str(r["date"]) == str(base_date)]
+            unavailable = [r["name"] for r in global_approved_requests if str(r["date"]) == str(base_date)]
             available = [n for n in roster.keys() if n not in unavailable] if roster else []
             
-            team_manager = st.selectbox("Designate Duty Team Manager", [""] + available, key="sb_assign_team_manager")
-            call = st.multiselect("Designate Call Queue Responders", available, key="ms_assign_call")
-            chat = st.multiselect("Designate Chat Queue Responders", available, key="ms_assign_chat")
-            mfq = st.multiselect("Designate MFQ Operations Handlers", available, key="ms_assign_mfq")
-            sme = st.multiselect("Designate Duty Subject Matter Experts (SME)", available, key="ms_assign_sme")
+            team_manager = st.selectbox("Team Manager", [""] + available, key="sb_assign_team_manager")
+            call = st.multiselect("Call", available, key="ms_assign_call")
+            chat = st.multiselect("Chat", available, key="ms_assign_chat")
+            mfq = st.multiselect("MFQ", available, key="ms_assign_mfq")
+            sme = st.multiselect("SME", available, key="ms_assign_sme")
             
             if st.button("💾 Apply Configuration Profile To Dates", key="btn_save_daily_config"):
                 for d in target_dates:
@@ -1363,10 +1329,8 @@ with tab_adm:
                 st.success("Calendar timeline database parameters successfully updated!")
                 st.rerun()
                 
-        # --- RIGHT SIDE: APPROVAL ENGINE & REVIEWS ---
         with col_right:
-            st.subheader("📥 Queue Exception Request Center")
-            all_pending_requests = fetch_pending_requests_from_db()
+            st.subheader("📥 Approval Center")
 
             if "admin_msg" not in st.session_state: 
                 st.session_state.admin_msg = None
@@ -1379,7 +1343,7 @@ with tab_adm:
                     st.rerun()
 
             st.markdown("### 🌿 Pending Wellness Requests")
-            wellness_pending = [r for r in all_pending_requests if r.get("type") == "Wellness"]
+            wellness_pending = [r for r in global_pending_requests if r.get("type") == "Wellness"]
             wellness_selected = []
             
             if wellness_pending:
@@ -1411,7 +1375,7 @@ with tab_adm:
                 st.write("*No pending Wellness requests matching conditions.*")
 
             st.markdown("### ✈️ Pending Paid Time Off (PTO) Requests")
-            pto_pending = [r for r in all_pending_requests if r.get("type") == "PTO"]
+            pto_pending = [r for r in global_pending_requests if r.get("type") == "PTO"]
             pto_selected = []
 
             if pto_pending:
@@ -1443,7 +1407,7 @@ with tab_adm:
                 st.write("*No pending PTO requests matching conditions.*")
 
             st.divider()
-            st.subheader("📜 Historical Request Lookup Archive")
+            st.subheader("Approved History")
             
             filter_col1, filter_col2 = st.columns(2)
             with filter_col1:
@@ -1458,12 +1422,11 @@ with tab_adm:
                 year_options = list(range(current_year - 5, current_year + 6))
                 selected_year = st.selectbox("Archive Filter Year", options=year_options, index=year_options.index(current_year), key="history_filter_year")
 
-            all_approved_from_db = fetch_approved_requests_from_db()
             app_wellness = []
             app_pto = []
             app_sl = []
             
-            for r in all_approved_from_db:
+            for r in global_approved_requests:
                 date_val = r.get('date')
                 if isinstance(date_val, str):
                     try:
