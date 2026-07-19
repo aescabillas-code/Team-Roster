@@ -1016,57 +1016,95 @@ with tab_case:
 with tab_dev:
     st.subheader("Submit Deviation Request")
     
-    with st.form("deviation_form", clear_on_submit=True):
-        col1, col2 = st.columns(2)
-        with col1:
+    # Global form parameters on top (provided once)
+    with st.container(border=True):
+        st.markdown("### 🌐 Global Information")
+        g_col1, g_col2, g_col3 = st.columns(3)
+        with g_col1:
             target_date = st.date_input("Target Date", value=date.today())
+        with g_col2:
             manager = st.text_input("Manager", value="Jeff Bote")
-            
+        with g_col3:
             roster_doc = collection.find_one({"type": "roster_list"})
             staff_data = roster_doc.get("data", {}) if roster_doc else {}
             available_names = list(staff_data.keys()) if staff_data else list(st.session_state.staff_roster.keys())
             name = st.selectbox("Name", available_names, key="dev_name_box")
             
-            calendar_doc = collection.find_one({"type": "calendar_data"})
-            if calendar_doc:
-                date_str = str(target_date)
-                shift_time = calendar_doc.get("data", {}).get(date_str, {}).get("shift") or \
-                             st.session_state.calendar_data.get(target_date, {}).get("shift", "Not Set")
+        calendar_doc = collection.find_one({"type": "calendar_data"})
+        if calendar_doc:
+            date_str = str(target_date)
+            shift_time = calendar_doc.get("data", {}).get(date_str, {}).get("shift") or \
+                         st.session_state.calendar_data.get(target_date, {}).get("shift", "Not Set")
+        else:
+            shift_time = st.session_state.calendar_data.get(target_date, {}).get("shift", "Not Set")
+            
+        st.write(f"**Shift Time:** `{shift_time}`")
+
+    # Dynamic bulk entry collection layout (Excel-like matrix form)
+    st.markdown("### 📊 Bulk Entry Log Matrix")
+    if "bulk_deviation_entries" not in st.session_state:
+        st.session_state.bulk_deviation_entries = [{"start": "00:00", "end": "00:00", "duration": "0m", "aux": "", "reason": ""}]
+
+    # Table Header Layout
+    hdr_cols = st.columns([2, 2, 2, 2, 4])
+    hdr_cols[0].markdown("**Start Time (HH:MM)**")
+    hdr_cols[1].markdown("**End Time (HH:MM)**")
+    hdr_cols[2].markdown("**Duration**")
+    hdr_cols[3].markdown("**Aux**")
+    hdr_cols[4].markdown("**Reason of Deviation**")
+
+    # Table Row Matrix
+    for idx, entry in enumerate(st.session_state.bulk_deviation_entries):
+        row_cols = st.columns([2, 2, 2, 2, 4])
+        with row_cols[0]:
+            entry["start"] = st.text_input("Start", value=entry["start"], label_visibility="collapsed", key=f"dev_matrix_start_{idx}")
+        with row_cols[1]:
+            entry["end"] = st.text_input("End", value=entry["end"], label_visibility="collapsed", key=f"dev_matrix_end_{idx}")
+        with row_cols[2]:
+            entry["duration"] = st.text_input("Duration", value=entry["duration"], label_visibility="collapsed", key=f"dev_matrix_dur_{idx}")
+        with row_cols[3]:
+            entry["aux"] = st.text_input("Aux", value=entry["aux"], label_visibility="collapsed", key=f"dev_matrix_aux_{idx}")
+        with row_cols[4]:
+            entry["reason"] = st.text_area("Reason", value=entry["reason"], label_visibility="collapsed", key=f"dev_matrix_reas_{idx}", height=35)
+
+    # Matrix Action Controls
+    ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([2, 2, 4])
+    with ctrl_col1:
+        if st.button("➕ Add Row Entry", key="btn_add_dev_matrix_row"):
+            st.session_state.bulk_deviation_entries.append({"start": "00:00", "end": "00:00", "duration": "0m", "aux": "", "reason": ""})
+            st.rerun()
+    with ctrl_col2:
+        if st.button("🗑️ Remove Last Entry Row", key="btn_remove_dev_matrix_row"):
+            if len(st.session_state.bulk_deviation_entries) > 1:
+                st.session_state.bulk_deviation_entries.pop()
+                st.rerun()
             else:
-                shift_time = st.session_state.calendar_data.get(target_date, {}).get("shift", "Not Set")
+                st.warning("Minimum of 1 entry line required.")
+    with ctrl_col3:
+        if st.button("💾 Submit Matrix To DB", key="btn_save_batch_deviations"):
+            records_saved = 0
+            for entry in st.session_state.bulk_deviation_entries:
+                duration_raw = entry["duration"].lower().strip()
+                hrs_match = re.search(r'(\d+)\s*h', duration_raw)
+                mins_match = re.search(r'(\d+)\s*m', duration_raw)
+                parsed_hrs = int(hrs_match.group(1)) if hrs_match else 0
+                parsed_mins = int(mins_match.group(1)) if mins_match else 0
                 
-            st.write(f"**Shift Time:** {shift_time}")
+                if not hrs_match and not mins_match and duration_raw.isdigit():
+                    total_mins = int(duration_raw)
+                else:
+                    total_mins = (parsed_hrs * 60) + parsed_mins
+
+                save_deviation_to_db({
+                    "Date": str(target_date), "Manager": manager, "Name": name,
+                    "Shift Time": shift_time, "Start Time": str(entry["start"].strip()),
+                    "End Time": str(entry["end"].strip()), "Total Mins": total_mins,
+                    "Aux": entry["aux"], "Reason": entry["reason"]
+                })
+                records_saved += 1
             
-        with col2:
-            start_time_input = st.text_input("Start Time (HH:MM)", value="00:00", key="manual_start_time")
-            end_time_input = st.text_input("End Time (HH:MM)", value="00:00", key="manual_end_time")
-            duration_input = st.text_input("Duration (e.g., 1h 15m or 45m)", value="0m", key="manual_duration")
-            
-            start_time = start_time_input.strip()
-            end_time = end_time_input.strip()
-            duration_raw = duration_input.lower().strip()
-            
-            hrs_match = re.search(r'(\d+)\s*h', duration_raw)
-            mins_match = re.search(r'(\d+)\s*m', duration_raw)
-            parsed_hrs = int(hrs_match.group(1)) if hrs_match else 0
-            parsed_mins = int(mins_match.group(1)) if mins_match else 0
-            
-            if not hrs_match and not mins_match and duration_raw.isdigit():
-                total_mins = int(duration_raw)
-            else:
-                total_mins = (parsed_hrs * 60) + parsed_mins
-                
-            aux = st.text_input("Aux")
-            reason = st.text_area("Reason of Deviation")
-            
-        if st.form_submit_button("Submit Deviation Request"):
-            save_deviation_to_db({
-                "Date": str(target_date), "Manager": manager, "Name": name,
-                "Shift Time": shift_time, "Start Time": str(start_time),
-                "End Time": str(end_time), "Total Mins": total_mins,
-                "Aux": aux, "Reason": reason
-            })
-            st.success("Deviation request saved to database!")
+            st.success(f"Successfully processed and recorded {records_saved} deviation entities!")
+            st.session_state.bulk_deviation_entries = [{"start": "00:00", "end": "00:00", "duration": "0m", "aux": "", "reason": ""}]
             st.rerun()
 
     st.divider()
@@ -1091,13 +1129,24 @@ with tab_dev:
                 df = df[(df['Date'].apply(lambda x: x.month) == filter_month) & (df['Date'].apply(lambda x: x.year) == filter_year)]
         
         filtered_records = df.to_dict(orient="records")
+        
+        # --- NEW SECTION: Monthly Deviation Counts Summary Grid ---
+        st.markdown("### 📊 Metrics Summary Count")
+        if not df.empty:
+            count_df = df.groupby("Name").size().reset_index(name="Deviation Count")
+            st.dataframe(count_df, hide_index=True, use_container_width=True)
+        else:
+            st.info("No records match filter bounds for summary processing.")
+        
+        st.divider()
+        
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button("Extract Report as CSV", csv, "deviation_report.csv", "text/csv")
         st.write("## Deviation Records")
         
-        col_widths = [1.2, 1.2, 1.2, 1.2, 1.0, 1.0, 0.8, 0.8, 2.0, 1.0]
+        col_widths = [0.6, 1.2, 1.2, 1.2, 1.2, 1.0, 1.0, 0.8, 0.8, 2.0, 2.4]
         h_cols = st.columns(col_widths)
-        headers = ["Date", "Manager", "Name", "Shift Time", "Start Time", "End Time", "Total Mins", "Aux", "Reason of Deviation", "Action"]
+        headers = ["#", "Date", "Manager", "Name", "Shift Time", "Start Time", "End Time", "Total Mins", "Aux", "Reason", "Actions Matrix State Toggle Switch"]
         for idx, header_title in enumerate(headers):
             h_cols[idx].markdown(f"**{header_title}**")
         st.markdown("---")
@@ -1115,12 +1164,12 @@ with tab_dev:
             r_cols[8].write(str(dev.get('Reason', '')))
             
             with r_cols[9]:
-                options_menu = st.popover("⋮", help="Options")
-                with options_menu:
-                    action = st.radio("Action", ["View", "Edit", "Delete"], key=f"act_dev_{dev['_id']}", horizontal=False)
+                # Dynamic toggle matrix view replace options
+                t_edit = st.toggle("✏️ Edit", key=f"t_edit_dev_{dev['_id']}")
+                t_del = st.toggle("🗑️ Del", key=f"t_del_dev_{dev['_id']}")
             
-            if action == "Edit":
-                with st.container():
+            if t_edit:
+                with st.container(border=True):
                     st.markdown(f"#### Edit Deviation Request for {dev.get('Name', '')}")
                     edit_date = st.date_input("Update Target Date", value=pd.to_datetime(dev.get('Date')).date(), key=f"ed_date_{dev['_id']}")
                     edit_manager = st.text_input("Update Manager", value=dev.get('Manager', ''), key=f"ed_mgr_{dev['_id']}")
@@ -1142,28 +1191,26 @@ with tab_dev:
                     edit_reason = st.text_area("Update Reason of Deviation", value=dev.get('Reason', ''), key=f"ed_reas_{dev['_id']}")
 
                     if st.button("Save Changes", key=f"save_ed_dev_{dev['_id']}"):
-                            update_deviation_in_db(dev["_id"], {
-                                "Date": str(edit_date), "Manager": edit_manager, "Name": edit_name,
-                                "Shift Time": edit_shift, "Start Time": str(edit_start),
-                                "End Time": str(edit_end), "Total Mins": edit_mins,
-                                "Aux": edit_aux, "Reason": edit_reason
-                            })
-                            st.success("Deviation record updated completely!")
-                            st.rerun()
+                        update_deviation_in_db(dev["_id"], {
+                            "Date": str(edit_date), "Manager": edit_manager, "Name": edit_name,
+                            "Shift Time": edit_shift, "Start Time": str(edit_start),
+                            "End Time": str(edit_end), "Total Mins": edit_mins,
+                            "Aux": edit_aux, "Reason": edit_reason
+                        })
+                        st.success("Deviation record updated completely!")
+                        st.rerun()
                         
-                      
-            elif action == "Delete":
-                with st.container():
+            elif t_del:
+                with st.container(border=True):
                     st.warning("⚠️ This action requires supervisor authorization.")
                     del_password = st.text_input("Enter Admin Password to confirm delete", type="password", key=f"pwd_del_dev_{dev['_id']}")
-                    del_col = st.columns(1)
                     if st.button("Confirm Delete", key=f"conf_del_dev_{dev['_id']}"):
-                            if del_password == "Password1234":
-                                delete_deviation_from_db(dev["_id"])
-                                st.success("Deviation record removed.")
-                                st.rerun()
-                            else:
-                                st.error("Incorrect Password. Action denied.")
+                        if del_password == "Password1234":
+                            delete_deviation_from_db(dev["_id"])
+                            st.success("Deviation record removed.")
+                            st.rerun()
+                        else:
+                            st.error("Incorrect Password. Action denied.")
 
             st.markdown("---")
     else:
