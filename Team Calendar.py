@@ -709,7 +709,7 @@ with tab_req:
     filtered_app = [r for r in global_approved_requests if int(r['date'].split('-')[1]) == f_m and int(r['date'].split('-')[0]) == f_y]
     
     if filtered_app: 
-        df_display = pd.DataFrame(filtered_app)[['name', 'date', 'type']]
+        df_display = pd.DataFrame(filtered_app)[['date', 'name', 'type']]
         df_display.columns = ["Date", "Name", "Type"]
         st.dataframe(df_display, hide_index=True, use_container_width=True)
     else: 
@@ -730,7 +730,7 @@ with tab_req:
             df_pending = df_pending.sort_values(by='sort_date', ascending=True)
             
             # Map structural preferences for UI display parameters
-            df_pending_display = df_pending[["date", "type", "name"]].copy()
+            df_pending_display = df_pending[["date", "name", "type"]].copy()
             df_pending_display.columns = ["Date", "Name", "Type"]
             
             # Dynamic height auto-scales exactly to row length without a max threshold caps constraint
@@ -1485,9 +1485,9 @@ with tab_adm:
                 
                 data = {
                     "Select": [select_all_values] * len(filtered),
-                    "Type": [r.get("type", "") for r in filtered],
-                    "Name": [r.get("name", "") for r in filtered],
                     "Date": [r.get("date", "") for r in filtered],
+                    "Name": [r.get("name", "") for r in filtered],
+                    "Type": [r.get("type", "") for r in filtered],
                     "Status": [r.get("status", "") for r in filtered],
                     "_id": [r.get("_id") for r in filtered]
                 }
@@ -1583,6 +1583,7 @@ with tab_adm:
                             st.rerun()
                         else:
                             st.warning("Please select at least one request to deny.")
+                            
             st.divider()
             st.subheader("Approved History")
             filter_col1, filter_col2 = st.columns(2)
