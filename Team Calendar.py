@@ -355,7 +355,7 @@ components.html(
 
 # --- TAB 1: CALENDAR ---
 with tab_cal:
-    col_main, col_side = st.columns([4, 1])
+    col_main, space_gap, col_side = st.columns([4, 0.2, 1])
     
     with col_main:
         c1, c2 = st.columns([1, 1])
@@ -1261,7 +1261,8 @@ with tab_adm:
         st.divider()
 
         # Update column ratio: allocation gives significantly larger footprint to the right column
-        col_left, col_right = st.columns([2, 3])
+        # 1 = Left Col, 0.2 = Spacing Gap, 1 = Right Col
+        col_left, space_gap, col_right = st.columns([1, 0.2, 1])
         
         with col_left:
             st.subheader("👥 Roster Management")
@@ -1499,11 +1500,15 @@ with tab_adm:
                         for req in group["requests"]:
                             req_id = str(req["_id"])
                             
-                            row_cols = st.columns([1, 8])
-                            with row_cols[0]:
-                                is_checked = st.checkbox("", value=select_all, key=f"chk_well_{req_id}", label_visibility="collapsed")
-                            with row_cols[1]:
-                                # Re-included string details including request status
+                            # Using a container block to visually group the elements without creating columns
+                            with st.container(border=True):
+                                is_checked = st.checkbox(
+                                    f"Select Request from {req['name']}", 
+                                    value=select_all, 
+                                    key=f"chk_well_{req_id}",
+                                    label_visibility="collapsed"
+                                )
+                                # Markdown works correctly here to format the status backticks
                                 st.markdown(f"👤 {req['name']} | 📅 {req['date']} | Status: `{req['status']}`")
                             
                             if is_checked:
@@ -1524,11 +1529,15 @@ with tab_adm:
                         for req in group["requests"]:
                             req_id = str(req["_id"])
                             
-                            row_cols = st.columns([1, 8])
-                            with row_cols[0]:
-                                is_checked = st.checkbox("", value=select_all, key=f"chk_pto_{req_id}", label_visibility="collapsed")
-                            with row_cols[1]:
-                                # Re-included string details including request status
+                            # Using a container block to visually group the elements without creating columns
+                            with st.container(border=True):
+                                is_checked = st.checkbox(
+                                    f"Select Request from {req['name']}", 
+                                    value=select_all, 
+                                    key=f"chk_pto_{req_id}",
+                                    label_visibility="collapsed"
+                                )
+                                # Markdown works correctly here to format the status backticks
                                 st.markdown(f"👤 {req['name']} | 📅 {req['date']} | Status: `{req['status']}`")
                             
                             if is_checked:
