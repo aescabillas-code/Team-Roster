@@ -626,22 +626,19 @@ with tab_req:
     with st.form("bulk_request_form"):
         st.markdown("### 📊 Request Entry Table")
         
-        # Excel Table-style Headers
-        header_cols = st.columns([2, 2, 1])
+        # Excel Table-style Headers (Status column removed)
+        header_cols = st.columns([1, 1])
         header_cols[0].markdown("**Date**")
         header_cols[1].markdown("**Request Type**")
-        header_cols[2].markdown("**Status**")
         st.divider()
 
         # Generate Data Input Rows Dynamically
         for i in range(st.session_state.request_count):
-            row_cols = st.columns([2, 2, 1])
+            row_cols = st.columns([1, 1])
             with row_cols[0]:
                 st.date_input("Date", label_visibility="collapsed", key=f"date_{i}")
             with row_cols[1]:
                 st.selectbox("Type", ["PTO", "Wellness", "Sick Leave"], label_visibility="collapsed", key=f"type_{i}")
-            with row_cols[2]:
-                st.info("Ready")
 
         st.markdown("<br>", unsafe_allow_html=True)
         
@@ -700,7 +697,25 @@ with tab_req:
             st.success("All operational entries successfully verified and processed!")
             st.session_state.request_count = 1 
             st.rerun()
-
+            
+    st.subheader("Approved History")
+    f_c1, f_c2 = st.columns(2)
+    
+    month_names = list(calendar.month_name)[1:]
+    selected_month_name = f_c1.selectbox("Month", month_names, index=current_date.month-1, key="history_month_select")
+    f_m = month_names.index(selected_month_name) + 1
+    
+    f_y = f_c2.number_input("Year", value=current_date.year, key="history_year_select")
+    
+    filtered_app = [r for r in global_approved_requests if int(r['date'].split('-')[1]) == f_m and int(r['date'].split('-')[0]) == f_y]
+    
+    if filtered_app: 
+        df_display = pd.DataFrame(filtered_app)[['name', 'date', 'type']]
+        df_display.columns = ["Name", "Date", "Type"]
+        st.dataframe(df_display, hide_index=True, use_container_width=True)
+    else: 
+        st.write("No records found.")
+        
     st.divider()
     st.subheader("📥 Pending Requests Overview")    
     
@@ -720,30 +735,13 @@ with tab_req:
             df_pending_display = df_pending[["date", "type", "name"]].copy()
             df_pending_display.columns = ["Date", "Type", "Employee Name"]
             
-            calculated_height = min(600, max(150, (len(df_pending_display) * 35) + 45))
+            # Dynamic height auto-scales exactly to row length without a max threshold caps constraint
+            calculated_height = (len(df_pending_display) * 35) + 45
             st.dataframe(df_pending_display, hide_index=True, use_container_width=True, height=calculated_height)
         else:
             st.info("ℹ️ No pending Wellness or PTO requests found in queue parameters.")
     else:
         st.write("*No pending requests await administrator review authorization logs.*")
-    
-    st.subheader("Approved History")
-    f_c1, f_c2 = st.columns(2)
-    
-    month_names = list(calendar.month_name)[1:]
-    selected_month_name = f_c1.selectbox("Month", month_names, index=current_date.month-1, key="history_month_select")
-    f_m = month_names.index(selected_month_name) + 1
-    
-    f_y = f_c2.number_input("Year", value=current_date.year, key="history_year_select")
-    
-    filtered_app = [r for r in global_approved_requests if int(r['date'].split('-')[1]) == f_m and int(r['date'].split('-')[0]) == f_y]
-    
-    if filtered_app: 
-        df_display = pd.DataFrame(filtered_app)[['name', 'date', 'type']]
-        df_display.columns = ["Name", "Date", "Type"]
-        st.dataframe(df_display, hide_index=True, use_container_width=True)
-    else: 
-        st.write("No records found.")
         
 # --- TAB 3: PRODUCTIVITY MONITORING ---
 with tab_prod:
