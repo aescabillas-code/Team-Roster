@@ -387,6 +387,7 @@ with tab_cal:
                 found_holiday = True
         if not found_holiday: 
             st.write("No holidays this month.")
+        st.divider()
         
         st.subheader("Daily View")
         view_date = current_date.date() if hasattr(current_date, 'date') else current_date
@@ -743,7 +744,6 @@ with tab_req:
         
 # --- TAB 3: PRODUCTIVITY MONITORING ---
 with tab_prod:
-    st.subheader("📈 Productivity Monitoring")
     cases = get_cases_from_db()
 
     if not cases:
