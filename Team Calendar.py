@@ -1243,7 +1243,7 @@ with tab_adm:
         </style>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div class="small-font-container">', unsafe_allowed_html=True)
+    st.markdown('<div class="small-font-container">', unsafe_allow_html=True)
 
     if not st.session_state.admin_authenticated:
         if st.text_input("Admin Password", type="password", key="a_pass_admin_tab") == "Password1234": 
@@ -1609,4 +1609,4 @@ with tab_adm:
             if not app_wellness and not app_pto and not app_sl:
                 st.write("*No verified history logs found matching calendar dimensions.*")
 
-    st.markdown('</div>', unsafe_allowed_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
