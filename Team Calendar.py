@@ -1434,7 +1434,25 @@ with tab_adm:
     
         with col_right:
             st.subheader("📥 Approval Center")
-        
+            
+            # --- 1. DEFINE THE HELPER FUNCTION FIRST ---
+            def get_requests_dataframe(requests_list, request_type, select_all_values=False):
+                filtered = [r for r in requests_list if r.get("type") == request_type]
+                if not filtered:
+                    return pd.DataFrame()
+                
+                data = {
+                    "Select": [select_all_values] * len(filtered), # Toggles default value based on "Select All"
+                    "Name": [r.get("name", "") for r in filtered],
+                    "Date": [r.get("date", "") for r in filtered],
+                    "Status": [r.get("status", "") for r in filtered],
+                    "_id": [r.get("_id") for r in filtered]
+                }
+                df = pd.DataFrame(data)
+                df.sort_values(by="Date", inplace=True)
+                return df
+
+            # --- 2. HANDLE SESSION MESSAGES ---
             if "admin_msg" not in st.session_state: 
                 st.session_state.admin_msg = None
             if st.session_state.admin_msg:
@@ -1444,56 +1462,24 @@ with tab_adm:
                 if st.button("Clear Processing Session Prompt", key="clear_admin_notif"):
                     st.session_state.admin_msg = None
                     st.rerun()
-        
-            # Track structural arrays to batch update database elements upon explicit submission save
-            approve_queue = []
-            reject_queue = []
-        
-            # --- GLOBAL MASS ACTION CONTROLS ---
-            bulk_cols = st.columns([1, 1])
-            with bulk_cols[0]:
+
+            # --- 3. GLOBAL MASS ACTION INITIALIZERS ---
+            # Restores the missing "Select All" master checkbox functionality
+            mass_action_cols = st.columns([1, 1])
+            with mass_action_cols[0]:
                 select_all = st.checkbox("Select All Pending Requests", key="global_select_all")
-            with bulk_cols[1]:
-                bulk_action = st.selectbox(
-                    "Action for Selections", 
-                    options=["Approve Selected", "Deny Selected"], 
-                    key="global_bulk_action",
-                    label_visibility="collapsed"
-                )
             
             st.markdown("---")
-        
-            # Helper function to group and sort requests by month chronologically
-            def get_monthly_grouped_requests(requests_list, request_type):
-                filtered = [r for r in requests_list if r.get("type") == request_type]
-                filtered.sort(key=lambda r: r.get("date", ""))
-                
-                grouped = {}
-                for req in filtered:
-                    date_str = req.get("date", "")
-                    try:
-                        date_obj = datetime.strptime(date_str, "%Y-%m-%d")
-                        sort_key = date_obj.strftime("%Y-%m")
-                        month_label = date_obj.strftime("%B %Y")
-                    except Exception:
-                        sort_key = "9999-12"
-                        month_label = "Other / Unspecified Date"
-                        
-                    if sort_key not in grouped:
-                        grouped[sort_key] = {"label": month_label, "requests": []}
-                    grouped[sort_key]["requests"].append(req)
-                    
-                sorted_groups = [grouped[k] for k in sorted(grouped.keys())]
-                return sorted_groups
-        
-            # --- SIDE-BY-SIDE PENDING REQUESTS LAYOUT ---
+
+            # --- 4. SIDE-BY-SIDE PENDING REQUESTS LAYOUT ---
             pending_col_left, pending_col_right = st.columns(2)
+            
             with pending_col_left:
                 st.markdown("### 🌿 Pending Wellness")
-                wellness_df = get_requests_dataframe(global_pending_requests, "Wellness")
+                # Passes down select_all to instantly check boxes across the dynamic grid
+                wellness_df = get_requests_dataframe(global_pending_requests, "Wellness", select_all_values=select_all)
                 
                 if not wellness_df.empty:
-                    # Configures the grid table with interactive columns
                     edited_well_df = st.data_editor(
                         wellness_df,
                         hide_index=True,
@@ -1502,7 +1488,7 @@ with tab_adm:
                             "Name": st.column_config.TextColumn(disabled=True),
                             "Date": st.column_config.TextColumn(disabled=True),
                             "Status": st.column_config.TextColumn(disabled=True),
-                            "_id": None # Keeps the database ID hidden from user view
+                            "_id": None 
                         },
                         use_container_width=True,
                         key="editor_wellness"
@@ -1512,10 +1498,9 @@ with tab_adm:
         
             with pending_col_right:
                 st.markdown("### ✈️ Pending PTO")
-                pto_df = get_requests_dataframe(global_pending_requests, "PTO")
+                pto_df = get_requests_dataframe(global_pending_requests, "PTO", select_all_values=select_all)
         
                 if not pto_df.empty:
-                    # Configures the grid table with interactive columns
                     edited_pto_df = st.data_editor(
                         pto_df,
                         hide_index=True,
@@ -1524,15 +1509,15 @@ with tab_adm:
                             "Name": st.column_config.TextColumn(disabled=True),
                             "Date": st.column_config.TextColumn(disabled=True),
                             "Status": st.column_config.TextColumn(disabled=True),
-                            "_id": None # Keeps the database ID hidden from user view
+                            "_id": None 
                         },
                         use_container_width=True,
                         key="editor_pto"
                     )
                 else:
                     st.write("*No pending PTO requests.*")
-        
-            # --- GLOBAL BULK ACTION CONTROLS ---
+
+            # --- 5. MASS ACTION ACTION SUBMISSION PANEL ---
             st.markdown("---")
             bulk_cols = st.columns([1, 1])
             with bulk_cols[0]:
@@ -1542,11 +1527,10 @@ with tab_adm:
                     key="global_bulk_action"
                 )
             
-            # --- DEFERRED SUBMIT BUTTON ---
-            # Aggregate selected rows dynamically from data_editor states
             approve_queue = []
             reject_queue = []
             
+            # Extract updates dynamically from the data editor dataframes
             if not wellness_df.empty:
                 selected_well = edited_well_df[edited_well_df["Select"] == True]
                 for _, row in selected_well.iterrows():
@@ -1559,6 +1543,7 @@ with tab_adm:
                     if bulk_action == "Approve Selected": approve_queue.append(row["_id"])
                     else: reject_queue.append(row["_id"])
 
+            # --- 6. DEFERRED SUBMIT SAVER ---
             if not wellness_df.empty or not pto_df.empty:
                 if st.button("💾 Save Approval Decisions", type="primary", use_container_width=True):
                     if approve_queue or reject_queue:
