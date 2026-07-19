@@ -1262,7 +1262,7 @@ with tab_adm:
 
         # Update column ratio: allocation gives significantly larger footprint to the right column
         # 1 = Left Col, 0.2 = Spacing Gap, 1 = Right Col
-        col_left, space_gap, col_right = st.columns([1, 0.2, 1])
+        col_left, space_gap, col_right = st.columns([2, 0.2, 3])
         
         with col_left:
             st.subheader("👥 Roster Management")
@@ -1450,7 +1450,6 @@ with tab_adm:
             reject_queue = []
         
             # --- GLOBAL MASS ACTION CONTROLS ---
-            st.markdown("### ⚡ Bulk Actions")
             bulk_cols = st.columns([1, 1])
             with bulk_cols[0]:
                 select_all = st.checkbox("Select All Pending Requests", key="global_select_all")
