@@ -1241,7 +1241,7 @@ with tab_adm:
         .small-font-container h4 { font-size: 1.05rem !important; }
         .small-font-container h5 { font-size: 0.95rem !important; }
         </style>
-    """, unsafe_allowed_html=True)
+    """, unsafe_allow_html=True)
 
     st.markdown('<div class="small-font-container">', unsafe_allowed_html=True)
 
