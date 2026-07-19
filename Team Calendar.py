@@ -1230,6 +1230,21 @@ with tab_dev:
 
 # --- TAB 6: ADMIN PANEL ---
 with tab_adm:
+    # Adjust font sizes globally inside this tab using a targeted div wrapper
+    st.markdown("""
+        <style>
+        .small-font-container input, .small-font-container button, .small-font-container label, 
+        .small-font-container div, .small-font-container span, .small-font-container p {
+            font-size: 0.85rem !important;
+        }
+        .small-font-container h3 { font-size: 1.2rem !important; }
+        .small-font-container h4 { font-size: 1.05rem !important; }
+        .small-font-container h5 { font-size: 0.95rem !important; }
+        </style>
+    """, unsafe_allowed_html=True)
+
+    st.markdown('<div class="small-font-container">', unsafe_allowed_html=True)
+
     if not st.session_state.admin_authenticated:
         if st.text_input("Admin Password", type="password", key="a_pass_admin_tab") == "Password1234": 
             st.session_state.admin_authenticated = True
@@ -1245,7 +1260,8 @@ with tab_adm:
             st.success("Admin configuration saved.")
         st.divider()
 
-        col_left, col_right = st.columns(2)
+        # Update column ratio: allocation gives significantly larger footprint to the right column
+        col_left, col_right = st.columns([2, 3])
         
         with col_left:
             st.subheader("👥 Roster Management")
@@ -1449,16 +1465,13 @@ with tab_adm:
         
             # Helper function to group and sort requests by month chronologically
             def get_monthly_grouped_requests(requests_list, request_type):
-                # Filter by type
                 filtered = [r for r in requests_list if r.get("type") == request_type]
-                # Sort chronologically from oldest to newest by raw date string
                 filtered.sort(key=lambda r: r.get("date", ""))
                 
                 grouped = {}
                 for req in filtered:
                     date_str = req.get("date", "")
                     try:
-                        # Parse date to extract sorting key and formal label
                         date_obj = datetime.strptime(date_str, "%Y-%m-%d")
                         sort_key = date_obj.strftime("%Y-%m")
                         month_label = date_obj.strftime("%B %Y")
@@ -1470,11 +1483,9 @@ with tab_adm:
                         grouped[sort_key] = {"label": month_label, "requests": []}
                     grouped[sort_key]["requests"].append(req)
                     
-                # Sort groups chronologically by key (YYYY-MM)
                 sorted_groups = [grouped[k] for k in sorted(grouped.keys())]
                 return sorted_groups
         
-            # Layout: Create side-by-side columns for Wellness and PTO
             col_wellness, col_pto = st.columns(2)
         
             # --- WELLNESS SECTION ---
@@ -1487,9 +1498,14 @@ with tab_adm:
                         st.markdown(f"##### 📅 {group['label']}")
                         for req in group["requests"]:
                             req_id = str(req["_id"])
-                            st.write(f"👤 {req['name']} | 📅 {req['date']} | Status: `{req['status']}`")
                             
-                            is_checked = st.checkbox("Select Request", value=select_all, key=f"chk_well_{req_id}", label_visibility="collapsed")
+                            # Single horizontal line layout using columns: [Checkbox, Text Content]
+                            row_cols = st.columns([1, 9])
+                            with row_cols[0]:
+                                is_checked = st.checkbox("", value=select_all, key=f"chk_well_{req_id}", label_visibility="collapsed")
+                            with row_cols[1]:
+                                st.write(f"👤 {req['name']} | 📅 {req['date']} | Status: `{req['status']}`")
+                            
                             if is_checked:
                                 if bulk_action == "Approve Selected":
                                     approve_queue.append(req["_id"])
@@ -1509,9 +1525,14 @@ with tab_adm:
                         st.markdown(f"##### 📅 {group['label']}")
                         for req in group["requests"]:
                             req_id = str(req["_id"])
-                            st.write(f"👤 {req['name']} | 📅 {req['date']} | Status: `{req['status']}`")
                             
-                            is_checked = st.checkbox("Select Request", value=select_all, key=f"chk_pto_{req_id}", label_visibility="collapsed")
+                            # Single horizontal line layout using columns: [Checkbox, Text Content]
+                            row_cols = st.columns([1, 9])
+                            with row_cols[0]:
+                                is_checked = st.checkbox("", value=select_all, key=f"chk_pto_{req_id}", label_visibility="collapsed")
+                            with row_cols[1]:
+                                st.write(f"👤 {req['name']} | 📅 {req['date']} | Status: `{req['status']}`")
+                            
                             if is_checked:
                                 if bulk_action == "Approve Selected":
                                     approve_queue.append(req["_id"])
@@ -1587,3 +1608,5 @@ with tab_adm:
                 st.dataframe(pd.DataFrame(app_sl).drop(columns=['_id', 'type'], errors='ignore'), hide_index=True, use_container_width=True, height=sl_height)
             if not app_wellness and not app_pto and not app_sl:
                 st.write("*No verified history logs found matching calendar dimensions.*")
+
+    st.markdown('</div>', unsafe_allowed_html=True)
