@@ -323,9 +323,10 @@ if "current_tab" not in st.session_state:
     st.session_state.current_tab = tab_names[0]
 
 # 3. Render the tabs 
-# Note: To prevent a tab from resetting during form submissions inside it,
-# make sure every widget inside these tabs has a unique `key="something"` assigned!
-tab_cal, tab_req, tab_prod, tab_case, tab_dev, tab_adm = st.tabs(tab_names)
+tab_cal, tab_req, tab_prod, tab_case, tab_dev, tab_adm = st.tabs(
+    tab_names, 
+    key="active_tab", 
+    on_change="rerun")
 
 # --- TAB 1: CALENDAR ---
 with tab_cal:
