@@ -1499,16 +1499,18 @@ with tab_adm:
                         for req in group["requests"]:
                             req_id = str(req["_id"])
                             
-                            # Using a container block to visually group the elements without creating columns
                             with st.container(border=True):
-                                is_checked = st.checkbox(
-                                    f"Select Request from {req['name']}", 
-                                    value=select_all, 
-                                    key=f"chk_well_{req_id}",
-                                    label_visibility="collapsed"
-                                )
-                                # Markdown works correctly here to format the status backticks
-                                st.markdown(f" {req['name']} |  {req['date']} | Status: `{req['status']}`")
+                                # Create side-by-side layout inside the container
+                                chk_col, text_col = st.columns([0.15, 0.85])
+                                with chk_col:
+                                    is_checked = st.checkbox(
+                                        f"Select Request from {req['name']}", 
+                                        value=select_all, 
+                                        key=f"chk_well_{req_id}",
+                                        label_visibility="collapsed"
+                                    )
+                                with text_col:
+                                    st.markdown(f"**{req['name']}** | {req['date']} | `{req['status']}`")
                             
                             if is_checked:
                                 if bulk_action == "Approve Selected":
@@ -1528,16 +1530,18 @@ with tab_adm:
                         for req in group["requests"]:
                             req_id = str(req["_id"])
                             
-                            # Using a container block to visually group the elements without creating columns
                             with st.container(border=True):
-                                is_checked = st.checkbox(
-                                    f"Select Request from {req['name']}", 
-                                    value=select_all, 
-                                    key=f"chk_pto_{req_id}",
-                                    label_visibility="collapsed"
-                                )
-                                # Markdown works correctly here to format the status backticks
-                                st.markdown(f" {req['name']} |  {req['date']} | Status: `{req['status']}`")
+                                # Create side-by-side layout inside the container
+                                chk_col, text_col = st.columns([0.15, 0.85])
+                                with chk_col:
+                                    is_checked = st.checkbox(
+                                        f"Select Request from {req['name']}", 
+                                        value=select_all, 
+                                        key=f"chk_pto_{req_id}",
+                                        label_visibility="collapsed"
+                                    )
+                                with text_col:
+                                    st.markdown(f"**{req['name']}** | {req['date']} | `{req['status']}`")
                             
                             if is_checked:
                                 if bulk_action == "Approve Selected":
