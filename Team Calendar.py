@@ -1041,7 +1041,7 @@ with tab_dev:
         st.write(f"**Shift Time:** `{shift_time}`")
 
     # Dynamic bulk entry collection layout (Excel-like matrix form)
-    st.markdown("### 📊 Bulk Entry Log Matrix")
+    st.markdown("### 📊 Bulk Entry Log")
     if "bulk_deviation_entries" not in st.session_state:
         st.session_state.bulk_deviation_entries = [{"start": "00:00", "end": "00:00", "duration": "0m", "aux": "", "reason": ""}]
 
@@ -1070,18 +1070,18 @@ with tab_dev:
     # Matrix Action Controls
     ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([2, 2, 4])
     with ctrl_col1:
-        if st.button("➕ Add Row Entry", key="btn_add_dev_matrix_row"):
+        if st.button("➕ Add Row", key="btn_add_dev_matrix_row"):
             st.session_state.bulk_deviation_entries.append({"start": "00:00", "end": "00:00", "duration": "0m", "aux": "", "reason": ""})
             st.rerun()
     with ctrl_col2:
-        if st.button("🗑️ Remove Last Entry Row", key="btn_remove_dev_matrix_row"):
+        if st.button("🗑️ Remove Last Row", key="btn_remove_dev_matrix_row"):
             if len(st.session_state.bulk_deviation_entries) > 1:
                 st.session_state.bulk_deviation_entries.pop()
                 st.rerun()
             else:
                 st.warning("Minimum of 1 entry line required.")
     with ctrl_col3:
-        if st.button("💾 Submit Matrix To DB", key="btn_save_batch_deviations"):
+        if st.button("💾 Submit All", key="btn_save_batch_deviations"):
             records_saved = 0
             for entry in st.session_state.bulk_deviation_entries:
                 duration_raw = entry["duration"].lower().strip()
@@ -1108,11 +1108,11 @@ with tab_dev:
             st.rerun()
 
     st.divider()
-    st.subheader("Deviation Request Report")
+    st.subheader("Deviation Report")
     
     with st.expander("Filter Report"):
         f_col1, f_col2, f_col3 = st.columns(3)
-        filter_month = f_col1.selectbox("Month", range(1, 13), index=date.today().month-1, key="dev_f_month")
+        filter_month = f_col1.selectbox("Month", options=range(1, 13), index=date.today().month - 1, format_func=lambda x: calendar.month_name[x],key="dev_f_month")
         filter_year = f_col2.number_input("Year", value=date.today().year, key="dev_f_year")
         filter_date = f_col3.date_input("Specific Date (Optional)", value=None, key="dev_f_date")
         apply_filter = st.button("Apply Filter")
@@ -1131,9 +1131,12 @@ with tab_dev:
         filtered_records = df.to_dict(orient="records")
         
         # --- NEW SECTION: Monthly Deviation Counts Summary Grid ---
-        st.markdown("### 📊 Metrics Summary Count")
+        st.markdown("### 📊 Deviation Count")
         if not df.empty:
+            # Group by Name, count entries, and sort descending by highest count
             count_df = df.groupby("Name").size().reset_index(name="Deviation Count")
+            count_df = count_df.sort_values(by="Deviation Count", ascending=False)
+            
             st.dataframe(count_df, hide_index=True, use_container_width=True)
         else:
             st.info("No records match filter bounds for summary processing.")
