@@ -13,6 +13,8 @@ import altair as alt
 import contextlib
 import streamlit.components.v1 as components
 
+st.set_page_config(layout="wide")
+
 # --- DATABASE HELPERS & CONNECTION ---
 @st.cache_resource
 def get_mongo_client():
@@ -153,7 +155,6 @@ def send_request_notification(recipient_email, status, request_type, date_val):
     pass
 
 # --- INITIAL CONFIG & STATE ---
-st.set_page_config(layout="wide")
 st.title("📊 Team Operations Management System (TOMS)")
 
 local_tz = pytz.timezone("Asia/Manila") 
