@@ -1018,7 +1018,7 @@ with tab_dev:
     
     # Global form parameters on top (provided once)
     with st.container(border=True):
-        st.markdown("### 🌐 Global Information")
+        st.markdown("### 🌐 Information")
         g_col1, g_col2, g_col3 = st.columns(3)
         with g_col1:
             target_date = st.date_input("Target Date", value=date.today())
@@ -1137,11 +1137,15 @@ with tab_dev:
             count_df = df.groupby("Name").size().reset_index(name="Deviation Count")
             count_df = count_df.sort_values(by="Deviation Count", ascending=False)
             
-            st.dataframe(count_df, hide_index=True, use_container_width=True)
+            # Apply center alignment styling to the specific column
+            styled_df = count_df.style.set_properties(
+                subset=["Deviation Count"], 
+                **{"text-align": "center"}
+            )
+            
+            st.dataframe(styled_df, hide_index=True, use_container_width=True)
         else:
             st.info("No records match filter bounds for summary processing.")
-        
-        st.divider()
         
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button("Extract Report as CSV", csv, "deviation_report.csv", "text/csv")
@@ -1149,7 +1153,7 @@ with tab_dev:
         
         col_widths = [0.6, 1.2, 1.2, 1.2, 1.2, 1.0, 1.0, 0.8, 0.8, 2.0, 2.4]
         h_cols = st.columns(col_widths)
-        headers = ["#", "Date", "Manager", "Name", "Shift Time", "Start Time", "End Time", "Total Mins", "Aux", "Reason", "Actions Matrix State Toggle Switch"]
+        headers = ["#", "Date", "Manager", "Name", "Shift Time", "Start Time", "End Time", "Total Mins", "Aux", "Reason", "Actions"]
         for idx, header_title in enumerate(headers):
             h_cols[idx].markdown(f"**{header_title}**")
         st.markdown("---")
