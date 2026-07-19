@@ -823,7 +823,6 @@ with tab_prod:
 
         p_height = min(1000, max(100, len(overall_product) * 35 + 38))
         st.dataframe(overall_product, use_container_width=True, height=p_height, hide_index=True)
-        st.divider()
 
 # --- TAB 4: CASE TRACKER ---
 with tab_case:
@@ -855,7 +854,6 @@ with tab_case:
     with g_col2:
         global_owner = st.selectbox("Global Case Owner", owner_list, key="case_global_owner")
 
-    st.divider()
     st.markdown("### 📊 Case Entry")
 
     if "batch_case_entries" not in st.session_state:
@@ -1053,7 +1051,6 @@ with tab_case:
                             st.cache_data.clear()
                             st.success("Comment cleared successfully.")
                             st.rerun()
-            st.divider()
     else:
         st.info("No active system case records match filter parameters.")
 
@@ -1315,8 +1312,7 @@ with tab_adm:
             grid_cols[1].write("**Nickname**")
             grid_cols[2].write("**Birthday**")
             grid_cols[3].write("**Actions**")
-            st.divider()
-    
+
             if roster:
                 for name, data in roster.items():
                     r_cols = st.columns([2, 2, 2, 2])
@@ -1351,7 +1347,6 @@ with tab_adm:
                 with inner_c2:
                     staff["bday"] = st.date_input("Birthday", value=staff["bday"], min_value=date(1950, 1, 1), key=f"multi_staff_bday_{idx}")
                     staff["rest_days"] = st.multiselect("Select Rest Days", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], default=staff["rest_days"], key=f"multi_staff_rest_{idx}")
-                st.divider()
             
             col_add, col_save = st.columns(2)
             with col_add:
@@ -1375,7 +1370,6 @@ with tab_adm:
                     st.success(f"{added_count} staff record(s) saved successfully!")
                     st.session_state.new_staff_entries = [{"name": "", "nick": "", "bday": date.today(), "rest_days": []}]
                     st.rerun()
-            st.divider() 
     
             st.markdown("---")
             st.subheader("📢 Announcements")
