@@ -1540,73 +1540,72 @@ with tab_adm:
                             st.warning("Please select at least one request to deny.")
             st.divider()
             st.subheader("Approved History")
-        
-        filter_col1, filter_col2 = st.columns(2)
-        with filter_col1:
-            month_options = {
-                1: "January", 2: "February", 3: "March", 4: "April", 5: "May", 6: "June",
-                7: "July", 8: "August", 9: "September", 10: "October", 11: "November", 12: "December"
-            }
-            default_month = st.session_state.get("cal_m", date.today().month)
-            selected_month = st.selectbox("Archive Filter Month", options=list(month_options.keys()), format_func=lambda x: month_options[x], index=list(month_options.keys()).index(default_month), key="history_filter_month")
-        with filter_col2:
-            current_year = date.today().year
-            year_options = list(range(current_year - 5, current_year + 6))
-            selected_year = st.selectbox("Archive Filter Year", options=year_options, index=year_options.index(current_year), key="history_filter_year")
-
-        # --- UNIFIED FILTERING LOGIC ---
-        filtered_history_requests = []
-        
-        for r in global_approved_requests:
-            date_val = r.get('date')
-            if isinstance(date_val, str):
-                try:
-                    date_val = datetime.strptime(date_val.split("T")[0], "%Y-%m-%d").date()
-                except ValueError:
-                    continue
+            filter_col1, filter_col2 = st.columns(2)
+            with filter_col1:
+                month_options = {
+                    1: "January", 2: "February", 3: "March", 4: "April", 5: "May", 6: "June",
+                    7: "July", 8: "August", 9: "September", 10: "October", 11: "November", 12: "December"
+                }
+                default_month = st.session_state.get("cal_m", date.today().month)
+                selected_month = st.selectbox("Archive Filter Month", options=list(month_options.keys()), format_func=lambda x: month_options[x], index=list(month_options.keys()).index(default_month), key="history_filter_month")
+            with filter_col2:
+                current_year = date.today().year
+                year_options = list(range(current_year - 5, current_year + 6))
+                selected_year = st.selectbox("Archive Filter Year", options=year_options, index=year_options.index(current_year), key="history_filter_year")
+    
+            # --- UNIFIED FILTERING LOGIC ---
+            filtered_history_requests = []
             
-            # Filter strictly by month, year, and target request types
-            if date_val.month == selected_month and date_val.year == selected_year:
-                if r.get('type') in ["Wellness", "PTO", "Sick Leave"]:
-                    # Store the normalized date object temporarily for accurate sorting
-                    r_copy = r.copy()
-                    r_copy['parsed_date'] = date_val
-                    filtered_history_requests.append(r_copy)
-        
-        # --- DATAFRAME GENERATION AND RENDERING ---
-        if filtered_history_requests:
-            st.markdown("#### Approved Requests Summary")
+            for r in global_approved_requests:
+                date_val = r.get('date')
+                if isinstance(date_val, str):
+                    try:
+                        date_val = datetime.strptime(date_val.split("T")[0], "%Y-%m-%d").date()
+                    except ValueError:
+                        continue
+                
+                # Filter strictly by month, year, and target request types
+                if date_val.month == selected_month and date_val.year == selected_year:
+                    if r.get('type') in ["Wellness", "PTO", "Sick Leave"]:
+                        # Store the normalized date object temporarily for accurate sorting
+                        r_copy = r.copy()
+                        r_copy['parsed_date'] = date_val
+                        filtered_history_requests.append(r_copy)
             
-            # Build the base DataFrame
-            history_df = pd.DataFrame(filtered_history_requests)
-            
-            # Sort from oldest to newest using the temporary parsed_date column
-            history_df.sort_values(by="parsed_date", ascending=True, inplace=True)
-            
-            # Rename the column to match standard preferences
-            if 'type' in history_df.columns:
-                history_df.rename(columns={'type': 'Request Type'}, inplace=True)
-            
-            # Explicitly drop technical columns and internal flags universally across all types
-            columns_to_drop = ['_id', 'parsed_date', 'email', 'viewed']
-            history_display_df = history_df.drop(columns=columns_to_drop, errors='ignore')
-            
-            # Reorder columns to ensure "Request Type" sits cleanly at the front
-            all_cols = list(history_display_df.columns)
-            if 'Request Type' in all_cols:
-                all_cols.insert(0, all_cols.pop(all_cols.index('Request Type')))
-                history_display_df = history_display_df[all_cols]
-            
-            # Dynamic height allocation tailored to fit the full item count seamlessly
-            history_height = min(1000, max(100, len(history_display_df) * 35 + 40))
-            
-            st.dataframe(
-                history_display_df, 
-                hide_index=True, 
-                use_container_width=True, 
-                height=history_height
-            )
-        else:
-            st.write("*No verified history logs found matching calendar dimensions.*")
-
-    st.markdown('</div>', unsafe_allow_html=True)
+            # --- DATAFRAME GENERATION AND RENDERING ---
+            if filtered_history_requests:
+                st.markdown("#### Approved Requests Summary")
+                
+                # Build the base DataFrame
+                history_df = pd.DataFrame(filtered_history_requests)
+                
+                # Sort from oldest to newest using the temporary parsed_date column
+                history_df.sort_values(by="parsed_date", ascending=True, inplace=True)
+                
+                # Rename the column to match standard preferences
+                if 'type' in history_df.columns:
+                    history_df.rename(columns={'type': 'Request Type'}, inplace=True)
+                
+                # Explicitly drop technical columns and internal flags universally across all types
+                columns_to_drop = ['_id', 'parsed_date', 'email', 'viewed']
+                history_display_df = history_df.drop(columns=columns_to_drop, errors='ignore')
+                
+                # Reorder columns to ensure "Request Type" sits cleanly at the front
+                all_cols = list(history_display_df.columns)
+                if 'Request Type' in all_cols:
+                    all_cols.insert(0, all_cols.pop(all_cols.index('Request Type')))
+                    history_display_df = history_display_df[all_cols]
+                
+                # Dynamic height allocation tailored to fit the full item count seamlessly
+                history_height = min(1000, max(100, len(history_display_df) * 35 + 40))
+                
+                st.dataframe(
+                    history_display_df, 
+                    hide_index=True, 
+                    use_container_width=True, 
+                    height=history_height
+                )
+            else:
+                st.write("*No verified history logs found matching calendar dimensions.*")
+    
+        st.markdown('</div>', unsafe_allow_html=True)
