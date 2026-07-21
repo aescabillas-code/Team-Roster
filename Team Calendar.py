@@ -1182,17 +1182,16 @@ with tab_dev:
         if not df.empty:
             # Get all employee names
             roster_doc = collection.find_one({"type": "roster_list"})
-            
-        all_names = (
-            sorted(
-                [
-                    name
-                    for name in roster_doc.get("data", {}).keys()
-                    if name != "Jeff Bote"
-                ]
+            all_names = (
+                sorted(
+                    [
+                        name
+                        for name in roster_doc.get("data", {}).keys()
+                        if name != "Jeff Bote"
+                    ]
+                )
+                if roster_doc else []
             )
-            if roster_doc else []
-        )
 
         
             # Count deviations by Name and Date
