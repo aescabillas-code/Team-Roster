@@ -720,27 +720,63 @@ with tab_req:
     
     # 2. Unified Pending Request Table (Filters for Wellness and PTO only)
     if global_pending_requests:
-        # Sick Leave is dropped here because auto-approved items are stored as "Approved" instead of "Pending"
-        unified_pending = [r for r in global_pending_requests if r.get('type') in ['Wellness', 'PTO']]
-        
-        if unified_pending:
-            df_pending = pd.DataFrame(unified_pending)
-            
-            # Chronological Sorting Implementation: Oldest Date to Newest Date
-            df_pending['sort_date'] = pd.to_datetime(df_pending['date'])
-            df_pending = df_pending.sort_values(by='sort_date', ascending=True)
-            
-            # Map structural preferences for UI display parameters
-            df_pending_display = df_pending[["date", "name", "type"]].copy()
-            df_pending_display.columns = ["Date", "Name", "Type"]
-            
-            # Dynamic height auto-scales exactly to row length without a max threshold caps constraint
-            calculated_height = (len(df_pending_display) * 35) + 45
-            st.dataframe(df_pending_display, hide_index=True, use_container_width=True, height=calculated_height)
+    
+        filtered_pending = []
+    
+        for r in global_pending_requests:
+    
+            if r.get("type") not in ["Wellness", "PTO"]:
+                continue
+    
+            try:
+                req_date = pd.to_datetime(r["date"])
+            except:
+                continue
+    
+            if req_date.month == f_m and req_date.year == f_y:
+                filtered_pending.append(r)
+    
+        if filtered_pending:
+    
+            df_pending = pd.DataFrame(filtered_pending)
+    
+            # Sort oldest to newest
+            df_pending["sort_date"] = pd.to_datetime(df_pending["date"])
+            df_pending = df_pending.sort_values(
+                by="sort_date",
+                ascending=True
+            )
+    
+            df_pending_display = df_pending[
+                ["date", "name", "type"]
+            ].copy()
+    
+            df_pending_display.columns = [
+                "Date",
+                "Name",
+                "Type"
+            ]
+    
+            calculated_height = (
+                len(df_pending_display) * 35
+            ) + 45
+    
+            st.dataframe(
+                df_pending_display,
+                hide_index=True,
+                use_container_width=True,
+                height=calculated_height
+            )
+    
         else:
-            st.info("ℹ️ No pending Wellness or PTO requests found in queue parameters.")
+            st.info(
+                f"ℹ️ No pending Wellness or PTO requests found for {selected_month_name} {int(f_y)}."
+            )
+    
     else:
-        st.write("*No pending requests await administrator review authorization logs.*")
+        st.write(
+            "*No pending requests await administrator review authorization logs.*"
+        )
         
 # --- TAB 3: PRODUCTIVITY MONITORING ---
 with tab_prod:
