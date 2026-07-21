@@ -1169,21 +1169,55 @@ with tab_dev:
             if filter_date:
                 df = df[df['Date'] == filter_date]
             else:
-                df = df[(df['Date'].apply(lambda x: x.month) == filter_month) & (df['Date'].apply(lambda x: x.year) == filter_year)]
+                df = df[
+                    (df['Date'].apply(lambda x: x.month) == filter_month) &
+                    (df['Date'].apply(lambda x: x.year) == filter_year)
+                ]
         
+        # IMPORTANT: keep this here after filtering
         filtered_records = df.to_dict(orient="records")
         
-        # --- NEW SECTION: Monthly Deviation Counts Summary Grid ---
-        st.markdown("### 📊 Deviation Count")
+        # --- Daily Deviation Count Matrix ---
+        st.markdown("### 📊 Daily Deviation Count")
+        
         if not df.empty:
-            # Group by Name, count entries, and sort descending by highest count
-            count_df = df.groupby("Name").size().reset_index(name="Deviation Count")
-            count_df = count_df.sort_values(by="Deviation Count", ascending=False)
-            
-            st.dataframe(count_df, hide_index=True, use_container_width=True)
+        
+            report_df = df.copy()
+        
+            daily_count_df = (
+                report_df.groupby(["Name", "Date"])
+                .size()
+                .reset_index(name="Count")
+            )
+        
+            deviation_matrix = (
+                daily_count_df.pivot(
+                    index="Name",
+                    columns="Date",
+                    values="Count"
+                )
+                .fillna(0)
+                .astype(int)
+            )
+        
+            deviation_matrix["Total"] = deviation_matrix.sum(axis=1)
+        
+            deviation_matrix = (
+                deviation_matrix
+                .sort_values("Total", ascending=False)
+                .reset_index()
+            )
+        
+            deviation_matrix.columns.name = None
+        
+            st.dataframe(
+                deviation_matrix,
+                hide_index=True,
+                use_container_width=True)
+        
         else:
             st.info("No records match filter bounds for summary processing.")
-        
+
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button("Extract Report as CSV", csv, "deviation_report.csv", "text/csv")
         st.write("## Deviation Records")
