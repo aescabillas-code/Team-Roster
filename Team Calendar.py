@@ -1200,19 +1200,31 @@ with tab_dev:
         
             # Get all dates from filtered data
             all_dates = sorted(heatmap_df["Date"].unique())
-        
-            heatmap_df = pd.merge(
-                full_grid,
-                heatmap_df,
-                on=["Name", "Date"],
-                how="left"
-            )
-        
-            heatmap_df["Deviation Count"] = (
-                heatmap_df["Deviation Count"]
-                .fillna(0)
-                .astype(int)
-            )
+            
+            if len(all_dates) > 0:
+            
+                full_grid = pd.MultiIndex.from_product(
+                    [all_names, all_dates],
+                    names=["Name", "Date"]
+                ).to_frame(index=False)
+            
+                heatmap_df = pd.merge(
+                    full_grid,
+                    heatmap_df,
+                    on=["Name", "Date"],
+                    how="left"
+                )
+            
+                heatmap_df["Deviation Count"] = (
+                    heatmap_df["Deviation Count"]
+                    .fillna(0)
+                    .astype(int)
+                )
+            
+            else:
+                heatmap_df = pd.DataFrame(
+                    columns=["Name", "Date", "Deviation Count"]
+                )
         
             heatmap = (
                 alt.Chart(heatmap_df)
