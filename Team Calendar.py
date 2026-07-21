@@ -1164,6 +1164,7 @@ with tab_dev:
     if dev_data:
         df = pd.DataFrame(dev_data)
         df['Date'] = pd.to_datetime(df['Date']).dt.date
+        df = df[df["Name"] != "Jeff Bote"]
         
         if apply_filter:
             if filter_date:
@@ -1181,10 +1182,18 @@ with tab_dev:
         if not df.empty:
             # Get all employee names
             roster_doc = collection.find_one({"type": "roster_list"})
-            all_names = (
-                sorted(list(roster_doc.get("data", {}).keys()))
-                if roster_doc else []
+            
+        all_names = (
+            sorted(
+                [
+                    name
+                    for name in roster_doc.get("data", {}).keys()
+                    if name != "Jeff Bote"
+                ]
             )
+            if roster_doc else []
+        )
+
         
             # Count deviations by Name and Date
             heatmap_df = (
