@@ -1179,11 +1179,14 @@ with tab_dev:
 
         st.markdown("### 📈 Daily Deviation Heatmap")
         if not df.empty:
-            # Get all staff names
+            # Get all employee names
             roster_doc = collection.find_one({"type": "roster_list"})
-            all_names = sorted(list(roster_doc.get("data", {}).keys())) if roster_doc else []
+            all_names = (
+                sorted(list(roster_doc.get("data", {}).keys()))
+                if roster_doc else []
+            )
         
-            # Daily counts
+            # Count deviations by Name and Date
             heatmap_df = (
                 df.groupby(["Name", "Date"])
                 .size()
@@ -1195,26 +1198,86 @@ with tab_dev:
                 heatmap_df["Date"]
             ).dt.strftime("%b-%d")
         
-            # Get all dates in filtered dataset
+            # Get all dates from filtered data
             all_dates = sorted(heatmap_df["Date"].unique())
         
-            # Create complete grid (all employees x all dates)
+            # Create full grid so all employees always appear
             full_grid = pd.MultiIndex.from_product(
                 [all_names, all_dates],
                 names=["Name", "Date"]
             ).to_frame(index=False)
         
-            heatmap_df = (
-                full_grid.merge(
-                    heatmap_df,
-                    on=["Name", "Date"],
-                    how="left"
-                )
-                .fillna(0)
+            heatmap_df = pd.merge(
+                full_grid,
+                heatmap_df,
+                on=["Name", "Date"],
+                how="left"
             )
         
             heatmap_df["Deviation Count"] = (
-
+                heatmap_df["Deviation Count"]
+                .fillna(0)
+                .astype(int)
+            )
+        
+            heatmap = (
+                alt.Chart(heatmap_df)
+                .mark_rect(stroke="white", strokeWidth=1)
+                .encode(
+                    x=alt.X(
+                        "Date:N",
+                        title="Date",
+                        sort=all_dates,
+                        axis=alt.Axis(
+                            labelAngle=-45,
+                            labelFontSize=10
+                        )
+                    ),
+                    y=alt.Y(
+                        "Name:N",
+                        title="Employee",
+                        sort=all_names
+                    ),
+                    color=alt.Color(
+                        "Deviation Count:Q",
+                        title="Count",
+                        scale=alt.Scale(scheme="tealblues")
+                    ),
+                    tooltip=[
+                        alt.Tooltip("Name:N", title="Name"),
+                        alt.Tooltip("Date:N", title="Date"),
+                        alt.Tooltip("Deviation Count:Q", title="Count")
+                    ]
+                )
+                .properties(
+                    height=max(120, len(all_names) * 20)
+                )
+            )
+        
+            # Show count only if > 0
+            text = (
+                alt.Chart(
+                    heatmap_df[heatmap_df["Deviation Count"] > 0]
+                )
+                .mark_text(
+                    fontSize=9,
+                    fontWeight="bold",
+                    color="black"
+                )
+                .encode(
+                    x=alt.X("Date:N", sort=all_dates),
+                    y=alt.Y("Name:N", sort=all_names),
+                    text="Deviation Count:Q"
+                )
+            )
+        
+            st.altair_chart(
+                heatmap + text,
+                use_container_width=True
+            )
+        
+        else:
+            st.info("No records available.")
         
         # --- Daily Deviation Count Matrix ---
         st.markdown("### 📊 Daily Deviation Count")
@@ -1226,9 +1289,12 @@ with tab_dev:
             daily_count_df = (
                 report_df.groupby(["Name", "Date"])
                 .size()
-                .reset_index(name="Count")
-            )
-        
+                .reset_index(name="Count"))
+            
+            daily_count_df["Date"] = pd.to_datetime(
+                daily_count_df["Date"]
+            ).dt.strftime("%b-%d")
+
             deviation_matrix = (
                 daily_count_df.pivot(
                     index="Name",
