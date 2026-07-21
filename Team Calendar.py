@@ -1179,73 +1179,42 @@ with tab_dev:
 
         st.markdown("### 📈 Daily Deviation Heatmap")
         if not df.empty:
+            # Get all staff names
+            roster_doc = collection.find_one({"type": "roster_list"})
+            all_names = sorted(list(roster_doc.get("data", {}).keys())) if roster_doc else []
         
+            # Daily counts
             heatmap_df = (
                 df.groupby(["Name", "Date"])
                 .size()
                 .reset_index(name="Deviation Count")
             )
         
+            # Format dates
             heatmap_df["Date"] = pd.to_datetime(
                 heatmap_df["Date"]
-            ).dt.strftime("%Y-%m-%d")
+            ).dt.strftime("%b-%d")
         
-            heatmap = (
-                alt.Chart(heatmap_df)
-                .mark_rect(
-                    stroke="white",
-                    strokeWidth=1
+            # Get all dates in filtered dataset
+            all_dates = sorted(heatmap_df["Date"].unique())
+        
+            # Create complete grid (all employees x all dates)
+            full_grid = pd.MultiIndex.from_product(
+                [all_names, all_dates],
+                names=["Name", "Date"]
+            ).to_frame(index=False)
+        
+            heatmap_df = (
+                full_grid.merge(
+                    heatmap_df,
+                    on=["Name", "Date"],
+                    how="left"
                 )
-                .encode(
-                    x=alt.X(
-                        "Date:N",
-                        title="Date",
-                        sort=sorted(heatmap_df["Date"].unique()),
-                        axis=alt.Axis(
-                            labelAngle=-45,
-                            labelFontSize=10
-                        )
-                    ),
-                    y=alt.Y(
-                        "Name:N",
-                        title="Employee"
-                    ),
-                    color=alt.Color(
-                        "Deviation Count:Q",
-                        title="Count",
-                        scale=alt.Scale(scheme="tealblues")
-                    ),
-                    tooltip=[
-                        "Name",
-                        "Date",
-                        "Deviation Count"
-                    ]
-                )
-                .properties(
-                    height=max(300, len(heatmap_df["Name"].unique()) * 22)
-                )
-            )
-            
-            text = (
-                alt.Chart(heatmap_df)
-                .mark_text(
-                    fontSize=13,
-                    fontWeight="bold"
-                )
-                .encode(
-                    x="Date:N",
-                    y="Name:N",
-                    text="Deviation Count:Q"
-                )
-            )
-            
-            st.altair_chart(
-                heatmap + text,
-                use_container_width=True
+                .fillna(0)
             )
         
-        else:
-            st.info("No records available.")
+            heatmap_df["Deviation Count"] = (
+
         
         # --- Daily Deviation Count Matrix ---
         st.markdown("### 📊 Daily Deviation Count")
