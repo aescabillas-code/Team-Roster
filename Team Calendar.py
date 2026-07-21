@@ -1201,12 +1201,6 @@ with tab_dev:
             # Get all dates from filtered data
             all_dates = sorted(heatmap_df["Date"].unique())
         
-            # Create full grid so all employees always appear
-            full_grid = pd.MultiIndex.from_product(
-                [all_names, all_dates],
-                names=["Name", "Date"]
-            ).to_frame(index=False)
-        
             heatmap_df = pd.merge(
                 full_grid,
                 heatmap_df,
@@ -1222,7 +1216,10 @@ with tab_dev:
         
             heatmap = (
                 alt.Chart(heatmap_df)
-                .mark_rect(stroke="white", strokeWidth=1)
+                .mark_rect(
+                    stroke="white",
+                    strokeWidth=1
+                )
                 .encode(
                     x=alt.X(
                         "Date:N",
@@ -1236,7 +1233,12 @@ with tab_dev:
                     y=alt.Y(
                         "Name:N",
                         title="Employee",
-                        sort=all_names
+                        sort=all_names,
+                        axis=alt.Axis(
+                            labelOverlap=False,
+                            labelLimit=500,
+                            labelFontSize=11
+                        )
                     ),
                     color=alt.Color(
                         "Deviation Count:Q",
@@ -1250,14 +1252,18 @@ with tab_dev:
                     ]
                 )
                 .properties(
-                    height=max(120, len(all_names) * 20)
+                    height=max(
+                        300,
+                        len(all_names) * 30
+                    )
                 )
             )
-        
-            # Show count only if > 0
+            
             text = (
                 alt.Chart(
-                    heatmap_df[heatmap_df["Deviation Count"] > 0]
+                    heatmap_df[
+                        heatmap_df["Deviation Count"] > 0
+                    ]
                 )
                 .mark_text(
                     fontSize=9,
@@ -1265,14 +1271,26 @@ with tab_dev:
                     color="black"
                 )
                 .encode(
-                    x=alt.X("Date:N", sort=all_dates),
-                    y=alt.Y("Name:N", sort=all_names),
+                    x=alt.X(
+                        "Date:N",
+                        sort=all_dates
+                    ),
+                    y=alt.Y(
+                        "Name:N",
+                        sort=all_names,
+                        axis=alt.Axis(
+                            labelOverlap=False,
+                            labelLimit=500
+                        )
+                    ),
                     text="Deviation Count:Q"
                 )
             )
-        
+            
             st.altair_chart(
-                heatmap + text,
+                (heatmap + text).configure_axis(
+                    labelOverlap=False
+                ),
                 use_container_width=True
             )
         
@@ -1305,11 +1323,12 @@ with tab_dev:
                 .astype(int)
             )
         
-            deviation_matrix["Total"] = deviation_matrix.sum(axis=1)
-        
+            # Sort by total count but do not display total column
+            sort_order = deviation_matrix.sum(axis=1)
             deviation_matrix = (
-                deviation_matrix
-                .sort_values("Total", ascending=False)
+                deviation_matrix.assign(_sort=sort_order)
+                .sort_values("_sort", ascending=False)
+                .drop(columns="_sort")
                 .reset_index()
             )
         
