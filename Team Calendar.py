@@ -1192,12 +1192,19 @@ with tab_dev:
         
             heatmap = (
                 alt.Chart(heatmap_df)
-                .mark_rect()
+                .mark_rect(
+                    stroke="white",
+                    strokeWidth=1
+                )
                 .encode(
                     x=alt.X(
                         "Date:N",
                         title="Date",
-                        sort=sorted(heatmap_df["Date"].unique())
+                        sort=sorted(heatmap_df["Date"].unique()),
+                        axis=alt.Axis(
+                            labelAngle=-45,
+                            labelFontSize=10
+                        )
                     ),
                     y=alt.Y(
                         "Name:N",
@@ -1205,33 +1212,33 @@ with tab_dev:
                     ),
                     color=alt.Color(
                         "Deviation Count:Q",
-                        title="Deviation Count",
-                        scale=alt.Scale(
-                            scheme="tealblues"
-                        )
+                        title="Count",
+                        scale=alt.Scale(scheme="tealblues")
                     ),
                     tooltip=[
-                        alt.Tooltip("Name:N", title="Name"),
-                        alt.Tooltip("Date:N", title="Date"),
-                        alt.Tooltip("Deviation Count:Q", title="Count")
+                        "Name",
+                        "Date",
+                        "Deviation Count"
                     ]
                 )
                 .properties(
-                    height=max(300, len(heatmap_df["Name"].unique()) * 35)
+                    height=max(120, len(heatmap_df["Name"].unique()) * 22)
                 )
             )
-        
+            
             text = (
                 alt.Chart(heatmap_df)
-                .mark_text(fontSize=12)
+                .mark_text(
+                    fontSize=10,
+                    fontWeight="bold"
+                )
                 .encode(
                     x="Date:N",
                     y="Name:N",
-                    text="Deviation Count:Q",
-                    color=alt.value("black")
+                    text="Deviation Count:Q"
                 )
             )
-        
+            
             st.altair_chart(
                 heatmap + text,
                 use_container_width=True
