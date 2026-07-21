@@ -1177,48 +1177,53 @@ with tab_dev:
         # IMPORTANT: keep this here after filtering
         filtered_records = df.to_dict(orient="records")
 
-        st.markdown("### 📈 Daily Deviation Trend by Employee")
+        st.markdown("### 📈 Daily Deviation Trend")
         if not df.empty:
-            graph_df = (
+            trend_df = (
                 df.groupby(["Name", "Date"])
                 .size()
                 .reset_index(name="Deviation Count"))
         
-            graph_df["Date"] = pd.to_datetime(graph_df["Date"])
+            trend_df["Date"] = pd.to_datetime(trend_df["Date"]).dt.strftime("%Y-%m-%d")
         
             trend_chart = (
-                alt.Chart(graph_df)
-                .mark_line(point=True)
+                alt.Chart(trend_df)
+                .mark_circle()
                 .encode(
                     x=alt.X(
-                        "Date:T",
-                        title="Date"
+                        "Date:N",
+                        title="Date",
+                        sort=sorted(trend_df["Date"].unique())
                     ),
                     y=alt.Y(
-                        "Deviation Count:Q",
-                        title="Deviation Count"
-                    ),
-                    color=alt.Color(
                         "Name:N",
                         title="Employee"
                     ),
+                    size=alt.Size(
+                        "Deviation Count:Q",
+                        title="Count"
+                    ),
+                    color=alt.Color(
+                        "Deviation Count:Q",
+                        scale=alt.Scale(scheme="tealblues")
+                    ),
                     tooltip=[
-                        "Name",
-                        alt.Tooltip("Date:T", title="Date"),
-                        "Deviation Count"
+                        alt.Tooltip("Name:N", title="Name"),
+                        alt.Tooltip("Date:N", title="Date"),
+                        alt.Tooltip("Deviation Count:Q", title="Deviation Count")
                     ]
                 )
-                .properties(
-                    height=450
-                )
-                .interactive())
+                .properties(height=500)
+                .interactive()
+            )
         
             st.altair_chart(
                 trend_chart,
-                use_container_width=True)
+                use_container_width=True
+            )
         
         else:
-            st.info("No records available for trend analysis.")
+            st.info("No records available.")
         
         # --- Daily Deviation Count Matrix ---
         st.markdown("### 📊 Daily Deviation Count")
