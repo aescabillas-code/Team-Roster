@@ -1172,15 +1172,56 @@ with tab_dev:
                 df = df[(df['Date'].apply(lambda x: x.month) == filter_month) & (df['Date'].apply(lambda x: x.year) == filter_year)]
         
         filtered_records = df.to_dict(orient="records")
+
+        st.markdown("#### Daily Deviation Trend Chart")
+        trend_chart = (
+            df.groupby([df["Date"].dt.date, "Name"])
+            .size()
+            .reset_index(name="Deviation Count"))
+        
+        st.line_chart(
+            trend_chart,
+            x="Date",
+            y="Deviation Count",
+            color="Name")
         
         # --- NEW SECTION: Monthly Deviation Counts Summary Grid ---
-        st.markdown("### 📊 Deviation Count")
+        st.markdown("### 📊 Daily Deviation Trend")
         if not df.empty:
-            # Group by Name, count entries, and sort descending by highest count
-            count_df = df.groupby("Name").size().reset_index(name="Deviation Count")
-            count_df = count_df.sort_values(by="Deviation Count", ascending=False)
-            
-            st.dataframe(count_df, hide_index=True, use_container_width=True)
+            # Ensure Date column is datetime
+            df["Date"] = pd.to_datetime(df["Date"])
+        
+            # Daily count by Name
+            daily_count_df = (
+                df.groupby([df["Date"].dt.date, "Name"])
+                .size()
+                .reset_index(name="Deviation Count")
+                .rename(columns={"Date": "Day"}))
+        
+            # Trend view (rows = Name, columns = Day)
+            trend_df = (
+                daily_count_df.pivot_table(
+                    index="Name",
+                    columns="Date",
+                    values="Deviation Count",
+                    fill_value=0)
+                .reset_index())
+        
+            st.markdown("#### Daily Trend by Employee")
+            st.dataframe(
+                trend_df,
+                hide_index=True,
+                use_container_width=True)
+        
+            st.markdown("#### Detailed Daily Counts")
+            st.dataframe(
+                daily_count_df.sort_values(
+                    by=["Date", "Deviation Count"],
+                    ascending=[False, False]
+                ),
+                hide_index=True,
+                use_container_width=True)
+        
         else:
             st.info("No records match filter bounds for summary processing.")
         
