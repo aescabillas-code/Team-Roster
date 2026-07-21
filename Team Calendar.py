@@ -1222,14 +1222,14 @@ with tab_dev:
                     ]
                 )
                 .properties(
-                    height=max(120, len(heatmap_df["Name"].unique()) * 22)
+                    height=max(300, len(heatmap_df["Name"].unique()) * 22)
                 )
             )
             
             text = (
                 alt.Chart(heatmap_df)
                 .mark_text(
-                    fontSize=10,
+                    fontSize=13,
                     fontWeight="bold"
                 )
                 .encode(
