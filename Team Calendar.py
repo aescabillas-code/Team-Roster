@@ -1176,6 +1176,49 @@ with tab_dev:
         
         # IMPORTANT: keep this here after filtering
         filtered_records = df.to_dict(orient="records")
+
+        st.markdown("### 📈 Daily Deviation Trend by Employee")
+        if not df.empty:
+            graph_df = (
+                df.groupby(["Name", "Date"])
+                .size()
+                .reset_index(name="Deviation Count"))
+        
+            graph_df["Date"] = pd.to_datetime(graph_df["Date"])
+        
+            trend_chart = (
+                alt.Chart(graph_df)
+                .mark_line(point=True)
+                .encode(
+                    x=alt.X(
+                        "Date:T",
+                        title="Date"
+                    ),
+                    y=alt.Y(
+                        "Deviation Count:Q",
+                        title="Deviation Count"
+                    ),
+                    color=alt.Color(
+                        "Name:N",
+                        title="Employee"
+                    ),
+                    tooltip=[
+                        "Name",
+                        alt.Tooltip("Date:T", title="Date"),
+                        "Deviation Count"
+                    ]
+                )
+                .properties(
+                    height=450
+                )
+                .interactive())
+        
+            st.altair_chart(
+                trend_chart,
+                use_container_width=True)
+        
+        else:
+            st.info("No records available for trend analysis.")
         
         # --- Daily Deviation Count Matrix ---
         st.markdown("### 📊 Daily Deviation Count")
