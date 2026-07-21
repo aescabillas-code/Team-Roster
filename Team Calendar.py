@@ -1177,48 +1177,63 @@ with tab_dev:
         # IMPORTANT: keep this here after filtering
         filtered_records = df.to_dict(orient="records")
 
-        st.markdown("### 📈 Daily Deviation Trend")
+        st.markdown("### 📈 Daily Deviation Heatmap")
         if not df.empty:
-            trend_df = (
+        
+            heatmap_df = (
                 df.groupby(["Name", "Date"])
                 .size()
-                .reset_index(name="Deviation Count"))
+                .reset_index(name="Deviation Count")
+            )
         
-            trend_df["Date"] = pd.to_datetime(trend_df["Date"]).dt.strftime("%Y-%m-%d")
+            heatmap_df["Date"] = pd.to_datetime(
+                heatmap_df["Date"]
+            ).dt.strftime("%Y-%m-%d")
         
-            trend_chart = (
-                alt.Chart(trend_df)
-                .mark_circle()
+            heatmap = (
+                alt.Chart(heatmap_df)
+                .mark_rect()
                 .encode(
                     x=alt.X(
                         "Date:N",
                         title="Date",
-                        sort=sorted(trend_df["Date"].unique())
+                        sort=sorted(heatmap_df["Date"].unique())
                     ),
                     y=alt.Y(
                         "Name:N",
                         title="Employee"
                     ),
-                    size=alt.Size(
-                        "Deviation Count:Q",
-                        title="Count"
-                    ),
                     color=alt.Color(
                         "Deviation Count:Q",
-                        scale=alt.Scale(scheme="tealblues")
+                        title="Deviation Count",
+                        scale=alt.Scale(
+                            scheme="tealblues"
+                        )
                     ),
                     tooltip=[
                         alt.Tooltip("Name:N", title="Name"),
                         alt.Tooltip("Date:N", title="Date"),
-                        alt.Tooltip("Deviation Count:Q", title="Deviation Count")
+                        alt.Tooltip("Deviation Count:Q", title="Count")
                     ]
                 )
-                .properties(height=500)
-                .interactive()
+                .properties(
+                    height=max(300, len(heatmap_df["Name"].unique()) * 35)
+                )
+            )
+        
+            text = (
+                alt.Chart(heatmap_df)
+                .mark_text(fontSize=12)
+                .encode(
+                    x="Date:N",
+                    y="Name:N",
+                    text="Deviation Count:Q",
+                    color=alt.value("black")
+                )
             )
         
             st.altair_chart(
-                trend_chart,
+                heatmap + text,
                 use_container_width=True
             )
         
