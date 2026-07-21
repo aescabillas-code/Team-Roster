@@ -1163,7 +1163,7 @@ with tab_dev:
     dev_data = fetch_deviations_from_db()
     if dev_data:
         df = pd.DataFrame(dev_data)
-        df['Date'] = pd.to_datetime(df['Date']).dt.date
+        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
         
         if apply_filter:
             if filter_date:
@@ -1176,9 +1176,10 @@ with tab_dev:
         st.markdown("#### Daily Deviation Trend Chart")
         trend_chart = (
             df.groupby([df["Date"].dt.date, "Name"])
-            .size()
-            .reset_index(name="Deviation Count"))
+              .size()
+              .reset_index(name="Deviation Count"))
         
+        trend_chart.columns = ["Date", "Name", "Deviation Count"]
         st.line_chart(
             trend_chart,
             x="Date",
