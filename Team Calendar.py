@@ -11,7 +11,6 @@ import re
 import io
 import altair as alt
 import contextlib
-import streamlit.components.v1 as components
 
 st.set_page_config(layout="wide")
 
@@ -323,32 +322,8 @@ tab_names = [
     "🔍 Case Tracker", "🔀 Deviation", "🔑 Admin"
 ]
 
-if "active_tab" not in st.query_params:
-    st.query_params["active_tab"] = "0"
-
-active_index = int(st.query_params["active_tab"])
+# Native Streamlit Tab allocation avoiding custom JS/query_param lifecycle bugs
 tab_cal, tab_req, tab_prod, tab_case, tab_dev, tab_adm = st.tabs(tab_names)
-
-components.html(
-    f"""
-    <script>
-        window.parent.document.querySelectorAll('[data-baseweb="tab"]').forEach((tab, index) => {{
-            if (!tab.dataset.hasListener) {{
-                tab.dataset.hasListener = "true";
-                tab.addEventListener('click', () => {{
-                    const url = new URL(window.parent.location.href);
-                    url.searchParams.set('active_tab', index);
-                    window.parent.history.replaceState({{}}, '', url.href);
-                }});
-            }}
-            if (index === {active_index}) {{
-                setTimeout(() => tab.click(), 10);
-            }}
-        }});
-    </script>
-    """,
-    height=0,
-)
 
 # --- TAB 1: CALENDAR ---
 with tab_cal:
