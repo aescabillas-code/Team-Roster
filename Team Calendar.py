@@ -809,7 +809,6 @@ with tab_case:
 
     ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([2, 2, 4])
     with ctrl_col1:
-        # Adds 1 additional slot on click
         if st.button("➕ Add Row (+1 Slot)", key="btn_add_matrix_row"):
             st.session_state.batch_case_entries.append({"case_number": ""})
             st.rerun()
@@ -831,7 +830,19 @@ with tab_case:
                     "Owner": global_owner,
                     "Type": global_c_type,
                     "Case Number": entry["case_number"],
-                    "Comment": ""
+                    "Comment": "",
+                    # QA Default Metrics
+                    "QA_SLO_SLA": "Met",
+                    "QA_Initial_Consecutive_Resp": "Met",
+                    "QA_Case_Status_Update": "Met",
+                    "QA_Issue_Field_Updated": "Met",
+                    "QA_Case_Comments_Probing": "Met",
+                    "QA_Collaborations_Logging": "Met",
+                    "QA_Entitlement_Validation": "Met",
+                    "QA_Account_Validation": "Met",
+                    "QA_Case_Routing": "Met",
+                    "QA_Score": 9,
+                    "QA_Feedback": ""
                 }
                 save_case_to_db(new_case)
                 cases_saved += 1
@@ -845,10 +856,13 @@ with tab_case:
 
     if cases_list:
         df_cases = pd.DataFrame(cases_list)
+        # Ensure _id field is converted to string for CSV cleanliness if present
+        if "_id" in df_cases.columns:
+            df_cases["_id"] = df_cases["_id"].astype(str)
         csv = df_cases.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Download Knowledge Base CSV", csv, "kb_export.csv", "text/csv")
+        st.download_button("📥 Download Knowledge Base CSV (With All QA & Notes Data)", csv, "kb_export.csv", "text/csv")
 
-    # Filter Section (Includes Filter by Comment Status)
+    # Filter Section
     f1, f2, f3 = st.columns(3)
     f_case = f1.text_input("Filter by Case #")
     owners = sorted(list(set(case.get("Owner", "") for case in cases_list if case.get("Owner"))))
@@ -873,12 +887,11 @@ with tab_case:
 
     if filtered_cases:
         for case in filtered_cases:
-            entry_col, gap, action_col = st.columns([4, .2, 1])
+            entry_col, gap, action_col = st.columns([3.8, .2, 1.2])
             
             has_comment = bool(case.get("Comment"))
             
             with entry_col:
-                # Expander itself acts as the primary entry block & highlights red when comments exist
                 expander_label = f"🚨 RED ALERT | Case #{case.get('Case Number','')} (Requires Attention)" if has_comment else f"Case #{case.get('Case Number','')}"
                 
                 with st.expander(expander_label, expanded=has_comment):
@@ -886,28 +899,33 @@ with tab_case:
                         **Owner:** {case.get('Owner','')}  
                         **Target Date:** {case.get('Target Date', str(date.today()))}  
                         **Contact Type:** {case.get('Type','')}  
-                        **Case Number:** {case.get('Case Number','')}
+                        **Case Number:** {case.get('Case Number','')}  
+                        **QA Score:** `{case.get('QA_Score', 9)} / 9`
                         """)
                     
                     if has_comment:
                         st.error(f"💬 **Internal Work Note:** {case.get('Comment')}")
+                    
+                    if case.get("QA_Feedback"):
+                        st.info(f"📝 **QA Feedback:** {case.get('QA_Feedback')}")
 
             # Horizontal Action Toggles
             with action_col:
-                t_col1, t_col2, t_col3 = st.columns(3)
+                t_col1, t_col2, t_col3, t_col4 = st.columns(4)
                 with t_col1:
                     t_edit = st.toggle("✏️ Edit", key=f"t_edit_{case['_id']}")
                 with t_col2:
                     t_del = st.toggle("🗑️ Del", key=f"t_del_{case['_id']}")
                 with t_col3:
                     t_comm = st.toggle("💬 Note", key=f"t_comm_{case['_id']}")
+                with t_col4:
+                    t_qa = st.toggle("🎯 QA", key=f"t_qa_{case['_id']}")
 
             if t_edit:
                 with st.container(border=True):
                     st.markdown(f"#### Edit Case #{case.get('Case Number','')}")
                     edit_owner = st.selectbox("Record Assignment Owner", owner_list, index=owner_list.index(case.get("Owner")) if case.get("Owner") in owner_list else 0, key=f"owner_{case['_id']}")
                     
-                    # Target Date Edit Picker
                     try:
                         default_target = date.fromisoformat(case.get("Target Date", str(date.today())))
                     except ValueError:
@@ -970,6 +988,67 @@ with tab_case:
                             st.cache_data.clear()
                             st.success("Comment cleared successfully.")
                             st.rerun()
+
+            # --- QA EVALUATION SECTION ---
+            if t_qa:
+                with st.container(border=True):
+                    st.markdown(f"### 🎯 QA Scorecard | Case #{case.get('Case Number','')}")
+                    
+                    met_opts = ["Met", "Not Met"]
+                    
+                    st.markdown("#### 1️⃣ Timely Engagement Standard")
+                    q_slo = st.selectbox("SLO/SLA", met_opts, index=met_opts.index(case.get("QA_SLO_SLA", "Met")), key=f"qa_slo_{case['_id']}")
+                    q_resp = st.selectbox("Initial and consecutive responses", met_opts, index=met_opts.index(case.get("QA_Initial_Consecutive_Resp", "Met")), key=f"qa_resp_{case['_id']}")
+                    q_update = st.selectbox("Case status update", met_opts, index=met_opts.index(case.get("QA_Case_Status_Update", "Met")), key=f"qa_update_{case['_id']}")
+                    
+                    st.markdown("#### 2️⃣ Documentations")
+                    q_issue = st.selectbox("Issue field updated with description, frequency and start date", met_opts, index=met_opts.index(case.get("QA_Issue_Field_Updated", "Met")), key=f"qa_issue_{case['_id']}")
+                    q_probing = st.selectbox("Case comments with probing questions and answers (🚨 Non-negotiable)", met_opts, index=met_opts.index(case.get("QA_Case_Comments_Probing", "Met")), key=f"qa_probing_{case['_id']}")
+                    q_collab = st.selectbox("Collaborations/Case communication logging (🚨 Non-negotiable)", met_opts, index=met_opts.index(case.get("QA_Collaborations_Logging", "Met")), key=f"qa_collab_{case['_id']}")
+                    
+                    st.markdown("#### 3️⃣ Validation Process Guidelines")
+                    q_entitle = st.selectbox("Entitlement Validation Process (🚨 Non-negotiable)", met_opts, index=met_opts.index(case.get("QA_Entitlement_Validation", "Met")), key=f"qa_entitle_{case['_id']}")
+                    q_account = st.selectbox("Account Validation Process", met_opts, index=met_opts.index(case.get("QA_Account_Validation", "Met")), key=f"qa_account_{case['_id']}")
+                    
+                    st.markdown("#### 4️⃣ Process and Policy")
+                    q_routing = st.selectbox("UVA, SDI, Private Case Routing (🚨 Non-negotiable)", met_opts, index=met_opts.index(case.get("QA_Case_Routing", "Met")), key=f"qa_routing_{case['_id']}")
+                    
+                    # --- AUTOMATED SCORE CALCULATION LOGIC ---
+                    all_criteria = [q_slo, q_resp, q_update, q_issue, q_probing, q_collab, q_entitle, q_account, q_routing]
+                    non_negotiables = [q_probing, q_collab, q_entitle, q_routing]
+                    
+                    # Check if any non-negotiable is 'Not Met'
+                    if any(nn == "Not Met" for nn in non_negotiables):
+                        computed_score = 0
+                        st.error("🚨 **Score: 0 / 9** (Failed a Non-negotiable criteria)")
+                    else:
+                        deductions = sum(1 for item in all_criteria if item == "Not Met")
+                        computed_score = max(0, 9 - deductions)
+                        st.metric("Calculated QA Score", f"{computed_score} / 9")
+
+                    qa_feedback_str = st.text_area("QA Auditor Feedback", value=case.get("QA_Feedback", ""), key=f"qa_fb_{case['_id']}")
+                    
+                    if st.button("💾 Save QA Scorecard", key=f"btn_save_qa_{case['_id']}"):
+                        collection.update_one(
+                            {"_id": case["_id"]},
+                            {"$set": {
+                                "QA_SLO_SLA": q_slo,
+                                "QA_Initial_Consecutive_Resp": q_resp,
+                                "QA_Case_Status_Update": q_update,
+                                "QA_Issue_Field_Updated": q_issue,
+                                "QA_Case_Comments_Probing": q_probing,
+                                "QA_Collaborations_Logging": q_collab,
+                                "QA_Entitlement_Validation": q_entitle,
+                                "QA_Account_Validation": q_account,
+                                "QA_Case_Routing": q_routing,
+                                "QA_Score": computed_score,
+                                "QA_Feedback": qa_feedback_str
+                            }}
+                        )
+                        st.cache_data.clear()
+                        st.success("QA evaluation saved successfully!")
+                        st.rerun()
+
             st.divider()
     else:
         st.info("No active system case records match filter parameters.")
