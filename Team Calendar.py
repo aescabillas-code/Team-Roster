@@ -758,19 +758,36 @@ with tab_prod:
         daily_owner_prod = df.groupby(["Day", "Owner"]).size().reset_index(name="Case Count")
 
         if not daily_owner_prod.empty:
-            # Multi-line chart showing daily productivity per person over time
-            prod_line_chart = (
-                alt.Chart(daily_owner_prod)
-                .mark_line(point=True)
-                .encode(
-                    x=alt.X("Day:T", title="Date", axis=alt.Axis(format="%Y-%m-%d", labelAngle=-45)),
-                    y=alt.Y("Case Count:Q", title="Total Cases Handled"),
-                    color=alt.Color("Owner:N", title="Case Owner"),
-                    tooltip=["Day:T", "Owner:N", "Case Count:Q"]
-                )
-                .interactive()
+            # 🎯 Dropdown Filter for Line Graph
+            all_owners = sorted(daily_owner_prod["Owner"].unique().tolist())
+            selected_chart_owner = st.selectbox(
+                "Filter Chart by Case Owner", 
+                ["All Owners"] + all_owners, 
+                key="prod_chart_owner_filter"
             )
-            st.altair_chart(prod_line_chart, use_container_width=True)
+
+            # Filter chart dataset based on dropdown selection
+            if selected_chart_owner != "All Owners":
+                chart_df = daily_owner_prod[daily_owner_prod["Owner"] == selected_chart_owner]
+            else:
+                chart_df = daily_owner_prod
+
+            if not chart_df.empty:
+                # Multi-line / Single-line chart showing daily productivity
+                prod_line_chart = (
+                    alt.Chart(chart_df)
+                    .mark_line(point=True)
+                    .encode(
+                        x=alt.X("Day:T", title="Date", axis=alt.Axis(format="%Y-%m-%d", labelAngle=-45)),
+                        y=alt.Y("Case Count:Q", title="Total Cases Handled"),
+                        color=alt.Color("Owner:N", title="Case Owner"),
+                        tooltip=["Day:T", "Owner:N", "Case Count:Q"]
+                    )
+                    .interactive()
+                )
+                st.altair_chart(prod_line_chart, use_container_width=True)
+            else:
+                st.info(f"No chart data available for {selected_chart_owner}.")
 
             st.markdown("### 🏆 Overall Leaderboard by Productivity")
             
