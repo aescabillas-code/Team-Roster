@@ -789,16 +789,17 @@ with tab_case:
 
     st.markdown("### 📊 Case Entry")
 
-    # Ensure 5 initial default entries if empty/uninitialized
+    # Default to 5 available slots initially
     if "batch_case_entries" not in st.session_state or len(st.session_state.batch_case_entries) == 0:
         st.session_state.batch_case_entries = [{"case_number": ""} for _ in range(5)]
 
-    # 5 Column Grid Layout for Case Numbers
-    for row_idx in range(0, len(st.session_state.batch_case_entries), 5):
+    # 5-Column Grid Rendering for Case Numbers
+    total_slots = len(st.session_state.batch_case_entries)
+    for row_idx in range(0, total_slots, 5):
         cols = st.columns(5)
         for col_idx in range(5):
             entry_idx = row_idx + col_idx
-            if entry_idx < len(st.session_state.batch_case_entries):
+            if entry_idx < total_slots:
                 with cols[col_idx]:
                     st.session_state.batch_case_entries[entry_idx]["case_number"] = st.text_input(
                         f"Case #{entry_idx + 1}",
@@ -808,16 +809,17 @@ with tab_case:
 
     ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([2, 2, 4])
     with ctrl_col1:
-        if st.button("➕ Add Row (5 Slots)", key="btn_add_matrix_row"):
-            st.session_state.batch_case_entries.extend([{"case_number": ""} for _ in range(5)])
+        # Adds 1 additional slot on click
+        if st.button("➕ Add Row (+1 Slot)", key="btn_add_matrix_row"):
+            st.session_state.batch_case_entries.append({"case_number": ""})
             st.rerun()
     with ctrl_col2:
-        if st.button("🗑️ Remove Last Row", key="btn_remove_matrix_row"):
-            if len(st.session_state.batch_case_entries) > 5:
-                st.session_state.batch_case_entries = st.session_state.batch_case_entries[:-5]
+        if st.button("🗑️ Remove Last Slot", key="btn_remove_matrix_row"):
+            if len(st.session_state.batch_case_entries) > 1:
+                st.session_state.batch_case_entries.pop()
                 st.rerun()
             else:
-                st.warning("Cannot remove row. Minimum of 5 entry slots required.")
+                st.warning("Cannot remove slot. Minimum of 1 entry slot required.")
     with ctrl_col3:
         if st.button("💾 Submit All Cases", key="btn_save_batch_cases"):
             cases_saved = 0
@@ -846,17 +848,27 @@ with tab_case:
         csv = df_cases.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Download Knowledge Base CSV", csv, "kb_export.csv", "text/csv")
 
-    f1, f2 = st.columns(2)
+    # Filter Section (Includes Filter by Comment Status)
+    f1, f2, f3 = st.columns(3)
     f_case = f1.text_input("Filter by Case #")
     owners = sorted(list(set(case.get("Owner", "") for case in cases_list if case.get("Owner"))))
     f_owner = f2.selectbox("Filter by Owner", ["All"] + owners)
+    f_comment = f3.selectbox("Filter by Comment", ["All", "With Comments Only", "Without Comments Only"])
 
     filtered_cases = []
     for case in reversed(cases_list):
         matches_case = not f_case or f_case.lower() in str(case.get("Case Number", "")).lower()
         matches_owner = f_owner == "All" or case.get("Owner", "") == f_owner
+        
+        has_comment = bool(case.get("Comment"))
+        if f_comment == "With Comments Only":
+            matches_comment = has_comment
+        elif f_comment == "Without Comments Only":
+            matches_comment = not has_comment
+        else:
+            matches_comment = True
 
-        if matches_case and matches_owner:
+        if matches_case and matches_owner and matches_comment:
             filtered_cases.append(case)
 
     if filtered_cases:
@@ -866,13 +878,10 @@ with tab_case:
             has_comment = bool(case.get("Comment"))
             
             with entry_col:
-                # Highlight tile red with large exclamation mark if comment exists
-                if has_comment:
-                    st.error(f"🚨 **Case #{case.get('Case Number','')} Requires Attention**")
+                # Expander itself acts as the primary entry block & highlights red when comments exist
+                expander_label = f"🚨 RED ALERT | Case #{case.get('Case Number','')} (Requires Attention)" if has_comment else f"Case #{case.get('Case Number','')}"
                 
-                expander_label = f"🚨 Case #{case.get('Case Number','')}" if has_comment else f"Case #{case.get('Case Number','')}"
-                
-                with st.expander(expander_label, expanded=False):
+                with st.expander(expander_label, expanded=has_comment):
                     st.markdown(f"""
                         **Owner:** {case.get('Owner','')}  
                         **Target Date:** {case.get('Target Date', str(date.today()))}  
@@ -881,7 +890,7 @@ with tab_case:
                         """)
                     
                     if has_comment:
-                        st.info(f"💬 **Internal Work Note:** {case.get('Comment')}")
+                        st.error(f"💬 **Internal Work Note:** {case.get('Comment')}")
 
             # Horizontal Action Toggles
             with action_col:
