@@ -852,15 +852,48 @@ with tab_case:
             st.rerun()
 
     st.divider()
-    st.subheader("📚 Knowledge Base")
+    st.subheader("📚 Knowledge Base & QA Reports")
 
     if cases_list:
         df_cases = pd.DataFrame(cases_list)
-        # Ensure _id field is converted to string for CSV cleanliness if present
         if "_id" in df_cases.columns:
             df_cases["_id"] = df_cases["_id"].astype(str)
-        csv = df_cases.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Download Knowledge Base CSV (With All QA & Notes Data)", csv, "kb_export.csv", "text/csv")
+
+        dl_col1, dl_col2 = st.columns(2)
+
+        # 1️⃣ Standard Knowledge Base Export
+        with dl_col1:
+            kb_cols = [c for c in ["Case Number", "Owner", "Target Date", "Type", "Comment"] if c in df_cases.columns]
+            df_kb = df_cases[kb_cols] if kb_cols else df_cases
+            csv_kb = df_kb.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                "📥 Download Knowledge Base CSV", 
+                csv_kb, 
+                "kb_export.csv", 
+                "text/csv", 
+                key="dl_kb_csv"
+            )
+
+        # 2️⃣ Dedicated QA Audit Report Export
+        with dl_col2:
+            qa_cols = [
+                "Case Number", "Owner", "Target Date", "Type",
+                "QA_Score", "QA_Feedback",
+                "QA_SLO_SLA", "QA_Initial_Consecutive_Resp", "QA_Case_Status_Update",
+                "QA_Issue_Field_Updated", "QA_Case_Comments_Probing", "QA_Collaborations_Logging",
+                "QA_Entitlement_Validation", "QA_Account_Validation", "QA_Case_Routing"
+            ]
+            # Include available QA columns present in dataframe
+            available_qa_cols = [col for col in qa_cols if col in df_cases.columns]
+            df_qa = df_cases[available_qa_cols] if available_qa_cols else df_cases
+            csv_qa = df_qa.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                "🎯 Download QA Audit Report CSV", 
+                csv_qa, 
+                "qa_audit_report.csv", 
+                "text/csv", 
+                key="dl_qa_csv"
+            )
 
     # Filter Section
     f1, f2, f3 = st.columns(3)
