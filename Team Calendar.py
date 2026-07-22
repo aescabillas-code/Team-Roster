@@ -687,7 +687,13 @@ with tab_prod:
         if "_id" in df.columns:
             df = df.drop(columns=["_id"])
 
-        required_cols = ["Date", "Owner", "Type", "Issue", "Product Group"]
+        # Consolidate Date column (handling both 'Target Date' and 'Date')
+        if "Date" not in df.columns and "Target Date" in df.columns:
+            df["Date"] = df["Target Date"]
+        elif "Date" not in df.columns:
+            df["Date"] = str(date.today())
+
+        required_cols = ["Date", "Owner", "Type"]
         for col in required_cols:
             if col not in df.columns:
                 df[col] = "Unknown"
@@ -701,14 +707,25 @@ with tab_prod:
         st.markdown("## Monthly Productivity")
         col1, col2 = st.columns(2)
         years = sorted(df["Year"].dropna().unique())
-        selected_year = col1.selectbox("Year", years, key="prod_year")
-        selected_month = col2.selectbox("Month", range(1, 13), format_func=lambda x: calendar.month_name[x], index=current_date.month - 1, key="prod_monitor_month")
+        
+        selected_year = col1.selectbox("Year", years if years else [date.today().year], key="prod_year")
+        selected_month = col2.selectbox(
+            "Month", 
+            range(1, 13), 
+            format_func=lambda x: calendar.month_name[x], 
+            index=date.today().month - 1, 
+            key="prod_monitor_month"
+        )
 
         monthly_df = df[(df["Year"] == selected_year) & (df["Month"] == selected_month)]
 
         if not monthly_df.empty:
             monthly_summary = monthly_df.groupby(["Owner", "Type"]).size().unstack(fill_value=0)
             monthly_summary["Total Cases"] = monthly_summary.sum(axis=1)
+            
+            # Sort monthly summary table by highest total case count
+            monthly_summary = monthly_summary.sort_values(by="Total Cases", ascending=False)
+            
             m_height = min(1000, max(100, len(monthly_summary) * 35 + 38))
             st.dataframe(monthly_summary.reset_index(), use_container_width=True, height=m_height, hide_index=True)
         else:
@@ -723,6 +740,10 @@ with tab_prod:
         if not daily_df.empty:
             daily_summary = daily_df.groupby(["Owner", "Type"]).size().unstack(fill_value=0)
             daily_summary["Total Cases"] = daily_summary.sum(axis=1)
+            
+            # Sort daily summary table by highest total case count
+            daily_summary = daily_summary.sort_values(by="Total Cases", ascending=False)
+            
             d_height = min(1000, max(100, len(daily_summary) * 35 + 38))
             st.dataframe(daily_summary.reset_index(), use_container_width=True, height=d_height, hide_index=True)
         else:
@@ -730,33 +751,53 @@ with tab_prod:
 
         st.divider()
 
-        st.markdown("## Overall Issue Analysis")
-        overall_issue = df["Issue"].value_counts().reset_index()
-        overall_issue.columns = ["Issue", "Count"]
+        # --- DAILY PRODUCTIVITY TREND & LEADERBOARD ---
+        st.markdown("## 📈 Daily Productivity Trend per Owner")
 
-        issue_chart = alt.Chart(overall_issue).mark_bar().encode(
-            x=alt.X("Issue", axis=alt.Axis(labelAngle=-45)),
-            y="Count"
-        )
-        st.altair_chart(issue_chart, use_container_width=True)
-        
-        i_height = min(1000, max(100, len(overall_issue) * 35 + 38))
-        st.dataframe(overall_issue, use_container_width=True, height=i_height, hide_index=True)
+        # Group data by Date and Owner to compute daily productivity per person
+        daily_owner_prod = df.groupby(["Day", "Owner"]).size().reset_index(name="Case Count")
 
-        st.divider()
+        if not daily_owner_prod.empty:
+            # Multi-line chart showing daily productivity per person over time
+            prod_line_chart = (
+                alt.Chart(daily_owner_prod)
+                .mark_line(point=True)
+                .encode(
+                    x=alt.X("Day:T", title="Date", axis=alt.Axis(format="%Y-%m-%d", labelAngle=-45)),
+                    y=alt.Y("Case Count:Q", title="Total Cases Handled"),
+                    color=alt.Color("Owner:N", title="Case Owner"),
+                    tooltip=["Day:T", "Owner:N", "Case Count:Q"]
+                )
+                .interactive()
+            )
+            st.altair_chart(prod_line_chart, use_container_width=True)
 
-        st.markdown("## Overall Product Analysis")
-        overall_product = df["Product Group"].value_counts().reset_index()
-        overall_product.columns = ["Product Group", "Count"]
+            st.markdown("### 🏆 Overall Leaderboard by Productivity")
+            
+            # Aggregate total cases by owner
+            overall_leaderboard = (
+                df.groupby("Owner")
+                .agg(
+                    Total_Cases=("Owner", "count"),
+                    Days_Active=("Day", "nunique")
+                )
+                .reset_index()
+            )
+            
+            # Calculate daily average productivity
+            overall_leaderboard["Avg Cases / Active Day"] = (
+                overall_leaderboard["Total_Cases"] / overall_leaderboard["Days_Active"]
+            ).round(2)
 
-        product_chart = alt.Chart(overall_product).mark_bar().encode(
-            x=alt.X("Product Group", axis=alt.Axis(labelAngle=-45)),
-            y="Count"
-        )
-        st.altair_chart(product_chart, use_container_width=True)
+            # Rename columns and sort descending by highest Total Cases
+            overall_leaderboard = overall_leaderboard.rename(
+                columns={"Total_Cases": "Total Cases Handled", "Days_Active": "Days Active"}
+            ).sort_values(by="Total Cases Handled", ascending=False)
 
-        p_height = min(1000, max(100, len(overall_product) * 35 + 38))
-        st.dataframe(overall_product, use_container_width=True, height=p_height, hide_index=True)
+            l_height = min(1000, max(100, len(overall_leaderboard) * 35 + 38))
+            st.dataframe(overall_leaderboard, use_container_width=True, height=l_height, hide_index=True)
+        else:
+            st.info("No daily productivity trend data available.")
 
 # --- TAB 4: CASE TRACKER ---
 with tab_case:
