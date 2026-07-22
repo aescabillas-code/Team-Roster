@@ -1,5 +1,4 @@
 from datetime import datetime, time, date, timedelta
-from datetime import datetime
 import streamlit as st
 from pymongo import MongoClient
 import calendar
@@ -26,37 +25,69 @@ client = get_mongo_client()
 db = client["my_database"] 
 collection = db["my_collection"]
 
-# --- LEAVE LIMITS HELPERS ---
+# --- CACHED DATA FETCHERS ---
+@st.cache_data(ttl=5)
+def fetch_roster_doc():
+    try:
+        return collection.find_one({"type": "roster_list"}) or {}
+    except Exception:
+        return {}
 
+@st.cache_data(ttl=5)
+def fetch_calendar_doc():
+    try:
+        return collection.find_one({"type": "calendar_data"}) or {}
+    except Exception:
+        return {}
+
+@st.cache_data(ttl=5)
+def fetch_masterfile_doc():
+    try:
+        return collection.find_one({"type": "masterfile"}) or {}
+    except Exception:
+        return {}
+
+@st.cache_data(ttl=2)
+def get_cases_from_db():
+    try:
+        return list(collection.find({"type": "case"}))
+    except Exception:
+        return []
+
+@st.cache_data(ttl=2)
+def fetch_deviations_from_db():
+    try:
+        return list(collection.find({"type": "deviation"}))
+    except Exception:
+        return []
+
+@st.cache_data(ttl=2)
+def fetch_approved_requests_from_db():
+    try:
+        return list(collection.find({
+            "type": {"$in": ["PTO", "Wellness", "Sick Leave"]}, 
+            "status": "Approved"
+        }))
+    except Exception:
+        return []
+
+@st.cache_data(ttl=2)
+def fetch_pending_requests_from_db():
+    try:
+        return list(collection.find({
+            "type": {"$in": ["PTO", "Wellness", "Sick Leave"]}, 
+            "status": "Pending"
+        }))
+    except Exception:
+        return []
+
+# --- DB MUTATION HELPERS ---
 def bulk_update_requests(request_ids, status):
     collection.update_many(
         {"_id": {"$in": request_ids}},
         {"$set": {"status": status}}
     )
-    # Clear cache to reflect updates
     st.cache_data.clear()
-
-def load_data_from_db():
-    if "staff_roster" not in st.session_state:
-        roster_doc = collection.find_one({"type": "roster_list"})
-        st.session_state.staff_roster = roster_doc.get("data", {}) if roster_doc else {}
-    
-    cal_doc = collection.find_one({"type": "calendar_data"})
-    if cal_doc and "data" in cal_doc:
-        st.session_state.calendar_data = {
-            datetime.strptime(k, "%Y-%m-%d").date(): v 
-            for k, v in cal_doc["data"].items()
-        }
-    else:
-        st.session_state.calendar_data = {}
-
-@st.cache_data(ttl=2)
-def get_staff_list():
-    try:
-        cursor = collection.find({"type": "roster_list"})
-        return {doc["name"]: {"bday": doc["bday"], "nick": doc["nick"], "rest_days": doc.get("rest_days", [])} for doc in cursor}
-    except Exception:
-        return {}
 
 def save_staff(name, data):
     st.session_state.staff_roster[name] = data
@@ -75,36 +106,22 @@ def update_staff_in_db(name, update_dict):
         st.session_state.staff_roster[name].update(update_dict)
     st.cache_data.clear()
 
-@st.cache_data(ttl=2)
-def get_cases_from_db():
-    try:
-        return list(collection.find({"type": "case"}))
-    except Exception:
-        return []
-
 def save_case_to_db(case_data):
     case_data["type"] = "case"
     collection.insert_one(case_data)
     st.cache_data.clear()
-
-@st.cache_data(ttl=2)
-def fetch_deviations_from_db():
-    try:
-        return list(collection.find({"type": "deviation"}))
-    except Exception:
-        return []
 
 def save_deviation_to_db(data):
     data["type"] = "deviation"
     collection.insert_one(data)
     st.cache_data.clear()
 
-def update_deviation_in_db(id, update_dict):
-    collection.update_one({"_id": id}, {"$set": update_dict})
+def update_deviation_in_db(id_val, update_dict):
+    collection.update_one({"_id": id_val}, {"$set": update_dict})
     st.cache_data.clear()
 
-def delete_deviation_from_db(id):
-    collection.delete_one({"_id": id})
+def delete_deviation_from_db(id_val):
+    collection.delete_one({"_id": id_val})
     st.cache_data.clear()
 
 def delete_request_from_db(req):
@@ -115,42 +132,22 @@ def update_request_status_in_db(req, status):
     collection.update_one({"_id": req["_id"]}, {"$set": {"status": status}})
     st.cache_data.clear()
 
-@st.cache_data(ttl=2)
-def fetch_approved_requests_from_db():
-    return list(collection.find({
-        "type": {"$in": ["PTO", "Wellness", "Sick Leave"]}, 
-        "status": "Approved"
-    }))
-
-@st.cache_data(ttl=2)
-def fetch_pending_requests_from_db():
-    return list(collection.find({
-        "type": {"$in": ["PTO", "Wellness", "Sick Leave"]}, 
-        "status": "Pending"
-    }))
-
 def save_request_to_db(req, request_type):
     req["type"] = request_type
     collection.insert_one(req)
     st.cache_data.clear()
 
+def save_masterfile_to_db(df):
+    collection.update_one({"type": "masterfile"}, {"$set": {"data": df.to_dict(orient="records")}}, upsert=True)
+    st.cache_data.clear()
+
 def get_request_limits(req_date):
-    calendar_doc = collection.find_one({"type": "calendar_data"})
-    selected_config = {}
-    
-    if calendar_doc:
-        selected_config = calendar_doc.get("data", {}).get(
-            str(st.session_state.get("selected_admin_date", date.today())),
-            {}
-        )
+    cal_doc = fetch_calendar_doc()
+    selected_config = cal_doc.get("data", {}).get(str(req_date), {})
     
     st.session_state.limits["PTO_per_day"] = selected_config.get("PTO_per_day", 1)
     st.session_state.limits["Wellness_per_day"] = selected_config.get("Wellness_per_day", 1)
     return st.session_state.limits
-
-def save_masterfile_to_db(df):
-    collection.update_one({"type": "masterfile"}, {"$set": {"data": df.to_dict(orient="records")}}, upsert=True)
-    st.cache_data.clear()
 
 def send_request_notification(recipient_email, status, request_type, date_val):
     pass
@@ -163,13 +160,8 @@ current_date = datetime.now(local_tz).date()
 
 if "admin_password" not in st.session_state: st.session_state.admin_password = "Password1234"
 if "admin_authenticated" not in st.session_state: st.session_state.admin_authenticated = False
-if "staff_roster" not in st.session_state: st.session_state.staff_roster = {}
-if "calendar_data" not in st.session_state: st.session_state.calendar_data = {}
 if "limits" not in st.session_state:
-    st.session_state.limits = {
-        "PTO_per_day": 1,
-        "Wellness_per_day": 1
-    }
+    st.session_state.limits = {"PTO_per_day": 1, "Wellness_per_day": 1}
 if "notifications" not in st.session_state: st.session_state.notifications = []
 if "master_data" not in st.session_state: 
     st.session_state.master_data = pd.DataFrame({
@@ -177,19 +169,24 @@ if "master_data" not in st.session_state:
         "Values": ["Call,Chat,Email", "Tech,Billing", "Hardware,Soft"]
     })
 
-# --- DATA MIGRATION ---
+# Fetch heavy datasets exactly ONCE per runner cycle globally
+roster_doc = fetch_roster_doc()
+st.session_state.staff_roster = roster_doc.get("data", {}) if roster_doc else {}
+
+# Data migration normalization
 if "staff_roster" in st.session_state:
     for name, value in st.session_state.staff_roster.items():
         if isinstance(value, dict) and isinstance(value.get("bday"), date) and not isinstance(value.get("bday"), datetime):
             d = value["bday"]
             value["bday"] = datetime(d.year, d.month, d.day)
 
-if "last_tracked_date" not in st.session_state or st.session_state.last_tracked_date != current_date:
-    st.session_state.last_tracked_date = current_date
-    st.session_state.calendar_data = {} 
-    load_data_from_db()
+calendar_doc = fetch_calendar_doc()
+raw_cal_data = calendar_doc.get("data", {}) if calendar_doc else {}
+st.session_state.calendar_data = {
+    (datetime.strptime(k, "%Y-%m-%d").date() if isinstance(k, str) and len(k) == 10 else k): v 
+    for k, v in raw_cal_data.items()
+}
 
-# Fetch heavy request datasets exactly *once* per runner cycle globally
 global_approved_requests = fetch_approved_requests_from_db()
 global_pending_requests = fetch_pending_requests_from_db()
 
@@ -362,8 +359,7 @@ with tab_cal:
         year = c1.selectbox("Year", [2026, 2027, 2028], key="cal_y")
         month = c2.selectbox("Month", range(1, 13), format_func=lambda x: calendar.month_name[x], index=current_date.month - 1, key="cal_m")
 
-    roster_doc = collection.find_one({"type": "roster_list"})
-    roster = roster_doc.get("data", {}) if roster_doc else {}
+    roster = st.session_state.staff_roster
 
     with col_side:
         st.markdown('<div class="side-block">', unsafe_allow_html=True)
@@ -390,18 +386,9 @@ with tab_cal:
         st.divider()
         
         st.subheader("Daily View")
-        view_date = current_date.date() if hasattr(current_date, 'date') else current_date
+        view_date = current_date
 
-        d_data = None
-        if hasattr(st.session_state, 'calendar_data') and st.session_state.calendar_data:
-            d_data = st.session_state.calendar_data.get(view_date) or st.session_state.calendar_data.get(str(view_date))
-        if not d_data:
-            d_data = collection.find_one({"type": "calendar_day", "date": str(view_date)})
-            if not d_data:
-                calendar_doc = collection.find_one({"type": "calendar_data"})
-                if calendar_doc:
-                    d_data = calendar_doc.get("data", {}).get(str(view_date))
-        d_data = d_data or {}
+        d_data = st.session_state.calendar_data.get(view_date) or st.session_state.calendar_data.get(str(view_date)) or {}
         
         st.markdown(f"### Date: {view_date.strftime('%B %d, %Y')}")
         
@@ -477,11 +464,7 @@ with tab_cal:
                     
                     req_display = "<br>".join([f"{roster.get(r['name'], {}).get('nick', r['name'])}({r['type']})" for r in approved])
                     
-                    grid_data = None
-                    if hasattr(st.session_state, 'calendar_data') and st.session_state.calendar_data:
-                        grid_data = st.session_state.calendar_data.get(d) or st.session_state.calendar_data.get(str(d))
-                    if not grid_data:
-                        grid_data = collection.find_one({"type": "calendar_day", "date": str(d)}) or {}
+                    grid_data = st.session_state.calendar_data.get(d) or st.session_state.calendar_data.get(str(d)) or {}
                     
                     if d.weekday() in [5, 6]:
                         content = f"<b>{day}</b><div class='calendar-divider'></div><br><center><b>REST DAY</b></center>"
@@ -506,9 +489,7 @@ with tab_cal:
     base_sunday = month_start_date - timedelta(days=(month_start_date.weekday() + 1) if month_start_date.weekday() != 6 else 0)
     
     sunday_options = [base_sunday + timedelta(weeks=i) for i in range(0, 6)]
-    
-    today_date = current_date.date() if hasattr(current_date, 'date') else current_date
-    today_sunday = today_date - timedelta(days=(today_date.weekday() + 1) if today_date.weekday() != 6 else 0)
+    today_sunday = current_date - timedelta(days=(current_date.weekday() + 1) if current_date.weekday() != 6 else 0)
     
     default_week_index = sunday_options.index(today_sunday) if today_sunday in sunday_options else 0
     
@@ -531,12 +512,7 @@ with tab_cal:
     
     for day in week_days:
         col_name = day.strftime("%A (%m/%d)")
-        
-        day_config = None
-        if hasattr(st.session_state, 'calendar_data') and st.session_state.calendar_data:
-            day_config = st.session_state.calendar_data.get(day) or st.session_state.calendar_data.get(str(day))
-        if not day_config:
-            day_config = collection.find_one({"type": "calendar_day", "date": str(day)}) or {}
+        day_config = st.session_state.calendar_data.get(day) or st.session_state.calendar_data.get(str(day)) or {}
         
         setup_row[col_name] = str(day_config.get('status', 'Not Set')).upper()
         shift_row[col_name] = str(day_config.get('shift', '--')).upper()
@@ -557,11 +533,7 @@ with tab_cal:
             if p_status:
                 staff_row[col_name] = p_status[0].upper()
             else:
-                day_config = None
-                if hasattr(st.session_state, 'calendar_data') and st.session_state.calendar_data:
-                    day_config = st.session_state.calendar_data.get(day) or st.session_state.calendar_data.get(str(day))
-                if not day_config:
-                    day_config = collection.find_one({"type": "calendar_day", "date": str(day)}) or {}
+                day_config = st.session_state.calendar_data.get(day) or st.session_state.calendar_data.get(str(day)) or {}
                     
                 assigned_roles = []
                 for r in roles:
@@ -608,7 +580,7 @@ with tab_cal:
         )
     else:
         st.write("*No scheduled staff found for this week.*")
-        
+
 # --- TAB 2: REQUEST FORM ---
 with tab_req:
     st.subheader("PTO / Wellness / SL Request Form")
@@ -616,23 +588,17 @@ with tab_req:
     if "request_count" not in st.session_state:
         st.session_state.request_count = 1
 
-    roster_doc = collection.find_one({"type": "roster_list"})
-    staff_data = roster_doc.get("data", {}) if roster_doc else {}
-    available_names = list(staff_data.keys()) if staff_data else list(st.session_state.staff_roster.keys())
+    available_names = list(st.session_state.staff_roster.keys())
 
-    # 1. Global Name Selector (Applies to all sub-entries)
     selected_name = st.selectbox("Select Employee Name:", available_names, key="bulk_request_global_name")
 
-    # Wrap the spreadsheet grid inside a standard form container
     with st.form("bulk_request_form"):
         st.markdown("### 📊 Request Entry Table")
         
-        # Excel Table-style Headers (Status column removed)
         header_cols = st.columns([1, 1])
         header_cols[0].markdown("**Date**")
         header_cols[1].markdown("**Request Type**")
 
-        # Generate Data Input Rows Dynamically
         for i in range(st.session_state.request_count):
             row_cols = st.columns([1, 1])
             with row_cols[0]:
@@ -642,37 +608,30 @@ with tab_req:
 
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # Action submission configuration array
         action_cols = st.columns([1, 1, 2])
         with action_cols[0]:
             add_row_triggered = st.form_submit_button("➕ Add New Row")
         with action_cols[1]:
             submit_triggered = st.form_submit_button("✅ Submit Entries", type="primary")
 
-        # Handle row mutations outside evaluation loops
         if add_row_triggered:
             st.session_state.request_count += 1
             st.rerun()
 
         if submit_triggered:
-            # Track counts locally during this batch processing loop to respect caps across identical dates
             running_caps = {}
             
             for i in range(st.session_state.request_count):
                 req_date = st.session_state[f"date_{i}"]
                 req_type = st.session_state[f"type_{i}"]
                 date_str = str(req_date)
-                
-                # Dynamic tracking key
                 cap_key = f"{req_type}_{date_str}"
                 
-                # Check duplication against existing records
                 is_already_requested = collection.count_documents({"name": selected_name, "date": date_str, "status": {"$in": ["Pending", "Approved"]}}) > 0
                 if is_already_requested:
                     st.warning(f"⚠️ A request for {selected_name} on {req_date} already exists.")
                     continue
                 
-                # Sick Leave auto-approves instantly and bypasses operational caps
                 if req_type == "Sick Leave":
                     initial_status = "Approved"
                     new_req = {"name": selected_name, "date": date_str, "type": req_type, "status": initial_status}
@@ -681,7 +640,6 @@ with tab_req:
                     limits = get_request_limits(req_date)
                     limit_value = limits["PTO_per_day"] if req_type == "PTO" else limits["Wellness_per_day"]
                     
-                    # Compute base database numbers if not calculated yet for this run loop context
                     if cap_key not in running_caps:
                         db_count = collection.count_documents({"type": req_type, "date": date_str, "status": {"$in": ["Pending", "Approved"]}})
                         running_caps[cap_key] = db_count
@@ -692,7 +650,7 @@ with tab_req:
                         initial_status = "Pending"
                         new_req = {"name": selected_name, "date": date_str, "type": req_type, "status": initial_status}
                         save_request_to_db(new_req, req_type)
-                        running_caps[cap_key] += 1 # Increments tracking safely within multi-row batch
+                        running_caps[cap_key] += 1
             
             st.success("All operational entries successfully verified and processed!")
             st.session_state.request_count = 1 
@@ -704,7 +662,6 @@ with tab_req:
     month_names = list(calendar.month_name)[1:]
     selected_month_name = f_c1.selectbox("Month", month_names, index=current_date.month-1, key="history_month_select")
     f_m = month_names.index(selected_month_name) + 1
-    
     f_y = f_c2.number_input("Year", value=current_date.year, key="history_year_select")
     
     filtered_app = [r for r in global_approved_requests if int(r['date'].split('-')[1]) == f_m and int(r['date'].split('-')[0]) == f_y]
@@ -718,66 +675,32 @@ with tab_req:
 
     st.subheader("📥 Pending Requests Overview")    
     
-    # 2. Unified Pending Request Table (Filters for Wellness and PTO only)
     if global_pending_requests:
-    
         filtered_pending = []
-    
         for r in global_pending_requests:
-    
             if r.get("type") not in ["Wellness", "PTO"]:
                 continue
-    
             try:
                 req_date = pd.to_datetime(r["date"])
             except:
                 continue
-    
             if req_date.month == f_m and req_date.year == f_y:
                 filtered_pending.append(r)
     
         if filtered_pending:
-    
             df_pending = pd.DataFrame(filtered_pending)
-    
-            # Sort oldest to newest
             df_pending["sort_date"] = pd.to_datetime(df_pending["date"])
-            df_pending = df_pending.sort_values(
-                by="sort_date",
-                ascending=True
-            )
+            df_pending = df_pending.sort_values(by="sort_date", ascending=True)
+            df_pending_display = df_pending[["date", "name", "type"]].copy()
+            df_pending_display.columns = ["Date", "Name", "Type"]
     
-            df_pending_display = df_pending[
-                ["date", "name", "type"]
-            ].copy()
-    
-            df_pending_display.columns = [
-                "Date",
-                "Name",
-                "Type"
-            ]
-    
-            calculated_height = (
-                len(df_pending_display) * 35
-            ) + 45
-    
-            st.dataframe(
-                df_pending_display,
-                hide_index=True,
-                use_container_width=True,
-                height=calculated_height
-            )
-    
+            calculated_height = (len(df_pending_display) * 35) + 45
+            st.dataframe(df_pending_display, hide_index=True, use_container_width=True, height=calculated_height)
         else:
-            st.info(
-                f"ℹ️ No pending Wellness or PTO requests found for {selected_month_name} {int(f_y)}."
-            )
-    
+            st.info(f"ℹ️ No pending Wellness or PTO requests found for {selected_month_name} {int(f_y)}.")
     else:
-        st.write(
-            "*No pending requests await administrator review authorization logs.*"
-        )
-        
+        st.write("*No pending requests await administrator review authorization logs.*")
+
 # --- TAB 3: PRODUCTIVITY MONITORING ---
 with tab_prod:
     cases = get_cases_from_db()
@@ -865,7 +788,7 @@ with tab_case:
     st.subheader("📝 Bulk Log New Cases")
     cases_list = get_cases_from_db() 
 
-    masterfile_doc = collection.find_one({"type": "masterfile"})
+    masterfile_doc = fetch_masterfile_doc()
     if masterfile_doc and "data" in masterfile_doc:
         master_df = pd.DataFrame(masterfile_doc["data"])
     else:
@@ -878,9 +801,7 @@ with tab_case:
     issues = master_df.loc[master_df["Category"] == "Issue", "Values"].iloc[0].split(",")
     prods = master_df.loc[master_df["Category"] == "Product Group", "Values"].iloc[0].split(",")
 
-    roster_doc = collection.find_one({"type": "roster_list"})
-    staff_data = roster_doc.get("data", {}) if roster_doc else {}
-    owner_list = sorted(list(staff_data.keys()))
+    owner_list = sorted(list(st.session_state.staff_roster.keys()))
     if not owner_list:
         owner_list = ["Unknown"]
 
@@ -1095,7 +1016,6 @@ with tab_case:
 with tab_dev:
     st.subheader("Submit Deviation Request")
     
-    # Global form parameters on top (provided once)
     with st.container(border=True):
         st.markdown("### 🌐 Information")
         g_col1, g_col2, g_col3 = st.columns(3)
@@ -1104,27 +1024,19 @@ with tab_dev:
         with g_col2:
             manager = st.text_input("Manager", value="Jeff Bote")
         with g_col3:
-            roster_doc = collection.find_one({"type": "roster_list"})
-            staff_data = roster_doc.get("data", {}) if roster_doc else {}
-            available_names = list(staff_data.keys()) if staff_data else list(st.session_state.staff_roster.keys())
+            available_names = list(st.session_state.staff_roster.keys())
             name = st.selectbox("Name", available_names, key="dev_name_box")
             
-        calendar_doc = collection.find_one({"type": "calendar_data"})
-        if calendar_doc:
-            date_str = str(target_date)
-            shift_time = calendar_doc.get("data", {}).get(date_str, {}).get("shift") or \
-                         st.session_state.calendar_data.get(target_date, {}).get("shift", "Not Set")
-        else:
-            shift_time = st.session_state.calendar_data.get(target_date, {}).get("shift", "Not Set")
+        date_str = str(target_date)
+        shift_time = st.session_state.calendar_data.get(target_date, {}).get("shift") or \
+                     st.session_state.calendar_data.get(date_str, {}).get("shift", "Not Set")
             
         st.write(f"**Shift Time:** `{shift_time}`")
 
-    # Dynamic bulk entry collection layout (Excel-like matrix form)
     st.markdown("### 📊 Bulk Entry Log")
     if "bulk_deviation_entries" not in st.session_state:
         st.session_state.bulk_deviation_entries = [{"start": "00:00", "end": "00:00", "duration": "0m", "aux": "", "reason": ""}]
 
-    # Table Header Layout
     hdr_cols = st.columns([2, 2, 2, 2, 4])
     hdr_cols[0].markdown("**Start Time (HH:MM)**")
     hdr_cols[1].markdown("**End Time (HH:MM)**")
@@ -1132,7 +1044,6 @@ with tab_dev:
     hdr_cols[3].markdown("**Aux**")
     hdr_cols[4].markdown("**Reason of Deviation**")
 
-    # Table Row Matrix
     for idx, entry in enumerate(st.session_state.bulk_deviation_entries):
         row_cols = st.columns([2, 2, 2, 2, 4])
         with row_cols[0]:
@@ -1146,7 +1057,6 @@ with tab_dev:
         with row_cols[4]:
             entry["reason"] = st.text_area("Reason", value=entry["reason"], label_visibility="collapsed", key=f"dev_matrix_reas_{idx}", height=68)
 
-    # Matrix Action Controls
     ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([2, 2, 4])
     with ctrl_col1:
         if st.button("➕ Add Row", key="btn_add_dev_matrix_row"):
@@ -1211,190 +1121,65 @@ with tab_dev:
                     (df['Date'].apply(lambda x: x.year) == filter_year)
                 ]
         
-        # IMPORTANT: keep this here after filtering
         filtered_records = df.to_dict(orient="records")
 
         st.markdown("### 📈 Daily Deviation Heatmap")
         if not df.empty:
-            # Get all employee names
-            roster_doc = collection.find_one({"type": "roster_list"})
-            all_names = (
-                sorted(
-                    [
-                        name
-                        for name in roster_doc.get("data", {}).keys()
-                        if name != "Jeff Bote"
-                    ]
-                )
-                if roster_doc else []
-            )
-
+            all_names = sorted([name for name in st.session_state.staff_roster.keys() if name != "Jeff Bote"])
         
-            # Count deviations by Name and Date
             heatmap_df = (
                 df.groupby(["Name", "Date"])
                 .size()
                 .reset_index(name="Deviation Count")
             )
-        
-            # Format dates
-            heatmap_df["Date"] = pd.to_datetime(
-                heatmap_df["Date"]
-            ).dt.strftime("%b-%d")
-        
-            # Get all dates from filtered data
+            heatmap_df["Date"] = pd.to_datetime(heatmap_df["Date"]).dt.strftime("%b-%d")
             all_dates = sorted(heatmap_df["Date"].unique())
             
             if len(all_dates) > 0:
-            
-                full_grid = pd.MultiIndex.from_product(
-                    [all_names, all_dates],
-                    names=["Name", "Date"]
-                ).to_frame(index=False)
-            
-                heatmap_df = pd.merge(
-                    full_grid,
-                    heatmap_df,
-                    on=["Name", "Date"],
-                    how="left"
-                )
-            
-                heatmap_df["Deviation Count"] = (
-                    heatmap_df["Deviation Count"]
-                    .fillna(0)
-                    .astype(int)
-                )
-            
+                full_grid = pd.MultiIndex.from_product([all_names, all_dates], names=["Name", "Date"]).to_frame(index=False)
+                heatmap_df = pd.merge(full_grid, heatmap_df, on=["Name", "Date"], how="left")
+                heatmap_df["Deviation Count"] = heatmap_df["Deviation Count"].fillna(0).astype(int)
             else:
-                heatmap_df = pd.DataFrame(
-                    columns=["Name", "Date", "Deviation Count"]
-                )
+                heatmap_df = pd.DataFrame(columns=["Name", "Date", "Deviation Count"])
         
             heatmap = (
                 alt.Chart(heatmap_df)
-                .mark_rect(
-                    stroke="white",
-                    strokeWidth=1
-                )
+                .mark_rect(stroke="white", strokeWidth=1)
                 .encode(
-                    x=alt.X(
-                        "Date:N",
-                        title="Date",
-                        sort=all_dates,
-                        axis=alt.Axis(
-                            labelAngle=-45,
-                            labelFontSize=10
-                        )
-                    ),
-                    y=alt.Y(
-                        "Name:N",
-                        title="Employee",
-                        sort=all_names,
-                        axis=alt.Axis(
-                            labelOverlap=False,
-                            labelLimit=500,
-                            labelFontSize=11
-                        )
-                    ),
-                    color=alt.Color(
-                        "Deviation Count:Q",
-                        title="Count",
-                        scale=alt.Scale(scheme="tealblues")
-                    ),
-                    tooltip=[
-                        alt.Tooltip("Name:N", title="Name"),
-                        alt.Tooltip("Date:N", title="Date"),
-                        alt.Tooltip("Deviation Count:Q", title="Count")
-                    ]
+                    x=alt.X("Date:N", title="Date", sort=all_dates, axis=alt.Axis(labelAngle=-45, labelFontSize=10)),
+                    y=alt.Y("Name:N", title="Employee", sort=all_names, axis=alt.Axis(labelOverlap=False, labelLimit=500, labelFontSize=11)),
+                    color=alt.Color("Deviation Count:Q", title="Count", scale=alt.Scale(scheme="tealblues")),
+                    tooltip=[alt.Tooltip("Name:N", title="Name"), alt.Tooltip("Date:N", title="Date"), alt.Tooltip("Deviation Count:Q", title="Count")]
                 )
-                .properties(
-                    height=max(
-                        300,
-                        len(all_names) * 30
-                    )
-                )
+                .properties(height=max(300, len(all_names) * 30))
             )
             
             text = (
-                alt.Chart(
-                    heatmap_df[
-                        heatmap_df["Deviation Count"] > 0
-                    ]
-                )
-                .mark_text(
-                    fontSize=9,
-                    fontWeight="bold",
-                    color="black"
-                )
+                alt.Chart(heatmap_df[heatmap_df["Deviation Count"] > 0])
+                .mark_text(fontSize=9, fontWeight="bold", color="black")
                 .encode(
-                    x=alt.X(
-                        "Date:N",
-                        sort=all_dates
-                    ),
-                    y=alt.Y(
-                        "Name:N",
-                        sort=all_names,
-                        axis=alt.Axis(
-                            labelOverlap=False,
-                            labelLimit=500
-                        )
-                    ),
+                    x=alt.X("Date:N", sort=all_dates),
+                    y=alt.Y("Name:N", sort=all_names, axis=alt.Axis(labelOverlap=False, labelLimit=500)),
                     text="Deviation Count:Q"
                 )
             )
             
-            st.altair_chart(
-                (heatmap + text).configure_axis(
-                    labelOverlap=False
-                ),
-                use_container_width=True
-            )
-        
+            st.altair_chart((heatmap + text).configure_axis(labelOverlap=False), use_container_width=True)
         else:
             st.info("No records available.")
         
-        # --- Daily Deviation Count Matrix ---
         st.markdown("### 📊 Daily Deviation Count")
-        
         if not df.empty:
-        
             report_df = df.copy()
-        
-            daily_count_df = (
-                report_df.groupby(["Name", "Date"])
-                .size()
-                .reset_index(name="Count"))
-            
-            daily_count_df["Date"] = pd.to_datetime(
-                daily_count_df["Date"]
-            ).dt.strftime("%b-%d")
+            daily_count_df = report_df.groupby(["Name", "Date"]).size().reset_index(name="Count")
+            daily_count_df["Date"] = pd.to_datetime(daily_count_df["Date"]).dt.strftime("%b-%d")
 
-            deviation_matrix = (
-                daily_count_df.pivot(
-                    index="Name",
-                    columns="Date",
-                    values="Count"
-                )
-                .fillna(0)
-                .astype(int)
-            )
-        
-            # Sort by total count but do not display total column
+            deviation_matrix = daily_count_df.pivot(index="Name", columns="Date", values="Count").fillna(0).astype(int)
             sort_order = deviation_matrix.sum(axis=1)
-            deviation_matrix = (
-                deviation_matrix.assign(_sort=sort_order)
-                .sort_values("_sort", ascending=False)
-                .drop(columns="_sort")
-                .reset_index()
-            )
-        
+            deviation_matrix = deviation_matrix.assign(_sort=sort_order).sort_values("_sort", ascending=False).drop(columns="_sort").reset_index()
             deviation_matrix.columns.name = None
         
-            st.dataframe(
-                deviation_matrix,
-                hide_index=True,
-                use_container_width=True)
-        
+            st.dataframe(deviation_matrix, hide_index=True, use_container_width=True)
         else:
             st.info("No records match filter bounds for summary processing.")
 
@@ -1409,11 +1194,9 @@ with tab_dev:
             h_cols[idx].markdown(f"**{header_title}**")
         st.markdown("---")
         
-        # Calculate total records to dynamically count down for the reversed display
         total_records = len(filtered_records)
         
         for reverse_idx, dev in enumerate(reversed(filtered_records)):
-            # Computes the true chronological entry number (#1 for oldest record)
             entry_number = total_records - reverse_idx
             
             r_cols = st.columns(col_widths)
@@ -1428,10 +1211,7 @@ with tab_dev:
             r_cols[8].write(str(dev.get('Aux', 'N/A')))
             r_cols[9].write(str(dev.get('Reason', '')))
             
-            # r_cols[10] remains reserved below for your Actions / Toggles
-            
             with r_cols[10]:
-                # Action Options via Toggles
                 t_edit = st.toggle("✏️ Edit", key=f"t_edit_{dev['_id']}")
                 t_del = st.toggle("🗑️ Del", key=f"t_del_{dev['_id']}")
             
@@ -1441,8 +1221,7 @@ with tab_dev:
                     edit_date = st.date_input("Update Target Date", value=pd.to_datetime(dev.get('Date')).date(), key=f"ed_date_{dev['_id']}")
                     edit_manager = st.text_input("Update Manager", value=dev.get('Manager', ''), key=f"ed_mgr_{dev['_id']}")
                     
-                    roster_doc = collection.find_one({"type": "roster_list"})
-                    staff_names = list(roster_doc.get("data", {}).keys()) if roster_doc else [dev.get('Name', '')]
+                    staff_names = list(st.session_state.staff_roster.keys()) if st.session_state.staff_roster else [dev.get('Name', '')]
                     if dev.get('Name') not in staff_names:
                         staff_names.append(dev.get('Name'))
                         
@@ -1485,7 +1264,6 @@ with tab_dev:
 
 # --- TAB 6: ADMIN PANEL ---
 with tab_adm:
-    # Adjust font sizes globally inside this tab using a targeted div wrapper
     st.markdown("""
         <style>
         .small-font-container input, .small-font-container button, .small-font-container label, 
@@ -1513,14 +1291,11 @@ with tab_adm:
         
         st.divider()
 
-        # Update column ratio: allocation gives significantly larger footprint to the right column
-        # 1 = Left Col, 0.2 = Spacing Gap, 1 = Right Col
         col_left, space_gap, col_right = st.columns([2, 0.2, 3])
         
         with col_left:
             st.subheader("👥 Roster Management")
-            roster_doc = collection.find_one({"type": "roster_list"})
-            roster = roster_doc.get("data", {}) if roster_doc else {}
+            roster = st.session_state.staff_roster
                 
             grid_cols = st.columns([2, 2, 2, 2])
             grid_cols[0].write("**Name**")
@@ -1606,35 +1381,26 @@ with tab_adm:
             if config_mode == "Single Date": 
                 target_date = st.date_input("Target Date Scope", value=date.today(), key="cfg_d")
                 target_dates = [target_date]
-                # Use the explicitly selected single date for the DB lookup
                 lookup_date_str = str(target_date)
             elif config_mode == "Date Range": 
                 dr = st.date_input("Target Date Range", [], key="cfg_dr")
                 target_dates = pd.date_range(dr[0], dr[1]).date if len(dr) == 2 else []
-                # Fallback to the first date of the range, or today if not yet picked
                 lookup_date_str = str(dr[0]) if len(dr) == 2 else str(date.today())
             else:
                 sm = st.date_input("Target Operational Month Selector", value=date.today(), key="cfg_m")
                 target_dates = pd.date_range(f"{sm.year}-{sm.month}-01", periods=31).date
                 target_dates = [d for d in target_dates if d.month == sm.month]
-                # Fallback to today's date for month lookups
                 lookup_date_str = str(date.today())
             
-            # Ensure the limits dictionary exists in session state before modifying it
             if "limits" not in st.session_state:
                 st.session_state.limits = {}
             
-            # --- Safe Database Lookup ---
-            calendar_doc = collection.find_one({"type": "calendar_data"})
-            if calendar_doc:
-                # Safely checks if selected_admin_date exists, otherwise uses our calculated target string
-                target_key = str(st.session_state.get("selected_admin_date", lookup_date_str))
-                selected_config = calendar_doc.get("data", {}).get(target_key, {})
-                
-                st.session_state.limits["PTO_per_day"] = selected_config.get("PTO_per_day", 1)
-                st.session_state.limits["Wellness_per_day"] = selected_config.get("Wellness_per_day", 1)
+            target_key = str(st.session_state.get("selected_admin_date", lookup_date_str))
+            selected_config = st.session_state.calendar_data.get(target_key, {})
             
-            # --- Number Inputs loaded dynamically from session state limits ---
+            st.session_state.limits["PTO_per_day"] = selected_config.get("PTO_per_day", 1)
+            st.session_state.limits["Wellness_per_day"] = selected_config.get("Wellness_per_day", 1)
+            
             st.session_state.limits["PTO_per_day"] = st.number_input(
                 "Max Allowable PTO Allocations Per Day", 
                 min_value=1, 
@@ -1685,9 +1451,7 @@ with tab_adm:
         with col_right:
             st.subheader("📥 Approval Center")
             
-            # --- 1. DEFINE THE HELPER FUNCTION FOR A SINGLE UNIFIED DATAFRAME ---
             def get_all_requests_dataframe(requests_list, select_all_values=False):
-                # Pull both Wellness and PTO requests into a single list
                 filtered = [r for r in requests_list if r.get("type") in ["Wellness", "PTO"]]
                 if not filtered:
                     return pd.DataFrame()
@@ -1701,12 +1465,10 @@ with tab_adm:
                     "_id": [r.get("_id") for r in filtered]
                 }
                 df = pd.DataFrame(data)
-                # Sort everything chronologically by date
                 df.sort_values(by="Date", inplace=True)
                 df.reset_index(drop=True, inplace=True)
                 return df
 
-            # --- 2. HANDLE SESSION MESSAGES ---
             if "admin_msg" not in st.session_state: 
                 st.session_state.admin_msg = None
             if st.session_state.admin_msg:
@@ -1717,14 +1479,11 @@ with tab_adm:
                     st.session_state.admin_msg = None
                     st.rerun()
 
-            # --- 3. GLOBAL MASTER CHECKBOX ---
             select_all = st.checkbox("Select All Pending Requests", key="global_select_all")
 
-            # --- 4. UNIFIED PENDING REQUESTS DATA EDITOR WITH DYNAMIC HEIGHT ---
             all_requests_df = get_all_requests_dataframe(global_pending_requests, select_all_values=select_all)
             
             if not all_requests_df.empty:
-                # Dynamic height calculation: 40px for header + 35px per row. Min 150px, Max 800px.
                 calculated_height = max(150, min(800, (len(all_requests_df) * 35) + 40))
                 
                 edited_df = st.data_editor(
@@ -1736,7 +1495,7 @@ with tab_adm:
                         "Name": st.column_config.TextColumn(disabled=True),
                         "Type": st.column_config.TextColumn(disabled=True),
                         "Status": st.column_config.TextColumn(disabled=True),
-                        "_id": None # Keeps the database ID completely hidden
+                        "_id": None
                     },
                     use_container_width=True,
                     height=calculated_height,
@@ -1745,19 +1504,14 @@ with tab_adm:
             else:
                 st.write("*No pending Wellness or PTO requests.*")
 
-            # --- 5. MASS ACTION ACTION SUBMISSION PANEL ---
             if not all_requests_df.empty:
                 st.markdown("---")
-                
-                # Create side-by-side execution buttons
                 btn_col1, btn_col2 = st.columns(2)
                 
-                # Extract updates reliably by evaluating session state row alterations
                 def get_selected_ids(base_df, session_key):
                     selected_ids = []
                     current_select_states = base_df["Select"].tolist()
                     
-                    # Intercept manual user row edits recorded in state
                     if session_key in st.session_state and "edited_rows" in st.session_state[session_key]:
                         edits = st.session_state[session_key]["edited_rows"]
                         for row_idx, edit_dict in edits.items():
@@ -1771,7 +1525,6 @@ with tab_adm:
 
                 with btn_col1:
                     if st.button("✅ Approve Selected", type="primary", use_container_width=True):
-                        # Fetch targets inside the execution phase
                         target_ids = get_selected_ids(all_requests_df, "editor_all_requests")
                         if target_ids:
                             bulk_update_requests(target_ids, "Approved")
@@ -1783,7 +1536,6 @@ with tab_adm:
                             
                 with btn_col2:
                     if st.button("❌ Deny Selected", type="secondary", use_container_width=True):
-                        # Fetch targets inside the execution phase
                         target_ids = get_selected_ids(all_requests_df, "editor_all_requests")
                         if target_ids:
                             bulk_update_requests(target_ids, "Rejected")
@@ -1808,7 +1560,6 @@ with tab_adm:
                 year_options = list(range(current_year - 5, current_year + 6))
                 selected_year = st.selectbox("Archive Filter Year", options=year_options, index=year_options.index(current_year), key="history_filter_year")
     
-            # --- UNIFIED FILTERING LOGIC ---
             filtered_history_requests = []
             
             for r in global_approved_requests:
@@ -1819,49 +1570,32 @@ with tab_adm:
                     except ValueError:
                         continue
                 
-                # Filter strictly by month, year, and target request types
                 if date_val.month == selected_month and date_val.year == selected_year:
                     if r.get('type') in ["Wellness", "PTO", "Sick Leave"]:
-                        # Store the normalized date object temporarily for accurate sorting
                         r_copy = r.copy()
                         r_copy['parsed_date'] = date_val
                         filtered_history_requests.append(r_copy)
             
-            # --- DATAFRAME GENERATION AND RENDERING ---
             if filtered_history_requests:
                 st.markdown("#### Approved Requests Summary")
-                
-                # Build the base DataFrame
                 history_df = pd.DataFrame(filtered_history_requests)
-                
-                # Sort from oldest to newest using the temporary parsed_date column
                 history_df.sort_values(by="parsed_date", ascending=True, inplace=True)
                 
-                # Rename the type column to match UI preferences
                 if 'type' in history_df.columns:
                     history_df.rename(columns={'type': 'Request Type'}, inplace=True)
                 
-                # Capitalize the first letter of key columns if they aren't already to look uniform
                 for col in ['date', 'name', 'status']:
                     if col in history_df.columns:
                         history_df.rename(columns={col: col.capitalize()}, inplace=True)
                 
-                # Explicitly drop technical columns and internal flags universally across all types
                 columns_to_drop = ['_id', 'parsed_date', 'email', 'viewed']
                 history_display_df = history_df.drop(columns=columns_to_drop, errors='ignore')
                 
-                # --- REARRANGE COLUMN ORDER ---
-                # Strictly mapping required layout dimensions: Date, Name, Request Type, Status
                 desired_order = ["Date", "Name", "Request Type", "Status"]
                 existing_cols = [c for c in desired_order if c in history_display_df.columns]
-                
-                # Capture any extra unexpected layout columns to prevent breaking or dropping data
                 extra_cols = [c for c in history_display_df.columns if c not in desired_order]
                 
-                # Construct final reordered DataFrame profile
                 history_display_df = history_display_df[existing_cols + extra_cols]
-                
-                # Dynamic height allocation tailored to fit the full item count seamlessly without arbitrary limit caps
                 history_height = (len(history_display_df) * 35) + 45
                 
                 st.dataframe(
