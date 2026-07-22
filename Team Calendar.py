@@ -778,7 +778,7 @@ with tab_case:
     if not owner_list:
         owner_list = ["Unknown"]
 
-    # Global Inputs: Target Date added BEFORE Contact Type (defaulted to today)
+    # Global Inputs
     g_col1, g_col2, g_col3 = st.columns(3)
     with g_col1:
         global_target_date = st.date_input("Global Target Date", value=date.today(), key="case_global_target_date")
@@ -789,29 +789,35 @@ with tab_case:
 
     st.markdown("### 📊 Case Entry")
 
-    if "batch_case_entries" not in st.session_state:
-        st.session_state.batch_case_entries = [{"case_number": ""}]
+    # Ensure 5 initial default entries if empty/uninitialized
+    if "batch_case_entries" not in st.session_state or len(st.session_state.batch_case_entries) == 0:
+        st.session_state.batch_case_entries = [{"case_number": ""} for _ in range(5)]
 
-    header_cols = st.columns([12])
-    header_cols[0].markdown("**Case #**")
-
-    for idx, entry in enumerate(st.session_state.batch_case_entries):
-        row_cols = st.columns([12])
-        with row_cols[0]:
-            entry["case_number"] = st.text_input("Case Number", value=entry["case_number"], label_visibility="collapsed", key=f"grid_case_num_{idx}")
+    # 5 Column Grid Layout for Case Numbers
+    for row_idx in range(0, len(st.session_state.batch_case_entries), 5):
+        cols = st.columns(5)
+        for col_idx in range(5):
+            entry_idx = row_idx + col_idx
+            if entry_idx < len(st.session_state.batch_case_entries):
+                with cols[col_idx]:
+                    st.session_state.batch_case_entries[entry_idx]["case_number"] = st.text_input(
+                        f"Case #{entry_idx + 1}",
+                        value=st.session_state.batch_case_entries[entry_idx]["case_number"],
+                        key=f"grid_case_num_{entry_idx}"
+                    )
 
     ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([2, 2, 4])
     with ctrl_col1:
-        if st.button("➕ Add Row", key="btn_add_matrix_row"):
-            st.session_state.batch_case_entries.append({"case_number": ""})
+        if st.button("➕ Add Row (5 Slots)", key="btn_add_matrix_row"):
+            st.session_state.batch_case_entries.extend([{"case_number": ""} for _ in range(5)])
             st.rerun()
     with ctrl_col2:
         if st.button("🗑️ Remove Last Row", key="btn_remove_matrix_row"):
-            if len(st.session_state.batch_case_entries) > 1:
-                st.session_state.batch_case_entries.pop()
+            if len(st.session_state.batch_case_entries) > 5:
+                st.session_state.batch_case_entries = st.session_state.batch_case_entries[:-5]
                 st.rerun()
             else:
-                st.warning("Cannot remove row. Minimum of 1 entry line required.")
+                st.warning("Cannot remove row. Minimum of 5 entry slots required.")
     with ctrl_col3:
         if st.button("💾 Submit All Cases", key="btn_save_batch_cases"):
             cases_saved = 0
@@ -819,7 +825,6 @@ with tab_case:
                 if not entry["case_number"]:
                     continue
                 new_case = {
-                    "Date": str(date.today()),
                     "Target Date": str(global_target_date),
                     "Owner": global_owner,
                     "Type": global_c_type,
@@ -830,7 +835,7 @@ with tab_case:
                 cases_saved += 1
             
             st.success(f"Batch execution complete! {cases_saved} cases recorded.")
-            st.session_state.batch_case_entries = [{"case_number": ""}]
+            st.session_state.batch_case_entries = [{"case_number": ""} for _ in range(5)]
             st.rerun()
 
     st.divider()
@@ -856,17 +861,20 @@ with tab_case:
 
     if filtered_cases:
         for case in filtered_cases:
-            entry_col, action_col = st.columns([6, 4])
+            entry_col, gap, action_col = st.columns([4, .2, 1])
             
-            # Urgent Indicator
             has_comment = bool(case.get("Comment"))
-            urgent_flag = "❗ " if has_comment else ""
             
             with entry_col:
-                with st.expander(f"{urgent_flag}Case #{case.get('Case Number','')}", expanded=False):
+                # Highlight tile red with large exclamation mark if comment exists
+                if has_comment:
+                    st.error(f"🚨 **Case #{case.get('Case Number','')} Requires Attention**")
+                
+                expander_label = f"🚨 Case #{case.get('Case Number','')}" if has_comment else f"Case #{case.get('Case Number','')}"
+                
+                with st.expander(expander_label, expanded=False):
                     st.markdown(f"""
                         **Owner:** {case.get('Owner','')}  
-                        **Date:** {case.get('Date','')}  
                         **Target Date:** {case.get('Target Date', str(date.today()))}  
                         **Contact Type:** {case.get('Type','')}  
                         **Case Number:** {case.get('Case Number','')}
@@ -888,7 +896,6 @@ with tab_case:
             if t_edit:
                 with st.container(border=True):
                     st.markdown(f"#### Edit Case #{case.get('Case Number','')}")
-                    edit_date = st.text_input("Date Stamp", value=case.get("Date", ""), key=f"date_{case['_id']}")
                     edit_owner = st.selectbox("Record Assignment Owner", owner_list, index=owner_list.index(case.get("Owner")) if case.get("Owner") in owner_list else 0, key=f"owner_{case['_id']}")
                     
                     # Target Date Edit Picker
@@ -905,7 +912,6 @@ with tab_case:
                         collection.update_one(
                             {"_id": case["_id"]},
                             {"$set": {
-                                "Date": edit_date, 
                                 "Target Date": str(edit_target_date),
                                 "Owner": edit_owner, 
                                 "Type": edit_type,
@@ -958,19 +964,6 @@ with tab_case:
             st.divider()
     else:
         st.info("No active system case records match filter parameters.")
-
-    # --- OWNER COMMENT NOTIFICATIONS SECTION ---
-    st.subheader("🔔 Comment Notifications")
-    commented_cases = [c for c in cases_list if c.get("Comment")]
-
-    if commented_cases:
-        for c in commented_cases:
-            owner_name = c.get("Owner", "Unassigned")
-            case_num = c.get("Case Number", "N/A")
-            comment_text = c.get("Comment", "")
-            st.warning(f"❗ **Attention {owner_name}:** There is an active comment on your **Case #{case_num}**: *\"{comment_text}\"*")
-    else:
-        st.success("🎉 No active comments requiring attention.")
         
 # --- TAB 5: DEVIATION ---
 with tab_dev:
