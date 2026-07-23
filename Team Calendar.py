@@ -967,7 +967,7 @@ with tab_case:
             st.rerun()
 
     st.divider()
-    st.subheader("📚 Knowledge Base & QA Reports")
+    st.subheader("📚 Cases")
 
     if cases_list:
         df_cases = pd.DataFrame(cases_list)
