@@ -981,7 +981,7 @@ with tab_case:
             df_kb = df_cases[kb_cols] if kb_cols else df_cases
             csv_kb = df_kb.to_csv(index=False).encode('utf-8')
             st.download_button(
-                "📥 Download Knowledge Base CSV", 
+                "📥 Download Cases CSV", 
                 csv_kb, 
                 "kb_export.csv", 
                 "text/csv", 
