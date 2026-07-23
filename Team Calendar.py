@@ -940,7 +940,6 @@ with tab_case:
     owners = sorted(list(set(case.get("Owner", "") for case in cases_list if case.get("Owner"))))
     f_owner = f2.selectbox("Filter by Owner", ["All"] + owners)
 
-    # Updated index=1 to default to "With Comments Only"
     f_comment = f3.selectbox(
         "Filter by Comment", 
         ["All", "With Comments Only", "Without Comments Only"], 
@@ -967,6 +966,7 @@ with tab_case:
         for case in filtered_cases:
             entry_col, gap, action_col = st.columns([3.8, .2, 1.2])
             has_comment = bool(case.get("Comment"))
+            score = case.get('QA_Score', 9)
             
             with entry_col:
                 expander_label = f"🚨 RED ALERT | Case #{case.get('Case Number','')} (Requires Attention)" if has_comment else f"Case #{case.get('Case Number','')}"
@@ -977,11 +977,12 @@ with tab_case:
                         **Target Date:** {case.get('Target Date', str(date.today()))}  
                         **Contact Type:** {case.get('Type','')}  
                         **Case Number:** {case.get('Case Number','')}  
-                        **QA Score:** `{case.get('QA_Score', 9)} / 9`
+                        **QA Score:** `{score} / 9`
                         """)
                     
                     if has_comment:
-                        st.error(f"💬 **Internal Work Note:** {case.get('Comment')}")
+                        pass_fail_status = "Passed" if score == 9 else "Failed"
+                        st.error(f"📝 **{pass_fail_status}:** {case.get('Comment')}")
                     
                     if case.get("QA_Feedback"):
                         st.info(f"📝 **QA Feedback:** {case.get('QA_Feedback')}")
@@ -1124,7 +1125,7 @@ with tab_case:
 
     else:
         st.info("No active system case records match filter parameters.")
-
+        
 # --- TAB 5: DEVIATION ---
 with tab_dev:
     st.subheader("Submit Deviation Request")
