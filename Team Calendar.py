@@ -1116,7 +1116,6 @@ with tab_case:
                         st.success("QA evaluation saved successfully!")
                         st.rerun()
 
-            st.divider()
     else:
         st.info("No active system case records match filter parameters.")
 
