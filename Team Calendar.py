@@ -158,6 +158,7 @@ if "admin_authenticated" not in st.session_state: st.session_state.admin_authent
 if "limits" not in st.session_state:
     st.session_state.limits = {"PTO_per_day": 1, "Wellness_per_day": 1}
 if "notifications" not in st.session_state: st.session_state.notifications = []
+if "dismissed_qa_alerts" not in st.session_state: st.session_state.dismissed_qa_alerts = set()
 if "master_data" not in st.session_state: 
     st.session_state.master_data = pd.DataFrame({
         "Category": ["Contact Type", "Issue", "Product Group"], 
@@ -328,6 +329,26 @@ with tab_cal:
         c1, c2 = st.columns([1, 1])
         year = c1.selectbox("Year", [2026, 2027, 2028], key="cal_y")
         month = c2.selectbox("Month", range(1, 13), format_func=lambda x: calendar.month_name[x], index=current_date.month - 1, key="cal_m")
+
+    # Item 5: QA Audit Flash Notification for entries created today that FAILED QA
+    today_str = str(current_date)
+    todays_cases = [c for c in get_cases_from_db() if str(c.get("Target Date") or c.get("Date")) == today_str]
+    failed_today_cases = [
+        c for c in todays_cases 
+        if c.get("QA_Score") is not None and int(c.get("QA_Score")) < 9
+        and str(c.get("_id")) not in st.session_state.dismissed_qa_alerts
+    ]
+    if failed_today_cases:
+        st.error(f"🚨 **QA AUDIT ALERT ({today_str}): The following case(s) FAILED QA audit today!**")
+        for f_case in failed_today_cases:
+            c_owner = f_case.get("Owner", "Unknown")
+            c_num = f_case.get("Case Number", "N/A")
+            c_score = f_case.get("QA_Score", 0)
+            st.warning(f"• **Owner:** {c_owner} | **Case #:** {c_num} | **QA Score:** {c_score}/9")
+        if st.button("Clear Notification", key="btn_clear_qa_alerts"):
+            for f_case in failed_today_cases:
+                st.session_state.dismissed_qa_alerts.add(str(f_case.get("_id")))
+            st.rerun()
 
     roster = st.session_state.staff_roster
 
@@ -685,7 +706,6 @@ with tab_prod:
     if not cases:
         st.info("No case records found.")
     else:
-        # Replace lines ~392-408 in Tab 3 with this:
         df = pd.DataFrame(cases)
         if "_id" in df.columns:
             df = df.drop(columns=["_id"])
@@ -730,6 +750,26 @@ with tab_prod:
         else:
             st.info("No cases found for selected month.")
 
+        # Item 7: Monthly Deviation placed directly below Monthly Productivity
+        st.markdown("### 📊 Monthly Deviation Summary")
+        dev_data_all = fetch_deviations_from_db()
+        if dev_data_all:
+            m_dev_df = pd.DataFrame(dev_data_all)
+            m_dev_df['Date'] = pd.to_datetime(m_dev_df['Date'], errors='coerce')
+            m_dev_df = m_dev_df.dropna(subset=['Date'])
+            m_dev_df = m_dev_df[m_dev_df["Name"] != "Jeff Bote"]
+            
+            m_dev_filtered = m_dev_df[(m_dev_df['Date'].dt.year == selected_year) & (m_dev_df['Date'].dt.month == selected_month)]
+            
+            if not m_dev_filtered.empty:
+                m_dev_summary = m_dev_filtered.groupby("Name").size().reset_index(name="Total Monthly Deviations")
+                m_dev_summary = m_dev_summary.sort_values(by="Total Monthly Deviations", ascending=False)
+                st.dataframe(m_dev_summary, use_container_width=True, hide_index=True)
+            else:
+                st.info("No deviation records found for selected month.")
+        else:
+            st.info("No deviation records found.")
+
         st.divider()
 
         st.markdown("## Daily Productivity")
@@ -745,6 +785,23 @@ with tab_prod:
             st.dataframe(daily_summary.reset_index(), use_container_width=True, height=d_height, hide_index=True)
         else:
             st.info("No cases found for selected day.")
+
+        # Item 6: Daily Deviation Summary placed below Daily Productivity (shows total count per day/owner)
+        st.markdown("### 📊 Daily Deviation Summary")
+        if dev_data_all:
+            d_dev_df = pd.DataFrame(dev_data_all)
+            d_dev_df['Date'] = pd.to_datetime(d_dev_df['Date'], errors='coerce').dt.date
+            d_dev_df = d_dev_df[d_dev_df["Name"] != "Jeff Bote"]
+            d_dev_filtered = d_dev_df[d_dev_df['Date'] == selected_day]
+            
+            if not d_dev_filtered.empty:
+                d_dev_summary = d_dev_filtered.groupby("Name").size().reset_index(name="Total Daily Deviations")
+                d_dev_summary = d_dev_summary.sort_values(by="Total Daily Deviations", ascending=False)
+                st.dataframe(d_dev_summary, use_container_width=True, hide_index=True)
+            else:
+                st.info("No deviation records found for selected day.")
+        else:
+            st.info("No deviation records found.")
 
         st.divider()
 
@@ -780,6 +837,36 @@ with tab_prod:
                 st.altair_chart(prod_line_chart, use_container_width=True)
             else:
                 st.info(f"No chart data available for {selected_chart_owner}.")
+
+            # Item 6: Daily Deviation Line Chart replacing the heatmap, affected by owner filter
+            st.markdown("### 📈 Daily Deviation Trend per Owner")
+            if dev_data_all:
+                dev_chart_df = pd.DataFrame(dev_data_all)
+                dev_chart_df['Day'] = pd.to_datetime(dev_chart_df['Date'], errors='coerce').dt.date
+                dev_chart_df = dev_chart_df[dev_chart_df["Name"] != "Jeff Bote"]
+                
+                daily_dev_counts = dev_chart_df.groupby(["Day", "Name"]).size().reset_index(name="Deviation Count")
+                
+                if selected_chart_owner != "All Owners":
+                    daily_dev_counts = daily_dev_counts[daily_dev_counts["Name"] == selected_chart_owner]
+                
+                if not daily_dev_counts.empty:
+                    dev_line_chart = (
+                        alt.Chart(daily_dev_counts)
+                        .mark_line(point=True)
+                        .encode(
+                            x=alt.X("Day:T", title="Date", axis=alt.Axis(format="%Y-%m-%d", labelAngle=-45)),
+                            y=alt.Y("Deviation Count:Q", title="Total Deviations"),
+                            color=alt.Color("Name:N", title="Employee"),
+                            tooltip=["Day:T", "Name:N", "Deviation Count:Q"]
+                        )
+                        .interactive()
+                    )
+                    st.altair_chart(dev_line_chart, use_container_width=True)
+                else:
+                    st.info("No deviation trend data available for current selection.")
+            else:
+                st.info("No deviation data available.")
 
             st.markdown("### 🏆 Overall Leaderboard by Productivity")
             
@@ -866,15 +953,16 @@ with tab_case:
     with ctrl_col3:
         if st.button("💾 Submit All Cases", key="btn_save_batch_cases"):
             cases_saved = 0
+            # Item 1: Only save slot with content, blank slots will not create an entry
             for entry in st.session_state.batch_case_entries:
-                if not entry["case_number"]:
+                if not entry["case_number"] or not str(entry["case_number"]).strip():
                     continue
                 new_case = {
                     "Date": str(global_target_date),
                     "Target Date": str(global_target_date),
                     "Owner": global_owner,
                     "Type": global_c_type,
-                    "Case Number": entry["case_number"],
+                    "Case Number": str(entry["case_number"]).strip(),
                     "Comment": "",
                     "QA_SLO_SLA": "Met",
                     "QA_Initial_Consecutive_Resp": "Met",
@@ -891,7 +979,10 @@ with tab_case:
                 save_case_to_db(new_case)
                 cases_saved += 1
             
-            st.success(f"Batch execution complete! {cases_saved} cases recorded.")
+            if cases_saved > 0:
+                st.success(f"Batch execution complete! {cases_saved} cases recorded.")
+            else:
+                st.warning("No valid case numbers entered to save.")
             st.session_state.batch_case_entries = [{"case_number": ""} for _ in range(5)]
             st.rerun()
 
@@ -941,7 +1032,6 @@ with tab_case:
     owners = sorted(list(set(case.get("Owner", "") for case in cases_list if case.get("Owner"))))
     f_owner = f2.selectbox("Filter by Owner", ["All"] + owners)
 
-    # Updated index=1 to default to "With Comments Only"
     f_comment = f3.selectbox(
         "Filter by Comment", 
         ["All", "With Comments Only", "Without Comments Only"], 
@@ -968,11 +1058,34 @@ with tab_case:
         for case in filtered_cases:
             entry_col, gap, action_col = st.columns([3.8, .2, 1.2])
             has_comment = bool(case.get("Comment"))
+            has_qa_fb = bool(case.get("QA_Feedback"))
+            score_val = case.get("QA_Score")
             
+            # Item 3: Change color of entry block if there's QA feedback (baby green if PASSED, light red with red alert if FAILED)
+            if has_qa_fb:
+                if score_val is not None and int(score_val) == 9:
+                    block_bg = "#e6fffa"
+                    block_border = "#00b386"
+                    expander_label = f"🟢 PASSED QA | Case #{case.get('Case Number','')}"
+                else:
+                    block_bg = "#ffe6e6"
+                    block_border = "#ff4d4d"
+                    expander_label = f"🚨 RED ALERT - FAILED QA | Case #{case.get('Case Number','')} (Requires Attention)"
+            elif has_comment:
+                block_bg = "#fff5f5"
+                block_border = "#ff4d4d"
+                expander_label = f"🚨 RED ALERT | Case #{case.get('Case Number','')} (Requires Attention)"
+            else:
+                block_bg = "#ffffff"
+                block_border = "#008080"
+                expander_label = f"Case #{case.get('Case Number','')}"
+
             with entry_col:
-                expander_label = f"🚨 RED ALERT | Case #{case.get('Case Number','')} (Requires Attention)" if has_comment else f"Case #{case.get('Case Number','')}"
-                
-                with st.expander(expander_label, expanded=has_comment):
+                st.markdown(
+                    f'<div style="background-color: {block_bg}; border: 2px solid {block_border}; padding: 10px; border-radius: 8px; margin-bottom: 8px;">',
+                    unsafe_allow_html=True
+                )
+                with st.expander(expander_label, expanded=(has_comment or (has_qa_fb and (score_val is None or int(score_val) < 9)))):
                     st.markdown(f"""
                         **Owner:** {case.get('Owner','')}  
                         **Target Date:** {case.get('Target Date', str(date.today()))}  
@@ -984,18 +1097,18 @@ with tab_case:
                     if has_comment:
                         st.error(f"💬 **Internal Work Note:** {case.get('Comment')}")
                     
-                    if case.get("QA_Feedback"):
+                    if has_qa_fb:
                         st.info(f"📝 **QA Feedback:** {case.get('QA_Feedback')}")
+                st.markdown('</div>', unsafe_allow_html=True)
 
             with action_col:
-                t_col1, t_col2, t_col3, t_col4 = st.columns(4)
+                # Item 4: Removed note action, kept Edit, Del, QA
+                t_col1, t_col2, t_col3 = st.columns(3)
                 with t_col1:
                     t_edit = st.toggle("✏️ Edit", key=f"t_edit_{case['_id']}")
                 with t_col2:
                     t_del = st.toggle("🗑️ Del", key=f"t_del_{case['_id']}")
                 with t_col3:
-                    t_comm = st.toggle("💬 Note", key=f"t_comm_{case['_id']}")
-                with t_col4:
                     t_qa = st.toggle("🎯 QA", key=f"t_qa_{case['_id']}")
 
             if t_edit:
@@ -1039,33 +1152,6 @@ with tab_case:
                         else:
                             st.error("Credential confirmation mismatch validation failure.")
 
-            if t_comm:
-                with st.container(border=True):
-                    st.markdown("#### Workflow Communication Entry")
-                    current_comment = case.get("Comment", "")
-                    new_comment_str = st.text_area("Work Item Comm Note Ledger", value=current_comment, key=f"input_comment_{case['_id']}")
-                    
-                    c_btn1, c_btn2 = st.columns(2)
-                    with c_btn1:
-                        if st.button("💾 Save Comment", key=f"btn_save_comm_{case['_id']}"):
-                            collection.update_one(
-                                {"_id": case["_id"]},
-                                {"$set": {"Comment": new_comment_str}}
-                            )
-                            st.cache_data.clear()
-                            st.success("Comment applied successfully.")
-                            st.rerun()
-                                
-                    with c_btn2:
-                        if st.button("🗑️ Delete Comment", key=f"btn_del_comm_{case['_id']}"):
-                            collection.update_one(
-                                {"_id": case["_id"]},
-                                {"$set": {"Comment": ""}}
-                            )
-                            st.cache_data.clear()
-                            st.success("Comment cleared successfully.")
-                            st.rerun()
-
             if t_qa:
                 with st.container(border=True):
                     st.markdown(f"### 🎯 QA Scorecard | Case #{case.get('Case Number','')}")
@@ -1099,6 +1185,12 @@ with tab_case:
                         deductions = sum(1 for item in all_criteria if item == "Not Met")
                         computed_score = max(0, 9 - deductions)
                         st.metric("Calculated QA Score", f"{computed_score} / 9")
+
+                    # Item 2: Display PASSED or FAILED status depending on total score (9 is PASSED, anything below is FAILED)
+                    if computed_score == 9:
+                        st.success("✅ **QA STATUS: PASSED**")
+                    else:
+                        st.error("❌ **QA STATUS: FAILED**")
 
                     qa_feedback_str = st.text_area("QA Auditor Feedback", value=case.get("QA_Feedback", ""), key=f"qa_fb_{case['_id']}")
                     
@@ -1217,7 +1309,8 @@ with tab_dev:
         f_col1, f_col2, f_col3 = st.columns(3)
         filter_month = f_col1.selectbox("Month", options=range(1, 13), index=date.today().month - 1, format_func=lambda x: calendar.month_name[x],key="dev_f_month")
         filter_year = f_col2.number_input("Year", value=date.today().year, key="dev_f_year")
-        filter_date = f_col3.date_input("Specific Date (Optional)", value=None, key="dev_f_date")
+        # Item 8: Default display entries for current day in deviation tab
+        filter_date = f_col3.date_input("Specific Date (Optional)", value=date.today(), key="dev_f_date")
         apply_filter = st.button("Apply Filter")
 
     dev_data = fetch_deviations_from_db()
@@ -1226,6 +1319,7 @@ with tab_dev:
         df['Date'] = pd.to_datetime(df['Date']).dt.date
         df = df[df["Name"] != "Jeff Bote"]
         
+        # Item 8: Filter defaults to current day unless user explicitly changes or unsets filter_date
         if apply_filter:
             if filter_date:
                 df = df[df['Date'] == filter_date]
@@ -1234,53 +1328,11 @@ with tab_dev:
                     (df['Date'].apply(lambda x: x.month) == filter_month) &
                     (df['Date'].apply(lambda x: x.year) == filter_year)
                 ]
+        else:
+            # Default behavior on load: filter to current day
+            df = df[df['Date'] == date.today()]
         
         filtered_records = df.to_dict(orient="records")
-
-        st.markdown("### 📈 Daily Deviation Heatmap")
-        if not df.empty:
-            all_names = sorted([name for name in st.session_state.staff_roster.keys() if name != "Jeff Bote"])
-        
-            heatmap_df = (
-                df.groupby(["Name", "Date"])
-                .size()
-                .reset_index(name="Deviation Count")
-            )
-            heatmap_df["Date"] = pd.to_datetime(heatmap_df["Date"]).dt.strftime("%b-%d")
-            all_dates = sorted(heatmap_df["Date"].unique())
-            
-            if len(all_dates) > 0:
-                full_grid = pd.MultiIndex.from_product([all_names, all_dates], names=["Name", "Date"]).to_frame(index=False)
-                heatmap_df = pd.merge(full_grid, heatmap_df, on=["Name", "Date"], how="left")
-                heatmap_df["Deviation Count"] = heatmap_df["Deviation Count"].fillna(0).astype(int)
-            else:
-                heatmap_df = pd.DataFrame(columns=["Name", "Date", "Deviation Count"])
-        
-            heatmap = (
-                alt.Chart(heatmap_df)
-                .mark_rect(stroke="white", strokeWidth=1)
-                .encode(
-                    x=alt.X("Date:N", title="Date", sort=all_dates, axis=alt.Axis(labelAngle=-45, labelFontSize=10)),
-                    y=alt.Y("Name:N", title="Employee", sort=all_names, axis=alt.Axis(labelOverlap=False, labelLimit=500, labelFontSize=11)),
-                    color=alt.Color("Deviation Count:Q", title="Count", scale=alt.Scale(scheme="tealblues")),
-                    tooltip=[alt.Tooltip("Name:N", title="Name"), alt.Tooltip("Date:N", title="Date"), alt.Tooltip("Deviation Count:Q", title="Count")]
-                )
-                .properties(height=max(300, len(all_names) * 30))
-            )
-            
-            text = (
-                alt.Chart(heatmap_df[heatmap_df["Deviation Count"] > 0])
-                .mark_text(fontSize=9, fontWeight="bold", color="black")
-                .encode(
-                    x=alt.X("Date:N", sort=all_dates),
-                    y=alt.Y("Name:N", sort=all_names, axis=alt.Axis(labelOverlap=False, labelLimit=500)),
-                    text="Deviation Count:Q"
-                )
-            )
-            
-            st.altair_chart((heatmap + text).configure_axis(labelOverlap=False), use_container_width=True)
-        else:
-            st.info("No records available.")
         
         st.markdown("### 📊 Daily Deviation Count")
         if not df.empty:
@@ -1476,18 +1528,7 @@ with tab_adm:
                     st.rerun()
     
             st.markdown("---")
-            st.subheader("📢 Announcements")
-            target_d = st.date_input("Announcement Release Date", key="config_target_date")
-            admin_sender_email = st.text_input("Your System Email Alias", key="cfg_admin_sender_email")
-            
-            new_notif = st.text_input("Add Global Notification Message Banner", key="input_new_sys_notif")
-            if st.button("🚀 Publish System Notice", key="btn_post_sys_notif"): 
-                if new_notif:
-                    if "notifications" not in st.session_state:
-                        st.session_state.notifications = []
-                    st.session_state.notifications.append(new_notif)
-                    st.success("Notification updated in runtime state!")
-                    st.rerun()
+            # Item 9: System notification/announcement section removed from Admin tab
             
             st.subheader("🗓️ Calendar Block Updates")
             config_mode = st.radio("Target Scope Selection:", ["Single Date", "Date Range", "Full Month"], key="radio_cfg_mode")
