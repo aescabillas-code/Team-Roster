@@ -1,16 +1,16 @@
 from datetime import datetime, time, date, timedelta
-import calendar
-import re
-import sys
-import io
-from types import ModuleType
-import contextlib
-import pytz
-import pandas as pd
-import holidays
-import altair as alt
 import streamlit as st
 from pymongo import MongoClient
+import calendar
+import pandas as pd
+import holidays
+import sys
+from types import ModuleType
+import pytz
+import re
+import io
+import altair as alt
+import contextlib
 
 st.set_page_config(layout="wide")
 
@@ -80,19 +80,6 @@ def fetch_pending_requests_from_db():
     except Exception:
         return []
 
-@st.cache_data(ttl=2)
-def fetch_all_requests_from_db():
-    try:
-        docs = list(collection.find({
-            "type": {"$in": ["PTO", "Wellness", "Sick Leave"]}, 
-            "status": {"$in": ["Approved", "Pending"]}
-        }))
-        approved = [r for r in docs if r.get("status") == "Approved"]
-        pending = [r for r in docs if r.get("status") == "Pending"]
-        return approved, pending
-    except Exception:
-        return [], []
-
 # --- DB MUTATION HELPERS ---
 def bulk_update_requests(request_ids, status):
     collection.update_many(
@@ -156,6 +143,7 @@ def save_masterfile_to_db(df):
 def get_request_limits(req_date):
     cal_doc = fetch_calendar_doc()
     selected_config = cal_doc.get("data", {}).get(str(req_date), {})
+    
     st.session_state.limits["PTO_per_day"] = selected_config.get("PTO_per_day", 1)
     st.session_state.limits["Wellness_per_day"] = selected_config.get("Wellness_per_day", 1)
     return st.session_state.limits
@@ -171,7 +159,8 @@ current_date = datetime.now(local_tz).date()
 
 if "admin_password" not in st.session_state: st.session_state.admin_password = "Password1234"
 if "admin_authenticated" not in st.session_state: st.session_state.admin_authenticated = False
-if "limits" not in st.session_state: st.session_state.limits = {"PTO_per_day": 1, "Wellness_per_day": 1}
+if "limits" not in st.session_state:
+    st.session_state.limits = {"PTO_per_day": 1, "Wellness_per_day": 1}
 if "notifications" not in st.session_state: st.session_state.notifications = []
 if "master_data" not in st.session_state: 
     st.session_state.master_data = pd.DataFrame({
@@ -197,7 +186,8 @@ st.session_state.calendar_data = {
     for k, v in raw_cal_data.items()
 }
 
-global_approved_requests, global_pending_requests = fetch_all_requests_from_db()
+global_approved_requests = fetch_approved_requests_from_db()
+global_pending_requests = fetch_pending_requests_from_db()
 
 # --- GLOBAL CSS STYLING ---
 st.markdown("""
@@ -332,6 +322,7 @@ tab_names = [
     "🔍 Case Tracker", "🔀 Deviation", "🔑 Admin"
 ]
 
+# Native Streamlit Tab allocation avoiding custom JS/query_param lifecycle bugs
 tab_cal, tab_req, tab_prod, tab_case, tab_dev, tab_adm = st.tabs(tab_names)
 
 # --- TAB 1: CALENDAR ---
@@ -696,6 +687,7 @@ with tab_prod:
         if "_id" in df.columns:
             df = df.drop(columns=["_id"])
 
+        # Consolidate Date column (handling both 'Target Date' and 'Date')
         if "Date" not in df.columns and "Target Date" in df.columns:
             df["Date"] = df["Target Date"]
         elif "Date" not in df.columns:
@@ -730,6 +722,8 @@ with tab_prod:
         if not monthly_df.empty:
             monthly_summary = monthly_df.groupby(["Owner", "Type"]).size().unstack(fill_value=0)
             monthly_summary["Total Cases"] = monthly_summary.sum(axis=1)
+            
+            # Sort monthly summary table by highest total case count
             monthly_summary = monthly_summary.sort_values(by="Total Cases", ascending=False)
             
             m_height = min(1000, max(100, len(monthly_summary) * 35 + 38))
@@ -746,6 +740,8 @@ with tab_prod:
         if not daily_df.empty:
             daily_summary = daily_df.groupby(["Owner", "Type"]).size().unstack(fill_value=0)
             daily_summary["Total Cases"] = daily_summary.sum(axis=1)
+            
+            # Sort daily summary table by highest total case count
             daily_summary = daily_summary.sort_values(by="Total Cases", ascending=False)
             
             d_height = min(1000, max(100, len(daily_summary) * 35 + 38))
@@ -755,11 +751,14 @@ with tab_prod:
 
         st.divider()
 
+        # --- DAILY PRODUCTIVITY TREND & LEADERBOARD ---
         st.markdown("## 📈 Daily Productivity Trend per Owner")
 
+        # Group data by Date and Owner to compute daily productivity per person
         daily_owner_prod = df.groupby(["Day", "Owner"]).size().reset_index(name="Case Count")
 
         if not daily_owner_prod.empty:
+            # 🎯 Dropdown Filter for Line Graph
             all_owners = sorted(daily_owner_prod["Owner"].unique().tolist())
             selected_chart_owner = st.selectbox(
                 "Filter Chart by Case Owner", 
@@ -767,12 +766,14 @@ with tab_prod:
                 key="prod_chart_owner_filter"
             )
 
+            # Filter chart dataset based on dropdown selection
             if selected_chart_owner != "All Owners":
                 chart_df = daily_owner_prod[daily_owner_prod["Owner"] == selected_chart_owner]
             else:
                 chart_df = daily_owner_prod
 
             if not chart_df.empty:
+                # Multi-line / Single-line chart showing daily productivity
                 prod_line_chart = (
                     alt.Chart(chart_df)
                     .mark_line(point=True)
@@ -790,6 +791,7 @@ with tab_prod:
 
             st.markdown("### 🏆 Overall Leaderboard by Productivity")
             
+            # Aggregate total cases by owner
             overall_leaderboard = (
                 df.groupby("Owner")
                 .agg(
@@ -799,10 +801,12 @@ with tab_prod:
                 .reset_index()
             )
             
+            # Calculate daily average productivity
             overall_leaderboard["Avg Cases / Active Day"] = (
                 overall_leaderboard["Total_Cases"] / overall_leaderboard["Days_Active"]
             ).round(2)
 
+            # Rename columns and sort descending by highest Total Cases
             overall_leaderboard = overall_leaderboard.rename(
                 columns={"Total_Cases": "Total Cases Handled", "Days_Active": "Days Active"}
             ).sort_values(by="Total Cases Handled", ascending=False)
@@ -832,6 +836,7 @@ with tab_case:
     if not owner_list:
         owner_list = ["Unknown"]
 
+    # Global Inputs
     g_col1, g_col2, g_col3 = st.columns(3)
     with g_col1:
         global_target_date = st.date_input("Global Target Date", value=date.today(), key="case_global_target_date")
@@ -842,9 +847,11 @@ with tab_case:
 
     st.markdown("### 📊 Case Entry")
 
+    # Default to 5 available slots initially
     if "batch_case_entries" not in st.session_state or len(st.session_state.batch_case_entries) == 0:
         st.session_state.batch_case_entries = [{"case_number": ""} for _ in range(5)]
 
+    # 5-Column Grid Rendering for Case Numbers
     total_slots = len(st.session_state.batch_case_entries)
     for row_idx in range(0, total_slots, 5):
         cols = st.columns(5)
@@ -882,6 +889,7 @@ with tab_case:
                     "Type": global_c_type,
                     "Case Number": entry["case_number"],
                     "Comment": "",
+                    # QA Default Metrics
                     "QA_SLO_SLA": "Met",
                     "QA_Initial_Consecutive_Resp": "Met",
                     "QA_Case_Status_Update": "Met",
@@ -911,6 +919,7 @@ with tab_case:
 
         dl_col1, dl_col2 = st.columns(2)
 
+        # 1️⃣ Standard Knowledge Base Export
         with dl_col1:
             kb_cols = [c for c in ["Case Number", "Owner", "Target Date", "Type", "Comment"] if c in df_cases.columns]
             df_kb = df_cases[kb_cols] if kb_cols else df_cases
@@ -923,6 +932,7 @@ with tab_case:
                 key="dl_kb_csv"
             )
 
+        # 2️⃣ Dedicated QA Audit Report Export
         with dl_col2:
             qa_cols = [
                 "Case Number", "Owner", "Target Date", "Type",
@@ -931,6 +941,7 @@ with tab_case:
                 "QA_Issue_Field_Updated", "QA_Case_Comments_Probing", "QA_Collaborations_Logging",
                 "QA_Entitlement_Validation", "QA_Account_Validation", "QA_Case_Routing"
             ]
+            # Include available QA columns present in dataframe
             available_qa_cols = [col for col in qa_cols if col in df_cases.columns]
             df_qa = df_cases[available_qa_cols] if available_qa_cols else df_cases
             csv_qa = df_qa.to_csv(index=False).encode('utf-8')
@@ -942,6 +953,7 @@ with tab_case:
                 key="dl_qa_csv"
             )
 
+    # Filter Section
     f1, f2, f3 = st.columns(3)
     f_case = f1.text_input("Filter by Case #")
     owners = sorted(list(set(case.get("Owner", "") for case in cases_list if case.get("Owner"))))
@@ -988,6 +1000,7 @@ with tab_case:
                     if case.get("QA_Feedback"):
                         st.info(f"📝 **QA Feedback:** {case.get('QA_Feedback')}")
 
+            # Horizontal Action Toggles
             with action_col:
                 t_col1, t_col2, t_col3, t_col4 = st.columns(4)
                 with t_col1:
@@ -1067,6 +1080,7 @@ with tab_case:
                             st.success("Comment cleared successfully.")
                             st.rerun()
 
+            # --- QA EVALUATION SECTION ---
             if t_qa:
                 with st.container(border=True):
                     st.markdown(f"### 🎯 QA Scorecard | Case #{case.get('Case Number','')}")
@@ -1090,9 +1104,11 @@ with tab_case:
                     st.markdown("#### 4️⃣ Process and Policy")
                     q_routing = st.selectbox("UVA, SDI, Private Case Routing (🚨 Non-negotiable)", met_opts, index=met_opts.index(case.get("QA_Case_Routing", "Met")), key=f"qa_routing_{case['_id']}")
                     
+                    # --- AUTOMATED SCORE CALCULATION LOGIC ---
                     all_criteria = [q_slo, q_resp, q_update, q_issue, q_probing, q_collab, q_entitle, q_account, q_routing]
                     non_negotiables = [q_probing, q_collab, q_entitle, q_routing]
                     
+                    # Check if any non-negotiable is 'Not Met'
                     if any(nn == "Not Met" for nn in non_negotiables):
                         computed_score = 0
                         st.error("🚨 **Score: 0 / 9** (Failed a Non-negotiable criteria)")
@@ -1127,7 +1143,7 @@ with tab_case:
             st.divider()
     else:
         st.info("No active system case records match filter parameters.")
-
+        
 # --- TAB 5: DEVIATION ---
 with tab_dev:
     st.subheader("Submit Deviation Request")
