@@ -939,7 +939,13 @@ with tab_case:
     f_case = f1.text_input("Filter by Case #")
     owners = sorted(list(set(case.get("Owner", "") for case in cases_list if case.get("Owner"))))
     f_owner = f2.selectbox("Filter by Owner", ["All"] + owners)
-    f_comment = f3.selectbox("Filter by Comment", ["All", "With Comments Only", "Without Comments Only"])
+
+    # Updated index=1 to default to "With Comments Only"
+    f_comment = f3.selectbox(
+        "Filter by Comment", 
+        ["All", "With Comments Only", "Without Comments Only"], 
+        index=1
+    )
 
     filtered_cases = []
     for case in reversed(cases_list):
