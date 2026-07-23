@@ -685,25 +685,25 @@ with tab_prod:
     if not cases:
         st.info("No case records found.")
     else:
+        # Replace lines ~392-408 in Tab 3 with this:
         df = pd.DataFrame(cases)
         if "_id" in df.columns:
             df = df.drop(columns=["_id"])
-
+        
+        # Coalesce Date and Target Date
         if "Date" not in df.columns and "Target Date" in df.columns:
             df["Date"] = df["Target Date"]
-        elif "Date" not in df.columns:
-            df["Date"] = str(date.today())
-
-        required_cols = ["Date", "Owner", "Type"]
-        for col in required_cols:
-            if col not in df.columns:
-                df[col] = "Unknown"
-
-        df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+        elif "Date" in df.columns and "Target Date" in df.columns:
+            df["Date"] = df["Date"].fillna(df["Target Date"])
+        
+        # Ensure string conversion before parsing to avoid type errors
+        df["Date"] = pd.to_datetime(df["Date"].astype(str), errors="coerce")
         df = df.dropna(subset=["Date"])
+        
         df["Month"] = df["Date"].dt.month
         df["Year"] = df["Date"].dt.year
         df["Day"] = df["Date"].dt.date
+        
 
         st.markdown("## Monthly Productivity")
         col1, col2 = st.columns(2)
@@ -870,6 +870,7 @@ with tab_case:
                 if not entry["case_number"]:
                     continue
                 new_case = {
+                    "Date": str(global_target_date),
                     "Target Date": str(global_target_date),
                     "Owner": global_owner,
                     "Type": global_c_type,
