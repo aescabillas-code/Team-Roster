@@ -273,14 +273,14 @@ st.markdown("""
     div[data-testid="stTable"] tr:nth-child(odd) td { color: #008080 !important; font-weight: 600; }
     div[data-testid="stTable"] th { background-color: #004d4d !important; color: #ffffff !important; }
 
-    .card-passed {
+    .qa-box-passed {
         background-color: #e6f4ea !important;
         border: 1px solid #34a853 !important;
         border-radius: 8px;
         padding: 12px;
         margin-bottom: 10px;
     }
-    .card-failed {
+    .qa-box-failed {
         background-color: #fce8e6 !important;
         border: 2px solid #ea4335 !important;
         border-radius: 8px;
@@ -696,7 +696,6 @@ with tab_req:
 # --- TAB 3: PRODUCTIVITY MONITORING ---
 with tab_prod:
     cases = get_cases_from_db()
-    dev_data = fetch_deviations_from_db()
 
     if not cases:
         st.info("No case records found.")
@@ -718,7 +717,6 @@ with tab_prod:
         df["Month"] = df["Date"].dt.month
         df["Year"] = df["Date"].dt.year
         df["Day"] = df["Date"].dt.date
-        
 
         st.markdown("## Monthly Productivity")
         col1, col2 = st.columns(2)
@@ -745,24 +743,23 @@ with tab_prod:
         else:
             st.info("No cases found for selected month.")
 
-        st.markdown("### 🔀 Monthly Deviation Summary")
-        if dev_data:
-            df_dev_m = pd.DataFrame(dev_data)
-            df_dev_m['Date'] = pd.to_datetime(df_dev_m['Date'], errors="coerce")
-            df_dev_m = df_dev_m.dropna(subset=['Date'])
-            df_dev_m = df_dev_m[df_dev_m["Name"] != "Jeff Bote"]
-            
-            df_dev_filtered = df_dev_m[(df_dev_m['Date'].dt.year == selected_year) & (df_dev_m['Date'].dt.month == selected_month)]
-            
-            if not df_dev_filtered.empty:
-                monthly_dev_summary = df_dev_filtered.groupby("Name").agg(
-                    Total_Deviations=("Name", "count"),
-                    Total_Minutes=("Total Mins", "sum")
-                ).reset_index().rename(columns={"Name": "Employee", "Total_Deviations": "Total Deviations", "Total_Minutes": "Total Minutes Lost"})
-                monthly_dev_summary = monthly_dev_summary.sort_values(by="Total Deviations", ascending=False)
-                st.dataframe(monthly_dev_summary, use_container_width=True, hide_index=True)
+        # --- MONTHLY DEVIATIONS (Affected by Month and Year Filter) ---
+        st.markdown("### 🔀 Monthly Deviations")
+        dev_data_all = fetch_deviations_from_db()
+        if dev_data_all:
+            dev_df_all = pd.DataFrame(dev_data_all)
+            dev_df_all["ParsedDate"] = pd.to_datetime(dev_df_all["Date"], errors="coerce")
+            dev_df_all = dev_df_all.dropna(subset=["ParsedDate"])
+            dev_df_m = dev_df_all[
+                (dev_df_all["ParsedDate"].dt.year == selected_year) & 
+                (dev_df_all["ParsedDate"].dt.month == selected_month) &
+                (dev_df_all["Name"] != "Jeff Bote")
+            ]
+            if not dev_df_m.empty:
+                m_dev_summary = dev_df_m.groupby(["Name"]).size().reset_index(name="Total Deviations").sort_values(by="Total Deviations", ascending=False)
+                st.dataframe(m_dev_summary, use_container_width=True, hide_index=True)
             else:
-                st.info("No deviation records found for selected month.")
+                st.info("No deviation entries found for selected month.")
         else:
             st.info("No deviation data available.")
 
@@ -770,19 +767,10 @@ with tab_prod:
 
         st.markdown("## Daily Productivity")
         
-        # Constrain date selector bounds to selected year and month
-        num_days = calendar.monthrange(int(selected_year), int(selected_month))[1]
-        min_date_val = date(int(selected_year), int(selected_month), 1)
-        max_date_val = date(int(selected_year), int(selected_month), num_days)
-        default_day_val = min(max(date.today(), min_date_val), max_date_val)
-        
-        selected_day = st.date_input(
-            "Select Day", 
-            value=default_day_val, 
-            min_value=min_date_val, 
-            max_value=max_date_val, 
-            key="prod_day"
-        )
+        # Day select constrained by selected Month and Year
+        month_days = [d.date() for d in pd.date_range(start=f"{selected_year}-{selected_month:02d}-01", periods=calendar.monthrange(selected_year, selected_month)[1])]
+        default_day = date.today() if date.today() in month_days else month_days[0]
+        selected_day = st.date_input("Select Day", value=default_day, key="prod_day")
         daily_df = df[df["Day"] == selected_day]
 
         if not daily_df.empty:
@@ -797,7 +785,7 @@ with tab_prod:
 
         st.divider()
 
-        st.markdown("## 📈 Daily Productivity & Deviation Trend per Owner")
+        st.markdown("## 📈 Daily Productivity Trend per Owner")
 
         daily_owner_prod = df.groupby(["Day", "Owner"]).size().reset_index(name="Case Count")
 
@@ -830,38 +818,35 @@ with tab_prod:
             else:
                 st.info(f"No chart data available for {selected_chart_owner}.")
 
-            # --- DAILY DEVIATION LINE CHART ---
+            # --- DAILY DEVIATIONS LINE GRAPH (Transformed from Heatmap) ---
             st.markdown("### 🔀 Daily Deviation Trend")
-            if dev_data:
-                df_dev_chart = pd.DataFrame(dev_data)
-                df_dev_chart["Day"] = pd.to_datetime(df_dev_chart["Date"], errors="coerce").dt.date
-                df_dev_chart = df_dev_chart.dropna(subset=["Day"])
-                df_dev_chart = df_dev_chart[df_dev_chart["Name"] != "Jeff Bote"]
-
-                daily_dev_counts = df_dev_chart.groupby(["Day", "Name"]).size().reset_index(name="Deviation Count")
-
+            if dev_data_all:
+                dev_df_all = pd.DataFrame(dev_data_all)
+                dev_df_all["ParsedDate"] = pd.to_datetime(dev_df_all["Date"], errors="coerce")
+                dev_df_all = dev_df_all.dropna(subset=["ParsedDate"])
+                
+                dev_chart_df = dev_df_all[dev_df_all["Name"] != "Jeff Bote"]
+                
                 if selected_chart_owner != "All Owners":
-                    dev_chart_df = daily_dev_counts[daily_dev_counts["Name"] == selected_chart_owner]
-                else:
-                    dev_chart_df = daily_dev_counts
-
+                    dev_chart_df = dev_chart_df[dev_chart_df["Name"] == selected_chart_owner]
+                
                 if not dev_chart_df.empty:
+                    daily_dev_trend = dev_chart_df.groupby(["ParsedDate", "Name"]).size().reset_index(name="Deviation Count")
+                    
                     dev_line_chart = (
-                        alt.Chart(dev_chart_df)
+                        alt.Chart(daily_dev_trend)
                         .mark_line(point=True)
                         .encode(
-                            x=alt.X("Day:T", title="Date", axis=alt.Axis(format="%Y-%m-%d", labelAngle=-45)),
+                            x=alt.X("ParsedDate:T", title="Date", axis=alt.Axis(format="%Y-%m-%d", labelAngle=-45)),
                             y=alt.Y("Deviation Count:Q", title="Total Deviations"),
                             color=alt.Color("Name:N", title="Employee"),
-                            tooltip=["Day:T", "Name:N", "Deviation Count:Q"]
+                            tooltip=["ParsedDate:T", "Name:N", "Deviation Count:Q"]
                         )
                         .interactive()
                     )
                     st.altair_chart(dev_line_chart, use_container_width=True)
                 else:
                     st.info("No deviation trend data available for current selection.")
-            else:
-                st.info("No deviation records available.")
 
             st.markdown("### 🏆 Overall Leaderboard by Productivity")
             
@@ -949,15 +934,15 @@ with tab_case:
         if st.button("💾 Submit All Cases", key="btn_save_batch_cases"):
             cases_saved = 0
             for entry in st.session_state.batch_case_entries:
-                case_num_str = str(entry["case_number"]).strip()
-                if not case_num_str:
+                # 1. Save ONLY slots with actual content
+                if not entry["case_number"] or not str(entry["case_number"]).strip():
                     continue
                 new_case = {
                     "Date": str(global_target_date),
                     "Target Date": str(global_target_date),
                     "Owner": global_owner,
                     "Type": global_c_type,
-                    "Case Number": case_num_str,
+                    "Case Number": entry["case_number"].strip(),
                     "Comment": "",
                     "QA_SLO_SLA": "Met",
                     "QA_Initial_Consecutive_Resp": "Met",
@@ -977,7 +962,7 @@ with tab_case:
             if cases_saved > 0:
                 st.success(f"Batch execution complete! {cases_saved} cases recorded.")
             else:
-                st.warning("No valid case numbers entered. Blank slots were skipped.")
+                st.warning("No cases recorded. Please enter at least one valid case number.")
             st.session_state.batch_case_entries = [{"case_number": ""} for _ in range(5)]
             st.rerun()
 
@@ -1027,9 +1012,10 @@ with tab_case:
     owners = sorted(list(set(case.get("Owner", "") for case in cases_list if case.get("Owner"))))
     f_owner = f2.selectbox("Filter by Owner", ["All"] + owners)
 
+    # Updated default to "With Comments Only"
     f_comment = f3.selectbox(
         "Filter by Comment", 
-        ["All", "With Comments Only", "Without Comments Only"], 
+        ["With Comments Only", "All", "Without Comments Only"], 
         index=0
     )
 
@@ -1054,33 +1040,41 @@ with tab_case:
             entry_col, gap, action_col = st.columns([3.8, .2, 1.2])
             has_comment = bool(case.get("Comment"))
             has_qa_fb = bool(case.get("QA_Feedback"))
-            score_val = case.get('QA_Score', 9)
-            qa_status_str = "PASSED" if score_val == 9 else "FAILED"
-            
-            with entry_col:
-                if has_qa_fb:
-                    card_class = "card-passed" if qa_status_str == "PASSED" else "card-failed"
-                    alert_prefix = "🚨 RED ALERT | " if qa_status_str == "FAILED" else ""
-                    st.markdown(f'<div class="{card_class}"><b>{alert_prefix}Case #{case.get("Case Number","")} ({qa_status_str})</b></div>', unsafe_allow_html=True)
+            qa_score = case.get('QA_Score', 9)
+            is_passed = (qa_score == 9)
 
-                expander_label = f"🚨 RED ALERT | Case #{case.get('Case Number','')} (Requires Attention)" if (has_comment and not has_qa_fb) else f"Case #{case.get('Case Number','')}"
-                
-                with st.expander(expander_label, expanded=has_comment):
+            with entry_col:
+                expander_label = f"Case #{case.get('Case Number','')}"
+                if has_comment or (has_qa_fb and not is_passed):
+                    expander_label = f"🚨 RED ALERT | Case #{case.get('Case Number','')} (Requires Attention)"
+                elif has_qa_fb and is_passed:
+                    expander_label = f"✅ PASSED | Case #{case.get('Case Number','')}"
+
+                # Render background container based on QA Status and Feedback presence
+                if has_qa_fb:
+                    box_class = "qa-box-passed" if is_passed else "qa-box-failed"
+                    st.markdown(f'<div class="{box_class}">', unsafe_allow_html=True)
+
+                with st.expander(expander_label, expanded=(has_comment or has_qa_fb)):
                     st.markdown(f"""
                         **Owner:** {case.get('Owner','')}  
                         **Target Date:** {case.get('Target Date', str(date.today()))}  
                         **Contact Type:** {case.get('Type','')}  
                         **Case Number:** {case.get('Case Number','')}  
-                        **QA Score:** `{score_val} / 9` (`{qa_status_str}`)
+                        **QA Score:** `{qa_score} / 9`
                         """)
                     
                     if has_comment:
                         st.error(f"💬 **Internal Work Note:** {case.get('Comment')}")
                     
-                    if has_qa_fb:
+                    if case.get("QA_Feedback"):
                         st.info(f"📝 **QA Feedback:** {case.get('QA_Feedback')}")
 
+                if has_qa_fb:
+                    st.markdown('</div>', unsafe_allow_html=True)
+
             with action_col:
+                # 4. Removed Note toggle (action)
                 t_col1, t_col2, t_col3 = st.columns(3)
                 with t_col1:
                     t_edit = st.toggle("✏️ Edit", key=f"t_edit_{case['_id']}")
@@ -1164,11 +1158,12 @@ with tab_case:
                         computed_score = max(0, 9 - deductions)
                         st.metric("Calculated QA Score", f"{computed_score} / 9")
 
-                    computed_status = "PASSED" if computed_score == 9 else "FAILED"
-                    if computed_status == "PASSED":
-                        st.success(f"**STATUS:** `{computed_status}`")
+                    # 2. Add PASSED or FAILED status display below
+                    qa_status_display = "PASSED" if computed_score == 9 else "FAILED"
+                    if qa_status_display == "PASSED":
+                        st.success(f"**STATUS: {qa_status_display}** ✅")
                     else:
-                        st.error(f"**STATUS:** `{computed_status}`")
+                        st.error(f"**STATUS: {qa_status_display}** ❌")
 
                     qa_feedback_str = st.text_area("QA Auditor Feedback", value=case.get("QA_Feedback", ""), key=f"qa_fb_{case['_id']}")
                     
@@ -1282,6 +1277,14 @@ with tab_dev:
 
     st.divider()
     st.subheader("Deviation Report")
+    
+    with st.expander("Filter Report"):
+        f_col1, f_col2, f_col3 = st.columns(3)
+        filter_month = f_col1.selectbox("Month", options=range(1, 13), index=date.today().month - 1, format_func=lambda x: calendar.month_name[x],key="dev_f_month")
+        filter_year = f_col2.number_input("Year", value=date.today().year, key="dev_f_year")
+        # 8. Default to current day entries only
+        filter_date = f_col3.date_input("Specific Date", value=date.today(), key="dev_f_date")
+        apply_filter = st.button("Apply Filter")
 
     dev_data = fetch_deviations_from_db()
     if dev_data:
@@ -1289,13 +1292,20 @@ with tab_dev:
         df['Date'] = pd.to_datetime(df['Date']).dt.date
         df = df[df["Name"] != "Jeff Bote"]
         
-        # Filter entries for the current day only
-        df_today = df[df['Date'] == date.today()]
-        filtered_records = df_today.to_dict(orient="records")
+        # Default behavior & manual filter handling: default filter by current date
+        if filter_date:
+            df = df[df['Date'] == filter_date]
+        else:
+            df = df[
+                (df['Date'].apply(lambda x: x.month) == filter_month) &
+                (df['Date'].apply(lambda x: x.year) == filter_year)
+            ]
+        
+        filtered_records = df.to_dict(orient="records")
 
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button("Extract Report as CSV", csv, "deviation_report.csv", "text/csv")
-        st.write("## Today's Deviation Records")
+        st.write("## Deviation Records")
         
         col_widths = [0.6, 1.2, 1.2, 1.2, 1.2, 1.0, 1.0, 0.8, 0.8, 2.0, 2.4]
         h_cols = st.columns(col_widths)
@@ -1472,6 +1482,7 @@ with tab_adm:
                     st.rerun()
     
             st.markdown("---")
+            
             st.subheader("🗓️ Calendar Block Updates")
             config_mode = st.radio("Target Scope Selection:", ["Single Date", "Date Range", "Full Month"], key="radio_cfg_mode")
             
