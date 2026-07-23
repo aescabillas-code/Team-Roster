@@ -318,7 +318,7 @@ def render_request(req, key_prefix):
 
 # --- TABS WORKSPACE ---
 tab_names = [
-    "📅 Calendar", "📝 Request", "📈 Productivity/Deviation Report", 
+    "📅 Calendar", "📝 Request", "📈 Productivity Monitoring", 
     "🔍 Case Tracker", "🔀 Deviation", "🔑 Admin"
 ]
 
