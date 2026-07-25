@@ -1,24 +1,27 @@
-from datetime import datetime, time, date, timedelta
-import streamlit as st
-from pymongo import MongoClient
 import calendar
-import pandas as pd
-import holidays
-import pytz
+from datetime import date, datetime, time, timedelta
 import re
 import altair as alt
+import holidays
+import pandas as pd
+from pymongo import MongoClient
+import pytz
+import streamlit as st
 
 st.set_page_config(layout="wide")
+
 
 # --- DATABASE HELPERS & CONNECTION ---
 @st.cache_resource
 def get_mongo_client():
-    uri = st.secrets["mongo"]["uri"] 
+    uri = st.secrets["mongo"]["uri"]
     return MongoClient(uri)
 
+
 client = get_mongo_client()
-db = client["my_database"] 
+db = client["my_database"]
 collection = db["my_collection"]
+
 
 # --- CACHED DATA FETCHERS (Optimized TTL & Projections) ---
 @st.cache_data(ttl=120)
@@ -28,12 +31,14 @@ def fetch_roster_doc():
     except Exception:
         return {}
 
+
 @st.cache_data(ttl=120)
 def fetch_calendar_doc():
     try:
         return collection.find_one({"type": "calendar_data"}) or {}
     except Exception:
         return {}
+
 
 @st.cache_data(ttl=120)
 def fetch_masterfile_doc():
@@ -42,12 +47,14 @@ def fetch_masterfile_doc():
     except Exception:
         return {}
 
+
 @st.cache_data(ttl=60)
 def get_cases_from_db():
     try:
         return list(collection.find({"type": "case"}))
     except Exception:
         return []
+
 
 @st.cache_data(ttl=60)
 def fetch_deviations_from_db():
@@ -56,45 +63,62 @@ def fetch_deviations_from_db():
     except Exception:
         return []
 
+
 @st.cache_data(ttl=60)
 def fetch_approved_requests_from_db():
     try:
-        return list(collection.find({
-            "type": {"$in": ["PTO", "Wellness", "Sick Leave"]}, 
-            "status": "Approved"
-        }))
+        return list(
+            collection.find({
+                "type": {"$in": ["PTO", "Wellness", "Sick Leave"]},
+                "status": "Approved",
+            })
+        )
     except Exception:
         return []
+
 
 @st.cache_data(ttl=60)
 def fetch_pending_requests_from_db():
     try:
-        return list(collection.find({
-            "type": {"$in": ["PTO", "Wellness", "Sick Leave"]}, 
-            "status": "Pending"
-        }))
+        return list(
+            collection.find({
+                "type": {"$in": ["PTO", "Wellness", "Sick Leave"]},
+                "status": "Pending",
+            })
+        )
     except Exception:
         return []
 
+
 # --- DB MUTATION HELPERS ---
-def bulk_update_requests(request_ids, status):
-    collection.update_many(
-        {"_id": {"$in": request_ids}},
-        {"$set": {"status": status}}
-    )
+def clear_requests_cache():
     fetch_approved_requests_from_db.clear()
     fetch_pending_requests_from_db.clear()
 
+
+def bulk_update_requests(request_ids, status):
+    collection.update_many(
+        {"_id": {"$in": request_ids}}, {"$set": {"status": status}}
+    )
+    clear_requests_cache()
+
+
 def save_staff(name, data):
     st.session_state.staff_roster[name] = data
-    collection.update_one({"type": "roster_list"}, {"$set": {"data": st.session_state.staff_roster}}, upsert=True)
+    collection.update_one(
+        {"type": "roster_list"},
+        {"$set": {"data": st.session_state.staff_roster}},
+        upsert=True,
+    )
     fetch_roster_doc.clear()
+
 
 def delete_staff(name):
     collection.delete_one({"type": "roster_list", "name": name})
-    if name in st.session_state.staff_roster: 
+    if name in st.session_state.staff_roster:
         del st.session_state.staff_roster[name]
     fetch_roster_doc.clear()
+
 
 def update_staff_in_db(name, update_dict):
     collection.update_one({"type": "roster_list", "name": name}, {"$set": update_dict})
@@ -102,43 +126,49 @@ def update_staff_in_db(name, update_dict):
         st.session_state.staff_roster[name].update(update_dict)
     fetch_roster_doc.clear()
 
+
 def save_case_to_db(case_data):
     case_data["type"] = "case"
     collection.insert_one(case_data)
     get_cases_from_db.clear()
+
 
 def save_deviation_to_db(data):
     data["type"] = "deviation"
     collection.insert_one(data)
     fetch_deviations_from_db.clear()
 
+
 def update_deviation_in_db(id_val, update_dict):
     collection.update_one({"_id": id_val}, {"$set": update_dict})
     fetch_deviations_from_db.clear()
+
 
 def delete_deviation_from_db(id_val):
     collection.delete_one({"_id": id_val})
     fetch_deviations_from_db.clear()
 
+
 def delete_request_from_db(req):
     collection.delete_one({"_id": req["_id"]})
-    fetch_approved_requests_from_db.clear()
-    fetch_pending_requests_from_db.clear()
+    clear_requests_cache()
+
 
 def update_request_status_in_db(req, status):
     collection.update_one({"_id": req["_id"]}, {"$set": {"status": status}})
-    fetch_approved_requests_from_db.clear()
-    fetch_pending_requests_from_db.clear()
+    clear_requests_cache()
+
 
 def save_request_to_db(req, request_type):
     req["type"] = request_type
     collection.insert_one(req)
-    fetch_approved_requests_from_db.clear()
-    fetch_pending_requests_from_db.clear()
+    clear_requests_cache()
+
 
 def save_masterfile_to_db(df):
     collection.update_one({"type": "masterfile"}, {"$set": {"data": df.to_dict(orient="records")}}, upsert=True)
     fetch_masterfile_doc.clear()
+
 
 def get_request_limits(req_date):
     cal_doc = fetch_calendar_doc()
@@ -147,6 +177,7 @@ def get_request_limits(req_date):
     st.session_state.limits["PTO_per_day"] = selected_config.get("PTO_per_day", 1)
     st.session_state.limits["Wellness_per_day"] = selected_config.get("Wellness_per_day", 1)
     return st.session_state.limits
+
 
 def calculate_duration_mins(start_str, end_str):
     """Calculates non-zero positive duration minutes between HH:MM strings accurately."""
@@ -163,10 +194,11 @@ def calculate_duration_mins(start_str, end_str):
     except Exception:
         return 0
 
+
 # --- INITIAL CONFIG & STATE ---
 st.title("📊 Team Operations Management System (TOMS)")
 
-local_tz = pytz.timezone("Asia/Manila") 
+local_tz = pytz.timezone("Asia/Manila")
 current_date = datetime.now(local_tz).date()
 
 if "admin_password" not in st.session_state: st.session_state.admin_password = "Password1234"
@@ -712,19 +744,16 @@ with tab_req:
 
 # --- TAB 3: PRODUCTIVITY MONITORING ---
 with tab_prod:
-    # Fetch initial data
     cases = get_cases_from_db()
     dev_data_all = fetch_deviations_from_db()
 
     if not cases:
         st.info("No case records found.")
     else:
-        # Data Preparation
         df = pd.DataFrame(cases)
         if "_id" in df.columns:
             df = df.drop(columns=["_id"])
         
-        # Coalesce Date and Target Date
         if "Date" not in df.columns and "Target Date" in df.columns:
             df["Date"] = df["Target Date"]
         elif "Date" in df.columns and "Target Date" in df.columns:
@@ -738,12 +767,8 @@ with tab_prod:
         df["Day"] = df["Date"].dt.date
         df["Day_Str"] = df["Date"].dt.strftime("%Y-%m-%d")
 
-        # Normalize Contact / Case Type column name if present
         type_col = "Type" if "Type" in df.columns else ("Contact Type" if "Contact Type" in df.columns else None)
 
-        # =====================================================================
-        # 🗓️ GLOBAL MONTH & YEAR FILTERS (APPLIED TO ALL SECTIONS)
-        # =====================================================================
         st.markdown("## 🗓️ Monthly Breakdown")
         
         col_y, col_m = st.columns(2)
@@ -758,7 +783,6 @@ with tab_prod:
             key="prod_monitor_month"
         )
 
-        # Global Monthly Filtered DataFrames applied consistently across ALL sections
         monthly_df = df[(df["Year"] == selected_year) & (df["Month"] == selected_month)]
 
         dev_df_m = pd.DataFrame()
@@ -773,9 +797,6 @@ with tab_prod:
                 (dev_df_all["Name"] != "Jeff Bote")
             ]
 
-        # =====================================================================
-        # 🎯 SECTION 3: QA ANALYSIS & MOST COMMON ERROR ANALYSIS (MOVED ABOVE CASES COUNT)
-        # =====================================================================
         commented_df = monthly_df[monthly_df["Comment"].astype(str).str.strip().ne("") & monthly_df["Comment"].notna()].copy()
         st.markdown("## 📈 Quality Analysis")
         if not commented_df.empty:
@@ -850,7 +871,6 @@ with tab_prod:
         else:
             st.info("No cases found for selected month.")
 
-        # Monthly Deviations Table
         st.markdown("### 🔀 Deviations Count")
         if not dev_df_m.empty:
             m_dev_summary = dev_df_m.groupby(["Name"]).size().reset_index(name="Total Deviations").sort_values(by="Total Deviations", ascending=False)
@@ -858,9 +878,6 @@ with tab_prod:
         else:
             st.info("No deviation entries found for selected month.")
 
-        # =====================================================================
-        # 📈 SECTION 2: DAILY TRENDS & CHART FILTERING
-        # =====================================================================
         st.markdown("## 📈 Daily Productivity & Deviation Trends")
 
         daily_owner_prod = monthly_df.groupby(["Day_Str", "Owner"]).size().reset_index(name="Case Count")
@@ -885,7 +902,6 @@ with tab_prod:
             filtered_prod = daily_owner_prod
             filtered_dev = daily_dev_trend
 
-        # Daily Productivity Trend Chart
         st.markdown("### 📈 Daily Productivity")
         if not filtered_prod.empty:
             prod_line_chart = (
@@ -907,7 +923,6 @@ with tab_prod:
         else:
             st.info("No productivity chart data available for current selection.")
 
-        # Daily Deviation Trend Chart
         st.markdown("### 🔀 Daily Deviation")
         if not filtered_dev.empty:
             dev_line_chart = (
@@ -929,9 +944,6 @@ with tab_prod:
         else:
             st.info("No deviation trend data available for current selection.")
 
-        # =====================================================================
-        # 📊 SECTION 4: OPERATIONAL ANALYSIS (MONTH-FILTERED & INDEPENDENT OF CHART FILTER)
-        # =====================================================================
         st.markdown("## 📊 Operational Analysis: Productivity vs. Deviations")
         
         total_monthly_prod_count = daily_owner_prod["Case Count"].sum() if not daily_owner_prod.empty else 0
@@ -976,7 +988,6 @@ with tab_prod:
             else:
                 st.metric(label="Correlation Coefficient", value="N/A")
 
-        # --- CONTACT / CASE TYPE ANALYSIS ---
         st.markdown("### 📞 Contact / Case Type Operational Analysis")
         if type_col and type_col in monthly_df.columns and not monthly_df.empty:
             type_counts = monthly_df[type_col].value_counts().reset_index()
@@ -1007,9 +1018,6 @@ with tab_prod:
         else:
             st.info("No specific contact/case type column found for deeper contact analysis.")
 
-        # =====================================================================
-        # 👤 SECTION 5: INDIVIDUAL PERFORMANCE ANALYSIS & PROFILING (MONTH-FILTERED)
-        # =====================================================================
         st.markdown("## 👤 Individual Performance Analysis & Profile Categories")
 
         active_roster_names = sorted(list(set(df["Owner"].dropna().tolist() + list(st.session_state.staff_roster.keys()))))
@@ -1062,9 +1070,6 @@ with tab_prod:
         else:
             st.info("No employee activity recorded for the selected month to generate individual performance profiles.")
 
-        # =====================================================================
-        # 🔍 SECTION 6: DEEP-DIVE OPERATIONAL INSIGHTS & MATRIX FRAMEWORK
-        # =====================================================================
         with st.expander("🔍 Deep-Dive Operational Insights & Correlation Models", expanded=True):
             st.markdown("""
             ### 1. Operational Relationship Framework
@@ -1103,7 +1108,7 @@ with tab_prod:
             st.markdown("""
             > **Operational Takeaway:** Monitor cases with high deviation counts to distinguish between **healthy process deviations** (coaching, complex research) and **unplanned friction** (tool outages, adherence loss).
             """)
-            
+
 # --- TAB 4: CASE TRACKER ---
 with tab_case:
     st.subheader("📝 Bulk Log New Cases")
@@ -1240,9 +1245,7 @@ with tab_case:
                 key="dl_qa_csv"
             )
 
-    # --- FILTER SECTION ---
     with st.expander("🔍 Filter Options", expanded=True):
-        # Row 1: Case #, Owner, Comment
         f1, f2, f3 = st.columns(3)
         f_case = f1.text_input("Filter by Case #", key="case_filter_num")
         owners = sorted(list(set(case.get("Owner", "") for case in cases_list if case.get("Owner"))))
@@ -1254,7 +1257,6 @@ with tab_case:
             key="case_filter_comment"
         )
 
-        # Row 2: Date Filter Type, Specific Date, Month, Year
         d_col1, d_col2, d_col3, d_col4 = st.columns([2, 2, 2, 2])
         filter_date_mode = d_col1.selectbox(
             "Filter Date By",
@@ -1278,10 +1280,8 @@ with tab_case:
             )
             f_year = d_col3.number_input("Year", value=date.today().year, step=1, key="case_filter_year")
 
-    # --- APPLY FILTERS ---
     filtered_cases = []
     for case in reversed(cases_list):
-        # Text/Category Filters
         matches_case = not f_case or f_case.lower() in str(case.get("Case Number", "")).lower()
         matches_owner = f_owner == "All" or case.get("Owner", "") == f_owner
         
@@ -1293,7 +1293,6 @@ with tab_case:
         else:
             matches_comment = True
 
-        # Date Filtering Logic
         matches_date = True
         raw_date_str = case.get("Target Date") or case.get("Date", "")
         
@@ -1310,7 +1309,6 @@ with tab_case:
         if matches_case and matches_owner and matches_comment and matches_date:
             filtered_cases.append(case)
 
-    # --- RESULTS & PAGINATION ---
     if filtered_cases:
         items_per_page = 10
         total_case_pages = max(1, (len(filtered_cases) + items_per_page - 1) // items_per_page)
@@ -1330,21 +1328,17 @@ with tab_case:
             has_comment = bool(str(case.get("Comment", "")).strip())
             has_qa_fb = bool(str(case.get("QA_Feedback", "")).strip())
             
-            # Determine score status
             qa_score = case.get('QA_Score', 9)
             is_passed = (qa_score == 9)
 
-            # Define class for background color based on pass/fail
             box_class = "qa-box-passed" if is_passed else "qa-box-failed"
 
             with entry_col:
-                expander_label = f"Case #{case.get('Case Number','')}"
                 if not is_passed or (has_comment and not is_passed):
                     expander_label = f"🚨 RED ALERT | Case #{case.get('Case Number','')} (Requires Attention / Failed)"
                 else:
                     expander_label = f"✅ PASSED | Case #{case.get('Case Number','')}"
 
-                # Container wrapper applying background color (Light Green = Passed, Light Red = Failed)
                 st.markdown(f'<div class="{box_class}">', unsafe_allow_html=True)
 
                 with st.expander(expander_label, expanded=(has_comment or has_qa_fb)):
@@ -1373,7 +1367,6 @@ with tab_case:
                 with t_col3:
                     t_comment = st.toggle("💬 Comment", key=f"t_comment_{case['_id']}")
                 with t_col4:
-                    # Toggle QA option allowed only if a comment is present
                     t_qa = st.toggle("🎯 QA", key=f"t_qa_{case['_id']}") if has_comment else False
 
             if t_edit:
@@ -1419,7 +1412,6 @@ with tab_case:
                         else:
                             st.error("Credential confirmation mismatch validation failure.")
 
-            # --- QUICK COMMENT TOGGLE ACTION ---
             if t_comment:
                 with st.container(border=True):
                     st.markdown(f"#### 💬 Add / Modify Comment for Case #{case.get('Case Number','')}")
@@ -1433,14 +1425,11 @@ with tab_case:
                         st.success("Comment updated successfully!")
                         st.rerun()
 
-            # --- QA EVALUATION FORM (Triggered only when case has a comment) ---
             if t_qa:
                 with st.container(border=True):
                     st.markdown(f"### 🎯 QA Scorecard | Case #{case.get('Case Number','')}")
                     
-                    # Passed / Failed direct toggle switch
                     qa_passed_toggle = st.toggle("Verdict: PASSED / FAILED", value=is_passed, key=f"qa_status_toggle_{case['_id']}")
-                    final_status_str = "PASSED" if qa_passed_toggle else "FAILED"
 
                     if qa_passed_toggle:
                         st.success("STATUS: PASSED ✅")
@@ -1492,7 +1481,7 @@ with tab_case:
 
     else:
         st.info("No active system case records match filter parameters.")
-        
+
 # --- TAB 5: DEVIATION ---
 with tab_dev:
     st.subheader("Submit Deviation Request")
@@ -1534,7 +1523,6 @@ with tab_dev:
             end_val = st.text_input("End", value=entry["end"], label_visibility="collapsed", key=f"dev_matrix_end_{idx}")
             entry["end"] = end_val
             
-        # Dynamically auto-calculate duration accurately
         calc_mins = calculate_duration_mins(entry["start"], entry["end"])
         if calc_mins > 0:
             entry["duration"] = f"{calc_mins}m"
@@ -1566,7 +1554,6 @@ with tab_dev:
             for entry in st.session_state.bulk_deviation_entries:
                 total_mins = calculate_duration_mins(entry["start"], entry["end"])
 
-                # Strict Guard against 0 minutes entry
                 if total_mins <= 0:
                     has_zero_error = True
                     st.error(f"❌ Invalid duration for time slot {entry['start']} - {entry['end']}. Duration cannot be 0 minutes.")
