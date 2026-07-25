@@ -1181,7 +1181,6 @@ with tab_case:
                     "Owner": global_owner,
                     "Type": global_c_type,
                     "Case Number": c_num,
-                    "Comment": "",
                     "QA_SLO_SLA": "Met",
                     "QA_Initial_Consecutive_Resp": "Met",
                     "QA_Case_Status_Update": "Met",
@@ -1191,7 +1190,8 @@ with tab_case:
                     "QA_Entitlement_Validation": "Met",
                     "QA_Account_Validation": "Met",
                     "QA_Case_Routing": "Met",
-                    "QA_Score": 9,
+                    "QA_Score": None,
+                    "QA_Audited": False,
                     "QA_Feedback": ""
                 }
                 save_case_to_db(new_case)
@@ -1215,7 +1215,7 @@ with tab_case:
         dl_col1, dl_col2 = st.columns(2)
 
         with dl_col1:
-            kb_cols = [c for c in ["Case Number", "Owner", "Target Date", "Type", "Comment"] if c in df_cases.columns]
+            kb_cols = [c for c in ["Case Number", "Owner", "Target Date", "Type"] if c in df_cases.columns]
             df_kb = df_cases[kb_cols] if kb_cols else df_cases
             csv_kb = df_kb.to_csv(index=False).encode('utf-8')
             st.download_button(
@@ -1229,7 +1229,7 @@ with tab_case:
         with dl_col2:
             qa_cols = [
                 "Case Number", "Owner", "Target Date", "Type",
-                "QA_Score", "QA_Feedback",
+                "QA_Score", "QA_Audited", "QA_Feedback",
                 "QA_SLO_SLA", "QA_Initial_Consecutive_Resp", "QA_Case_Status_Update",
                 "QA_Issue_Field_Updated", "QA_Case_Comments_Probing", "QA_Collaborations_Logging",
                 "QA_Entitlement_Validation", "QA_Account_Validation", "QA_Case_Routing"
@@ -1246,18 +1246,12 @@ with tab_case:
             )
 
     with st.expander("🔍 Filter Options", expanded=True):
-        f1, f2, f3 = st.columns(3)
+        f1, f2 = st.columns(2)
         f_case = f1.text_input("Filter by Case #", key="case_filter_num")
         owners = sorted(list(set(case.get("Owner", "") for case in cases_list if case.get("Owner"))))
         f_owner = f2.selectbox("Filter by Owner", ["All"] + owners, key="case_filter_owner")
-        f_comment = f3.selectbox(
-            "Filter by Comment", 
-            ["With Comments Only", "All", "Without Comments Only"], 
-            index=0,
-            key="case_filter_comment"
-        )
 
-        d_col1, d_col2, d_col3, d_col4 = st.columns([2, 2, 2, 2])
+        d_col1, d_col2, d_col3 = st.columns([2, 2, 2])
         filter_date_mode = d_col1.selectbox(
             "Filter Date By",
             ["All Time", "Specific Date", "Month & Year"],
@@ -1284,14 +1278,6 @@ with tab_case:
     for case in reversed(cases_list):
         matches_case = not f_case or f_case.lower() in str(case.get("Case Number", "")).lower()
         matches_owner = f_owner == "All" or case.get("Owner", "") == f_owner
-        
-        has_comment = bool(str(case.get("Comment", "")).strip())
-        if f_comment == "With Comments Only":
-            matches_comment = has_comment
-        elif f_comment == "Without Comments Only":
-            matches_comment = not has_comment
-        else:
-            matches_comment = True
 
         matches_date = True
         raw_date_str = case.get("Target Date") or case.get("Date", "")
@@ -1306,7 +1292,7 @@ with tab_case:
             except Exception:
                 matches_date = False
 
-        if matches_case and matches_owner and matches_comment and matches_date:
+        if matches_case and matches_owner and matches_date:
             filtered_cases.append(case)
 
     if filtered_cases:
@@ -1325,35 +1311,38 @@ with tab_case:
 
         for case in paginated_cases:
             entry_col, gap, action_col = st.columns([3.5, .1, 1.4])
-            has_comment = bool(str(case.get("Comment", "")).strip())
             has_qa_fb = bool(str(case.get("QA_Feedback", "")).strip())
+            is_audited = case.get("QA_Audited", False)
             
-            qa_score = case.get('QA_Score', 9)
-            is_passed = (qa_score == 9)
+            qa_score = case.get('QA_Score', None)
+            is_passed = (qa_score == 9) if qa_score is not None else False
 
-            box_class = "qa-box-passed" if is_passed else "qa-box-failed"
+            if is_audited:
+                box_class = "qa-box-passed" if is_passed else "qa-box-failed"
+            else:
+                box_class = ""
 
             with entry_col:
-                if has_comment or (has_qa_fb and not is_passed):
-                    expander_label = f"🚨 RED ALERT | Case #{case.get('Case Number','')} (Requires Attention)"
-                elif has_qa_fb and is_passed:
-                    expander_label = f"✅ PASSED | Case #{case.get('Case Number','')}"
+                if is_audited:
+                    if not is_passed:
+                        expander_label = f"🚨 RED ALERT | Case #{case.get('Case Number','')} (Failed Audit)"
+                    else:
+                        expander_label = f"✅ PASSED | Case #{case.get('Case Number','')}"
                 else:
                     expander_label = f"Case #{case.get('Case Number','')}"
 
                 st.markdown(f'<div class="{box_class}">', unsafe_allow_html=True)
 
-                with st.expander(expander_label, expanded=(has_comment or has_qa_fb)):
+                with st.expander(expander_label, expanded=(is_audited and (not is_passed or has_qa_fb))):
+                    score_display = f"`{qa_score} / 9` ({'PASSED' if is_passed else 'FAILED'})" if (is_audited and qa_score is not None) else "`Not Audited`"
+                    
                     st.markdown(f"""
                         **Owner:** {case.get('Owner','')}  
                         **Target Date:** {case.get('Target Date', str(date.today()))}  
                         **Contact Type:** {case.get('Type','')}  
                         **Case Number:** {case.get('Case Number','')}  
-                        **QA Score:** `{qa_score} / 9` ({'PASSED' if is_passed else 'FAILED'})
+                        **QA Score:** {score_display}
                         """)
-                    
-                    if has_comment:
-                        st.error(f"💬 **Internal Work Note:** {case.get('Comment')}")
                     
                     if case.get("QA_Feedback"):
                         st.info(f"📝 **QA Feedback:** {case.get('QA_Feedback')}")
@@ -1361,14 +1350,12 @@ with tab_case:
                 st.markdown('</div>', unsafe_allow_html=True)
 
             with action_col:
-                t_col1, t_col2, t_col3, t_col4 = st.columns(4)
+                t_col1, t_col2, t_col3 = st.columns(3)
                 with t_col1:
                     t_edit = st.toggle("✏️ Edit", key=f"t_edit_{case['_id']}")
                 with t_col2:
                     t_del = st.toggle("🗑️ Del", key=f"t_del_{case['_id']}")
                 with t_col3:
-                    t_comment = st.toggle("💬 Comment", key=f"t_comment_{case['_id']}")
-                with t_col4:
                     t_qa = st.toggle("🎯 QA", key=f"t_qa_{case['_id']}")
 
             if t_edit:
@@ -1384,7 +1371,6 @@ with tab_case:
                     
                     edit_type = st.selectbox("Interaction Channel Profile", c_types, index=c_types.index(case.get("Type")) if case.get("Type") in c_types else 0, key=f"type_{case['_id']}")
                     edit_case_number = st.text_input("Identified Case Identifier", value=case.get("Case Number", ""), key=f"case_num_{case['_id']}")
-                    edit_comment = st.text_area("Case Comment / Work Note", value=case.get("Comment", ""), key=f"comment_{case['_id']}")
 
                     if st.button("Save Record", key=f"save_ed_{case['_id']}"):
                         collection.update_one(
@@ -1393,8 +1379,7 @@ with tab_case:
                                 "Target Date": str(edit_target_date),
                                 "Owner": edit_owner, 
                                 "Type": edit_type,
-                                "Case Number": edit_case_number,
-                                "Comment": edit_comment
+                                "Case Number": edit_case_number
                             }}
                         )
                         get_cases_from_db.clear()
@@ -1414,35 +1399,12 @@ with tab_case:
                         else:
                             st.error("Credential confirmation mismatch validation failure.")
 
-            if t_comment:
-                with st.container(border=True):
-                    st.markdown(f"#### 💬 Add / Modify Comment for Case #{case.get('Case Number','')}")
-                    
-                    # Verdict toggle placed inside Comment action block
-                    qa_passed_toggle = st.toggle("Verdict: PASSED / FAILED", value=is_passed, key=f"qa_status_toggle_{case['_id']}")
-                    if qa_passed_toggle:
-                        st.success("STATUS: PASSED ✅")
-                    else:
-                        st.error("STATUS: FAILED ❌")
-
-                    new_comment_val = st.text_area("Work Note / Case Comment", value=case.get("Comment", ""), key=f"quick_comment_{case['_id']}")
-                    
-                    if st.button("💾 Save Comment & Verdict", key=f"btn_save_comment_{case['_id']}"):
-                        computed_score = 9 if qa_passed_toggle else 0
-                        collection.update_one(
-                            {"_id": case["_id"]},
-                            {"$set": {
-                                "Comment": new_comment_val,
-                                "QA_Score": computed_score
-                            }}
-                        )
-                        get_cases_from_db.clear()
-                        st.success("Comment and Verdict updated successfully!")
-                        st.rerun()
-
             if t_qa:
                 with st.container(border=True):
                     st.markdown(f"### 🎯 QA Scorecard | Case #{case.get('Case Number','')}")
+
+                    # Audited status toggle
+                    audited_status = st.toggle("Audit Status: AUDITED / NOT AUDITED", value=is_audited, key=f"qa_audited_toggle_{case['_id']}")
 
                     met_opts = ["Met", "Not Met"]
                     
@@ -1466,19 +1428,23 @@ with tab_case:
                     all_criteria = [q_slo, q_resp, q_update, q_issue, q_probing, q_collab, q_entitle, q_account, q_routing]
                     non_negotiables = [q_probing, q_collab, q_entitle, q_routing]
                     
-                    if any(nn == "Not Met" for nn in non_negotiables):
-                        computed_score = 0
-                        st.error("🚨 **Score: 0 / 9** (Failed a Non-negotiable criteria)")
-                    else:
-                        deductions = sum(1 for item in all_criteria if item == "Not Met")
-                        computed_score = max(0, 9 - deductions)
-                        st.metric("Calculated QA Score", f"{computed_score} / 9")
+                    if audited_status:
+                        if any(nn == "Not Met" for nn in non_negotiables):
+                            computed_score = 0
+                            st.error("🚨 **Score: 0 / 9** (Failed a Non-negotiable criteria)")
+                        else:
+                            deductions = sum(1 for item in all_criteria if item == "Not Met")
+                            computed_score = max(0, 9 - deductions)
+                            st.metric("Calculated QA Score", f"{computed_score} / 9")
 
-                    qa_status_display = "PASSED" if computed_score == 9 else "FAILED"
-                    if qa_status_display == "PASSED":
-                        st.success(f"**STATUS: {qa_status_display}** ✅")
+                        qa_status_display = "PASSED" if computed_score == 9 else "FAILED"
+                        if qa_status_display == "PASSED":
+                            st.success(f"**STATUS: {qa_status_display}** ✅")
+                        else:
+                            st.error(f"**STATUS: {qa_status_display}** ❌")
                     else:
-                        st.error(f"**STATUS: {qa_status_display}** ❌")
+                        computed_score = None
+                        st.info("ℹ️ **Status: NOT AUDITED**")
 
                     qa_feedback_str = st.text_area("QA Auditor Feedback", value=case.get("QA_Feedback", ""), key=f"qa_fb_{case['_id']}")
                     
@@ -1496,6 +1462,7 @@ with tab_case:
                                 "QA_Account_Validation": q_account,
                                 "QA_Case_Routing": q_routing,
                                 "QA_Score": computed_score,
+                                "QA_Audited": audited_status,
                                 "QA_Feedback": qa_feedback_str
                             }}
                         )
