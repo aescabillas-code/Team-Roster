@@ -11,15 +11,7 @@ import altair as alt
 st.set_page_config(layout="wide")
 
 # --- DATABASE HELPERS & CONNECTION ---
-uploaded_tracker = st.sidebar.file_uploader(
-    "Upload Team Productivity Tracker",
-    type=["xlsx"]
-)
-
-if uploaded_tracker is None:
-    st.sidebar.warning(
-        "Upload TEAM JEFF PRODUCTIVITY TRACKER.xlsx to populate Productivity and Case Tracker"
-    )
+EXCEL_FILE = "TEAM JEFF PRODUCTIVITY TRACKER.xlsx"
 
 @st.cache_resource
 def get_mongo_client():
@@ -803,7 +795,7 @@ with tab_req:
 
 # --- TAB 3: PRODUCTIVITY MONITORING ---
 with tab_prod:
-    cases = fetch_all_excel_cases(uploaded_tracker)
+    cases = fetch_all_excel_cases(EXCEL_FILE)
 
     if not cases:
         st.info("No case records found.")
@@ -996,7 +988,7 @@ with tab_case:
 
     st.divider()
 
-    cases_list = fetch_all_excel_cases(uploaded_tracker)
+    cases_list = fetch_all_excel_cases(EXCEL_FILE)
 
     st.subheader("📚 Cases")
 
