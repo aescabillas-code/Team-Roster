@@ -877,14 +877,14 @@ with tab_case:
     st.subheader("📝 Case Entry Workspace")
     
     # 1. Google Sheets Redirect Button & Instructions
-    sheet_url = "https://docs.google.com/spreadsheets/d/1LH9cFYAtxa9jnphYjFwT5uy3DNz0oaIWug4XZgc7CL0/edit?usp=sharing"
+    sheet_url = "https://hpe-my.sharepoint.com/:x:/p/arianne-may_escabillas/IQAgnyyBKfzxSIiKM49uruu6AX9oA4RSMQfDDLcXvZ5uvuI?e=XjNwN0"
     
     st.markdown("""
         Click the button below to log new cases directly into the shared master Excel sheet. 
         Select your assigned tab (*Andre John Castor, Arianne May Escabillas, Denmark Navarro, Ian Christian Derez, Jasmin Gonzales, John Linnel Adagao, June John Cruz, Leo Renz Calizo, Marinelle Espinosa, or May Ann Ramirez*) to enter case records.
     """)
     
-    st.link_button("🌐 Open Case Tracker Google Sheet", sheet_url, type="primary")
+    st.link_button("🌐 Open Case Tracker Sheet", sheet_url, type="primary")
 
     st.divider()
 
@@ -914,7 +914,7 @@ with tab_case:
 
         for tab_name, gid in tab_gids.items():
             try:
-                csv_url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={gid}"
+                csv_url = f"https://hpe-my.sharepoint.com/:x:/p/arianne-may_escabillas/IQAgnyyBKfzxSIiKM49uruu6AX9oA4RSMQfDDLcXvZ5uvuI?e=XjNwN0"
                 df_tab = pd.read_csv(csv_url)
                 
                 # Standardize columns
