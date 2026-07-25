@@ -1188,19 +1188,48 @@ with tab_case:
                 key="dl_qa_csv"
             )
 
-    f1, f2, f3 = st.columns(3)
-    f_case = f1.text_input("Filter by Case #")
-    owners = sorted(list(set(case.get("Owner", "") for case in cases_list if case.get("Owner"))))
-    f_owner = f2.selectbox("Filter by Owner", ["All"] + owners)
+    # --- FILTER SECTION ---
+    with st.expander("🔍 Filter Options", expanded=True):
+        # Row 1: Case #, Owner, Comment
+        f1, f2, f3 = st.columns(3)
+        f_case = f1.text_input("Filter by Case #", key="case_filter_num")
+        owners = sorted(list(set(case.get("Owner", "") for case in cases_list if case.get("Owner"))))
+        f_owner = f2.selectbox("Filter by Owner", ["All"] + owners, key="case_filter_owner")
+        f_comment = f3.selectbox(
+            "Filter by Comment", 
+            ["With Comments Only", "All", "Without Comments Only"], 
+            index=0,
+            key="case_filter_comment"
+        )
 
-    f_comment = f3.selectbox(
-        "Filter by Comment", 
-        ["With Comments Only", "All", "Without Comments Only"], 
-        index=0
-    )
+        # Row 2: Date Filter Type, Specific Date, Month, Year
+        d_col1, d_col2, d_col3, d_col4 = st.columns([2, 2, 2, 2])
+        filter_date_mode = d_col1.selectbox(
+            "Filter Date By",
+            ["All Time", "Specific Date", "Month & Year"],
+            key="case_filter_date_mode"
+        )
 
+        f_specific_date = None
+        f_month = None
+        f_year = None
+
+        if filter_date_mode == "Specific Date":
+            f_specific_date = d_col2.date_input("Select Date", value=date.today(), key="case_filter_spec_date")
+        elif filter_date_mode == "Month & Year":
+            f_month = d_col2.selectbox(
+                "Month", 
+                options=range(1, 13), 
+                index=date.today().month - 1, 
+                format_func=lambda x: calendar.month_name[x], 
+                key="case_filter_month"
+            )
+            f_year = d_col3.number_input("Year", value=date.today().year, step=1, key="case_filter_year")
+
+    # --- APPLY FILTERS ---
     filtered_cases = []
     for case in reversed(cases_list):
+        # Text/Category Filters
         matches_case = not f_case or f_case.lower() in str(case.get("Case Number", "")).lower()
         matches_owner = f_owner == "All" or case.get("Owner", "") == f_owner
         
@@ -1212,9 +1241,24 @@ with tab_case:
         else:
             matches_comment = True
 
-        if matches_case and matches_owner and matches_comment:
+        # Date Filtering Logic
+        matches_date = True
+        raw_date_str = case.get("Target Date") or case.get("Date", "")
+        
+        if filter_date_mode != "All Time" and raw_date_str:
+            try:
+                c_date = pd.to_datetime(raw_date_str).date()
+                if filter_date_mode == "Specific Date":
+                    matches_date = (c_date == f_specific_date)
+                elif filter_date_mode == "Month & Year":
+                    matches_date = (c_date.month == f_month and c_date.year == f_year)
+            except Exception:
+                matches_date = False
+
+        if matches_case and matches_owner and matches_comment and matches_date:
             filtered_cases.append(case)
 
+    # --- RESULTS & PAGINATION ---
     if filtered_cases:
         items_per_page = 10
         total_case_pages = max(1, (len(filtered_cases) + items_per_page - 1) // items_per_page)
