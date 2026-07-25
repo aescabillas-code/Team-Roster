@@ -709,7 +709,7 @@ with tab_req:
         st.write("*No pending requests await administrator review authorization logs.*")
 
 # --- TAB 3: PRODUCTIVITY MONITORING ---
-with tab3:
+with tab_prod:
     st.header("📈 Productivity Monitoring & Operational Analysis")
 
     # Fetch initial data
