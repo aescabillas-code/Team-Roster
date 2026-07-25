@@ -204,10 +204,10 @@ global_pending_requests = fetch_pending_requests_from_db()
 # --- GLOBAL CSS STYLING ---
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
-    html, body, [class*="css"] { font-family: 'Roboto', sans-serif !important; }
-    h1, h2, h3, .header-cell { font-family: 'Roboto', sans-serif !important; font-weight: 700; color: #008080 !important; }
-    .side-block { font-family: 'Roboto', sans-serif !important; font-size: 10px !important; line-height: 1.2; }
+    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;700&display=swap');
+    html, body, [class*="css"] { font-family: 'Montserrat', sans-serif !important; }
+    h1, h2, h3, .header-cell { font-family: 'Montserrat', sans-serif !important; font-weight: 700; color: #008080 !important; }
+    .side-block { font-family: 'Montserrat', sans-serif !important; font-size: 10px !important; line-height: 1.2; }
     
     .day-block { 
         border-radius: 0px; 
