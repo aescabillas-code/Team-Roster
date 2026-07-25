@@ -776,7 +776,7 @@ with tab_prod:
                 (dev_df_all["Name"] != "Jeff Bote")
             ]
 
-        st.markdown("### 📦 MTD Cases Count")
+        st.markdown("### 📦 Cases Count")
         if not monthly_df.empty:
             if type_col:
                 monthly_summary = monthly_df.groupby(["Owner", type_col]).size().unstack(fill_value=0)
@@ -792,7 +792,7 @@ with tab_prod:
             st.info("No cases found for selected month.")
 
         # Monthly Deviations Table
-        st.markdown("### 🔀 MTD Deviations Count")
+        st.markdown("### 🔀  Deviations Count")
         if not dev_df_m.empty:
             m_dev_summary = dev_df_m.groupby(["Name"]).size().reset_index(name="Total Deviations").sort_values(by="Total Deviations", ascending=False)
             st.dataframe(m_dev_summary, use_container_width=True, hide_index=True)
@@ -948,7 +948,7 @@ with tab_prod:
             filtered_dev = daily_dev_trend
 
         # Daily Productivity Trend Chart
-        st.markdown("### 📈 Daily Productivity Trend per Owner")
+        st.markdown("### 📈 Daily Productivity")
         if not filtered_prod.empty:
             prod_line_chart = (
                 alt.Chart(filtered_prod)
@@ -970,7 +970,7 @@ with tab_prod:
             st.info("No productivity chart data available for current selection.")
 
         # Daily Deviation Trend Chart
-        st.markdown("### 🔀 Daily Deviation Trend")
+        st.markdown("### 🔀 Daily Deviation")
         if not filtered_dev.empty:
             dev_line_chart = (
                 alt.Chart(filtered_dev)
