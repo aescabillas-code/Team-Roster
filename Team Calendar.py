@@ -792,7 +792,7 @@ with tab_prod:
             st.info("No cases found for selected month.")
 
         # Monthly Deviations Table
-        st.markdown("### 🔀 Monthly Deviations Count")
+        st.markdown("### 🔀 MTD Deviations Count")
         if not dev_df_m.empty:
             m_dev_summary = dev_df_m.groupby(["Name"]).size().reset_index(name="Total Deviations").sort_values(by="Total Deviations", ascending=False)
             st.dataframe(m_dev_summary, use_container_width=True, hide_index=True)
