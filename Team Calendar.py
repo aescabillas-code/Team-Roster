@@ -802,52 +802,61 @@ with tab_prod:
         st.divider()
 
         # =====================================================================
-        # 🎯 SECTION 1.5: QA ANALYSIS (CASES WITH COMMENTS ONLY)
+        # 🎯 SECTION 1.5: QA ANALYSIS & MOST COMMON ERROR ANALYSIS
         # =====================================================================
-        st.markdown("### ⚠️ Most Common QA Error & Defect Analysis")
-        qa_criteria_map = {
-            "QA_SLO_SLA": "SLO / SLA Adherence",
-            "QA_Initial_Consecutive_Resp": "Initial & Consecutive Responses",
-            "QA_Case_Status_Update": "Timely Case Status Update",
-            "QA_Issue_Field_Updated": "Issue Field Documentation",
-            "QA_Case_Comments_Probing": "Probing Questions & Case Comments (🚨)",
-            "QA_Collaborations_Logging": "Collaborations / Communication Logging (🚨)",
-            "QA_Entitlement_Validation": "Entitlement Validation Process (🚨)",
-            "QA_Account_Validation": "Account Validation Process",
-            "QA_Case_Routing": "Private Case Routing / Escalation (🚨)"
-        }
+        st.markdown("## 🎯 QA Analysis (Cases with Comments Only)")
+        
+        # Filter for cases with valid comments within the selected month/year scope
+        commented_df = monthly_df[monthly_df["Comment"].astype(str).str.strip().ne("") & monthly_df["Comment"].notna()].copy()
 
-        error_counts = {}
-        for col, label in qa_criteria_map.items():
-            if col in commented_df.columns:
-                # Count instances marked as 'Not Met'
-                not_met_count = (commented_df[col] == "Not Met").sum()
-                error_counts[label] = not_met_count
+            # --- MOST COMMON ERROR ANALYSIS ---
+            st.markdown("### ⚠️ Most Common QA Error & Defect Analysis")
+            
+            qa_criteria_map = {
+                "QA_SLO_SLA": "SLO / SLA Adherence",
+                "QA_Initial_Consecutive_Resp": "Initial & Consecutive Responses",
+                "QA_Case_Status_Update": "Timely Case Status Update",
+                "QA_Issue_Field_Updated": "Issue Field Documentation",
+                "QA_Case_Comments_Probing": "Probing Questions & Case Comments (🚨)",
+                "QA_Collaborations_Logging": "Collaborations / Communication Logging (🚨)",
+                "QA_Entitlement_Validation": "Entitlement Validation Process (🚨)",
+                "QA_Account_Validation": "Account Validation Process",
+                "QA_Case_Routing": "Private Case Routing / Escalation (🚨)"
+            }
 
-        error_df = pd.DataFrame(list(error_counts.items()), columns=["QA Requirement / Criterion", "Defect Count ('Not Met')"])
-        error_df["Error Rate (%)"] = ((error_df["Defect Count ('Not Met')"] / total_commented) * 100).round(1)
-        error_df = error_df.sort_values(by="Defect Count ('Not Met')", ascending=False)
+            error_counts = {}
+            for col, label in qa_criteria_map.items():
+                if col in commented_df.columns:
+                    # Count instances marked as 'Not Met'
+                    not_met_count = (commented_df[col] == "Not Met").sum()
+                    error_counts[label] = not_met_count
 
-        err_col1, err_col2 = st.columns([1, 1])
-        with err_col1:
-            st.markdown("**Defect Breakdown Table**")
-            st.dataframe(error_df, use_container_width=True, hide_index=True)
+            error_df = pd.DataFrame(list(error_counts.items()), columns=["QA Requirement / Criterion", "Defect Count ('Not Met')"])
+            error_df["Error Rate (%)"] = ((error_df["Defect Count ('Not Met')"] / total_commented) * 100).round(1)
+            error_df = error_df.sort_values(by="Defect Count ('Not Met')", ascending=False)
 
-        with err_col2:
-            st.markdown("**Defect Distribution Visual**")
-            if error_df["Defect Count ('Not Met')"].sum() > 0:
-                err_chart = (
-                    alt.Chart(error_df)
-                    .mark_bar(color="#ea4335")
-                    .encode(
-                        x=alt.X("Defect Count ('Not Met'):Q", title="Total Defect Count"),
-                        y=alt.Y("QA Requirement / Criterion:N", sort="-x", title="QA Criterion"),
-                        tooltip=["QA Requirement / Criterion", "Defect Count ('Not Met')", "Error Rate (%)"]
+            err_col1, err_col2 = st.columns([1, 1])
+            with err_col1:
+                st.markdown("**Defect Breakdown Table**")
+                st.dataframe(error_df, use_container_width=True, hide_index=True)
+
+            with err_col2:
+                st.markdown("**Defect Distribution Visual**")
+                if error_df["Defect Count ('Not Met')"].sum() > 0:
+                    err_chart = (
+                        alt.Chart(error_df)
+                        .mark_bar(color="#ea4335")
+                        .encode(
+                            x=alt.X("Defect Count ('Not Met'):Q", title="Total Defect Count"),
+                            y=alt.Y("QA Requirement / Criterion:N", sort="-x", title="QA Criterion"),
+                            tooltip=["QA Requirement / Criterion", "Defect Count ('Not Met')", "Error Rate (%)"]
+                        )
                     )
-                )
-                st.altair_chart(err_chart, use_container_width=True)
-            else:
-                st.success("🎉 No QA defect errors recorded across evaluated cases in this timeframe!")
+                    st.altair_chart(err_chart, use_container_width=True)
+                else:
+                    st.success("🎉 No QA defect errors recorded across evaluated cases in this timeframe!")
+        else:
+            st.info("No cases with comments found for QA evaluation in the selected month.")
 
         st.divider()
 
