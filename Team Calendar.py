@@ -2304,7 +2304,8 @@ with tab_dev:
         d_col1, d_col2, d_col3 = st.columns([2, 2, 2])
         filter_date_mode = d_col1.selectbox(
             "Filter Date By",
-            ["All Time", "Specific Date", "Month & Year"],
+            ["Specific Date", "Month & Year", "All Time"],
+            index=0,  # Defaults to "Specific Date"
             key="dev_filter_date_mode",
         )
 
@@ -2534,7 +2535,7 @@ with tab_dev:
             st.info("No deviation records match the selected filter criteria.")
     else:
         st.write("No deviation requests found.")
-
+        
 # --- TAB 6: ADMIN PANEL ---
 with tab_adm:
     st.markdown(
