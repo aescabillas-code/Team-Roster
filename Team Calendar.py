@@ -805,8 +805,7 @@ with tab_prod:
         # 🎯 SECTION 1.5: QA ANALYSIS (CASES WITH COMMENTS ONLY)
         # =====================================================================
         st.markdown("### ⚠️ Most Common QA Error & Defect Analysis")
-            
-            qa_criteria_map = {
+        qa_criteria_map = {
                 "QA_SLO_SLA": "SLO / SLA Adherence",
                 "QA_Initial_Consecutive_Resp": "Initial & Consecutive Responses",
                 "QA_Case_Status_Update": "Timely Case Status Update",
