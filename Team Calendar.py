@@ -808,8 +808,9 @@ with tab_prod:
         # Filter for cases with valid comments within the selected month/year scope
         commented_df = monthly_df[monthly_df["Comment"].astype(str).str.strip().ne("") & monthly_df["Comment"].notna()].copy()
 
-        st.markdown("### ⚠️ Most Common QA Error & Defect Analysis")
-        qa_criteria_map = {
+        if not commented_df.empty:
+            st.markdown("### ⚠️ Most Common QA Error & Defect Analysis")
+            qa_criteria_map = {
                 "QA_SLO_SLA": "SLO / SLA Adherence",
                 "QA_Initial_Consecutive_Resp": "Initial & Consecutive Responses",
                 "QA_Case_Status_Update": "Timely Case Status Update",
@@ -822,6 +823,7 @@ with tab_prod:
             }
 
             error_counts = {}
+            total_commented = len(commented_df)
             for col, label in qa_criteria_map.items():
                 if col in commented_df.columns:
                     # Count instances marked as 'Not Met'
@@ -856,7 +858,7 @@ with tab_prod:
             st.info("No cases with comments found for QA evaluation in the selected month.")
             
         st.divider()
-
+        
         # =====================================================================
         # 👤 SECTION 2: INDIVIDUAL PERFORMANCE ANALYSIS & PROFILING
         # =====================================================================
