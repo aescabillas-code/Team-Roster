@@ -1721,12 +1721,14 @@ with tab_case:
         f_owner = f2.selectbox(
             "Filter by Owner", ["All"] + owners, key="case_filter_owner"
         )
+        # Defaulting "Filter by Audit Status" to "Audited" (index 1)
         f_audit_status = f3.selectbox(
             "Filter by Audit Status",
             ["All", "Audited", "Not Audited"],
+            index=1,
             key="case_filter_audit_status",
         )
-
+        
         d_col1, d_col2, d_col3 = st.columns([2, 2, 2])
         filter_date_mode = d_col1.selectbox(
             "Filter Date By",
