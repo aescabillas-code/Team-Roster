@@ -738,6 +738,9 @@ with tab_prod:
         df["Day"] = df["Date"].dt.date
         df["Day_Str"] = df["Date"].dt.strftime("%Y-%m-%d")
 
+        # Normalize Contact / Case Type column name if present
+        type_col = "Type" if "Type" in df.columns else ("Contact Type" if "Contact Type" in df.columns else None)
+
         # =====================================================================
         # 🗓️ SECTION 1: MONTHLY PRODUCTIVITY & DEVIATIONS
         # =====================================================================
@@ -760,8 +763,12 @@ with tab_prod:
 
         st.markdown("### 📦 Monthly Case Breakdown")
         if not monthly_df.empty:
-            monthly_summary = monthly_df.groupby(["Owner", "Type"]).size().unstack(fill_value=0)
-            monthly_summary["Total Cases"] = monthly_summary.sum(axis=1)
+            if type_col:
+                monthly_summary = monthly_df.groupby(["Owner", type_col]).size().unstack(fill_value=0)
+            else:
+                monthly_summary = monthly_df.groupby("Owner").size().to_frame(name="Total Cases")
+            
+            monthly_summary["Total Cases"] = monthly_summary.sum(axis=1) if type_col else monthly_summary["Total Cases"]
             monthly_summary = monthly_summary.sort_values(by="Total Cases", ascending=False)
             
             m_height = min(1000, max(100, len(monthly_summary) * 35 + 38))
@@ -923,7 +930,7 @@ with tab_prod:
                     tooltip=[
                         alt.Tooltip("Date_Str:N", title="Date"),
                         alt.Tooltip("Name:N", title="Employee"),
-                        alt.Tooltip("Deviation Count:Q", title="Deviations")
+                        alt.Tooltip("Deviations:Q", title="Deviations")
                     ]
                 )
                 .interactive()
@@ -971,6 +978,37 @@ with tab_prod:
             else:
                 st.metric(label="Correlation Coefficient", value="N/A")
 
+        # --- CONTACT / CASE TYPE ANALYSIS ---
+        st.markdown("### 📞 Contact / Case Type Operational Analysis")
+        if type_col and type_col in monthly_df.columns and not monthly_df.empty:
+            type_counts = monthly_df[type_col].value_counts().reset_index()
+            type_counts.columns = ["Contact Type", "Total Volume"]
+            
+            total_monthly_cases = type_counts["Total Volume"].sum()
+            type_counts["Volume Share (%)"] = ((type_counts["Total Volume"] / total_monthly_cases) * 100).round(1).astype(str) + "%"
+
+            col_t1, col_t2 = st.columns([1, 1])
+            
+            with col_t1:
+                st.markdown("**Distribution Table**")
+                st.dataframe(type_counts, use_container_width=True, hide_index=True)
+                
+            with col_t2:
+                st.markdown("**Volume Share Visual**")
+                type_chart = (
+                    alt.Chart(type_counts)
+                    .mark_bar()
+                    .encode(
+                        x=alt.X("Total Volume:Q", title="Total Cases"),
+                        y=alt.Y("Contact Type:N", sort="-x", title="Contact Type"),
+                        color=alt.Color("Contact Type:N", legend=None),
+                        tooltip=["Contact Type", "Total Volume", "Volume Share (%)"]
+                    )
+                )
+                st.altair_chart(type_chart, use_container_width=True)
+        else:
+            st.info("No specific contact/case type column found for deeper contact analysis.")
+
         with st.expander("🔍 Deep-Dive Operational Insights & Correlation Models", expanded=True):
             st.markdown("""
             ### 1. Operational Relationship Framework
@@ -1006,7 +1044,8 @@ with tab_prod:
                     "Inspect active work queue habits and idle time."
                 ]
             }
-            st.table(pd.DataFrame(matrix_data))
+            # Clean dataframe output with no index column numbers
+            st.dataframe(pd.DataFrame(matrix_data), use_container_width=True, hide_index=True)
 
             st.markdown("""
             > **Operational Takeaway:** Monitor cases with high deviation counts to distinguish between **healthy process deviations** (coaching, complex research) and **unplanned friction** (tool outages, adherence loss).
