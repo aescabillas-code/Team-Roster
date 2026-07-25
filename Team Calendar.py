@@ -876,73 +876,77 @@ with tab_prod:
 with tab_case:
     st.subheader("📝 Case Entry Workspace")
     
+    # 1. Google Sheets Redirect Button & Instructions
     sheet_url = "https://docs.google.com/spreadsheets/d/1LH9cFYAtxa9jnphYjFwT5uy3DNz0oaIWug4XZgc7CL0/edit?usp=sharing"
     
-    st.markdown("Click the button below to open the team master case tracking Excel file and log your cases under your designated tab:")
-    st.link_button("🌐 Open Case Tracker Spreadsheet", sheet_url, type="primary")
+    st.markdown("""
+        Click the button below to log new cases directly into the shared master Excel sheet. 
+        Select your assigned tab (*Andre John Castor, Arianne May Escabillas, Denmark Navarro, Ian Christian Derez, Jasmin Gonzales, John Linnel Adagao, June John Cruz, Leo Renz Calizo, Marinelle Espinosa, or May Ann Ramirez*) to enter case records.
+    """)
+    
+    st.link_button("🌐 Open Case Tracker Google Sheet", sheet_url, type="primary")
 
     st.divider()
-    st.subheader("📚 Cases Tracker")
 
-    tab_names_list = [
-        "Andre John Castor", "Arianne May Escabillas", "Denmark Navarro", 
-        "Ian Christian Derez", "Jasmin Gonzales", "John Linnel Adagao", 
-        "June John Cruz", "Leo Renz Calizo", "Marinelle Espinosa", "May Ann Ramirez"
-    ]
+    # 2. Fetch and aggregate data across sheet tabs for Cases view
+    SHEET_ID = "1LH9cFYAtxa9jnphYjFwT5uy3DNz0oaIWug4XZgc7CL0"
+    
+    # Mapping tab names to their respective Google Sheet GID numbers
+    tab_gids = {
+        "Andre John Castor": "0",
+        "Arianne May Escabillas": "1",
+        "Denmark Navarro": "2",
+        "Ian Christian Derez": "3",
+        "Jasmin Gonzales": "4",
+        "John Linnel Adagao": "5",
+        "June John Cruz": "6",
+        "Leo Renz Calizo": "7",
+        "Marinelle Espinosa": "8",
+        "May Ann Ramirez": "9"
+    }
 
-    doc_id = "1LH9cFYAtxa9jnphYjFwT5uy3DNz0oaIWug4XZgc7CL0"
+    @st.cache_data(ttl=30)
+    def fetch_all_sheet_cases():
+        aggregated_cases = []
+        # Database cases fallback or overlay
+        db_cases = get_cases_from_db()
+        aggregated_cases.extend(db_cases)
 
-    @st.cache_data(ttl=60)
-    def fetch_cases_from_sheets():
-        all_cases = []
-        for tab_name in tab_names_list:
-            encoded_tab = tab_name.replace(" ", "%20")
-            csv_export_url = f"https://docs.google.com/spreadsheets/d/{doc_id}/gviz/tq?tqx=out:csv&sheet={encoded_tab}"
+        for tab_name, gid in tab_gids.items():
             try:
-                sheet_df = pd.read_csv(csv_export_url)
-                if not sheet_df.empty:
-                    sheet_df = sheet_df.dropna(how="all")
-                    for _, row in sheet_df.iterrows():
-                        case_no = str(row.get("Case #", "") or row.get("Case Number", "")).strip()
-                        if case_no and case_no.lower() != "nan":
-                            case_date = str(row.get("Date", "")).strip()
-                            contact_type = str(row.get("Contact Type", "")).strip()
-                            description = str(row.get("Description", "") or row.get("Desription", "")).strip()
-                            main_issue = str(row.get("Main Issue", "")).strip()
-                            product_grp = str(row.get("Product Group", "")).strip()
-                            status = str(row.get("Status", "")).strip()
-                            status_reason = str(row.get("Status Reason", "")).strip()
-                            
-                            comment_parts = []
-                            if main_issue and main_issue.lower() != "nan": comment_parts.append(f"Issue: {main_issue}")
-                            if product_grp and product_grp.lower() != "nan": comment_parts.append(f"Product: {product_grp}")
-                            if description and description.lower() != "nan": comment_parts.append(f"Desc: {description}")
-                            if status and status.lower() != "nan": comment_parts.append(f"Status: {status}")
-                            if status_reason and status_reason.lower() != "nan": comment_parts.append(f"Reason: {status_reason}")
-
-                            all_cases.append({
-                                "_id": f"{tab_name}_{case_no}",
-                                "Case Number": case_no,
-                                "Owner": tab_name,
-                                "Target Date": case_date if case_date and case_date.lower() != "nan" else str(date.today()),
-                                "Type": contact_type if contact_type and contact_type.lower() != "nan" else "N/A",
-                                "Comment": " | ".join(comment_parts),
-                                "QA_Score": 9,
-                                "QA_Feedback": ""
-                            })
+                csv_url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={gid}"
+                df_tab = pd.read_csv(csv_url)
+                
+                # Standardize columns
+                df_tab.columns = [str(c).strip() for c in df_tab.columns]
+                
+                for _, row in df_tab.iterrows():
+                    case_num = str(row.get("Case #", "")).strip()
+                    if case_num and case_num.lower() != "nan":
+                        aggregated_cases.append({
+                            "_id": f"sheet_{gid}_{_}",
+                            "Target Date": str(row.get("Date", str(date.today()))),
+                            "Date": str(row.get("Date", str(date.today()))),
+                            "Owner": tab_name,
+                            "Type": str(row.get("Contact Type", "Call")),
+                            "Case Number": case_num,
+                            "Main Issue": str(row.get("Main Issue", "")),
+                            "Product Group": str(row.get("Product Group", "")),
+                            "Description": str(row.get("Description", "")),
+                            "Status": str(row.get("Status", "")),
+                            "Status Reason": str(row.get("Status Reason", "")),
+                            "Comment": str(row.get("Description", "")) if str(row.get("Description", "")).strip() and str(row.get("Description", "")).lower() != "nan" else "",
+                            "QA_Score": row.get("QA_Score", 9),
+                            "QA_Feedback": str(row.get("QA_Feedback", "")) if pd.notnull(row.get("QA_Feedback")) else ""
+                        })
             except Exception:
                 continue
-        return all_cases
 
-    db_cases = get_cases_from_db()
-    sheet_cases = fetch_cases_from_sheets()
+        return aggregated_cases
 
-    merged_cases_dict = {c["_id"]: c for c in db_cases if "_id" in c}
-    for sc in sheet_cases:
-        if sc["_id"] not in merged_cases_dict:
-            merged_cases_dict[sc["_id"]] = sc
+    cases_list = fetch_all_sheet_cases()
 
-    cases_list = list(merged_cases_dict.values())
+    st.subheader("📚 Cases")
 
     if cases_list:
         df_cases = pd.DataFrame(cases_list)
@@ -952,7 +956,7 @@ with tab_case:
         dl_col1, dl_col2 = st.columns(2)
 
         with dl_col1:
-            kb_cols = [c for c in ["Case Number", "Owner", "Target Date", "Type", "Comment"] if c in df_cases.columns]
+            kb_cols = [c for c in ["Case Number", "Owner", "Target Date", "Type", "Main Issue", "Product Group", "Status", "Comment"] if c in df_cases.columns]
             df_kb = df_cases[kb_cols] if kb_cols else df_cases
             csv_kb = df_kb.to_csv(index=False).encode('utf-8')
             st.download_button(
@@ -1030,15 +1034,22 @@ with tab_case:
 
                 with st.expander(expander_label, expanded=(has_comment or has_qa_fb)):
                     st.markdown(f"""
-                        **Owner:** {case.get('Owner','')}  
-                        **Target Date:** {case.get('Target Date', str(date.today()))}  
+                        **Owner (Tab Name):** {case.get('Owner','')}  
+                        **Date:** {case.get('Target Date', str(date.today()))}  
                         **Contact Type:** {case.get('Type','')}  
                         **Case Number:** {case.get('Case Number','')}  
                         **QA Score:** `{qa_score} / 9`
                         """)
                     
+                    if case.get("Main Issue"):
+                        st.write(f"**Main Issue:** {case.get('Main Issue')}")
+                    if case.get("Product Group"):
+                        st.write(f"**Product Group:** {case.get('Product Group')}")
+                    if case.get("Status"):
+                        st.write(f"**Status:** {case.get('Status')} ({case.get('Status Reason', '')})")
+
                     if has_comment:
-                        st.error(f"💬 **Internal Work Note:** {case.get('Comment')}")
+                        st.error(f"💬 **Internal Work Note / Description:** {case.get('Comment')}")
                     
                     if case.get("QA_Feedback"):
                         st.info(f"📝 **QA Feedback:** {case.get('QA_Feedback')}")
@@ -1058,8 +1069,7 @@ with tab_case:
             if t_edit:
                 with st.container(border=True):
                     st.markdown(f"#### Edit Case #{case.get('Case Number','')}")
-                    owner_list = sorted(list(st.session_state.staff_roster.keys())) or ["Unknown"]
-                    c_types = ["Call", "Chat", "MFQ"]
+                    owner_list = sorted(list(st.session_state.staff_roster.keys())) or [case.get("Owner")]
                     edit_owner = st.selectbox("Record Assignment Owner", owner_list, index=owner_list.index(case.get("Owner")) if case.get("Owner") in owner_list else 0, key=f"owner_{case['_id']}")
                     
                     try:
@@ -1068,6 +1078,7 @@ with tab_case:
                         default_target = date.today()
                     edit_target_date = st.date_input("Target Date", value=default_target, key=f"target_date_{case['_id']}")
                     
+                    c_types = ["Call", "Chat", "MFQ"]
                     edit_type = st.selectbox("Interaction Channel Profile", c_types, index=c_types.index(case.get("Type")) if case.get("Type") in c_types else 0, key=f"type_{case['_id']}")
                     edit_case_number = st.text_input("Identified Case Identifier", value=case.get("Case Number", ""), key=f"case_num_{case['_id']}")
                     
