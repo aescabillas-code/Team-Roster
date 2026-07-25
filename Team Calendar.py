@@ -792,7 +792,7 @@ with tab_prod:
             st.info("No cases found for selected month.")
 
         # Monthly Deviations Table
-        st.markdown("### 🔀  Deviations Count")
+        st.markdown("### 🔀 Deviations Count")
         if not dev_df_m.empty:
             m_dev_summary = dev_df_m.groupby(["Name"]).size().reset_index(name="Total Deviations").sort_values(by="Total Deviations", ascending=False)
             st.dataframe(m_dev_summary, use_container_width=True, hide_index=True)
@@ -805,7 +805,7 @@ with tab_prod:
         # =====================================================================
         st.markdown("## 📈 Daily Productivity & Deviation Trends")
 
-        # Aggregation restricted strictly to the selected month & year
+        # Unaffected base aggregations for the entire month
         daily_owner_prod = monthly_df.groupby(["Day_Str", "Owner"]).size().reset_index(name="Case Count")
 
         daily_dev_trend = pd.DataFrame()
@@ -821,6 +821,7 @@ with tab_prod:
             key="tab3_owner_filter"
         )
 
+        # Apply filter ONLY to chart views, keeping general metrics completely independent
         if selected_chart_owner != "All Owners":
             filtered_prod = daily_owner_prod[daily_owner_prod["Owner"] == selected_chart_owner] if not daily_owner_prod.empty else daily_owner_prod
             filtered_dev = daily_dev_trend[daily_dev_trend["Name"] == selected_chart_owner] if not daily_dev_trend.empty else daily_dev_trend
@@ -997,6 +998,7 @@ with tab_prod:
         # =====================================================================
         st.markdown("## 📊 Operational Analysis: Productivity vs. Deviations")
         
+        # Use full monthly aggregate metrics so operations metrics are immune to the owner filter
         merged_metrics = pd.DataFrame()
         if not daily_owner_prod.empty and not daily_dev_trend.empty:
             merged_metrics = pd.merge(
@@ -1011,12 +1013,12 @@ with tab_prod:
         with col1:
             st.metric(
                 label="Total Productivity Logs", 
-                value=f"{filtered_prod['Case Count'].sum():,}" if not filtered_prod.empty else 0
+                value=f"{daily_owner_prod['Case Count'].sum():,}" if not daily_owner_prod.empty else 0
             )
         with col2:
             st.metric(
                 label="Total Deviations Logged", 
-                value=f"{filtered_dev['Deviation Count'].sum():,}" if not filtered_dev.empty else 0
+                value=f"{daily_dev_trend['Deviation Count'].sum():,}" if not daily_dev_trend.empty else 0
             )
         with col3:
             if len(merged_metrics) > 2:
@@ -1028,6 +1030,22 @@ with tab_prod:
                 )
             else:
                 st.metric(label="Correlation Coefficient", value="N/A")
+
+        # --- PRODUCTIVITY & DEVIATION RELATIONSHIP DEEP-DIVE ANALYSIS ---
+        st.markdown("### 🔍 Productivity & Deviation Correlation Insights")
+        
+        if not merged_metrics.empty and len(merged_metrics) > 2:
+            avg_cases_per_day = merged_metrics["Case Count"].mean()
+            avg_devs_per_day = merged_metrics["Deviation Count"].mean()
+            
+            st.markdown(f"""
+            * **Daily Throughput Baseline:** Agents average **{avg_cases_per_day:.1f} cases** per active day against an average of **{avg_devs_per_day:.1f} offline deviations**.
+            * **Operational Correlation Dynamics:** 
+              * **Negative Correlation ($r < 0$):** Highlights operational friction, where increased off-queue compliance breaks or unplanned system interruptions directly compress daily case resolutions.
+              * **Positive Correlation ($r > 0$):** Indicates specialized escalation handling, where agents managing dense case queues concurrently require extensive team cross-consultations or specialized SME alignment.
+            """)
+        else:
+            st.info("Insufficient overlapping daily data between cases and deviations for the selected month to run correlation modeling.")
 
         # --- CONTACT / CASE TYPE ANALYSIS ---
         st.markdown("### 📞 Contact / Case Type Operational Analysis")
