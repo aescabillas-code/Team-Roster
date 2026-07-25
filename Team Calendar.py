@@ -1314,7 +1314,7 @@ with tab_case:
         paginated_cases = filtered_cases[start_idx:end_idx]
 
         for case in paginated_cases:
-            entry_col, gap, action_col = st.columns([3.8, .2, 1.2])
+            entry_col, gap, action_col = st.columns([3.5, .1, 1.4])
             has_comment = bool(str(case.get("Comment", "")).strip())
             has_qa_fb = bool(str(case.get("QA_Feedback", "")).strip())
             
@@ -1353,12 +1353,14 @@ with tab_case:
                 st.markdown('</div>', unsafe_allow_html=True)
 
             with action_col:
-                t_col1, t_col2, t_col3 = st.columns(3)
+                t_col1, t_col2, t_col3, t_col4 = st.columns(4)
                 with t_col1:
                     t_edit = st.toggle("✏️ Edit", key=f"t_edit_{case['_id']}")
                 with t_col2:
                     t_del = st.toggle("🗑️ Del", key=f"t_del_{case['_id']}")
                 with t_col3:
+                    t_comment = st.toggle("💬 Comment", key=f"t_comment_{case['_id']}")
+                with t_col4:
                     # Toggle QA option allowed only if a comment is present
                     t_qa = st.toggle("🎯 QA", key=f"t_qa_{case['_id']}") if has_comment else False
 
@@ -1404,6 +1406,20 @@ with tab_case:
                             st.rerun()
                         else:
                             st.error("Credential confirmation mismatch validation failure.")
+
+            # --- QUICK COMMENT TOGGLE ACTION ---
+            if t_comment:
+                with st.container(border=True):
+                    st.markdown(f"#### 💬 Add / Modify Comment for Case #{case.get('Case Number','')}")
+                    new_comment_val = st.text_area("Work Note / Case Comment", value=case.get("Comment", ""), key=f"quick_comment_{case['_id']}")
+                    if st.button("💾 Save Comment", key=f"btn_save_comment_{case['_id']}"):
+                        collection.update_one(
+                            {"_id": case["_id"]},
+                            {"$set": {"Comment": new_comment_val}}
+                        )
+                        get_cases_from_db.clear()
+                        st.success("Comment updated successfully!")
+                        st.rerun()
 
             # --- QA EVALUATION FORM (Triggered only when case has a comment) ---
             if t_qa:
@@ -1464,7 +1480,7 @@ with tab_case:
 
     else:
         st.info("No active system case records match filter parameters.")
-
+        
 # --- TAB 5: DEVIATION ---
 with tab_dev:
     st.subheader("Submit Deviation Request")
