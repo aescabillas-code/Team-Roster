@@ -1,7 +1,7 @@
 streamlit==1.40.0
 pymongo==4.17.0
 pandas==2.2.3
-# Pin numpy and pyarrow to proven stable versions for Python 3.12
+openpyxl
 numpy>=1.26.0,<2.0.0
 dnspython==2.8.0
 pyarrow==15.0.2
