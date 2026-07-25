@@ -1418,7 +1418,7 @@ with tab_case:
                     st.markdown(f"### 🎯 QA Scorecard | Case #{case.get('Case Number','')}")
 
                     # Audited status toggle
-                    audited_status = st.toggle("Audit Status: AUDITED / NOT AUDITED", value=is_audited, key=f"qa_audited_toggle_{case['_id']}")
+                    audited_status = st.toggle("Audit Status: AUDITED", value=is_audited, key=f"qa_audited_toggle_{case['_id']}")
 
                     met_opts = ["Met", "Not Met"]
                     
