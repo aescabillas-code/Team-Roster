@@ -874,53 +874,105 @@ with tab_prod:
 
 # --- TAB 4: CASE TRACKER ---
 with tab_case:
-    st.subheader("📝 Case Entry Excel Sheet")
+    st.subheader("📝 Bulk Log New Cases")
+    cases_list = get_cases_from_db() 
 
-    excel_link = "https://hpe-my.sharepoint.com/:x:/p/arianne-may_escabillas/IQAgnyyBKfzxSIiKM49uruu6AX9oA4RSMQfDDLcXvZ5uvuI?e=XjNwN0"
-    st.markdown(
-        f'''
-        <a href="{excel_link}" target="_blank">
-            <button style="
-                background: linear-gradient(90deg, #1D6F42 0%, #21A366 100%);
-                color: white;
-                padding: 12px 24px;
-                font-size: 16px;
-                font-weight: 600;
-                border: none;
-                border-radius: 8px;
-                cursor: pointer;
-                box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
-            ">
-                📊 Open Case Entry Excel Workbook
-            </button>
-        </a>
-        ''',
-        unsafe_allow_html=True
-    )
+    masterfile_doc = fetch_masterfile_doc()
+    if masterfile_doc and "data" in masterfile_doc:
+        master_df = pd.DataFrame(masterfile_doc["data"])
+    else:
+        master_df = pd.DataFrame({
+            "Category": ["Contact Type"],
+            "Values": ["Call,Chat,Email"]
+        })
+
+    c_types = master_df.loc[master_df["Category"] == "Contact Type", "Values"].iloc[0].split(",")
+
+    owner_list = sorted(list(st.session_state.staff_roster.keys()))
+    if not owner_list:
+        owner_list = ["Unknown"]
+
+    g_col1, g_col2, g_col3 = st.columns(3)
+    with g_col1:
+        global_target_date = st.date_input("Global Target Date", value=date.today(), key="case_global_target_date")
+    with g_col2:
+        global_c_type = st.selectbox("Global Contact Type", c_types, key="case_global_type")
+    with g_col3:
+        global_owner = st.selectbox("Global Case Owner", owner_list, key="case_global_owner")
+
+    st.markdown("### 📊 Case Entry")
+
+    if "batch_case_entries" not in st.session_state or len(st.session_state.batch_case_entries) == 0:
+        st.session_state.batch_case_entries = [{"case_number": ""} for _ in range(5)]
+
+    total_slots = len(st.session_state.batch_case_entries)
+    for row_idx in range(0, total_slots, 5):
+        cols = st.columns(5)
+        for col_idx in range(5):
+            entry_idx = row_idx + col_idx
+            if entry_idx < total_slots:
+                with cols[col_idx]:
+                    st.session_state.batch_case_entries[entry_idx]["case_number"] = st.text_input(
+                        f"Case #{entry_idx + 1}",
+                        value=st.session_state.batch_case_entries[entry_idx]["case_number"],
+                        key=f"grid_case_num_{entry_idx}"
+                    )
+
+    ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([2, 2, 4])
+    with ctrl_col1:
+        if st.button("➕ Add Row (+1 Slot)", key="btn_add_matrix_row"):
+            st.session_state.batch_case_entries.append({"case_number": ""})
+            st.rerun()
+    with ctrl_col2:
+        if st.button("🗑️ Remove Last Slot", key="btn_remove_matrix_row"):
+            if len(st.session_state.batch_case_entries) > 1:
+                st.session_state.batch_case_entries.pop()
+                st.rerun()
+            else:
+                st.warning("Cannot remove slot. Minimum of 1 entry slot required.")
+    with ctrl_col3:
+        if st.button("💾 Submit All Cases", key="btn_save_batch_cases"):
+            cases_saved = 0
+            for entry in st.session_state.batch_case_entries:
+                # 1. Save ONLY slots with actual content
+                if not entry["case_number"] or not str(entry["case_number"]).strip():
+                    continue
+                new_case = {
+                    "Date": str(global_target_date),
+                    "Target Date": str(global_target_date),
+                    "Owner": global_owner,
+                    "Type": global_c_type,
+                    "Case Number": entry["case_number"].strip(),
+                    "Comment": "",
+                    "QA_SLO_SLA": "Met",
+                    "QA_Initial_Consecutive_Resp": "Met",
+                    "QA_Case_Status_Update": "Met",
+                    "QA_Issue_Field_Updated": "Met",
+                    "QA_Case_Comments_Probing": "Met",
+                    "QA_Collaborations_Logging": "Met",
+                    "QA_Entitlement_Validation": "Met",
+                    "QA_Account_Validation": "Met",
+                    "QA_Case_Routing": "Met",
+                    "QA_Score": 9,
+                    "QA_Feedback": ""
+                }
+                save_case_to_db(new_case)
+                cases_saved += 1
+            
+            if cases_saved > 0:
+                st.success(f"Batch execution complete! {cases_saved} cases recorded.")
+            else:
+                st.warning("No cases recorded. Please enter at least one valid case number.")
+            st.session_state.batch_case_entries = [{"case_number": ""} for _ in range(5)]
+            st.rerun()
 
     st.divider()
     st.subheader("📚 Cases")
 
-    # Fetch cases dynamically from the Excel SharePoint workbook (or database populated by Excel)
-    cases_list = get_cases_from_db()
-
-    # Map SharePoint tab names / fields dynamically for cases rendering
     if cases_list:
         df_cases = pd.DataFrame(cases_list)
         if "_id" in df_cases.columns:
             df_cases["_id"] = df_cases["_id"].astype(str)
-
-        # Standardize Case Owner mapping from tab names
-        if "Tab Name" in df_cases.columns:
-            df_cases["Owner"] = df_cases["Tab Name"]
-        elif "Case Owner" in df_cases.columns:
-            df_cases["Owner"] = df_cases["Case Owner"]
-
-        # Standardize Date & Case Number
-        if "Date" in df_cases.columns:
-            df_cases["Target Date"] = df_cases["Date"]
-        if "Case #" in df_cases.columns:
-            df_cases["Case Number"] = df_cases["Case #"]
 
         dl_col1, dl_col2 = st.columns(2)
 
@@ -957,17 +1009,10 @@ with tab_case:
 
     f1, f2, f3 = st.columns(3)
     f_case = f1.text_input("Filter by Case #")
-    
-    excel_tab_owners = [
-        "Andre John Castor", "Arianne May Escabillas", "Denmark Navarro", 
-        "Ian Christian Derez", "Jasmin Gonzales", "John Linnel Adagao", 
-        "June John Cruz", "Leo Renz Calizo", "Marinelle Espinosa", "May Ann Ramirez"
-    ]
-    db_owners = list(set(case.get("Owner", "") or case.get("Tab Name", "") for case in cases_list if case.get("Owner") or case.get("Tab Name")))
-    combined_owners = sorted(list(set(excel_tab_owners + db_owners)))
-    
-    f_owner = f2.selectbox("Filter by Owner", ["All"] + combined_owners)
+    owners = sorted(list(set(case.get("Owner", "") for case in cases_list if case.get("Owner"))))
+    f_owner = f2.selectbox("Filter by Owner", ["All"] + owners)
 
+    # Updated default to "With Comments Only"
     f_comment = f3.selectbox(
         "Filter by Comment", 
         ["With Comments Only", "All", "Without Comments Only"], 
@@ -976,11 +1021,8 @@ with tab_case:
 
     filtered_cases = []
     for case in reversed(cases_list):
-        case_num = case.get("Case Number") or case.get("Case #", "")
-        owner_val = case.get("Owner") or case.get("Tab Name", "")
-        
-        matches_case = not f_case or f_case.lower() in str(case_num).lower()
-        matches_owner = f_owner == "All" or owner_val == f_owner
+        matches_case = not f_case or f_case.lower() in str(case.get("Case Number", "")).lower()
+        matches_owner = f_owner == "All" or case.get("Owner", "") == f_owner
         
         has_comment = bool(case.get("Comment"))
         if f_comment == "With Comments Only":
@@ -991,12 +1033,7 @@ with tab_case:
             matches_comment = True
 
         if matches_case and matches_owner and matches_comment:
-            # Map normalized dictionary values
-            case_entry = case.copy()
-            case_entry["Case Number"] = case_num
-            case_entry["Owner"] = owner_val
-            case_entry["Target Date"] = case.get("Target Date") or case.get("Date", str(date.today()))
-            filtered_cases.append(case_entry)
+            filtered_cases.append(case)
 
     if filtered_cases:
         for case in filtered_cases:
@@ -1013,6 +1050,7 @@ with tab_case:
                 elif has_qa_fb and is_passed:
                     expander_label = f"✅ PASSED | Case #{case.get('Case Number','')}"
 
+                # Render background container based on QA Status and Feedback presence
                 if has_qa_fb:
                     box_class = "qa-box-passed" if is_passed else "qa-box-failed"
                     st.markdown(f'<div class="{box_class}">', unsafe_allow_html=True)
@@ -1021,7 +1059,7 @@ with tab_case:
                     st.markdown(f"""
                         **Owner:** {case.get('Owner','')}  
                         **Target Date:** {case.get('Target Date', str(date.today()))}  
-                        **Contact Type:** {case.get('Type') or case.get('Contact Type','')}  
+                        **Contact Type:** {case.get('Type','')}  
                         **Case Number:** {case.get('Case Number','')}  
                         **QA Score:** `{qa_score} / 9`
                         """)
@@ -1036,6 +1074,7 @@ with tab_case:
                     st.markdown('</div>', unsafe_allow_html=True)
 
             with action_col:
+                # 4. Removed Note toggle (action)
                 t_col1, t_col2, t_col3 = st.columns(3)
                 with t_col1:
                     t_edit = st.toggle("✏️ Edit", key=f"t_edit_{case['_id']}")
@@ -1047,8 +1086,6 @@ with tab_case:
             if t_edit:
                 with st.container(border=True):
                     st.markdown(f"#### Edit Case #{case.get('Case Number','')}")
-                    owner_list = combined_owners
-                    c_types = ["Call", "Chat", "MFQ"]
                     edit_owner = st.selectbox("Record Assignment Owner", owner_list, index=owner_list.index(case.get("Owner")) if case.get("Owner") in owner_list else 0, key=f"owner_{case['_id']}")
                     
                     try:
@@ -1057,8 +1094,7 @@ with tab_case:
                         default_target = date.today()
                     edit_target_date = st.date_input("Target Date", value=default_target, key=f"target_date_{case['_id']}")
                     
-                    current_c_type = case.get("Type") or case.get("Contact Type", "Call")
-                    edit_type = st.selectbox("Interaction Channel Profile", c_types, index=c_types.index(current_c_type) if current_c_type in c_types else 0, key=f"type_{case['_id']}")
+                    edit_type = st.selectbox("Interaction Channel Profile", c_types, index=c_types.index(case.get("Type")) if case.get("Type") in c_types else 0, key=f"type_{case['_id']}")
                     edit_case_number = st.text_input("Identified Case Identifier", value=case.get("Case Number", ""), key=f"case_num_{case['_id']}")
                     
                     if st.button("Save Record", key=f"save_ed_{case['_id']}"):
@@ -1066,13 +1102,9 @@ with tab_case:
                             {"_id": case["_id"]},
                             {"$set": {
                                 "Target Date": str(edit_target_date),
-                                "Date": str(edit_target_date),
-                                "Owner": edit_owner,
-                                "Tab Name": edit_owner, 
+                                "Owner": edit_owner, 
                                 "Type": edit_type,
-                                "Contact Type": edit_type,
-                                "Case Number": edit_case_number,
-                                "Case #": edit_case_number
+                                "Case Number": edit_case_number
                             }}
                         )
                         st.cache_data.clear()
@@ -1126,6 +1158,7 @@ with tab_case:
                         computed_score = max(0, 9 - deductions)
                         st.metric("Calculated QA Score", f"{computed_score} / 9")
 
+                    # 2. Add PASSED or FAILED status display below
                     qa_status_display = "PASSED" if computed_score == 9 else "FAILED"
                     if qa_status_display == "PASSED":
                         st.success(f"**STATUS: {qa_status_display}** ✅")
@@ -1249,6 +1282,7 @@ with tab_dev:
         f_col1, f_col2, f_col3 = st.columns(3)
         filter_month = f_col1.selectbox("Month", options=range(1, 13), index=date.today().month - 1, format_func=lambda x: calendar.month_name[x],key="dev_f_month")
         filter_year = f_col2.number_input("Year", value=date.today().year, key="dev_f_year")
+        # 8. Default to current day entries only
         filter_date = f_col3.date_input("Specific Date", value=date.today(), key="dev_f_date")
         apply_filter = st.button("Apply Filter")
 
@@ -1258,6 +1292,7 @@ with tab_dev:
         df['Date'] = pd.to_datetime(df['Date']).dt.date
         df = df[df["Name"] != "Jeff Bote"]
         
+        # Default behavior & manual filter handling: default filter by current date
         if filter_date:
             df = df[df['Date'] == filter_date]
         else:
