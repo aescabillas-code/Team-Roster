@@ -842,7 +842,7 @@ with tab_prod:
                 "ErrorRate": "Error Rate (%)"
             })
 
-            err_col1, err_col2 = st.columns([1, 1])
+            err_col1, gap, err_col2 = st.columns([1,0.2, 1])
             with err_col1:
                 st.markdown("**Defect Breakdown Table**")
                 st.dataframe(table_df, use_container_width=True, hide_index=True)
