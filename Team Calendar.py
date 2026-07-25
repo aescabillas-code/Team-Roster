@@ -800,7 +800,79 @@ with tab_prod:
             st.info("No deviation entries found for selected month.")
 
         st.divider()
+        # =====================================================================
+        # 📈 SECTION 3: DAILY TRENDS & CHART FILTERING
+        # =====================================================================
+        st.markdown("## 📈 Daily Productivity & Deviation Trends")
 
+        # Aggregation restricted strictly to the selected month & year
+        daily_owner_prod = monthly_df.groupby(["Day_Str", "Owner"]).size().reset_index(name="Case Count")
+
+        daily_dev_trend = pd.DataFrame()
+        if not dev_df_m.empty:
+            dev_chart_df = dev_df_m.copy()
+            dev_chart_df["Date_Str"] = dev_chart_df["ParsedDate"].dt.strftime("%Y-%m-%d")
+            daily_dev_trend = dev_chart_df.groupby(["Date_Str", "Name"]).size().reset_index(name="Deviation Count")
+
+        all_owners = sorted(daily_owner_prod["Owner"].unique().tolist()) if not daily_owner_prod.empty else []
+        selected_chart_owner = st.selectbox(
+            "Filter Daily Charts by Case Owner / Employee", 
+            ["All Owners"] + all_owners, 
+            key="tab3_owner_filter"
+        )
+
+        if selected_chart_owner != "All Owners":
+            filtered_prod = daily_owner_prod[daily_owner_prod["Owner"] == selected_chart_owner] if not daily_owner_prod.empty else daily_owner_prod
+            filtered_dev = daily_dev_trend[daily_dev_trend["Name"] == selected_chart_owner] if not daily_dev_trend.empty else daily_dev_trend
+        else:
+            filtered_prod = daily_owner_prod
+            filtered_dev = daily_dev_trend
+
+        # Daily Productivity Trend Chart
+        st.markdown("### 📈 Daily Productivity")
+        if not filtered_prod.empty:
+            prod_line_chart = (
+                alt.Chart(filtered_prod)
+                .mark_line(point=True)
+                .encode(
+                    x=alt.X("Day_Str:N", title="Date", axis=alt.Axis(labelAngle=-45)),
+                    y=alt.Y("Case Count:Q", title="Total Cases Handled"),
+                    color=alt.Color("Owner:N", title="Case Owner"),
+                    tooltip=[
+                        alt.Tooltip("Day_Str:N", title="Date"),
+                        alt.Tooltip("Owner:N", title="Owner"),
+                        alt.Tooltip("Case Count:Q", title="Cases Handled")
+                    ]
+                )
+                .interactive()
+            )
+            st.altair_chart(prod_line_chart, use_container_width=True)
+        else:
+            st.info("No productivity chart data available for current selection.")
+
+        # Daily Deviation Trend Chart
+        st.markdown("### 🔀 Daily Deviation")
+        if not filtered_dev.empty:
+            dev_line_chart = (
+                alt.Chart(filtered_dev)
+                .mark_line(point=True)
+                .encode(
+                    x=alt.X("Date_Str:N", title="Date", axis=alt.Axis(labelAngle=-45)),
+                    y=alt.Y("Deviation Count:Q", title="Total Deviations"),
+                    color=alt.Color("Name:N", title="Employee"),
+                    tooltip=[
+                        alt.Tooltip("Date_Str:N", title="Date"),
+                        alt.Tooltip("Name:N", title="Employee"),
+                        alt.Tooltip("Deviation Count:Q", title="Deviations")
+                    ]
+                )
+                .interactive()
+            )
+            st.altair_chart(dev_line_chart, use_container_width=True)
+        else:
+            st.info("No deviation trend data available for current selection.")
+
+        st.markdown("---")
         # =====================================================================
         # 🎯 SECTION 1.5: QA ANALYSIS & MOST COMMON ERROR ANALYSIS
         # =====================================================================
@@ -918,80 +990,6 @@ with tab_prod:
             st.info("No employee activity recorded for the selected month to generate individual performance profiles.")
 
         st.divider()
-
-        # =====================================================================
-        # 📈 SECTION 3: DAILY TRENDS & CHART FILTERING
-        # =====================================================================
-        st.markdown("## 📈 Daily Productivity & Deviation Trends")
-
-        # Aggregation restricted strictly to the selected month & year
-        daily_owner_prod = monthly_df.groupby(["Day_Str", "Owner"]).size().reset_index(name="Case Count")
-
-        daily_dev_trend = pd.DataFrame()
-        if not dev_df_m.empty:
-            dev_chart_df = dev_df_m.copy()
-            dev_chart_df["Date_Str"] = dev_chart_df["ParsedDate"].dt.strftime("%Y-%m-%d")
-            daily_dev_trend = dev_chart_df.groupby(["Date_Str", "Name"]).size().reset_index(name="Deviation Count")
-
-        all_owners = sorted(daily_owner_prod["Owner"].unique().tolist()) if not daily_owner_prod.empty else []
-        selected_chart_owner = st.selectbox(
-            "Filter Daily Charts by Case Owner / Employee", 
-            ["All Owners"] + all_owners, 
-            key="tab3_owner_filter"
-        )
-
-        if selected_chart_owner != "All Owners":
-            filtered_prod = daily_owner_prod[daily_owner_prod["Owner"] == selected_chart_owner] if not daily_owner_prod.empty else daily_owner_prod
-            filtered_dev = daily_dev_trend[daily_dev_trend["Name"] == selected_chart_owner] if not daily_dev_trend.empty else daily_dev_trend
-        else:
-            filtered_prod = daily_owner_prod
-            filtered_dev = daily_dev_trend
-
-        # Daily Productivity Trend Chart
-        st.markdown("### 📈 Daily Productivity")
-        if not filtered_prod.empty:
-            prod_line_chart = (
-                alt.Chart(filtered_prod)
-                .mark_line(point=True)
-                .encode(
-                    x=alt.X("Day_Str:N", title="Date", axis=alt.Axis(labelAngle=-45)),
-                    y=alt.Y("Case Count:Q", title="Total Cases Handled"),
-                    color=alt.Color("Owner:N", title="Case Owner"),
-                    tooltip=[
-                        alt.Tooltip("Day_Str:N", title="Date"),
-                        alt.Tooltip("Owner:N", title="Owner"),
-                        alt.Tooltip("Case Count:Q", title="Cases Handled")
-                    ]
-                )
-                .interactive()
-            )
-            st.altair_chart(prod_line_chart, use_container_width=True)
-        else:
-            st.info("No productivity chart data available for current selection.")
-
-        # Daily Deviation Trend Chart
-        st.markdown("### 🔀 Daily Deviation")
-        if not filtered_dev.empty:
-            dev_line_chart = (
-                alt.Chart(filtered_dev)
-                .mark_line(point=True)
-                .encode(
-                    x=alt.X("Date_Str:N", title="Date", axis=alt.Axis(labelAngle=-45)),
-                    y=alt.Y("Deviation Count:Q", title="Total Deviations"),
-                    color=alt.Color("Name:N", title="Employee"),
-                    tooltip=[
-                        alt.Tooltip("Date_Str:N", title="Date"),
-                        alt.Tooltip("Name:N", title="Employee"),
-                        alt.Tooltip("Deviation Count:Q", title="Deviations")
-                    ]
-                )
-                .interactive()
-            )
-            st.altair_chart(dev_line_chart, use_container_width=True)
-        else:
-            st.info("No deviation trend data available for current selection.")
-
-        st.markdown("---")
 
         # =====================================================================
         # 📊 SECTION 4: OPERATIONAL ANALYSIS
