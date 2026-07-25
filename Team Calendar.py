@@ -745,9 +745,9 @@ with tab_prod:
 
         st.divider()
         # =====================================================================
-        # 🗓️ SECTION 1: MONTHLY PRODUCTIVITY & DEVIATIONS (FILTERS DEFINED HERE)
+        # 🗓️ GLOBAL MONTH & YEAR FILTERS (APPLIED TO ALL SECTIONS)
         # =====================================================================
-        st.markdown("## 🗓️ Monthly Breakdown")
+        st.markdown("## 🗓️ Global Filter: Monthly Breakdown")
         
         col_y, col_m = st.columns(2)
         years = sorted(df["Year"].dropna().unique())
@@ -799,7 +799,6 @@ with tab_prod:
         else:
             st.info("No deviation entries found for selected month.")
 
-        st.divider()
         # =====================================================================
         # 📈 SECTION 2: DAILY TRENDS & CHART FILTERING
         # =====================================================================
@@ -1012,10 +1011,49 @@ with tab_prod:
         else:
             st.info("No specific contact/case type column found for deeper contact analysis.")
 
-        st.divider()
-
         # =====================================================================
-        # 👤 SECTION 4.1: INDIVIDUAL PERFORMANCE ANALYSIS & PROFILING (MONTH-FILTERED)
+        # 🔍 SECTION 5: DEEP-DIVE OPERATIONAL INSIGHTS & MATRIX FRAMEWORK
+        # =====================================================================
+        with st.expander("🔍 Deep-Dive Operational Insights & Correlation Models", expanded=True):
+            st.markdown("""
+            ### 1. Operational Relationship Framework
+            Understanding how work throughput (cases processed) intersects with queue deviations (AUX time, offline activity, unscheduled breaks):
+
+            * **Inverse Correlation Curve (Unplanned System / Adherence Anomalies):**
+              * **Pattern:** Days with spikes in total deviation counts show a proportional decline in total cases completed.
+              * **Drivers:** System outages, unannounced tool slowness, or non-adherence to scheduled shifts.
+            
+            * **Direct Correlation Curve (Complex Escalations & Mentorship):**
+              * **Pattern:** Days where complex cases spike lead to simultaneously high recorded case effort and increased off-queue deviation time.
+              * **Drivers:** Required SME consultations, QA syncs, multi-system research, or coaching sessions required to complete difficult cases.
+
+            ### 2. Employee Efficiency Profile Matrix Framework
+            """)
+
+            matrix_data = {
+                "Profile Category": ["High Performers", "Complex Processors", "Adherence At-Risk", "Under-Reporting"],
+                "Productivity (Output)": ["High", "High/Medium", "Low", "Low"],
+                "Deviation Frequency": ["Low", "High", "High", "Low"],
+                "Operational Diagnosis": [
+                    "Optimal floor engagement and adherence.",
+                    "Handling difficult escalations requiring offline effort.",
+                    "Frequent off-queue activity directly impacting output.",
+                    "Low output despite no logged offline time."
+                ],
+                "Recommended Action": [
+                    "Benchmark for team best practices.",
+                    "Review AUX reason codes & SME time.",
+                    "Schedule adherence coaching.",
+                    "Inspect active work queue habits and idle time."
+                ]
+            }
+            st.dataframe(pd.DataFrame(matrix_data), use_container_width=True, hide_index=True)
+
+            st.markdown("""
+            > **Operational Takeaway:** Monitor cases with high deviation counts to distinguish between **healthy process deviations** (coaching, complex research) and **unplanned friction** (tool outages, adherence loss).
+            """)
+        # =====================================================================
+        # 👤 SECTION 6: INDIVIDUAL PERFORMANCE ANALYSIS & PROFILING (MONTH-FILTERED)
         # =====================================================================
         st.markdown("## 👤 Individual Performance Analysis & Profile Categories")
 
@@ -1068,49 +1106,6 @@ with tab_prod:
             st.dataframe(profile_df, use_container_width=True, height=p_height, hide_index=True)
         else:
             st.info("No employee activity recorded for the selected month to generate individual performance profiles.")
-
-        st.divider()
-
-        with st.expander("🔍 Deep-Dive Operational Insights & Correlation Models", expanded=True):
-            st.markdown("""
-            ### 1. Operational Relationship Framework
-            Understanding how work throughput (cases processed) intersects with queue deviations (AUX time, offline activity, unscheduled breaks):
-
-            * **Inverse Correlation Curve (Unplanned System / Adherence Anomalies):**
-              * **Pattern:** Days with spikes in total deviation counts show a proportional decline in total cases completed.
-              * **Drivers:** System outages, unannounced tool slowness, or non-adherence to scheduled shifts.
-            
-            * **Direct Correlation Curve (Complex Escalations & Mentorship):**
-              * **Pattern:** Days where complex cases spike lead to simultaneously high recorded case effort and increased off-queue deviation time.
-              * **Drivers:** Required SME consultations, QA syncs, multi-system research, or coaching sessions required to complete difficult cases.
-
-            ---
-
-            ### 2. Employee Efficiency Profile Matrix Framework
-            """)
-
-            matrix_data = {
-                "Profile Category": ["High Performers", "Complex Processors", "Adherence At-Risk", "Under-Reporting"],
-                "Productivity (Output)": ["High", "High/Medium", "Low", "Low"],
-                "Deviation Frequency": ["Low", "High", "High", "Low"],
-                "Operational Diagnosis": [
-                    "Optimal floor engagement and adherence.",
-                    "Handling difficult escalations requiring offline effort.",
-                    "Frequent off-queue activity directly impacting output.",
-                    "Low output despite no logged offline time."
-                ],
-                "Recommended Action": [
-                    "Benchmark for team best practices.",
-                    "Review AUX reason codes & SME time.",
-                    "Schedule adherence coaching.",
-                    "Inspect active work queue habits and idle time."
-                ]
-            }
-            st.dataframe(pd.DataFrame(matrix_data), use_container_width=True, hide_index=True)
-
-            st.markdown("""
-            > **Operational Takeaway:** Monitor cases with high deviation counts to distinguish between **healthy process deviations** (coaching, complex research) and **unplanned friction** (tool outages, adherence loss).
-            """)
             
 # --- TAB 4: CASE TRACKER ---
 with tab_case:
