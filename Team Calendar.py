@@ -797,10 +797,15 @@ with tab_prod:
                 (dev_df_all["Name"] != "Jeff Bote")
             ]
 
-        commented_df = monthly_df[monthly_df["Comment"].astype(str).str.strip().ne("") & monthly_df["Comment"].notna()].copy()
+        # Filter strictly for audited cases
+        if "QA_Audited" in monthly_df.columns:
+            audited_df = monthly_df[monthly_df["QA_Audited"].isin([True, "True", "true", 1])].copy()
+        else:
+            audited_df = pd.DataFrame()
+
         st.markdown("## 📈 Quality Analysis")
-        if not commented_df.empty:
-            st.markdown("### ⚠️ Most Common QA Error & Defect Analysis")
+        if not audited_df.empty:
+            st.markdown("### ⚠️ Most Common QA Error & Defect Analysis (Audited Cases Only)")
             qa_criteria_map = {
                 "QA_SLO_SLA": "SLO / SLA Adherence",
                 "QA_Initial_Consecutive_Resp": "Initial & Consecutive Responses",
@@ -814,14 +819,14 @@ with tab_prod:
             }
 
             error_counts = {}
-            total_commented = len(commented_df)
+            total_audited = len(audited_df)
             for col, label in qa_criteria_map.items():
-                if col in commented_df.columns:
-                    not_met_count = (commented_df[col] == "Not Met").sum()
+                if col in audited_df.columns:
+                    not_met_count = (audited_df[col] == "Not Met").sum()
                     error_counts[label] = not_met_count
 
             error_df = pd.DataFrame(list(error_counts.items()), columns=["Criterion", "DefectCount"])
-            error_df["ErrorRate"] = ((error_df["DefectCount"] / total_commented) * 100).round(1)
+            error_df["ErrorRate"] = ((error_df["DefectCount"] / total_audited) * 100).round(1)
             error_df = error_df.sort_values(by="DefectCount", ascending=False)
 
             table_df = error_df.rename(columns={
@@ -832,7 +837,7 @@ with tab_prod:
 
             err_col1, gap, err_col2 = st.columns([1, 0.2, 1])
             with err_col1:
-                st.markdown("**Defect Breakdown Table**")
+                st.markdown(f"**Defect Breakdown Table** *(Total Audited: {total_audited})*")
                 st.dataframe(table_df, use_container_width=True, hide_index=True)
 
             with err_col2:
@@ -849,9 +854,9 @@ with tab_prod:
                     )
                     st.altair_chart(err_chart, use_container_width=True)
                 else:
-                    st.success("🎉 No QA defect errors recorded across evaluated cases in this timeframe!")
+                    st.success("🎉 No QA defect errors recorded across audited cases in this timeframe!")
         else:
-            st.info("No cases with comments found for QA evaluation in the selected month.")
+            st.info("No audited cases found for QA evaluation in the selected month.")
 
         st.divider()
         
@@ -1108,7 +1113,7 @@ with tab_prod:
             st.markdown("""
             > **Operational Takeaway:** Monitor cases with high deviation counts to distinguish between **healthy process deviations** (coaching, complex research) and **unplanned friction** (tool outages, adherence loss).
             """)
-
+            
 # --- TAB 4: CASE TRACKER ---
 with tab_case:
     st.subheader("📝 Bulk Log New Cases")
@@ -1246,10 +1251,11 @@ with tab_case:
             )
 
     with st.expander("🔍 Filter Options", expanded=True):
-        f1, f2 = st.columns(2)
+        f1, f2, f3 = st.columns(3)
         f_case = f1.text_input("Filter by Case #", key="case_filter_num")
         owners = sorted(list(set(case.get("Owner", "") for case in cases_list if case.get("Owner"))))
         f_owner = f2.selectbox("Filter by Owner", ["All"] + owners, key="case_filter_owner")
+        f_audit_status = f3.selectbox("Filter by Audit Status", ["All", "Audited", "Not Audited"], key="case_filter_audit_status")
 
         d_col1, d_col2, d_col3 = st.columns([2, 2, 2])
         filter_date_mode = d_col1.selectbox(
@@ -1279,6 +1285,14 @@ with tab_case:
         matches_case = not f_case or f_case.lower() in str(case.get("Case Number", "")).lower()
         matches_owner = f_owner == "All" or case.get("Owner", "") == f_owner
 
+        is_case_audited = case.get("QA_Audited", False)
+        if f_audit_status == "Audited":
+            matches_audit = is_case_audited is True
+        elif f_audit_status == "Not Audited":
+            matches_audit = is_case_audited is False
+        else:
+            matches_audit = True
+
         matches_date = True
         raw_date_str = case.get("Target Date") or case.get("Date", "")
         
@@ -1292,7 +1306,7 @@ with tab_case:
             except Exception:
                 matches_date = False
 
-        if matches_case and matches_owner and matches_date:
+        if matches_case and matches_owner and matches_audit and matches_date:
             filtered_cases.append(case)
 
     if filtered_cases:
