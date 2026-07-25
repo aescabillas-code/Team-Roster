@@ -848,9 +848,7 @@ with tab_prod:
                 st.altair_chart(err_chart, use_container_width=True)
             else:
                 st.success("🎉 No QA defect errors recorded across evaluated cases in this timeframe!")
-            else:
-                st.info("No cases with comments found for QA evaluation in the selected month.")
-        
+
         st.divider()
 
         # =====================================================================
