@@ -2301,20 +2301,32 @@ with tab_dev:
     st.subheader("Deviation Report")
 
     with st.expander("Filter Report"):
-        f_col1, f_col2, f_col3 = st.columns(3)
-        filter_month = f_col1.selectbox(
-            "Month",
-            options=range(1, 13),
-            index=date.today().month - 1,
-            format_func=lambda x: calendar.month_name[x],
-            key="dev_f_month",
+        d_col1, d_col2, d_col3 = st.columns([2, 2, 2])
+        filter_date_mode = d_col1.selectbox(
+            "Filter Date By",
+            ["All Time", "Specific Date", "Month & Year"],
+            key="dev_filter_date_mode",
         )
-        filter_year = f_col2.number_input(
-            "Year", value=date.today().year, key="dev_f_year"
-        )
-        filter_date = f_col3.date_input(
-            "Specific Date", value=date.today(), key="dev_f_date"
-        )
+
+        f_specific_date = None
+        f_month = None
+        f_year = None
+
+        if filter_date_mode == "Specific Date":
+            f_specific_date = d_col2.date_input(
+                "Select Date", value=date.today(), key="dev_filter_spec_date"
+            )
+        elif filter_date_mode == "Month & Year":
+            f_month = d_col2.selectbox(
+                "Month",
+                options=range(1, 13),
+                index=date.today().month - 1,
+                format_func=lambda x: calendar.month_name[x],
+                key="dev_filter_month",
+            )
+            f_year = d_col3.number_input(
+                "Year", value=date.today().year, step=1, key="dev_filter_year"
+            )
 
     dev_data = fetch_deviations_from_db()
     if dev_data:
@@ -2322,13 +2334,15 @@ with tab_dev:
         df["Date"] = pd.to_datetime(df["Date"]).dt.date
         df = df[df["Name"] != "Jeff Bote"]
 
-        if filter_date:
-            df = df[df["Date"] == filter_date]
-        else:
+        # Dynamic Date Filtering Logic
+        if filter_date_mode == "Specific Date" and f_specific_date:
+            df = df[df["Date"] == f_specific_date]
+        elif filter_date_mode == "Month & Year" and f_month and f_year:
             df = df[
-                (df["Date"].apply(lambda x: x.month) == filter_month)
-                & (df["Date"].apply(lambda x: x.year) == filter_year)
+                (df["Date"].apply(lambda x: x.month) == f_month)
+                & (df["Date"].apply(lambda x: x.year) == f_year)
             ]
+        # "All Time" applies no filtering on df["Date"]
 
         filtered_records = df.to_dict(orient="records")
 
