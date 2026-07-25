@@ -872,7 +872,8 @@ with tab_prod:
         else:
             st.info("No deviation trend data available for current selection.")
 
-        st.markdown("---")
+        st.divider()
+
         # =====================================================================
         # 🎯 SECTION 1.5: QA ANALYSIS & MOST COMMON ERROR ANALYSIS
         # =====================================================================
@@ -989,7 +990,7 @@ with tab_prod:
         else:
             st.info("No employee activity recorded for the selected month to generate individual performance profiles.")
 
-        st.divider()
+        st.markdown("---")
 
         # =====================================================================
         # 📊 SECTION 4: OPERATIONAL ANALYSIS
