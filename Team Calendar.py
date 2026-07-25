@@ -830,25 +830,34 @@ with tab_prod:
                     not_met_count = (commented_df[col] == "Not Met").sum()
                     error_counts[label] = not_met_count
 
-            error_df = pd.DataFrame(list(error_counts.items()), columns=["QA Requirement / Criterion", "Defect Count ('Not Met')"])
-            error_df["Error Rate (%)"] = ((error_df["Defect Count ('Not Met')"] / total_commented) * 100).round(1)
-            error_df = error_df.sort_values(by="Defect Count ('Not Met')", ascending=False)
+            # 1. Use clean column names for the DataFrame to avoid Vega-Lite syntax errors
+            error_df = pd.DataFrame(list(error_counts.items()), columns=["Criterion", "DefectCount"])
+            error_df["ErrorRate"] = ((error_df["DefectCount"] / total_commented) * 100).round(1)
+            error_df = error_df.sort_values(by="DefectCount", ascending=False)
+
+            # 2. Create a display copy for the table with user-friendly headers
+            table_df = error_df.rename(columns={
+                "Criterion": "QA Requirement / Criterion",
+                "DefectCount": "Defect Count ('Not Met')",
+                "ErrorRate": "Error Rate (%)"
+            })
 
             err_col1, err_col2 = st.columns([1, 1])
             with err_col1:
                 st.markdown("**Defect Breakdown Table**")
-                st.dataframe(error_df, use_container_width=True, hide_index=True)
+                st.dataframe(table_df, use_container_width=True, hide_index=True)
 
             with err_col2:
                 st.markdown("**Defect Distribution Visual**")
-                if error_df["Defect Count ('Not Met')"].sum() > 0:
+                if error_df["DefectCount"].sum() > 0:
+                    # 3. Use the clean field names without special characters in Altair
                     err_chart = (
                         alt.Chart(error_df)
                         .mark_bar(color="#ea4335")
                         .encode(
-                            x=alt.X("Defect Count ('Not Met'):Q", title="Total Defect Count"),
-                            y=alt.Y("QA Requirement / Criterion:N", sort="-x", title="QA Criterion"),
-                            tooltip=["QA Requirement / Criterion", "Defect Count ('Not Met')", "Error Rate (%)"]
+                            x=alt.X("DefectCount:Q", title="Total Defect Count"),
+                            y=alt.Y("Criterion:N", sort="-x", title="QA Criterion"),
+                            tooltip=["Criterion", "DefectCount", "ErrorRate"]
                         )
                     )
                     st.altair_chart(err_chart, use_container_width=True)
