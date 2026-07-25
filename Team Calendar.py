@@ -998,11 +998,22 @@ with tab_prod:
         # =====================================================================
         st.markdown("## 📊 Operational Analysis: Productivity vs. Deviations")
         
-        merged_metrics = pd.DataFrame()
-        if not daily_owner_prod.empty and not daily_dev_trend.empty:
-            merged_metrics = pd.merge(
+        # Calculate unshifted metrics globally for the entire team/month
+        total_monthly_prod_count = daily_owner_prod["Case Count"].sum() if not daily_owner_prod.empty else 0
+        
+        total_monthly_dev_count = 0
+        global_daily_dev = pd.DataFrame()
+        if not dev_df_m.empty:
+            dev_global_df = dev_df_m.copy()
+            dev_global_df["Date_Str"] = dev_global_df["ParsedDate"].dt.strftime("%Y-%m-%d")
+            global_daily_dev = dev_global_df.groupby(["Date_Str", "Name"]).size().reset_index(name="Deviation Count")
+            total_monthly_dev_count = global_daily_dev["Deviation Count"].sum()
+
+        global_merged_metrics = pd.DataFrame()
+        if not daily_owner_prod.empty and not global_daily_dev.empty:
+            global_merged_metrics = pd.merge(
                 daily_owner_prod, 
-                daily_dev_trend, 
+                global_daily_dev, 
                 left_on=["Day_Str", "Owner"], 
                 right_on=["Date_Str", "Name"], 
                 how="inner"
@@ -1012,16 +1023,16 @@ with tab_prod:
         with col1:
             st.metric(
                 label="Total Productivity Logs", 
-                value=f"{filtered_prod['Case Count'].sum():,}" if not filtered_prod.empty else 0
+                value=f"{total_monthly_prod_count:,}"
             )
         with col2:
             st.metric(
                 label="Total Deviations Logged", 
-                value=f"{filtered_dev['Deviation Count'].sum():,}" if not filtered_dev.empty else 0
+                value=f"{total_monthly_dev_count:,}"
             )
         with col3:
-            if len(merged_metrics) > 2:
-                corr_val = merged_metrics["Case Count"].corr(merged_metrics["Deviation Count"])
+            if len(global_merged_metrics) > 2:
+                corr_val = global_merged_metrics["Case Count"].corr(global_merged_metrics["Deviation Count"])
                 st.metric(
                     label="Correlation Coefficient", 
                     value=f"{corr_val:.2f}",
