@@ -804,13 +804,11 @@ with tab_prod:
         # =====================================================================
         # 🎯 SECTION 1.5: QA ANALYSIS & MOST COMMON ERROR ANALYSIS
         # =====================================================================
-        st.markdown("## 🎯 QA Analysis (Cases with Comments Only)")
         
         # Filter for cases with valid comments within the selected month/year scope
         commented_df = monthly_df[monthly_df["Comment"].astype(str).str.strip().ne("") & monthly_df["Comment"].notna()].copy()
 
-            # --- MOST COMMON ERROR ANALYSIS ---
-            st.markdown("### ⚠️ Most Common QA Error & Defect Analysis")
+        st.markdown("### ⚠️ Most Common QA Error & Defect Analysis")
             
             qa_criteria_map = {
                 "QA_SLO_SLA": "SLO / SLA Adherence",
