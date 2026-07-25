@@ -1417,8 +1417,19 @@ with tab_case:
                 with st.container(border=True):
                     st.markdown(f"### 🎯 QA Scorecard | Case #{case.get('Case Number','')}")
 
-                    # Audited status toggle
-                    audited_status = st.toggle("Audit Status: AUDITED", value=is_audited, key=f"qa_audited_toggle_{case['_id']}")
+                    # Audited status toggle with dynamic AUDITED / NOT AUDITED label
+                    is_audited_val = case.get("QA_Audited", False)
+                    
+                    # Determine label state based on current session state or initial value
+                    toggle_key = f"qa_audited_toggle_{case['_id']}"
+                    current_toggle_state = st.session_state.get(toggle_key, is_audited_val)
+                    toggle_label = f"Audit Status: {'AUDITED' if current_toggle_state else 'NOT AUDITED'}"
+
+                    audited_status = st.toggle(
+                        toggle_label, 
+                        value=is_audited_val, 
+                        key=toggle_key
+                    )
 
                     met_opts = ["Met", "Not Met"]
                     
