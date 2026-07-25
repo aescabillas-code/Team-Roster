@@ -776,33 +776,8 @@ with tab_prod:
                 (dev_df_all["Name"] != "Jeff Bote")
             ]
 
-        st.markdown("### 📦 Cases Count")
-        if not monthly_df.empty:
-            if type_col:
-                monthly_summary = monthly_df.groupby(["Owner", type_col]).size().unstack(fill_value=0)
-            else:
-                monthly_summary = monthly_df.groupby("Owner").size().to_frame(name="Total Cases")
-            
-            monthly_summary["Total Cases"] = monthly_summary.sum(axis=1) if type_col else monthly_summary["Total Cases"]
-            monthly_summary = monthly_summary.sort_values(by="Total Cases", ascending=False)
-            
-            m_height = min(1000, max(100, len(monthly_summary) * 35 + 38))
-            st.dataframe(monthly_summary.reset_index(), use_container_width=True, height=m_height, hide_index=True)
-        else:
-            st.info("No cases found for selected month.")
-
-        # Monthly Deviations Table
-        st.markdown("### 🔀 Deviations Count")
-        if not dev_df_m.empty:
-            m_dev_summary = dev_df_m.groupby(["Name"]).size().reset_index(name="Total Deviations").sort_values(by="Total Deviations", ascending=False)
-            st.dataframe(m_dev_summary, use_container_width=True, hide_index=True)
-        else:
-            st.info("No deviation entries found for selected month.")
-
-        st.divider()
-
         # =====================================================================
-        # 🎯 SECTION 3: QA ANALYSIS & MOST COMMON ERROR ANALYSIS
+        # 🎯 SECTION 3: QA ANALYSIS & MOST COMMON ERROR ANALYSIS (MOVED ABOVE CASES COUNT)
         # =====================================================================
         commented_df = monthly_df[monthly_df["Comment"].astype(str).str.strip().ne("") & monthly_df["Comment"].notna()].copy()
         st.markdown("## 📈 Quality Analysis")
@@ -861,6 +836,29 @@ with tab_prod:
             st.info("No cases with comments found for QA evaluation in the selected month.")
 
         st.divider()
+
+        st.markdown("### 📦 Cases Count")
+        if not monthly_df.empty:
+            if type_col:
+                monthly_summary = monthly_df.groupby(["Owner", type_col]).size().unstack(fill_value=0)
+            else:
+                monthly_summary = monthly_df.groupby("Owner").size().to_frame(name="Total Cases")
+            
+            monthly_summary["Total Cases"] = monthly_summary.sum(axis=1) if type_col else monthly_summary["Total Cases"]
+            monthly_summary = monthly_summary.sort_values(by="Total Cases", ascending=False)
+            
+            m_height = min(1000, max(100, len(monthly_summary) * 35 + 38))
+            st.dataframe(monthly_summary.reset_index(), use_container_width=True, height=m_height, hide_index=True)
+        else:
+            st.info("No cases found for selected month.")
+
+        # Monthly Deviations Table
+        st.markdown("### 🔀 Deviations Count")
+        if not dev_df_m.empty:
+            m_dev_summary = dev_df_m.groupby(["Name"]).size().reset_index(name="Total Deviations").sort_values(by="Total Deviations", ascending=False)
+            st.dataframe(m_dev_summary, use_container_width=True, hide_index=True)
+        else:
+            st.info("No deviation entries found for selected month.")
 
         # =====================================================================
         # 📈 SECTION 2: DAILY TRENDS & CHART FILTERING
@@ -932,8 +930,6 @@ with tab_prod:
             st.altair_chart(dev_line_chart, use_container_width=True)
         else:
             st.info("No deviation trend data available for current selection.")
-
-        st.divider()
 
         # =====================================================================
         # 📊 SECTION 4: OPERATIONAL ANALYSIS (MONTH-FILTERED & INDEPENDENT OF CHART FILTER)
