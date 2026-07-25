@@ -761,8 +761,20 @@ with tab_prod:
             key="prod_monitor_month"
         )
 
-        # Monthly Productivity Data Table
+        # Global Monthly Filtered DataFrames for ALL sections
         monthly_df = df[(df["Year"] == selected_year) & (df["Month"] == selected_month)]
+
+        dev_df_m = pd.DataFrame()
+        if dev_data_all:
+            dev_df_all = pd.DataFrame(dev_data_all)
+            dev_df_all["ParsedDate"] = pd.to_datetime(dev_df_all["Date"], errors="coerce")
+            dev_df_all = dev_df_all.dropna(subset=["ParsedDate"])
+            
+            dev_df_m = dev_df_all[
+                (dev_df_all["ParsedDate"].dt.year == selected_year) & 
+                (dev_df_all["ParsedDate"].dt.month == selected_month) &
+                (dev_df_all["Name"] != "Jeff Bote")
+            ]
 
         st.markdown("### 📦 Monthly Case Breakdown")
         if not monthly_df.empty:
@@ -781,31 +793,17 @@ with tab_prod:
 
         # Monthly Deviations Table
         st.markdown("### 🔀 Monthly Deviations")
-        if dev_data_all:
-            dev_df_all = pd.DataFrame(dev_data_all)
-            dev_df_all["ParsedDate"] = pd.to_datetime(dev_df_all["Date"], errors="coerce")
-            dev_df_all = dev_df_all.dropna(subset=["ParsedDate"])
-            
-            dev_df_m = dev_df_all[
-                (dev_df_all["ParsedDate"].dt.year == selected_year) & 
-                (dev_df_all["ParsedDate"].dt.month == selected_month) &
-                (dev_df_all["Name"] != "Jeff Bote")
-            ]
-            if not dev_df_m.empty:
-                m_dev_summary = dev_df_m.groupby(["Name"]).size().reset_index(name="Total Deviations").sort_values(by="Total Deviations", ascending=False)
-                st.dataframe(m_dev_summary, use_container_width=True, hide_index=True)
-            else:
-                st.info("No deviation entries found for selected month.")
+        if not dev_df_m.empty:
+            m_dev_summary = dev_df_m.groupby(["Name"]).size().reset_index(name="Total Deviations").sort_values(by="Total Deviations", ascending=False)
+            st.dataframe(m_dev_summary, use_container_width=True, hide_index=True)
         else:
-            st.info("No deviation data available.")
+            st.info("No deviation entries found for selected month.")
 
         st.divider()
 
         # =====================================================================
         # 🎯 SECTION 1.5: QA ANALYSIS & MOST COMMON ERROR ANALYSIS
         # =====================================================================
-        
-        # Filter for cases with valid comments within the selected month/year scope
         commented_df = monthly_df[monthly_df["Comment"].astype(str).str.strip().ne("") & monthly_df["Comment"].notna()].copy()
 
         if not commented_df.empty:
@@ -826,23 +824,20 @@ with tab_prod:
             total_commented = len(commented_df)
             for col, label in qa_criteria_map.items():
                 if col in commented_df.columns:
-                    # Count instances marked as 'Not Met'
                     not_met_count = (commented_df[col] == "Not Met").sum()
                     error_counts[label] = not_met_count
 
-            # 1. Use clean column names for the DataFrame to avoid Vega-Lite syntax errors
             error_df = pd.DataFrame(list(error_counts.items()), columns=["Criterion", "DefectCount"])
             error_df["ErrorRate"] = ((error_df["DefectCount"] / total_commented) * 100).round(1)
             error_df = error_df.sort_values(by="DefectCount", ascending=False)
 
-            # 2. Create a display copy for the table with user-friendly headers
             table_df = error_df.rename(columns={
                 "Criterion": "QA Requirement / Criterion",
                 "DefectCount": "Defect Count ('Not Met')",
                 "ErrorRate": "Error Rate (%)"
             })
 
-            err_col1, gap, err_col2 = st.columns([1,0.2, 1])
+            err_col1, gap, err_col2 = st.columns([1, 0.2, 1])
             with err_col1:
                 st.markdown("**Defect Breakdown Table**")
                 st.dataframe(table_df, use_container_width=True, hide_index=True)
@@ -850,7 +845,6 @@ with tab_prod:
             with err_col2:
                 st.markdown("**Defect Distribution Visual**")
                 if error_df["DefectCount"].sum() > 0:
-                    # 3. Use the clean field names without special characters in Altair
                     err_chart = (
                         alt.Chart(error_df)
                         .mark_bar(color="#ea4335")
@@ -873,14 +867,11 @@ with tab_prod:
         # =====================================================================
         st.markdown("## 👤 Individual Employee Performance Analysis & Profile Categories")
 
-        # Extract active roster employees or owners present in dataset
         active_roster_names = sorted(list(set(df["Owner"].dropna().tolist() + list(st.session_state.staff_roster.keys()))))
         
-        # Monthly summaries per person
         person_cases = monthly_df.groupby("Owner").size().to_dict() if not monthly_df.empty else {}
-        person_devs = dev_df_m.groupby("Name").size().to_dict() if (dev_data_all and not dev_df_m.empty) else {}
+        person_devs = dev_df_m.groupby("Name").size().to_dict() if not dev_df_m.empty else {}
 
-        # Calculate monthly benchmarks/thresholds dynamically
         avg_cases = (sum(person_cases.values()) / len(person_cases)) if person_cases else 0
         avg_devs = (sum(person_devs.values()) / len(person_devs)) if person_devs else 0
 
@@ -890,11 +881,9 @@ with tab_prod:
             c_count = person_cases.get(emp_name, 0)
             d_count = person_devs.get(emp_name, 0)
 
-            # Skip employees with 0 cases and 0 deviations in selected month
             if c_count == 0 and d_count == 0:
                 continue
 
-            # Classify profile category based on individual stats vs monthly benchmark average
             if c_count >= avg_cases and d_count <= avg_devs:
                 cat = "High Performers"
                 diag = "High output with low off-queue deviations. Strong adherence."
@@ -924,13 +913,7 @@ with tab_prod:
         if profile_analysis_rows:
             profile_df = pd.DataFrame(profile_analysis_rows).sort_values(by="Total Cases", ascending=False)
             p_height = min(1000, max(120, len(profile_df) * 38 + 38))
-            
-            st.dataframe(
-                profile_df, 
-                use_container_width=True, 
-                height=p_height, 
-                hide_index=True
-            )
+            st.dataframe(profile_df, use_container_width=True, height=p_height, hide_index=True)
         else:
             st.info("No employee activity recorded for the selected month to generate individual performance profiles.")
 
@@ -941,17 +924,16 @@ with tab_prod:
         # =====================================================================
         st.markdown("## 📈 Daily Productivity & Deviation Trends")
 
-        # Aggregation for Charts
-        daily_owner_prod = df.groupby(["Day_Str", "Owner"]).size().reset_index(name="Case Count")
+        # Aggregation restricted strictly to the selected month & year
+        daily_owner_prod = monthly_df.groupby(["Day_Str", "Owner"]).size().reset_index(name="Case Count")
 
         daily_dev_trend = pd.DataFrame()
-        if dev_data_all and not dev_df_all.empty:
-            dev_chart_df = dev_df_all[dev_df_all["Name"] != "Jeff Bote"].copy()
+        if not dev_df_m.empty:
+            dev_chart_df = dev_df_m.copy()
             dev_chart_df["Date_Str"] = dev_chart_df["ParsedDate"].dt.strftime("%Y-%m-%d")
             daily_dev_trend = dev_chart_df.groupby(["Date_Str", "Name"]).size().reset_index(name="Deviation Count")
 
-        # Filter Owner Selection
-        all_owners = sorted(daily_owner_prod["Owner"].unique().tolist())
+        all_owners = sorted(daily_owner_prod["Owner"].unique().tolist()) if not daily_owner_prod.empty else []
         selected_chart_owner = st.selectbox(
             "Filter Daily Charts by Case Owner / Employee", 
             ["All Owners"] + all_owners, 
@@ -959,7 +941,7 @@ with tab_prod:
         )
 
         if selected_chart_owner != "All Owners":
-            filtered_prod = daily_owner_prod[daily_owner_prod["Owner"] == selected_chart_owner]
+            filtered_prod = daily_owner_prod[daily_owner_prod["Owner"] == selected_chart_owner] if not daily_owner_prod.empty else daily_owner_prod
             filtered_dev = daily_dev_trend[daily_dev_trend["Name"] == selected_chart_owner] if not daily_dev_trend.empty else daily_dev_trend
         else:
             filtered_prod = daily_owner_prod
@@ -1000,7 +982,7 @@ with tab_prod:
                     tooltip=[
                         alt.Tooltip("Date_Str:N", title="Date"),
                         alt.Tooltip("Name:N", title="Employee"),
-                        alt.Tooltip("Deviations:Q", title="Deviations")
+                        alt.Tooltip("Deviation Count:Q", title="Deviations")
                     ]
                 )
                 .interactive()
@@ -1078,48 +1060,6 @@ with tab_prod:
                 st.altair_chart(type_chart, use_container_width=True)
         else:
             st.info("No specific contact/case type column found for deeper contact analysis.")
-
-        with st.expander("🔍 Deep-Dive Operational Insights & Correlation Models", expanded=True):
-            st.markdown("""
-            ### 1. Operational Relationship Framework
-            Understanding how work throughput (cases processed) intersects with queue deviations (AUX time, offline activity, unscheduled breaks):
-
-            * **Inverse Correlation Curve (Unplanned System / Adherence Anomalies):**
-              * **Pattern:** Days with spikes in total deviation counts show a proportional decline in total cases completed.
-              * **Drivers:** System outages, unannounced tool slowness, or non-adherence to scheduled shifts.
-            
-            * **Direct Correlation Curve (Complex Escalations & Mentorship):**
-              * **Pattern:** Days where complex cases spike lead to simultaneously high recorded case effort and increased off-queue deviation time.
-              * **Drivers:** Required SME consultations, QA syncs, multi-system research, or coaching sessions required to complete difficult cases.
-
-            ---
-
-            ### 2. Employee Efficiency Profile Matrix Framework
-            """)
-
-            matrix_data = {
-                "Profile Category": ["High Performers", "Complex Processors", "Adherence At-Risk", "Under-Reporting"],
-                "Productivity (Output)": ["High", "High/Medium", "Low", "Low"],
-                "Deviation Frequency": ["Low", "High", "High", "Low"],
-                "Operational Diagnosis": [
-                    "Optimal floor engagement and adherence.",
-                    "Handling difficult escalations requiring offline effort.",
-                    "Frequent off-queue activity directly impacting output.",
-                    "Low output despite no logged offline time."
-                ],
-                "Recommended Action": [
-                    "Benchmark for team best practices.",
-                    "Review AUX reason codes & SME time.",
-                    "Schedule adherence coaching.",
-                    "Inspect active work queue habits and idle time."
-                ]
-            }
-            # Clean dataframe output with no index column numbers
-            st.dataframe(pd.DataFrame(matrix_data), use_container_width=True, hide_index=True)
-
-            st.markdown("""
-            > **Operational Takeaway:** Monitor cases with high deviation counts to distinguish between **healthy process deviations** (coaching, complex research) and **unplanned friction** (tool outages, adherence loss).
-            """)
 
 # --- TAB 4: CASE TRACKER ---
 with tab_case:
