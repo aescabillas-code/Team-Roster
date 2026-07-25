@@ -809,8 +809,7 @@ with tab_prod:
         commented_df = monthly_df[monthly_df["Comment"].astype(str).str.strip().ne("") & monthly_df["Comment"].notna()].copy()
 
         st.markdown("### ⚠️ Most Common QA Error & Defect Analysis")
-            
-            qa_criteria_map = {
+        qa_criteria_map = {
                 "QA_SLO_SLA": "SLO / SLA Adherence",
                 "QA_Initial_Consecutive_Resp": "Initial & Consecutive Responses",
                 "QA_Case_Status_Update": "Timely Case Status Update",
@@ -855,7 +854,7 @@ with tab_prod:
                     st.success("🎉 No QA defect errors recorded across evaluated cases in this timeframe!")
         else:
             st.info("No cases with comments found for QA evaluation in the selected month.")
-
+            
         st.divider()
 
         # =====================================================================
