@@ -1216,7 +1216,20 @@ with tab_case:
             filtered_cases.append(case)
 
     if filtered_cases:
-        for case in filtered_cases:
+        items_per_page = 10
+        total_case_pages = max(1, (len(filtered_cases) + items_per_page - 1) // items_per_page)
+        
+        p_col1, p_col2 = st.columns([1, 4])
+        with p_col1:
+            case_page = st.number_input("Page", min_value=1, max_value=total_case_pages, value=1, step=1, key="case_page_num")
+        with p_col2:
+            st.write(f"Showing page **{case_page}** of **{total_case_pages}** ({len(filtered_cases)} total matching cases)")
+
+        start_idx = (case_page - 1) * items_per_page
+        end_idx = start_idx + items_per_page
+        paginated_cases = filtered_cases[start_idx:end_idx]
+
+        for case in paginated_cases:
             entry_col, gap, action_col = st.columns([3.8, .2, 1.2])
             has_comment = bool(case.get("Comment"))
             has_qa_fb = bool(case.get("QA_Feedback"))
@@ -1489,80 +1502,98 @@ with tab_dev:
         st.download_button("Extract Report as CSV", csv, "deviation_report.csv", "text/csv")
         st.write("## Deviation Records")
         
-        col_widths = [0.6, 1.2, 1.2, 1.2, 1.2, 1.0, 1.0, 0.8, 0.8, 2.0, 2.4]
-        h_cols = st.columns(col_widths)
-        headers = ["#", "Date", "Manager", "Name", "Shift Time", "Start Time", "End Time", "Total Mins", "Aux", "Reason", "Actions"]
-        for idx, header_title in enumerate(headers):
-            h_cols[idx].markdown(f"**{header_title}**")
-        st.markdown("---")
-        
-        total_records = len(filtered_records)
-        
-        for reverse_idx, dev in enumerate(reversed(filtered_records)):
-            entry_number = total_records - reverse_idx
+        if filtered_records:
+            items_per_page = 10
+            total_dev_pages = max(1, (len(filtered_records) + items_per_page - 1) // items_per_page)
             
-            r_cols = st.columns(col_widths)
-            r_cols[0].write(f"#{entry_number}")
-            r_cols[1].write(str(dev.get('Date', '')))
-            r_cols[2].write(str(dev.get('Manager', '')))
-            r_cols[3].write(str(dev.get('Name', '')))
-            r_cols[4].write(str(dev.get('Shift Time', 'Not Set')))
-            r_cols[5].write(str(dev.get('Start Time', '')))
-            r_cols[6].write(str(dev.get('End Time', '')))
-            r_cols[7].write(str(dev.get('Total Mins', 0)))
-            r_cols[8].write(str(dev.get('Aux', 'N/A')))
-            r_cols[9].write(str(dev.get('Reason', '')))
-            
-            with r_cols[10]:
-                t_edit = st.toggle("✏️ Edit", key=f"t_edit_{dev['_id']}")
-                t_del = st.toggle("🗑️ Del", key=f"t_del_{dev['_id']}")
-            
-            if t_edit:
-                with st.container(border=True):
-                    st.markdown(f"#### Edit Properties Frame For Record Line Item #{entry_number}")
-                    edit_date = st.date_input("Update Target Date", value=pd.to_datetime(dev.get('Date')).date(), key=f"ed_date_{dev['_id']}")
-                    edit_manager = st.text_input("Update Manager", value=dev.get('Manager', ''), key=f"ed_mgr_{dev['_id']}")
-                    
-                    staff_names = list(st.session_state.staff_roster.keys()) if st.session_state.staff_roster else [dev.get('Name', '')]
-                    if dev.get('Name') not in staff_names:
-                        staff_names.append(dev.get('Name'))
-                        
-                    edit_name = st.selectbox("Update Name", staff_names, index=staff_names.index(dev.get('Name')), key=f"ed_name_{dev['_id']}")
-                    edit_shift = st.text_input("Update Shift Time", value=dev.get('Shift Time', 'Not Set'), key=f"ed_shift_{dev['_id']}")
-                    
-                    c1, c2, c3 = st.columns(3)
-                    edit_start = c1.text_input("Update Start Time", value=dev.get('Start Time', '00:00'), key=f"ed_start_{dev['_id']}")
-                    edit_end = c2.text_input("Update End Time", value=dev.get('End Time', '00:00'), key=f"ed_end_{dev['_id']}")
-                    
-                    auto_mins = calculate_duration_mins(edit_start, edit_end)
-                    edit_mins = c3.number_input("Update Total Mins", value=max(1, auto_mins), min_value=1, key=f"ed_mins_{dev['_id']}")
-                    
-                    edit_aux = st.text_input("Update Aux", value=dev.get('Aux', ''), key=f"ed_aux_{dev['_id']}")
-                    edit_reason = st.text_area("Update Reason of Deviation", value=dev.get('Reason', ''), key=f"ed_reas_{dev['_id']}")
+            dp_col1, dp_col2 = st.columns([1, 4])
+            with dp_col1:
+                dev_page = st.number_input("Page", min_value=1, max_value=total_dev_pages, value=1, step=1, key="dev_page_num")
+            with dp_col2:
+                st.write(f"Showing page **{dev_page}** of **{total_dev_pages}** ({len(filtered_records)} total records)")
 
-                    if st.button("Save Changes", key=f"save_ed_dev_{dev['_id']}"):
-                        update_deviation_in_db(dev["_id"], {
-                            "Date": str(edit_date), "Manager": edit_manager, "Name": edit_name,
-                            "Shift Time": edit_shift, "Start Time": str(edit_start),
-                            "End Time": str(edit_end), "Total Mins": edit_mins,
-                            "Aux": edit_aux, "Reason": edit_reason
-                        })
-                        st.success("Deviation record updated completely!")
-                        st.rerun()
-                        
-            if t_del:
-                with st.container(border=True):
-                    st.warning("⚠️ This action requires supervisor authorization credentials verification validation.")
-                    del_password = st.text_input("Enter Admin Password to confirm delete", type="password", key=f"pwd_del_dev_{dev['_id']}")
-                    if st.button("Confirm Purge Selection Action", key=f"conf_del_dev_{dev['_id']}"):
-                        if del_password == "Password1234":
-                            delete_deviation_from_db(dev["_id"])
-                            st.success("Deviation record removed.")
-                            st.rerun()
-                        else:
-                            st.error("Incorrect Password. Action denied.")
-
+            col_widths = [0.6, 1.2, 1.2, 1.2, 1.2, 1.0, 1.0, 0.8, 0.8, 2.0, 2.4]
+            h_cols = st.columns(col_widths)
+            headers = ["#", "Date", "Manager", "Name", "Shift Time", "Start Time", "End Time", "Total Mins", "Aux", "Reason", "Actions"]
+            for idx, header_title in enumerate(headers):
+                h_cols[idx].markdown(f"**{header_title}**")
             st.markdown("---")
+            
+            reversed_all_records = list(reversed(filtered_records))
+            start_idx = (dev_page - 1) * items_per_page
+            end_idx = start_idx + items_per_page
+            paginated_records = reversed_all_records[start_idx:end_idx]
+
+            total_records = len(filtered_records)
+            
+            for page_rel_idx, dev in enumerate(paginated_records):
+                overall_reverse_idx = start_idx + page_rel_idx
+                entry_number = total_records - overall_reverse_idx
+                
+                r_cols = st.columns(col_widths)
+                r_cols[0].write(f"#{entry_number}")
+                r_cols[1].write(str(dev.get('Date', '')))
+                r_cols[2].write(str(dev.get('Manager', '')))
+                r_cols[3].write(str(dev.get('Name', '')))
+                r_cols[4].write(str(dev.get('Shift Time', 'Not Set')))
+                r_cols[5].write(str(dev.get('Start Time', '')))
+                r_cols[6].write(str(dev.get('End Time', '')))
+                r_cols[7].write(str(dev.get('Total Mins', 0)))
+                r_cols[8].write(str(dev.get('Aux', 'N/A')))
+                r_cols[9].write(str(dev.get('Reason', '')))
+                
+                with r_cols[10]:
+                    t_edit = st.toggle("✏️ Edit", key=f"t_edit_{dev['_id']}")
+                    t_del = st.toggle("🗑️ Del", key=f"t_del_{dev['_id']}")
+                
+                if t_edit:
+                    with st.container(border=True):
+                        st.markdown(f"#### Edit Properties Frame For Record Line Item #{entry_number}")
+                        edit_date = st.date_input("Update Target Date", value=pd.to_datetime(dev.get('Date')).date(), key=f"ed_date_{dev['_id']}")
+                        edit_manager = st.text_input("Update Manager", value=dev.get('Manager', ''), key=f"ed_mgr_{dev['_id']}")
+                        
+                        staff_names = list(st.session_state.staff_roster.keys()) if st.session_state.staff_roster else [dev.get('Name', '')]
+                        if dev.get('Name') not in staff_names:
+                            staff_names.append(dev.get('Name'))
+                            
+                        edit_name = st.selectbox("Update Name", staff_names, index=staff_names.index(dev.get('Name')), key=f"ed_name_{dev['_id']}")
+                        edit_shift = st.text_input("Update Shift Time", value=dev.get('Shift Time', 'Not Set'), key=f"ed_shift_{dev['_id']}")
+                        
+                        c1, c2, c3 = st.columns(3)
+                        edit_start = c1.text_input("Update Start Time", value=dev.get('Start Time', '00:00'), key=f"ed_start_{dev['_id']}")
+                        edit_end = c2.text_input("Update End Time", value=dev.get('End Time', '00:00'), key=f"ed_end_{dev['_id']}")
+                        
+                        auto_mins = calculate_duration_mins(edit_start, edit_end)
+                        edit_mins = c3.number_input("Update Total Mins", value=max(1, auto_mins), min_value=1, key=f"ed_mins_{dev['_id']}")
+                        
+                        edit_aux = st.text_input("Update Aux", value=dev.get('Aux', ''), key=f"ed_aux_{dev['_id']}")
+                        edit_reason = st.text_area("Update Reason of Deviation", value=dev.get('Reason', ''), key=f"ed_reas_{dev['_id']}")
+
+                        if st.button("Save Changes", key=f"save_ed_dev_{dev['_id']}"):
+                            update_deviation_in_db(dev["_id"], {
+                                "Date": str(edit_date), "Manager": edit_manager, "Name": edit_name,
+                                "Shift Time": edit_shift, "Start Time": str(edit_start),
+                                "End Time": str(edit_end), "Total Mins": edit_mins,
+                                "Aux": edit_aux, "Reason": edit_reason
+                            })
+                            st.success("Deviation record updated completely!")
+                            st.rerun()
+                            
+                if t_del:
+                    with st.container(border=True):
+                        st.warning("⚠️ This action requires supervisor authorization credentials verification validation.")
+                        del_password = st.text_input("Enter Admin Password to confirm delete", type="password", key=f"pwd_del_dev_{dev['_id']}")
+                        if st.button("Confirm Purge Selection Action", key=f"conf_del_dev_{dev['_id']}"):
+                            if del_password == "Password1234":
+                                delete_deviation_from_db(dev["_id"])
+                                st.success("Deviation record removed.")
+                                st.rerun()
+                            else:
+                                st.error("Incorrect Password. Action denied.")
+
+                st.markdown("---")
+        else:
+            st.info("No deviation records match the selected filter criteria.")
     else:
         st.write("No deviation requests found.")
 
