@@ -712,8 +712,6 @@ with tab_req:
 
 # --- TAB 3: PRODUCTIVITY MONITORING ---
 with tab_prod:
-    st.header("📈 Productivity Monitoring & Operational Analysis")
-
     # Fetch initial data
     cases = get_cases_from_db()
     dev_data_all = fetch_deviations_from_db()
@@ -836,7 +834,8 @@ with tab_prod:
             st.info("No cases with comments found for QA evaluation in the selected month.")
 
         st.divider()
-
+        
+        st.header("📈 Productivity Monitoring & Operational Analysis")
         st.markdown("### 📦 Cases Count")
         if not monthly_df.empty:
             if type_col:
