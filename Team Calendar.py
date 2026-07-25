@@ -1334,10 +1334,12 @@ with tab_case:
             box_class = "qa-box-passed" if is_passed else "qa-box-failed"
 
             with entry_col:
-                if not is_passed or (has_comment and not is_passed):
-                    expander_label = f"🚨 RED ALERT | Case #{case.get('Case Number','')} (Requires Attention / Failed)"
-                else:
+                if has_comment or (has_qa_fb and not is_passed):
+                    expander_label = f"🚨 RED ALERT | Case #{case.get('Case Number','')} (Requires Attention)"
+                elif has_qa_fb and is_passed:
                     expander_label = f"✅ PASSED | Case #{case.get('Case Number','')}"
+                else:
+                    expander_label = f"Case #{case.get('Case Number','')}"
 
                 st.markdown(f'<div class="{box_class}">', unsafe_allow_html=True)
 
@@ -1367,7 +1369,7 @@ with tab_case:
                 with t_col3:
                     t_comment = st.toggle("💬 Comment", key=f"t_comment_{case['_id']}")
                 with t_col4:
-                    t_qa = st.toggle("🎯 QA", key=f"t_qa_{case['_id']}") if has_comment else False
+                    t_qa = st.toggle("🎯 QA", key=f"t_qa_{case['_id']}")
 
             if t_edit:
                 with st.container(border=True):
