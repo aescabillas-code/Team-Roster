@@ -1417,26 +1417,32 @@ with tab_case:
             if t_comment:
                 with st.container(border=True):
                     st.markdown(f"#### 💬 Add / Modify Comment for Case #{case.get('Case Number','')}")
+                    
+                    # Verdict toggle placed inside Comment action block
+                    qa_passed_toggle = st.toggle("Verdict: PASSED / FAILED", value=is_passed, key=f"qa_status_toggle_{case['_id']}")
+                    if qa_passed_toggle:
+                        st.success("STATUS: PASSED ✅")
+                    else:
+                        st.error("STATUS: FAILED ❌")
+
                     new_comment_val = st.text_area("Work Note / Case Comment", value=case.get("Comment", ""), key=f"quick_comment_{case['_id']}")
-                    if st.button("💾 Save Comment", key=f"btn_save_comment_{case['_id']}"):
+                    
+                    if st.button("💾 Save Comment & Verdict", key=f"btn_save_comment_{case['_id']}"):
+                        computed_score = 9 if qa_passed_toggle else 0
                         collection.update_one(
                             {"_id": case["_id"]},
-                            {"$set": {"Comment": new_comment_val}}
+                            {"$set": {
+                                "Comment": new_comment_val,
+                                "QA_Score": computed_score
+                            }}
                         )
                         get_cases_from_db.clear()
-                        st.success("Comment updated successfully!")
+                        st.success("Comment and Verdict updated successfully!")
                         st.rerun()
 
             if t_qa:
                 with st.container(border=True):
                     st.markdown(f"### 🎯 QA Scorecard | Case #{case.get('Case Number','')}")
-                    
-                    qa_passed_toggle = st.toggle("Verdict: PASSED / FAILED", value=is_passed, key=f"qa_status_toggle_{case['_id']}")
-
-                    if qa_passed_toggle:
-                        st.success("STATUS: PASSED ✅")
-                    else:
-                        st.error("STATUS: FAILED ❌")
 
                     met_opts = ["Met", "Not Met"]
                     
@@ -1457,10 +1463,26 @@ with tab_case:
                     st.markdown("#### 4️⃣ Process and Policy")
                     q_routing = st.selectbox("UVA, SDI, Private Case Routing (🚨 Non-negotiable)", met_opts, index=met_opts.index(case.get("QA_Case_Routing", "Met")), key=f"qa_routing_{case['_id']}")
 
+                    all_criteria = [q_slo, q_resp, q_update, q_issue, q_probing, q_collab, q_entitle, q_account, q_routing]
+                    non_negotiables = [q_probing, q_collab, q_entitle, q_routing]
+                    
+                    if any(nn == "Not Met" for nn in non_negotiables):
+                        computed_score = 0
+                        st.error("🚨 **Score: 0 / 9** (Failed a Non-negotiable criteria)")
+                    else:
+                        deductions = sum(1 for item in all_criteria if item == "Not Met")
+                        computed_score = max(0, 9 - deductions)
+                        st.metric("Calculated QA Score", f"{computed_score} / 9")
+
+                    qa_status_display = "PASSED" if computed_score == 9 else "FAILED"
+                    if qa_status_display == "PASSED":
+                        st.success(f"**STATUS: {qa_status_display}** ✅")
+                    else:
+                        st.error(f"**STATUS: {qa_status_display}** ❌")
+
                     qa_feedback_str = st.text_area("QA Auditor Feedback", value=case.get("QA_Feedback", ""), key=f"qa_fb_{case['_id']}")
                     
                     if st.button("💾 Save QA Scorecard", key=f"btn_save_qa_{case['_id']}"):
-                        computed_score = 9 if qa_passed_toggle else 0
                         collection.update_one(
                             {"_id": case["_id"]},
                             {"$set": {
