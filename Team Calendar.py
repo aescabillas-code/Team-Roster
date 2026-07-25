@@ -915,14 +915,24 @@ with tab_case:
                 
                 curr_df = st.session_state.excel_sheets_data[owner_name].copy()
                 
-                # Ensure minimum 5 editable rows
+                # Ensure minimum 5 editable rows with typed defaults
                 if len(curr_df) < 5:
                     extra_rows = pd.DataFrame([{
-                        "Date": None, "Contact Type": None, "Case #": "", 
-                        "Main Issue": None, "Product Group": "", "Description": "", 
-                        "Status": "", "Status Reason": ""
+                        "Date": pd.NaT, 
+                        "Contact Type": None, 
+                        "Case #": "", 
+                        "Main Issue": None, 
+                        "Product Group": "", 
+                        "Description": "", 
+                        "Status": "", 
+                        "Status Reason": ""
                     } for _ in range(5 - len(curr_df))])
                     curr_df = pd.concat([curr_df, extra_rows], ignore_index=True)
+
+                # Explicitly enforce types to satisfy Streamlit column_config requirements
+                curr_df["Date"] = pd.to_datetime(curr_df["Date"]).dt.date
+                for str_col in ["Case #", "Product Group", "Description", "Status", "Status Reason"]:
+                    curr_df[str_col] = curr_df[str_col].fillna("").astype(str)
 
                 edited_df = st.data_editor(
                     curr_df,
@@ -942,10 +952,10 @@ with tab_case:
                 )
 
                 # Auto-populate date on non-empty case rows if date is missing
-                today_str = str(date.today())
+                today_date = date.today()
                 for idx, row in edited_df.iterrows():
                     if str(row.get("Case #", "")).strip() and pd.isna(row.get("Date")):
-                        edited_df.at[idx, "Date"] = today_str
+                        edited_df.at[idx, "Date"] = today_date
 
                 st.session_state.excel_sheets_data[owner_name] = edited_df
 
@@ -954,11 +964,10 @@ with tab_case:
                     valid_rows = edited_df[edited_df["Case #"].astype(str).str.strip() != ""]
                     
                     for _, row in valid_rows.iterrows():
-                        entry_date = str(row["Date"]) if pd.notna(row["Date"]) else today_str
+                        entry_date = str(row["Date"]) if pd.notna(row["Date"]) else str(today_date)
                         case_num = str(row["Case #"]).strip()
-                        c_type = row["Contact Type"] if pd.notna(row["Contact Type"]) else "Call"
+                        c_type = row["Contact Type"] if pd.notna(row["Contact Type"]) and row["Contact Type"] else "Call"
                         
-                        # Save case entity with owner as tab name
                         new_case = {
                             "Date": entry_date,
                             "Target Date": entry_date,
