@@ -741,7 +741,6 @@ with tab_prod:
         # Normalize Contact / Case Type column name if present
         type_col = "Type" if "Type" in df.columns else ("Contact Type" if "Contact Type" in df.columns else None)
 
-        st.divider()
         # =====================================================================
         # 🗓️ GLOBAL MONTH & YEAR FILTERS (APPLIED TO ALL SECTIONS)
         # =====================================================================
