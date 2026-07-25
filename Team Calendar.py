@@ -776,7 +776,7 @@ with tab_prod:
                 (dev_df_all["Name"] != "Jeff Bote")
             ]
 
-        st.markdown("### 📦 Monthly Case Breakdown")
+        st.markdown("### 📦 MTD Cases Count")
         if not monthly_df.empty:
             if type_col:
                 monthly_summary = monthly_df.groupby(["Owner", type_col]).size().unstack(fill_value=0)
@@ -792,7 +792,7 @@ with tab_prod:
             st.info("No cases found for selected month.")
 
         # Monthly Deviations Table
-        st.markdown("### 🔀 Monthly Deviations")
+        st.markdown("### 🔀 Monthly Deviations Count")
         if not dev_df_m.empty:
             m_dev_summary = dev_df_m.groupby(["Name"]).size().reset_index(name="Total Deviations").sort_values(by="Total Deviations", ascending=False)
             st.dataframe(m_dev_summary, use_container_width=True, hide_index=True)
@@ -865,7 +865,7 @@ with tab_prod:
         # =====================================================================
         # 👤 SECTION 2: INDIVIDUAL PERFORMANCE ANALYSIS & PROFILING
         # =====================================================================
-        st.markdown("## 👤 Individual Employee Performance Analysis & Profile Categories")
+        st.markdown("## 👤 Individual Performance Analysis & Profile Categories")
 
         active_roster_names = sorted(list(set(df["Owner"].dropna().tolist() + list(st.session_state.staff_roster.keys()))))
         
