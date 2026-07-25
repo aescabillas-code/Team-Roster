@@ -781,6 +781,7 @@ with tab_prod:
 
         # Monthly Deviations Table
         st.markdown("### 🔀 Monthly Deviations")
+        dev_df_m = pd.DataFrame()
         if dev_data_all:
             dev_df_all = pd.DataFrame(dev_data_all)
             dev_df_all["ParsedDate"] = pd.to_datetime(dev_df_all["Date"], errors="coerce")
@@ -802,7 +803,7 @@ with tab_prod:
         st.divider()
 
         # =====================================================================
-        # 🎯 SECTION 1.5: QA ANALYSIS (CASES WITH COMMENTS ONLY)
+        # 🎯 SECTION 1.5: QA ANALYSIS & MOST COMMON ERROR ANALYSIS
         # =====================================================================
         st.markdown("## 🎯 QA Analysis (Cases with Comments Only)")
         
@@ -834,6 +835,53 @@ with tab_prod:
             qa_summary = qa_summary.sort_values(by="Total Evaluated", ascending=False).reset_index()
 
             st.dataframe(qa_summary, use_container_width=True, hide_index=True)
+
+            # --- MOST COMMON ERROR ANALYSIS ---
+            st.markdown("### ⚠️ Most Common QA Error & Defect Analysis")
+            
+            qa_criteria_map = {
+                "QA_SLO_SLA": "SLO / SLA Adherence",
+                "QA_Initial_Consecutive_Resp": "Initial & Consecutive Responses",
+                "QA_Case_Status_Update": "Timely Case Status Update",
+                "QA_Issue_Field_Updated": "Issue Field Documentation",
+                "QA_Case_Comments_Probing": "Probing Questions & Case Comments (🚨)",
+                "QA_Collaborations_Logging": "Collaborations / Communication Logging (🚨)",
+                "QA_Entitlement_Validation": "Entitlement Validation Process (🚨)",
+                "QA_Account_Validation": "Account Validation Process",
+                "QA_Case_Routing": "Private Case Routing / Escalation (🚨)"
+            }
+
+            error_counts = {}
+            for col, label in qa_criteria_map.items():
+                if col in commented_df.columns:
+                    # Count instances marked as 'Not Met'
+                    not_met_count = (commented_df[col] == "Not Met").sum()
+                    error_counts[label] = not_met_count
+
+            error_df = pd.DataFrame(list(error_counts.items()), columns=["QA Requirement / Criterion", "Defect Count ('Not Met')"])
+            error_df["Error Rate (%)"] = ((error_df["Defect Count ('Not Met')"] / total_commented) * 100).round(1)
+            error_df = error_df.sort_values(by="Defect Count ('Not Met')", ascending=False)
+
+            err_col1, err_col2 = st.columns([1, 1])
+            with err_col1:
+                st.markdown("**Defect Breakdown Table**")
+                st.dataframe(error_df, use_container_width=True, hide_index=True)
+
+            with err_col2:
+                st.markdown("**Defect Distribution Visual**")
+                if error_df["Defect Count ('Not Met')"].sum() > 0:
+                    err_chart = (
+                        alt.Chart(error_df)
+                        .mark_bar(color="#ea4335")
+                        .encode(
+                            x=alt.X("Defect Count ('Not Met'):Q", title="Total Defect Count"),
+                            y=alt.Y("QA Requirement / Criterion:N", sort="-x", title="QA Criterion"),
+                            tooltip=["QA Requirement / Criterion", "Defect Count ('Not Met')", "Error Rate (%)"]
+                        )
+                    )
+                    st.altair_chart(err_chart, use_container_width=True)
+                else:
+                    st.success("🎉 No QA defect errors recorded across evaluated cases in this timeframe!")
         else:
             st.info("No cases with comments found for QA evaluation in the selected month.")
 
@@ -983,7 +1031,54 @@ with tab_prod:
         st.markdown("---")
 
         # =====================================================================
-        # 📊 SECTION 4: OPERATIONAL ANALYSIS
+        # 🔬 SECTION 4: QA, PRODUCTIVITY & DEVIATION RELATIONSHIP STUDY
+        # =====================================================================
+        st.markdown("## 🔬 QA, Productivity & Deviation Relationship Study")
+        
+        # Merge individual level data across Productivity, Deviations, and QA Scores
+        owner_prod_agg = df.groupby("Owner").size().reset_index(name="Total Cases Handled")
+        
+        dev_agg = pd.DataFrame()
+        if dev_data_all and not dev_df_all.empty:
+            dev_agg = dev_df_all[dev_df_all["Name"] != "Jeff Bote"].groupby("Name")["Total Mins"].sum().reset_index(name="Total Deviation Mins")
+
+        qa_agg = pd.DataFrame()
+        if not commented_df.empty:
+            commented_df["QA_Numeric"] = pd.to_numeric(commented_df.get("QA_Score", 9), errors="coerce").fillna(9)
+            qa_agg = commented_df.groupby("Owner")["QA_Numeric"].mean().reset_index(name="Average QA Score")
+
+        # Merge all metrics into unified dataframe
+        study_df = pd.merge(owner_prod_agg, dev_agg, left_on="Owner", right_on="Name", how="outer").fillna(0)
+        if "Name" in study_df.columns: study_df = study_df.drop(columns=["Name"])
+        
+        if not qa_agg.empty:
+            study_df = pd.merge(study_df, qa_agg, on="Owner", how="left").fillna({"Average QA Score": 9.0})
+
+        st.markdown("### 📊 Unified Employee Performance Matrix")
+        st.dataframe(study_df, use_container_width=True, hide_index=True)
+
+        if len(study_df) >= 3:
+            st.markdown("### 🔗 Correlation Analysis Matrix")
+            corr_cols = [c for c in ["Total Cases Handled", "Total Deviation Mins", "Average QA Score"] if c in study_df.columns]
+            corr_matrix = study_df[corr_cols].corr().round(2)
+            st.dataframe(corr_matrix, use_container_width=True)
+
+            c_prod_qa = corr_matrix.loc["Total Cases Handled", "Average QA Score"] if "Average QA Score" in corr_matrix.columns else 0
+            c_dev_qa = corr_matrix.loc["Total Deviation Mins", "Average QA Score"] if ("Average QA Score" in corr_matrix.columns and "Total Deviation Mins" in corr_matrix.columns) else 0
+
+            st.markdown(f"""
+            * **Productivity vs QA Score Correlation (`{c_prod_qa}`):** 
+              {"*High volume corresponds with high quality scores, indicating strong mastery.*" if c_prod_qa > 0.3 else ("*Rushed processing detected — higher volume lowers QA compliance.*" if c_prod_qa < -0.3 else "*Productivity speed shows minimal impact on QA score standard adherence.*")}
+            * **Deviation Mins vs QA Score Correlation (`{c_dev_qa}`):** 
+              {"*Deviations reflect coaching and SME collaboration time leading to higher QA quality.*" if c_dev_qa > 0.3 else ("*High off-queue deviation time correlates with lower QA quality scores.*" if c_dev_qa < -0.3 else "*Off-queue deviation time operates independently from QA performance scores.*")}
+            """)
+        else:
+            st.info("Insufficient data points to calculate correlation matrix (minimum 3 active employees required).")
+
+        st.divider()
+
+        # =====================================================================
+        # 📊 SECTION 5: OPERATIONAL ANALYSIS
         # =====================================================================
         st.markdown("## 📊 Operational Analysis: Productivity vs. Deviations")
         
@@ -1314,7 +1409,7 @@ with tab_case:
         paginated_cases = filtered_cases[start_idx:end_idx]
 
         for case in paginated_cases:
-            entry_col, gap, action_col = st.columns([3.8, .2, 1.2])
+            entry_col, gap, action_col = st.columns([3.5, .1, 1.4])
             has_comment = bool(str(case.get("Comment", "")).strip())
             has_qa_fb = bool(str(case.get("QA_Feedback", "")).strip())
             
@@ -1353,12 +1448,14 @@ with tab_case:
                 st.markdown('</div>', unsafe_allow_html=True)
 
             with action_col:
-                t_col1, t_col2, t_col3 = st.columns(3)
+                t_col1, t_col2, t_col3, t_col4 = st.columns(4)
                 with t_col1:
                     t_edit = st.toggle("✏️ Edit", key=f"t_edit_{case['_id']}")
                 with t_col2:
                     t_del = st.toggle("🗑️ Del", key=f"t_del_{case['_id']}")
                 with t_col3:
+                    t_comment = st.toggle("💬 Comment", key=f"t_comment_{case['_id']}")
+                with t_col4:
                     # Toggle QA option allowed only if a comment is present
                     t_qa = st.toggle("🎯 QA", key=f"t_qa_{case['_id']}") if has_comment else False
 
@@ -1404,6 +1501,20 @@ with tab_case:
                             st.rerun()
                         else:
                             st.error("Credential confirmation mismatch validation failure.")
+
+            # --- QUICK COMMENT TOGGLE ACTION ---
+            if t_comment:
+                with st.container(border=True):
+                    st.markdown(f"#### 💬 Add / Modify Comment for Case #{case.get('Case Number','')}")
+                    new_comment_val = st.text_area("Work Note / Case Comment", value=case.get("Comment", ""), key=f"quick_comment_{case['_id']}")
+                    if st.button("💾 Save Comment", key=f"btn_save_comment_{case['_id']}"):
+                        collection.update_one(
+                            {"_id": case["_id"]},
+                            {"$set": {"Comment": new_comment_val}}
+                        )
+                        get_cases_from_db.clear()
+                        st.success("Comment updated successfully!")
+                        st.rerun()
 
             # --- QA EVALUATION FORM (Triggered only when case has a comment) ---
             if t_qa:
