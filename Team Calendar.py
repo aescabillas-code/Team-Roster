@@ -804,8 +804,7 @@ with tab_prod:
         # =====================================================================
         # 🎯 SECTION 1.5: QA ANALYSIS (CASES WITH COMMENTS ONLY)
         # =====================================================================
-        # --- MOST COMMON ERROR ANALYSIS ---
-            st.markdown("### ⚠️ Most Common QA Error & Defect Analysis")
+        st.markdown("### ⚠️ Most Common QA Error & Defect Analysis")
             
             qa_criteria_map = {
                 "QA_SLO_SLA": "SLO / SLA Adherence",
@@ -852,7 +851,7 @@ with tab_prod:
                     st.success("🎉 No QA defect errors recorded across evaluated cases in this timeframe!")
         else:
             st.info("No cases with comments found for QA evaluation in the selected month.")
-
+            
         st.divider()
 
         # =====================================================================
