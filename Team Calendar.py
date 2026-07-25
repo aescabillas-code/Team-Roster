@@ -709,12 +709,17 @@ with tab_req:
         st.write("*No pending requests await administrator review authorization logs.*")
 
 # --- TAB 3: PRODUCTIVITY MONITORING ---
-with tab_prod:
+with tab3:
+    st.header("📈 Productivity Monitoring & Operational Analysis")
+
+    # Fetch initial data
     cases = get_cases_from_db()
+    dev_data_all = fetch_deviations_from_db()
 
     if not cases:
         st.info("No case records found.")
     else:
+        # Data Preparation
         df = pd.DataFrame(cases)
         if "_id" in df.columns:
             df = df.drop(columns=["_id"])
@@ -731,13 +736,18 @@ with tab_prod:
         df["Month"] = df["Date"].dt.month
         df["Year"] = df["Date"].dt.year
         df["Day"] = df["Date"].dt.date
+        df["Day_Str"] = df["Date"].dt.strftime("%Y-%m-%d")
 
-        st.markdown("## Monthly Productivity")
-        col1, col2 = st.columns(2)
+        # =====================================================================
+        # 🗓️ SECTION 1: MONTHLY PRODUCTIVITY & DEVIATIONS
+        # =====================================================================
+        st.markdown("## 🗓️ Monthly Breakdown")
+        
+        col_y, col_m = st.columns(2)
         years = sorted(df["Year"].dropna().unique())
         
-        selected_year = col1.selectbox("Year", years if years else [date.today().year], key="prod_year")
-        selected_month = col2.selectbox(
+        selected_year = col_y.selectbox("Year", years if years else [date.today().year], key="prod_year")
+        selected_month = col_m.selectbox(
             "Month", 
             range(1, 13), 
             format_func=lambda x: calendar.month_name[x], 
@@ -745,8 +755,10 @@ with tab_prod:
             key="prod_monitor_month"
         )
 
+        # Monthly Productivity Data Table
         monthly_df = df[(df["Year"] == selected_year) & (df["Month"] == selected_month)]
 
+        st.markdown("### 📦 Monthly Case Breakdown")
         if not monthly_df.empty:
             monthly_summary = monthly_df.groupby(["Owner", "Type"]).size().unstack(fill_value=0)
             monthly_summary["Total Cases"] = monthly_summary.sum(axis=1)
@@ -757,13 +769,13 @@ with tab_prod:
         else:
             st.info("No cases found for selected month.")
 
-        # --- MONTHLY DEVIATIONS ---
+        # Monthly Deviations Table
         st.markdown("### 🔀 Monthly Deviations")
-        dev_data_all = fetch_deviations_from_db()
         if dev_data_all:
             dev_df_all = pd.DataFrame(dev_data_all)
             dev_df_all["ParsedDate"] = pd.to_datetime(dev_df_all["Date"], errors="coerce")
             dev_df_all = dev_df_all.dropna(subset=["ParsedDate"])
+            
             dev_df_m = dev_df_all[
                 (dev_df_all["ParsedDate"].dt.year == selected_year) & 
                 (dev_df_all["ParsedDate"].dt.month == selected_month) &
@@ -779,111 +791,158 @@ with tab_prod:
 
         st.divider()
 
-        st.markdown("## Daily Productivity")
+        # =====================================================================
+        # 📈 SECTION 2: DAILY TRENDS & CHART FILTERING
+        # =====================================================================
+        st.markdown("## 📈 Daily Productivity & Deviation Trends")
+
+        # Aggregation for Charts
+        daily_owner_prod = df.groupby(["Day_Str", "Owner"]).size().reset_index(name="Case Count")
+
+        daily_dev_trend = pd.DataFrame()
+        if dev_data_all and not dev_df_all.empty:
+            dev_chart_df = dev_df_all[dev_df_all["Name"] != "Jeff Bote"].copy()
+            dev_chart_df["Date_Str"] = dev_chart_df["ParsedDate"].dt.strftime("%Y-%m-%d")
+            daily_dev_trend = dev_chart_df.groupby(["Date_Str", "Name"]).size().reset_index(name="Deviation Count")
+
+        # Filter Owner Selection
+        all_owners = sorted(daily_owner_prod["Owner"].unique().tolist())
+        selected_chart_owner = st.selectbox(
+            "Filter Daily Charts by Case Owner / Employee", 
+            ["All Owners"] + all_owners, 
+            key="tab3_owner_filter"
+        )
+
+        if selected_chart_owner != "All Owners":
+            filtered_prod = daily_owner_prod[daily_owner_prod["Owner"] == selected_chart_owner]
+            filtered_dev = daily_dev_trend[daily_dev_trend["Name"] == selected_chart_owner] if not daily_dev_trend.empty else daily_dev_trend
+        else:
+            filtered_prod = daily_owner_prod
+            filtered_dev = daily_dev_trend
+
+        # Daily Productivity Trend Chart
+        st.markdown("### 📈 Daily Productivity Trend per Owner")
+        if not filtered_prod.empty:
+            prod_line_chart = (
+                alt.Chart(filtered_prod)
+                .mark_line(point=True)
+                .encode(
+                    x=alt.X("Day_Str:N", title="Date", axis=alt.Axis(labelAngle=-45)),
+                    y=alt.Y("Case Count:Q", title="Total Cases Handled"),
+                    color=alt.Color("Owner:N", title="Case Owner"),
+                    tooltip=[
+                        alt.Tooltip("Day_Str:N", title="Date"),
+                        alt.Tooltip("Owner:N", title="Owner"),
+                        alt.Tooltip("Case Count:Q", title="Cases Handled")
+                    ]
+                )
+                .interactive()
+            )
+            st.altair_chart(prod_line_chart, use_container_width=True)
+        else:
+            st.info("No productivity chart data available for current selection.")
+
+        # Daily Deviation Trend Chart
+        st.markdown("### 🔀 Daily Deviation Trend")
+        if not filtered_dev.empty:
+            dev_line_chart = (
+                alt.Chart(filtered_dev)
+                .mark_line(point=True)
+                .encode(
+                    x=alt.X("Date_Str:N", title="Date", axis=alt.Axis(labelAngle=-45)),
+                    y=alt.Y("Deviation Count:Q", title="Total Deviations"),
+                    color=alt.Color("Name:N", title="Employee"),
+                    tooltip=[
+                        alt.Tooltip("Date_Str:N", title="Date"),
+                        alt.Tooltip("Name:N", title="Employee"),
+                        alt.Tooltip("Deviation Count:Q", title="Deviations")
+                    ]
+                )
+                .interactive()
+            )
+            st.altair_chart(dev_line_chart, use_container_width=True)
+        else:
+            st.info("No deviation trend data available for current selection.")
+
+        st.markdown("---")
+
+        # =====================================================================
+        # 📊 SECTION 3: OPERATIONAL ANALYSIS
+        # =====================================================================
+        st.markdown("## 📊 Operational Analysis: Productivity vs. Deviations")
         
-        month_days = [d.date() for d in pd.date_range(start=f"{selected_year}-{selected_month:02d}-01", periods=calendar.monthrange(selected_year, selected_month)[1])]
-        default_day = date.today() if date.today() in month_days else month_days[0]
-        selected_day = st.date_input("Select Day", value=default_day, key="prod_day")
-        daily_df = df[df["Day"] == selected_day]
-
-        if not daily_df.empty:
-            daily_summary = daily_df.groupby(["Owner", "Type"]).size().unstack(fill_value=0)
-            daily_summary["Total Cases"] = daily_summary.sum(axis=1)
-            daily_summary = daily_summary.sort_values(by="Total Cases", ascending=False)
-            
-            d_height = min(1000, max(100, len(daily_summary) * 35 + 38))
-            st.dataframe(daily_summary.reset_index(), use_container_width=True, height=d_height, hide_index=True)
-        else:
-            st.info("No cases found for selected day.")
-
-        st.divider()
-
-        st.markdown("## 📈 Daily Productivity Trend per Owner")
-
-        daily_owner_prod = df.groupby(["Day", "Owner"]).size().reset_index(name="Case Count")
-
-        if not daily_owner_prod.empty:
-            all_owners = sorted(daily_owner_prod["Owner"].unique().tolist())
-            selected_chart_owner = st.selectbox(
-                "Filter Chart by Case Owner", 
-                ["All Owners"] + all_owners, 
-                key="prod_chart_owner_filter"
+        merged_metrics = pd.DataFrame()
+        if not daily_owner_prod.empty and not daily_dev_trend.empty:
+            merged_metrics = pd.merge(
+                daily_owner_prod, 
+                daily_dev_trend, 
+                left_on=["Day_Str", "Owner"], 
+                right_on=["Date_Str", "Name"], 
+                how="inner"
             )
 
-            if selected_chart_owner != "All Owners":
-                chart_df = daily_owner_prod[daily_owner_prod["Owner"] == selected_chart_owner]
-            else:
-                chart_df = daily_owner_prod
-
-            if not chart_df.empty:
-                prod_line_chart = (
-                    alt.Chart(chart_df)
-                    .mark_line(point=True)
-                    .encode(
-                        x=alt.X("Day:T", title="Date", axis=alt.Axis(format="%Y-%m-%d", labelAngle=-45)),
-                        y=alt.Y("Case Count:Q", title="Total Cases Handled"),
-                        color=alt.Color("Owner:N", title="Case Owner"),
-                        tooltip=["Day:T", "Owner:N", "Case Count:Q"]
-                    )
-                    .interactive()
-                )
-                st.altair_chart(prod_line_chart, use_container_width=True)
-            else:
-                st.info(f"No chart data available for {selected_chart_owner}.")
-
-            # --- DAILY DEVIATIONS LINE GRAPH ---
-            st.markdown("### 🔀 Daily Deviation Trend")
-            if dev_data_all:
-                dev_df_all = pd.DataFrame(dev_data_all)
-                dev_df_all["ParsedDate"] = pd.to_datetime(dev_df_all["Date"], errors="coerce")
-                dev_df_all = dev_df_all.dropna(subset=["ParsedDate"])
-                
-                dev_chart_df = dev_df_all[dev_df_all["Name"] != "Jeff Bote"]
-                
-                if selected_chart_owner != "All Owners":
-                    dev_chart_df = dev_chart_df[dev_chart_df["Name"] == selected_chart_owner]
-                
-                if not dev_chart_df.empty:
-                    daily_dev_trend = dev_chart_df.groupby(["ParsedDate", "Name"]).size().reset_index(name="Deviation Count")
-                    
-                    dev_line_chart = (
-                        alt.Chart(daily_dev_trend)
-                        .mark_line(point=True)
-                        .encode(
-                            x=alt.X("ParsedDate:T", title="Date", axis=alt.Axis(format="%Y-%m-%d", labelAngle=-45)),
-                            y=alt.Y("Deviation Count:Q", title="Total Deviations"),
-                            color=alt.Color("Name:N", title="Employee"),
-                            tooltip=["ParsedDate:T", "Name:N", "Deviation Count:Q"]
-                        )
-                        .interactive()
-                    )
-                    st.altair_chart(dev_line_chart, use_container_width=True)
-                else:
-                    st.info("No deviation trend data available for current selection.")
-
-            st.markdown("### 🏆 Overall Leaderboard by Productivity")
-            
-            overall_leaderboard = (
-                df.groupby("Owner")
-                .agg(
-                    Total_Cases=("Owner", "count"),
-                    Days_Active=("Day", "nunique")
-                )
-                .reset_index()
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric(
+                label="Total Productivity Logs", 
+                value=f"{filtered_prod['Case Count'].sum():,}" if not filtered_prod.empty else 0
             )
+        with col2:
+            st.metric(
+                label="Total Deviations Logged", 
+                value=f"{filtered_dev['Deviation Count'].sum():,}" if not filtered_dev.empty else 0
+            )
+        with col3:
+            if len(merged_metrics) > 2:
+                corr_val = merged_metrics["Case Count"].corr(merged_metrics["Deviation Count"])
+                st.metric(
+                    label="Correlation Coefficient", 
+                    value=f"{corr_val:.2f}",
+                    help="Values close to -1 indicate high deviations lower output. Values close to +1 indicate parallel increases."
+                )
+            else:
+                st.metric(label="Correlation Coefficient", value="N/A")
+
+        with st.expander("🔍 Deep-Dive Operational Insights & Correlation Models", expanded=True):
+            st.markdown("""
+            ### 1. Operational Relationship Framework
+            Understanding how work throughput (cases processed) intersects with queue deviations (AUX time, offline activity, unscheduled breaks):
+
+            * **Inverse Correlation Curve (Unplanned System / Adherence Anomalies):**
+              * **Pattern:** Days with spikes in total deviation counts show a proportional decline in total cases completed.
+              * **Drivers:** System outages, unannounced tool slowness, or non-adherence to scheduled shifts.
             
-            overall_leaderboard["Avg Cases / Active Day"] = (
-                overall_leaderboard["Total_Cases"] / overall_leaderboard["Days_Active"]
-            ).round(2)
+            * **Direct Correlation Curve (Complex Escalations & Mentorship):**
+              * **Pattern:** Days where complex cases spike lead to simultaneously high recorded case effort and increased off-queue deviation time.
+              * **Drivers:** Required SME consultations, QA syncs, multi-system research, or coaching sessions required to complete difficult cases.
 
-            overall_leaderboard = overall_leaderboard.rename(
-                columns={"Total_Cases": "Total Cases Handled", "Days_Active": "Days Active"}
-            ).sort_values(by="Total Cases Handled", ascending=False)
+            ---
 
-            l_height = min(1000, max(100, len(overall_leaderboard) * 35 + 38))
-            st.dataframe(overall_leaderboard, use_container_width=True, height=l_height, hide_index=True)
-        else:
-            st.info("No daily productivity trend data available.")
+            ### 2. Employee Efficiency Profile Matrix
+            """)
+
+            matrix_data = {
+                "Profile Category": ["High Performers", "Complex Processors", "Adherence At-Risk", "Under-Reporting"],
+                "Productivity (Output)": ["High", "Medium", "Low", "Low"],
+                "Deviation Frequency": ["Low", "High", "High", "Low"],
+                "Operational Diagnosis": [
+                    "Optimal floor engagement and adherence.",
+                    "Handling difficult escalations requiring offline effort.",
+                    "Frequent off-queue activity directly impacting output.",
+                    "Low output despite no logged offline time."
+                ],
+                "Recommended Action": [
+                    "Benchmark for team best practices.",
+                    "Review AUX reason codes & SME time.",
+                    "Schedule adherence coaching.",
+                    "Inspect active work queue habits and idle time."
+                ]
+            }
+            st.table(pd.DataFrame(matrix_data))
+
+            st.markdown("""
+            > **Operational Takeaway:** Monitor cases with high deviation counts to distinguish between **healthy process deviations** (coaching, complex research) and **unplanned friction** (tool outages, adherence loss).
+            """)
 
 # --- TAB 4: CASE TRACKER ---
 with tab_case:
