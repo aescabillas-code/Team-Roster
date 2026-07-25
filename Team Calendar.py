@@ -745,7 +745,7 @@ with tab_prod:
 
         st.divider()
         # =====================================================================
-        # 🗓️ SECTION 1: MONTHLY PRODUCTIVITY & DEVIATIONS
+        # 🗓️ SECTION 1: MONTHLY PRODUCTIVITY & DEVIATIONS (FILTERS DEFINED HERE)
         # =====================================================================
         st.markdown("## 🗓️ Monthly Breakdown")
         
@@ -761,7 +761,7 @@ with tab_prod:
             key="prod_monitor_month"
         )
 
-        # Global Monthly Filtered DataFrames for ALL sections
+        # Global Monthly Filtered DataFrames applied consistently across ALL sections
         monthly_df = df[(df["Year"] == selected_year) & (df["Month"] == selected_month)]
 
         dev_df_m = pd.DataFrame()
@@ -801,11 +801,10 @@ with tab_prod:
 
         st.divider()
         # =====================================================================
-        # 📈 SECTION 3: DAILY TRENDS & CHART FILTERING
+        # 📈 SECTION 2: DAILY TRENDS & CHART FILTERING
         # =====================================================================
         st.markdown("## 📈 Daily Productivity & Deviation Trends")
 
-        # Unaffected base aggregations for the entire month
         daily_owner_prod = monthly_df.groupby(["Day_Str", "Owner"]).size().reset_index(name="Case Count")
 
         daily_dev_trend = pd.DataFrame()
@@ -821,7 +820,6 @@ with tab_prod:
             key="tab3_owner_filter"
         )
 
-        # Apply filter ONLY to chart views, keeping general metrics completely independent
         if selected_chart_owner != "All Owners":
             filtered_prod = daily_owner_prod[daily_owner_prod["Owner"] == selected_chart_owner] if not daily_owner_prod.empty else daily_owner_prod
             filtered_dev = daily_dev_trend[daily_dev_trend["Name"] == selected_chart_owner] if not daily_dev_trend.empty else daily_dev_trend
@@ -876,7 +874,7 @@ with tab_prod:
         st.divider()
 
         # =====================================================================
-        # 🎯 SECTION 1.5: QA ANALYSIS & MOST COMMON ERROR ANALYSIS
+        # 🎯 SECTION 3: QA ANALYSIS & MOST COMMON ERROR ANALYSIS
         # =====================================================================
         commented_df = monthly_df[monthly_df["Comment"].astype(str).str.strip().ne("") & monthly_df["Comment"].notna()].copy()
 
@@ -933,72 +931,14 @@ with tab_prod:
                     st.success("🎉 No QA defect errors recorded across evaluated cases in this timeframe!")
         else:
             st.info("No cases with comments found for QA evaluation in the selected month.")
-            
+
         st.divider()
-        
-        # =====================================================================
-        # 👤 SECTION 2: INDIVIDUAL PERFORMANCE ANALYSIS & PROFILING
-        # =====================================================================
-        st.markdown("## 👤 Individual Performance Analysis & Profile Categories")
-
-        active_roster_names = sorted(list(set(df["Owner"].dropna().tolist() + list(st.session_state.staff_roster.keys()))))
-        
-        person_cases = monthly_df.groupby("Owner").size().to_dict() if not monthly_df.empty else {}
-        person_devs = dev_df_m.groupby("Name").size().to_dict() if not dev_df_m.empty else {}
-
-        avg_cases = (sum(person_cases.values()) / len(person_cases)) if person_cases else 0
-        avg_devs = (sum(person_devs.values()) / len(person_devs)) if person_devs else 0
-
-        profile_analysis_rows = []
-
-        for emp_name in active_roster_names:
-            c_count = person_cases.get(emp_name, 0)
-            d_count = person_devs.get(emp_name, 0)
-
-            if c_count == 0 and d_count == 0:
-                continue
-
-            if c_count >= avg_cases and d_count <= avg_devs:
-                cat = "High Performers"
-                diag = "High output with low off-queue deviations. Strong adherence."
-                action = "Benchmark for operational best practices."
-            elif c_count >= avg_cases and d_count > avg_devs:
-                cat = "Complex Processors"
-                diag = "High case effort with elevated deviation/consultation time."
-                action = "Review AUX reason codes & SME consultation time."
-            elif c_count < avg_cases and d_count > avg_devs:
-                cat = "Adherence At-Risk"
-                diag = "Frequent off-queue time directly lowering total output."
-                action = "Schedule targeted schedule adherence coaching."
-            else:
-                cat = "Under-Reporting"
-                diag = "Low case output despite low logged offline/deviation time."
-                action = "Inspect active floor work habits & idle time."
-
-            profile_analysis_rows.append({
-                "Employee Name": emp_name,
-                "Total Cases": c_count,
-                "Total Deviations": d_count,
-                "Profile Category": cat,
-                "Operational Diagnosis": diag,
-                "Recommended Action": action
-            })
-
-        if profile_analysis_rows:
-            profile_df = pd.DataFrame(profile_analysis_rows).sort_values(by="Total Cases", ascending=False)
-            p_height = min(1000, max(120, len(profile_df) * 38 + 38))
-            st.dataframe(profile_df, use_container_width=True, height=p_height, hide_index=True)
-        else:
-            st.info("No employee activity recorded for the selected month to generate individual performance profiles.")
-
-        st.markdown("---")
 
         # =====================================================================
-        # 📊 SECTION 4: OPERATIONAL ANALYSIS
+        # 📊 SECTION 4: OPERATIONAL ANALYSIS (MONTH-FILTERED & INDEPENDENT OF CHART FILTER)
         # =====================================================================
         st.markdown("## 📊 Operational Analysis: Productivity vs. Deviations")
         
-        # Calculate unshifted metrics globally for the entire team/month
         total_monthly_prod_count = daily_owner_prod["Case Count"].sum() if not daily_owner_prod.empty else 0
         
         total_monthly_dev_count = 0
@@ -1072,6 +1012,65 @@ with tab_prod:
         else:
             st.info("No specific contact/case type column found for deeper contact analysis.")
 
+        st.divider()
+
+        # =====================================================================
+        # 👤 SECTION 4.1: INDIVIDUAL PERFORMANCE ANALYSIS & PROFILING (MONTH-FILTERED)
+        # =====================================================================
+        st.markdown("## 👤 Individual Performance Analysis & Profile Categories")
+
+        active_roster_names = sorted(list(set(df["Owner"].dropna().tolist() + list(st.session_state.staff_roster.keys()))))
+        
+        person_cases = monthly_df.groupby("Owner").size().to_dict() if not monthly_df.empty else {}
+        person_devs = dev_df_m.groupby("Name").size().to_dict() if not dev_df_m.empty else {}
+
+        avg_cases = (sum(person_cases.values()) / len(person_cases)) if person_cases else 0
+        avg_devs = (sum(person_devs.values()) / len(person_devs)) if person_devs else 0
+
+        profile_analysis_rows = []
+
+        for emp_name in active_roster_names:
+            c_count = person_cases.get(emp_name, 0)
+            d_count = person_devs.get(emp_name, 0)
+
+            if c_count == 0 and d_count == 0:
+                continue
+
+            if c_count >= avg_cases and d_count <= avg_devs:
+                cat = "High Performers"
+                diag = "High output with low off-queue deviations. Strong adherence."
+                action = "Benchmark for operational best practices."
+            elif c_count >= avg_cases and d_count > avg_devs:
+                cat = "Complex Processors"
+                diag = "High case effort with elevated deviation/consultation time."
+                action = "Review AUX reason codes & SME consultation time."
+            elif c_count < avg_cases and d_count > avg_devs:
+                cat = "Adherence At-Risk"
+                diag = "Frequent off-queue time directly lowering total output."
+                action = "Schedule targeted schedule adherence coaching."
+            else:
+                cat = "Under-Reporting"
+                diag = "Low case output despite low logged offline/deviation time."
+                action = "Inspect active floor work habits & idle time."
+
+            profile_analysis_rows.append({
+                "Employee Name": emp_name,
+                "Total Cases": c_count,
+                "Total Deviations": d_count,
+                "Profile Category": cat,
+                "Operational Diagnosis": diag,
+                "Recommended Action": action
+            })
+
+        if profile_analysis_rows:
+            profile_df = pd.DataFrame(profile_analysis_rows).sort_values(by="Total Cases", ascending=False)
+            p_height = min(1000, max(120, len(profile_df) * 38 + 38))
+            st.dataframe(profile_df, use_container_width=True, height=p_height, hide_index=True)
+        else:
+            st.info("No employee activity recorded for the selected month to generate individual performance profiles.")
+
+        st.divider()
+
         with st.expander("🔍 Deep-Dive Operational Insights & Correlation Models", expanded=True):
             st.markdown("""
             ### 1. Operational Relationship Framework
@@ -1107,13 +1106,12 @@ with tab_prod:
                     "Inspect active work queue habits and idle time."
                 ]
             }
-            # Clean dataframe output with no index column numbers
             st.dataframe(pd.DataFrame(matrix_data), use_container_width=True, hide_index=True)
 
             st.markdown("""
             > **Operational Takeaway:** Monitor cases with high deviation counts to distinguish between **healthy process deviations** (coaching, complex research) and **unplanned friction** (tool outages, adherence loss).
             """)
-
+            
 # --- TAB 4: CASE TRACKER ---
 with tab_case:
     st.subheader("📝 Bulk Log New Cases")
