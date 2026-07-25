@@ -21,42 +21,42 @@ db = client["my_database"]
 collection = db["my_collection"]
 
 # --- CACHED DATA FETCHERS (Optimized TTL & Projections) ---
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=120)
 def fetch_roster_doc():
     try:
         return collection.find_one({"type": "roster_list"}) or {}
     except Exception:
         return {}
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=120)
 def fetch_calendar_doc():
     try:
         return collection.find_one({"type": "calendar_data"}) or {}
     except Exception:
         return {}
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=120)
 def fetch_masterfile_doc():
     try:
         return collection.find_one({"type": "masterfile"}) or {}
     except Exception:
         return {}
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=60)
 def get_cases_from_db():
     try:
         return list(collection.find({"type": "case"}))
     except Exception:
         return []
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=60)
 def fetch_deviations_from_db():
     try:
         return list(collection.find({"type": "deviation"}))
     except Exception:
         return []
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=60)
 def fetch_approved_requests_from_db():
     try:
         return list(collection.find({
@@ -66,7 +66,7 @@ def fetch_approved_requests_from_db():
     except Exception:
         return []
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=60)
 def fetch_pending_requests_from_db():
     try:
         return list(collection.find({
@@ -82,59 +82,63 @@ def bulk_update_requests(request_ids, status):
         {"_id": {"$in": request_ids}},
         {"$set": {"status": status}}
     )
-    st.cache_data.clear()
+    fetch_approved_requests_from_db.clear()
+    fetch_pending_requests_from_db.clear()
 
 def save_staff(name, data):
     st.session_state.staff_roster[name] = data
     collection.update_one({"type": "roster_list"}, {"$set": {"data": st.session_state.staff_roster}}, upsert=True)
-    st.cache_data.clear()
+    fetch_roster_doc.clear()
 
 def delete_staff(name):
     collection.delete_one({"type": "roster_list", "name": name})
     if name in st.session_state.staff_roster: 
         del st.session_state.staff_roster[name]
-    st.cache_data.clear()
+    fetch_roster_doc.clear()
 
 def update_staff_in_db(name, update_dict):
     collection.update_one({"type": "roster_list", "name": name}, {"$set": update_dict})
     if name in st.session_state.staff_roster:
         st.session_state.staff_roster[name].update(update_dict)
-    st.cache_data.clear()
+    fetch_roster_doc.clear()
 
 def save_case_to_db(case_data):
     case_data["type"] = "case"
     collection.insert_one(case_data)
-    st.cache_data.clear()
+    get_cases_from_db.clear()
 
 def save_deviation_to_db(data):
     data["type"] = "deviation"
     collection.insert_one(data)
-    st.cache_data.clear()
+    fetch_deviations_from_db.clear()
 
 def update_deviation_in_db(id_val, update_dict):
     collection.update_one({"_id": id_val}, {"$set": update_dict})
-    st.cache_data.clear()
+    fetch_deviations_from_db.clear()
 
 def delete_deviation_from_db(id_val):
     collection.delete_one({"_id": id_val})
-    st.cache_data.clear()
+    fetch_deviations_from_db.clear()
 
 def delete_request_from_db(req):
     collection.delete_one({"_id": req["_id"]})
-    st.cache_data.clear()
+    fetch_approved_requests_from_db.clear()
+    fetch_pending_requests_from_db.clear()
 
 def update_request_status_in_db(req, status):
     collection.update_one({"_id": req["_id"]}, {"$set": {"status": status}})
-    st.cache_data.clear()
+    fetch_approved_requests_from_db.clear()
+    fetch_pending_requests_from_db.clear()
 
 def save_request_to_db(req, request_type):
     req["type"] = request_type
     collection.insert_one(req)
-    st.cache_data.clear()
+    fetch_approved_requests_from_db.clear()
+    fetch_pending_requests_from_db.clear()
 
 def save_masterfile_to_db(df):
     collection.update_one({"type": "masterfile"}, {"$set": {"data": df.to_dict(orient="records")}}, upsert=True)
-    st.cache_data.clear()
+    fetch_masterfile_doc.clear()
 
 def get_request_limits(req_date):
     cal_doc = fetch_calendar_doc()
@@ -144,8 +148,20 @@ def get_request_limits(req_date):
     st.session_state.limits["Wellness_per_day"] = selected_config.get("Wellness_per_day", 1)
     return st.session_state.limits
 
-def send_request_notification(recipient_email, status, request_type, date_val):
-    pass
+def calculate_duration_mins(start_str, end_str):
+    """Calculates non-zero positive duration minutes between HH:MM strings accurately."""
+    try:
+        time_fmt = "%H:%M"
+        start_dt = datetime.strptime(start_str.strip(), time_fmt)
+        end_dt = datetime.strptime(end_str.strip(), time_fmt)
+        
+        if end_dt < start_dt:
+            end_dt += timedelta(days=1)  # Overlap across midnight
+            
+        diff_mins = int((end_dt - start_dt).total_seconds() // 60)
+        return max(0, diff_mins)
+    except Exception:
+        return 0
 
 # --- INITIAL CONFIG & STATE ---
 st.title("📊 Team Operations Management System (TOMS)")
@@ -603,7 +619,6 @@ with tab_req:
 
         if submit_triggered:
             running_caps = {}
-            # In-memory fast checks replacing DB count_documents queries inside loop
             existing_requests = global_pending_requests + global_approved_requests
             
             for i in range(st.session_state.request_count):
@@ -710,7 +725,6 @@ with tab_prod:
         elif "Date" in df.columns and "Target Date" in df.columns:
             df["Date"] = df["Date"].fillna(df["Target Date"])
         
-        # Ensure string conversion before parsing to avoid type errors
         df["Date"] = pd.to_datetime(df["Date"].astype(str), errors="coerce")
         df = df.dropna(subset=["Date"])
         
@@ -743,7 +757,7 @@ with tab_prod:
         else:
             st.info("No cases found for selected month.")
 
-        # --- MONTHLY DEVIATIONS (Affected by Month and Year Filter) ---
+        # --- MONTHLY DEVIATIONS ---
         st.markdown("### 🔀 Monthly Deviations")
         dev_data_all = fetch_deviations_from_db()
         if dev_data_all:
@@ -767,7 +781,6 @@ with tab_prod:
 
         st.markdown("## Daily Productivity")
         
-        # Day select constrained by selected Month and Year
         month_days = [d.date() for d in pd.date_range(start=f"{selected_year}-{selected_month:02d}-01", periods=calendar.monthrange(selected_year, selected_month)[1])]
         default_day = date.today() if date.today() in month_days else month_days[0]
         selected_day = st.date_input("Select Day", value=default_day, key="prod_day")
@@ -818,7 +831,7 @@ with tab_prod:
             else:
                 st.info(f"No chart data available for {selected_chart_owner}.")
 
-            # --- DAILY DEVIATIONS LINE GRAPH (Transformed from Heatmap) ---
+            # --- DAILY DEVIATIONS LINE GRAPH ---
             st.markdown("### 🔀 Daily Deviation Trend")
             if dev_data_all:
                 dev_df_all = pd.DataFrame(dev_data_all)
@@ -912,11 +925,12 @@ with tab_case:
             entry_idx = row_idx + col_idx
             if entry_idx < total_slots:
                 with cols[col_idx]:
-                    st.session_state.batch_case_entries[entry_idx]["case_number"] = st.text_input(
+                    val = st.text_input(
                         f"Case #{entry_idx + 1}",
                         value=st.session_state.batch_case_entries[entry_idx]["case_number"],
                         key=f"grid_case_num_{entry_idx}"
                     )
+                    st.session_state.batch_case_entries[entry_idx]["case_number"] = val
 
     ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([2, 2, 4])
     with ctrl_col1:
@@ -934,15 +948,15 @@ with tab_case:
         if st.button("💾 Submit All Cases", key="btn_save_batch_cases"):
             cases_saved = 0
             for entry in st.session_state.batch_case_entries:
-                # 1. Save ONLY slots with actual content
-                if not entry["case_number"] or not str(entry["case_number"]).strip():
+                c_num = entry.get("case_number", "").strip()
+                if not c_num:
                     continue
                 new_case = {
                     "Date": str(global_target_date),
                     "Target Date": str(global_target_date),
                     "Owner": global_owner,
                     "Type": global_c_type,
-                    "Case Number": entry["case_number"].strip(),
+                    "Case Number": c_num,
                     "Comment": "",
                     "QA_SLO_SLA": "Met",
                     "QA_Initial_Consecutive_Resp": "Met",
@@ -1012,7 +1026,6 @@ with tab_case:
     owners = sorted(list(set(case.get("Owner", "") for case in cases_list if case.get("Owner"))))
     f_owner = f2.selectbox("Filter by Owner", ["All"] + owners)
 
-    # Updated default to "With Comments Only"
     f_comment = f3.selectbox(
         "Filter by Comment", 
         ["With Comments Only", "All", "Without Comments Only"], 
@@ -1050,7 +1063,6 @@ with tab_case:
                 elif has_qa_fb and is_passed:
                     expander_label = f"✅ PASSED | Case #{case.get('Case Number','')}"
 
-                # Render background container based on QA Status and Feedback presence
                 if has_qa_fb:
                     box_class = "qa-box-passed" if is_passed else "qa-box-failed"
                     st.markdown(f'<div class="{box_class}">', unsafe_allow_html=True)
@@ -1074,7 +1086,6 @@ with tab_case:
                     st.markdown('</div>', unsafe_allow_html=True)
 
             with action_col:
-                # 4. Removed Note toggle (action)
                 t_col1, t_col2, t_col3 = st.columns(3)
                 with t_col1:
                     t_edit = st.toggle("✏️ Edit", key=f"t_edit_{case['_id']}")
@@ -1107,7 +1118,7 @@ with tab_case:
                                 "Case Number": edit_case_number
                             }}
                         )
-                        st.cache_data.clear()
+                        get_cases_from_db.clear()
                         st.success("Case profile properties modified successfully.")
                         st.rerun()
 
@@ -1118,7 +1129,7 @@ with tab_case:
                     if st.button("Purge Permanent Record", key=f"conf_del_{case['_id']}"):
                         if del_password == "Password1234":
                             collection.delete_one({"_id": case["_id"]})
-                            st.cache_data.clear()
+                            get_cases_from_db.clear()
                             st.success("Database entity stripped completely.")
                             st.rerun()
                         else:
@@ -1158,7 +1169,6 @@ with tab_case:
                         computed_score = max(0, 9 - deductions)
                         st.metric("Calculated QA Score", f"{computed_score} / 9")
 
-                    # 2. Add PASSED or FAILED status display below
                     qa_status_display = "PASSED" if computed_score == 9 else "FAILED"
                     if qa_status_display == "PASSED":
                         st.success(f"**STATUS: {qa_status_display}** ✅")
@@ -1184,7 +1194,7 @@ with tab_case:
                                 "QA_Feedback": qa_feedback_str
                             }}
                         )
-                        st.cache_data.clear()
+                        get_cases_from_db.clear()
                         st.success("QA evaluation saved successfully!")
                         st.rerun()
 
@@ -1214,7 +1224,7 @@ with tab_dev:
 
     st.markdown("### 📊 Bulk Entry Log")
     if "bulk_deviation_entries" not in st.session_state:
-        st.session_state.bulk_deviation_entries = [{"start": "00:00", "end": "00:00", "duration": "0m", "aux": "", "reason": ""}]
+        st.session_state.bulk_deviation_entries = [{"start": "09:00", "end": "09:30", "duration": "30m", "aux": "", "reason": ""}]
 
     hdr_cols = st.columns([2, 2, 2, 2, 4])
     hdr_cols[0].markdown("**Start Time (HH:MM)**")
@@ -1226,11 +1236,19 @@ with tab_dev:
     for idx, entry in enumerate(st.session_state.bulk_deviation_entries):
         row_cols = st.columns([2, 2, 2, 2, 4])
         with row_cols[0]:
-            entry["start"] = st.text_input("Start", value=entry["start"], label_visibility="collapsed", key=f"dev_matrix_start_{idx}")
+            start_val = st.text_input("Start", value=entry["start"], label_visibility="collapsed", key=f"dev_matrix_start_{idx}")
+            entry["start"] = start_val
         with row_cols[1]:
-            entry["end"] = st.text_input("End", value=entry["end"], label_visibility="collapsed", key=f"dev_matrix_end_{idx}")
+            end_val = st.text_input("End", value=entry["end"], label_visibility="collapsed", key=f"dev_matrix_end_{idx}")
+            entry["end"] = end_val
+            
+        # Dynamically auto-calculate duration accurately
+        calc_mins = calculate_duration_mins(entry["start"], entry["end"])
+        if calc_mins > 0:
+            entry["duration"] = f"{calc_mins}m"
+            
         with row_cols[2]:
-            entry["duration"] = st.text_input("Duration", value=entry["duration"], label_visibility="collapsed", key=f"dev_matrix_dur_{idx}")
+            st.text_input("Duration", value=entry["duration"], label_visibility="collapsed", key=f"dev_matrix_dur_{idx}", disabled=True)
         with row_cols[3]:
             entry["aux"] = st.text_input("Aux", value=entry["aux"], label_visibility="collapsed", key=f"dev_matrix_aux_{idx}")
         with row_cols[4]:
@@ -1239,7 +1257,7 @@ with tab_dev:
     ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([2, 2, 4])
     with ctrl_col1:
         if st.button("➕ Add Row", key="btn_add_dev_matrix_row"):
-            st.session_state.bulk_deviation_entries.append({"start": "00:00", "end": "00:00", "duration": "0m", "aux": "", "reason": ""})
+            st.session_state.bulk_deviation_entries.append({"start": "09:00", "end": "09:30", "duration": "30m", "aux": "", "reason": ""})
             st.rerun()
     with ctrl_col2:
         if st.button("🗑️ Remove Last Row", key="btn_remove_dev_matrix_row"):
@@ -1251,17 +1269,16 @@ with tab_dev:
     with ctrl_col3:
         if st.button("💾 Submit All", key="btn_save_batch_deviations"):
             records_saved = 0
+            has_zero_error = False
+
             for entry in st.session_state.bulk_deviation_entries:
-                duration_raw = entry["duration"].lower().strip()
-                hrs_match = re.search(r'(\d+)\s*h', duration_raw)
-                mins_match = re.search(r'(\d+)\s*m', duration_raw)
-                parsed_hrs = int(hrs_match.group(1)) if hrs_match else 0
-                parsed_mins = int(mins_match.group(1)) if mins_match else 0
-                
-                if not hrs_match and not mins_match and duration_raw.isdigit():
-                    total_mins = int(duration_raw)
-                else:
-                    total_mins = (parsed_hrs * 60) + parsed_mins
+                total_mins = calculate_duration_mins(entry["start"], entry["end"])
+
+                # Strict Guard against 0 minutes entry
+                if total_mins <= 0:
+                    has_zero_error = True
+                    st.error(f"❌ Invalid duration for time slot {entry['start']} - {entry['end']}. Duration cannot be 0 minutes.")
+                    continue
 
                 save_deviation_to_db({
                     "Date": str(target_date), "Manager": manager, "Name": name,
@@ -1271,20 +1288,19 @@ with tab_dev:
                 })
                 records_saved += 1
             
-            st.success(f"Successfully processed and recorded {records_saved} deviation entities!")
-            st.session_state.bulk_deviation_entries = [{"start": "00:00", "end": "00:00", "duration": "0m", "aux": "", "reason": ""}]
-            st.rerun()
+            if records_saved > 0:
+                st.success(f"Successfully processed and recorded {records_saved} deviation entities!")
+                st.session_state.bulk_deviation_entries = [{"start": "09:00", "end": "09:30", "duration": "30m", "aux": "", "reason": ""}]
+                st.rerun()
 
     st.divider()
     st.subheader("Deviation Report")
     
     with st.expander("Filter Report"):
         f_col1, f_col2, f_col3 = st.columns(3)
-        filter_month = f_col1.selectbox("Month", options=range(1, 13), index=date.today().month - 1, format_func=lambda x: calendar.month_name[x],key="dev_f_month")
+        filter_month = f_col1.selectbox("Month", options=range(1, 13), index=date.today().month - 1, format_func=lambda x: calendar.month_name[x], key="dev_f_month")
         filter_year = f_col2.number_input("Year", value=date.today().year, key="dev_f_year")
-        # 8. Default to current day entries only
         filter_date = f_col3.date_input("Specific Date", value=date.today(), key="dev_f_date")
-        apply_filter = st.button("Apply Filter")
 
     dev_data = fetch_deviations_from_db()
     if dev_data:
@@ -1292,7 +1308,6 @@ with tab_dev:
         df['Date'] = pd.to_datetime(df['Date']).dt.date
         df = df[df["Name"] != "Jeff Bote"]
         
-        # Default behavior & manual filter handling: default filter by current date
         if filter_date:
             df = df[df['Date'] == filter_date]
         else:
@@ -1351,7 +1366,9 @@ with tab_dev:
                     c1, c2, c3 = st.columns(3)
                     edit_start = c1.text_input("Update Start Time", value=dev.get('Start Time', '00:00'), key=f"ed_start_{dev['_id']}")
                     edit_end = c2.text_input("Update End Time", value=dev.get('End Time', '00:00'), key=f"ed_end_{dev['_id']}")
-                    edit_mins = c3.number_input("Update Total Mins", value=int(dev.get('Total Mins', 0)), min_value=0, key=f"ed_mins_{dev['_id']}")
+                    
+                    auto_mins = calculate_duration_mins(edit_start, edit_end)
+                    edit_mins = c3.number_input("Update Total Mins", value=max(1, auto_mins), min_value=1, key=f"ed_mins_{dev['_id']}")
                     
                     edit_aux = st.text_input("Update Aux", value=dev.get('Aux', ''), key=f"ed_aux_{dev['_id']}")
                     edit_reason = st.text_area("Update Reason of Deviation", value=dev.get('Reason', ''), key=f"ed_reas_{dev['_id']}")
@@ -1552,7 +1569,7 @@ with tab_adm:
                     }
                 serializable_data = {str(k): v for k, v in st.session_state.calendar_data.items()}
                 collection.update_one({"type": "calendar_data"}, {"$set": {"data": serializable_data}}, upsert=True)
-                st.cache_data.clear()
+                fetch_calendar_doc.clear()
                 st.success("Calendar timeline database parameters successfully updated!")
                 st.rerun()
     
@@ -1637,7 +1654,6 @@ with tab_adm:
                         if target_ids:
                             bulk_update_requests(target_ids, "Approved")
                             st.session_state.admin_msg = ("success", f"Successfully approved {len(target_ids)} requests!")
-                            st.cache_data.clear()
                             st.rerun()
                         else:
                             st.warning("Please select at least one request to approve.")
@@ -1648,7 +1664,6 @@ with tab_adm:
                         if target_ids:
                             bulk_update_requests(target_ids, "Rejected")
                             st.session_state.admin_msg = ("success", f"Successfully denied {len(target_ids)} requests!")
-                            st.cache_data.clear()
                             st.rerun()
                         else:
                             st.warning("Please select at least one request to deny.")
