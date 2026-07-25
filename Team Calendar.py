@@ -138,24 +138,24 @@ def fetch_all_excel_cases(uploaded_file):
                     "QA_Feedback": ""
                 })
 
-        except Exception as e:
+    except Exception as e:
         st.error(f"Excel Load Error: {e}")
 
-        seen_cases = set()
-        deduped = []
-    
-        for record in aggregated_cases:
-            case_num = str(
-                record.get("Case Number", "")
-            ).strip()
-    
-            if case_num in seen_cases:
-                continue
-    
-            seen_cases.add(case_num)
-            deduped.append(record)
-    
-        return deduped
+    seen_cases = set()
+    deduped = []
+
+    for record in aggregated_cases:
+        case_num = str(
+            record.get("Case Number", "")
+        ).strip()
+
+        if case_num in seen_cases:
+            continue
+
+        seen_cases.add(case_num)
+        deduped.append(record)
+
+    return deduped
 
 @st.cache_data(ttl=30)
 def fetch_deviations_from_db():
