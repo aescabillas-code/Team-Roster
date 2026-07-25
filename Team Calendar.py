@@ -792,7 +792,75 @@ with tab_prod:
         st.divider()
 
         # =====================================================================
-        # 📈 SECTION 2: DAILY TRENDS & CHART FILTERING
+        # 👤 SECTION 2: INDIVIDUAL PERFORMANCE ANALYSIS & PROFILING
+        # =====================================================================
+        st.markdown("## 👤 Individual Employee Performance Analysis & Profile Categories")
+
+        # Extract active roster employees or owners present in dataset
+        active_roster_names = sorted(list(set(df["Owner"].dropna().tolist() + list(st.session_state.staff_roster.keys()))))
+        
+        # Monthly summaries per person
+        person_cases = monthly_df.groupby("Owner").size().to_dict() if not monthly_df.empty else {}
+        person_devs = dev_df_m.groupby("Name").size().to_dict() if (dev_data_all and not dev_df_m.empty) else {}
+
+        # Calculate monthly benchmarks/thresholds dynamically
+        avg_cases = (sum(person_cases.values()) / len(person_cases)) if person_cases else 0
+        avg_devs = (sum(person_devs.values()) / len(person_devs)) if person_devs else 0
+
+        profile_analysis_rows = []
+
+        for emp_name in active_roster_names:
+            c_count = person_cases.get(emp_name, 0)
+            d_count = person_devs.get(emp_name, 0)
+
+            # Skip employees with 0 cases and 0 deviations in selected month
+            if c_count == 0 and d_count == 0:
+                continue
+
+            # Classify profile category based on individual stats vs monthly benchmark average
+            if c_count >= avg_cases and d_count <= avg_devs:
+                cat = "High Performers"
+                diag = "High output with low off-queue deviations. Strong adherence."
+                action = "Benchmark for operational best practices."
+            elif c_count >= avg_cases and d_count > avg_devs:
+                cat = "Complex Processors"
+                diag = "High case effort with elevated deviation/consultation time."
+                action = "Review AUX reason codes & SME consultation time."
+            elif c_count < avg_cases and d_count > avg_devs:
+                cat = "Adherence At-Risk"
+                diag = "Frequent off-queue time directly lowering total output."
+                action = "Schedule targeted schedule adherence coaching."
+            else:
+                cat = "Under-Reporting"
+                diag = "Low case output despite low logged offline/deviation time."
+                action = "Inspect active floor work habits & idle time."
+
+            profile_analysis_rows.append({
+                "Employee Name": emp_name,
+                "Total Cases": c_count,
+                "Total Deviations": d_count,
+                "Profile Category": cat,
+                "Operational Diagnosis": diag,
+                "Recommended Action": action
+            })
+
+        if profile_analysis_rows:
+            profile_df = pd.DataFrame(profile_analysis_rows).sort_values(by="Total Cases", ascending=False)
+            p_height = min(1000, max(120, len(profile_df) * 38 + 38))
+            
+            st.dataframe(
+                profile_df, 
+                use_container_width=True, 
+                height=p_height, 
+                hide_index=True
+            )
+        else:
+            st.info("No employee activity recorded for the selected month to generate individual performance profiles.")
+
+        st.divider()
+
+        # =====================================================================
+        # 📈 SECTION 3: DAILY TRENDS & CHART FILTERING
         # =====================================================================
         st.markdown("## 📈 Daily Productivity & Deviation Trends")
 
@@ -867,7 +935,7 @@ with tab_prod:
         st.markdown("---")
 
         # =====================================================================
-        # 📊 SECTION 3: OPERATIONAL ANALYSIS
+        # 📊 SECTION 4: OPERATIONAL ANALYSIS
         # =====================================================================
         st.markdown("## 📊 Operational Analysis: Productivity vs. Deviations")
         
@@ -918,12 +986,12 @@ with tab_prod:
 
             ---
 
-            ### 2. Employee Efficiency Profile Matrix
+            ### 2. Employee Efficiency Profile Matrix Framework
             """)
 
             matrix_data = {
                 "Profile Category": ["High Performers", "Complex Processors", "Adherence At-Risk", "Under-Reporting"],
-                "Productivity (Output)": ["High", "Medium", "Low", "Low"],
+                "Productivity (Output)": ["High", "High/Medium", "Low", "Low"],
                 "Deviation Frequency": ["Low", "High", "High", "Low"],
                 "Operational Diagnosis": [
                     "Optimal floor engagement and adherence.",
