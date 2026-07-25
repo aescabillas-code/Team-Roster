@@ -11,6 +11,16 @@ import altair as alt
 st.set_page_config(layout="wide")
 
 # --- DATABASE HELPERS & CONNECTION ---
+uploaded_tracker = st.sidebar.file_uploader(
+    "Upload Team Productivity Tracker",
+    type=["xlsx"]
+)
+
+if uploaded_tracker is None:
+    st.sidebar.warning(
+        "Upload TEAM JEFF PRODUCTIVITY TRACKER.xlsx to populate Productivity and Case Tracker"
+    )
+
 @st.cache_resource
 def get_mongo_client():
     uri = st.secrets["mongo"]["uri"] 
@@ -48,6 +58,104 @@ def get_cases_from_db():
         return list(collection.find({"type": "case"}))
     except Exception:
         return []
+
+@st.cache_data(ttl=30)
+def fetch_all_excel_cases(uploaded_file):
+    aggregated_cases = []
+
+    try:
+        aggregated_cases.extend(get_cases_from_db())
+    except:
+        pass
+
+    if uploaded_file is None:
+        return aggregated_cases
+
+    analyst_tabs = [
+        "Andre John Castor",
+        "Arianne May Escabillas",
+        "Denmark Navarro",
+        "Ian Christian Derez",
+        "Jasmin Gonzales",
+        "John Linnel Adagao",
+        "June John Cruz",
+        "Leo Renz Calizo",
+        "Marinelle Espinosa",
+        "May Ann Ramirez"
+    ]
+
+    try:
+        xls = pd.ExcelFile(uploaded_file, engine="openpyxl")
+
+        for tab_name in analyst_tabs:
+
+            if tab_name not in xls.sheet_names:
+                continue
+
+            df_tab = pd.read_excel(
+                uploaded_file,
+                sheet_name=tab_name,
+                engine="openpyxl"
+            )
+
+            df_tab.columns = [
+                str(col).strip().upper()
+                for col in df_tab.columns
+            ]
+
+            for idx, row in df_tab.iterrows():
+
+                case_number = str(
+                    row.get(
+                        "CASE #",
+                        row.get(
+                            "CASE#",
+                            row.get(
+                                "CASE NUMBER",
+                                ""
+                            )
+                        )
+                    )
+                ).strip()
+
+                if not case_number or case_number.lower() == "nan":
+                    continue
+
+                aggregated_cases.append({
+                    "_id": f"excel_{tab_name}_{idx}",
+                    "Owner": tab_name,
+                    "Date": str(row.get("DATE", "")),
+                    "Target Date": str(row.get("DATE", "")),
+                    "Type": str(row.get("CONTACT TYPE", "")),
+                    "Case Number": case_number,
+                    "Main Issue": str(row.get("MAIN ISSUE", "")),
+                    "Product Group": str(row.get("PRODUCT GROUP", "")),
+                    "Description": str(row.get("DESCRIPTION", "")),
+                    "Comment": str(row.get("DESCRIPTION", "")),
+                    "Status": str(row.get("STATUS", "")),
+                    "Status Reason": str(row.get("STATUS REASON", "")),
+                    "QA_Score": 9,
+                    "QA_Feedback": ""
+                })
+
+        except Exception as e:
+        st.error(f"Excel Load Error: {e}")
+
+        seen_cases = set()
+        deduped = []
+    
+        for record in aggregated_cases:
+            case_num = str(
+                record.get("Case Number", "")
+            ).strip()
+    
+            if case_num in seen_cases:
+                continue
+    
+            seen_cases.add(case_num)
+            deduped.append(record)
+    
+        return deduped
 
 @st.cache_data(ttl=30)
 def fetch_deviations_from_db():
@@ -695,7 +803,7 @@ with tab_req:
 
 # --- TAB 3: PRODUCTIVITY MONITORING ---
 with tab_prod:
-    cases = get_cases_from_db()
+    cases = fetch_all_excel_cases(uploaded_tracker)
 
     if not cases:
         st.info("No case records found.")
@@ -888,63 +996,7 @@ with tab_case:
 
     st.divider()
 
-    # 2. Fetch and aggregate data across sheet tabs for Cases view
-    SHEET_ID = "1LH9cFYAtxa9jnphYjFwT5uy3DNz0oaIWug4XZgc7CL0"
-    
-    # Mapping tab names to their respective Google Sheet GID numbers
-    tab_gids = {
-        "Andre John Castor": "0",
-        "Arianne May Escabillas": "1",
-        "Denmark Navarro": "2",
-        "Ian Christian Derez": "3",
-        "Jasmin Gonzales": "4",
-        "John Linnel Adagao": "5",
-        "June John Cruz": "6",
-        "Leo Renz Calizo": "7",
-        "Marinelle Espinosa": "8",
-        "May Ann Ramirez": "9"
-    }
-
-    @st.cache_data(ttl=30)
-    def fetch_all_sheet_cases():
-        aggregated_cases = []
-        # Database cases fallback or overlay
-        db_cases = get_cases_from_db()
-        aggregated_cases.extend(db_cases)
-
-        for tab_name, gid in tab_gids.items():
-            try:
-                csv_url = f"https://hpe-my.sharepoint.com/:x:/p/arianne-may_escabillas/IQAgnyyBKfzxSIiKM49uruu6AX9oA4RSMQfDDLcXvZ5uvuI?e=XjNwN0"
-                df_tab = pd.read_csv(csv_url)
-                
-                # Standardize columns
-                df_tab.columns = [str(c).strip() for c in df_tab.columns]
-                
-                for _, row in df_tab.iterrows():
-                    case_num = str(row.get("Case #", "")).strip()
-                    if case_num and case_num.lower() != "nan":
-                        aggregated_cases.append({
-                            "_id": f"sheet_{gid}_{_}",
-                            "Target Date": str(row.get("Date", str(date.today()))),
-                            "Date": str(row.get("Date", str(date.today()))),
-                            "Owner": tab_name,
-                            "Type": str(row.get("Contact Type", "Call")),
-                            "Case Number": case_num,
-                            "Main Issue": str(row.get("Main Issue", "")),
-                            "Product Group": str(row.get("Product Group", "")),
-                            "Description": str(row.get("Description", "")),
-                            "Status": str(row.get("Status", "")),
-                            "Status Reason": str(row.get("Status Reason", "")),
-                            "Comment": str(row.get("Description", "")) if str(row.get("Description", "")).strip() and str(row.get("Description", "")).lower() != "nan" else "",
-                            "QA_Score": row.get("QA_Score", 9),
-                            "QA_Feedback": str(row.get("QA_Feedback", "")) if pd.notnull(row.get("QA_Feedback")) else ""
-                        })
-            except Exception:
-                continue
-
-        return aggregated_cases
-
-    cases_list = fetch_all_sheet_cases()
+    cases_list = fetch_all_excel_cases(uploaded_tracker)
 
     st.subheader("📚 Cases")
 
