@@ -993,12 +993,11 @@ with tab_prod:
 
         st.markdown("---")
 
-        # =====================================================================
+        =====================================================================
         # 📊 SECTION 4: OPERATIONAL ANALYSIS
         # =====================================================================
         st.markdown("## 📊 Operational Analysis: Productivity vs. Deviations")
         
-        # Use full monthly aggregate metrics so operations metrics are immune to the owner filter
         merged_metrics = pd.DataFrame()
         if not daily_owner_prod.empty and not daily_dev_trend.empty:
             merged_metrics = pd.merge(
@@ -1013,12 +1012,12 @@ with tab_prod:
         with col1:
             st.metric(
                 label="Total Productivity Logs", 
-                value=f"{daily_owner_prod['Case Count'].sum():,}" if not daily_owner_prod.empty else 0
+                value=f"{filtered_prod['Case Count'].sum():,}" if not filtered_prod.empty else 0
             )
         with col2:
             st.metric(
                 label="Total Deviations Logged", 
-                value=f"{daily_dev_trend['Deviation Count'].sum():,}" if not daily_dev_trend.empty else 0
+                value=f"{filtered_dev['Deviation Count'].sum():,}" if not filtered_dev.empty else 0
             )
         with col3:
             if len(merged_metrics) > 2:
@@ -1030,22 +1029,6 @@ with tab_prod:
                 )
             else:
                 st.metric(label="Correlation Coefficient", value="N/A")
-
-        # --- PRODUCTIVITY & DEVIATION RELATIONSHIP DEEP-DIVE ANALYSIS ---
-        st.markdown("### 🔍 Productivity & Deviation Correlation Insights")
-        
-        if not merged_metrics.empty and len(merged_metrics) > 2:
-            avg_cases_per_day = merged_metrics["Case Count"].mean()
-            avg_devs_per_day = merged_metrics["Deviation Count"].mean()
-            
-            st.markdown(f"""
-            * **Daily Throughput Baseline:** Agents average **{avg_cases_per_day:.1f} cases** per active day against an average of **{avg_devs_per_day:.1f} offline deviations**.
-            * **Operational Correlation Dynamics:** 
-              * **Negative Correlation ($r < 0$):** Highlights operational friction, where increased off-queue compliance breaks or unplanned system interruptions directly compress daily case resolutions.
-              * **Positive Correlation ($r > 0$):** Indicates specialized escalation handling, where agents managing dense case queues concurrently require extensive team cross-consultations or specialized SME alignment.
-            """)
-        else:
-            st.info("Insufficient overlapping daily data between cases and deviations for the selected month to run correlation modeling.")
 
         # --- CONTACT / CASE TYPE ANALYSIS ---
         st.markdown("### 📞 Contact / Case Type Operational Analysis")
@@ -1077,6 +1060,48 @@ with tab_prod:
                 st.altair_chart(type_chart, use_container_width=True)
         else:
             st.info("No specific contact/case type column found for deeper contact analysis.")
+
+        with st.expander("🔍 Deep-Dive Operational Insights & Correlation Models", expanded=True):
+            st.markdown("""
+            ### 1. Operational Relationship Framework
+            Understanding how work throughput (cases processed) intersects with queue deviations (AUX time, offline activity, unscheduled breaks):
+
+            * **Inverse Correlation Curve (Unplanned System / Adherence Anomalies):**
+              * **Pattern:** Days with spikes in total deviation counts show a proportional decline in total cases completed.
+              * **Drivers:** System outages, unannounced tool slowness, or non-adherence to scheduled shifts.
+            
+            * **Direct Correlation Curve (Complex Escalations & Mentorship):**
+              * **Pattern:** Days where complex cases spike lead to simultaneously high recorded case effort and increased off-queue deviation time.
+              * **Drivers:** Required SME consultations, QA syncs, multi-system research, or coaching sessions required to complete difficult cases.
+
+            ---
+
+            ### 2. Employee Efficiency Profile Matrix Framework
+            """)
+
+            matrix_data = {
+                "Profile Category": ["High Performers", "Complex Processors", "Adherence At-Risk", "Under-Reporting"],
+                "Productivity (Output)": ["High", "High/Medium", "Low", "Low"],
+                "Deviation Frequency": ["Low", "High", "High", "Low"],
+                "Operational Diagnosis": [
+                    "Optimal floor engagement and adherence.",
+                    "Handling difficult escalations requiring offline effort.",
+                    "Frequent off-queue activity directly impacting output.",
+                    "Low output despite no logged offline time."
+                ],
+                "Recommended Action": [
+                    "Benchmark for team best practices.",
+                    "Review AUX reason codes & SME time.",
+                    "Schedule adherence coaching.",
+                    "Inspect active work queue habits and idle time."
+                ]
+            }
+            # Clean dataframe output with no index column numbers
+            st.dataframe(pd.DataFrame(matrix_data), use_container_width=True, hide_index=True)
+
+            st.markdown("""
+            > **Operational Takeaway:** Monitor cases with high deviation counts to distinguish between **healthy process deviations** (coaching, complex research) and **unplanned friction** (tool outages, adherence loss).
+            """)
 
 # --- TAB 4: CASE TRACKER ---
 with tab_case:
