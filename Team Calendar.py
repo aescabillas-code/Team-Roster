@@ -874,136 +874,75 @@ with tab_prod:
 
 # --- TAB 4: CASE TRACKER ---
 with tab_case:
-    st.subheader("📝 Case Tracker Log Sheet")
-    cases_list = get_cases_from_db()
+    st.subheader("📝 Case Entry Workspace")
+    
+    sheet_url = "https://docs.google.com/spreadsheets/d/1LH9cFYAtxa9jnphYjFwT5uy3DNz0oaIWug4XZgc7CL0/edit?usp=sharing"
+    
+    st.markdown("Click the button below to open the team master case tracking Excel file and log your cases under your designated tab:")
+    st.link_button("🌐 Open Case Tracker Spreadsheet", sheet_url, type="primary")
 
-    # List of staff members for the excel tabs
-    excel_tabs_list = [
+    st.divider()
+    st.subheader("📚 Cases Tracker")
+
+    tab_names_list = [
         "Andre John Castor", "Arianne May Escabillas", "Denmark Navarro", 
         "Ian Christian Derez", "Jasmin Gonzales", "John Linnel Adagao", 
         "June John Cruz", "Leo Renz Calizo", "Marinelle Espinosa", "May Ann Ramirez"
     ]
 
-    # Initialize Excel-like sheet state
-    if "excel_sheets_data" not in st.session_state:
-        st.session_state.excel_sheets_data = {
-            owner: pd.DataFrame(columns=[
-                "Date", "Contact Type", "Case #", "Main Issue", 
-                "Product Group", "Description", "Status", "Status Reason"
-            ]) for owner in excel_tabs_list
-        }
+    doc_id = "1LH9cFYAtxa9jnphYjFwT5uy3DNz0oaIWug4XZgc7CL0"
 
-    if "show_excel_file" not in st.session_state:
-        st.session_state.show_excel_file = False
+    @st.cache_data(ttl=60)
+    def fetch_cases_from_sheets():
+        all_cases = []
+        for tab_name in tab_names_list:
+            encoded_tab = tab_name.replace(" ", "%20")
+            csv_export_url = f"https://docs.google.com/spreadsheets/d/{doc_id}/gviz/tq?tqx=out:csv&sheet={encoded_tab}"
+            try:
+                sheet_df = pd.read_csv(csv_export_url)
+                if not sheet_df.empty:
+                    sheet_df = sheet_df.dropna(how="all")
+                    for _, row in sheet_df.iterrows():
+                        case_no = str(row.get("Case #", "") or row.get("Case Number", "")).strip()
+                        if case_no and case_no.lower() != "nan":
+                            case_date = str(row.get("Date", "")).strip()
+                            contact_type = str(row.get("Contact Type", "")).strip()
+                            description = str(row.get("Description", "") or row.get("Desription", "")).strip()
+                            main_issue = str(row.get("Main Issue", "")).strip()
+                            product_grp = str(row.get("Product Group", "")).strip()
+                            status = str(row.get("Status", "")).strip()
+                            status_reason = str(row.get("Status Reason", "")).strip()
+                            
+                            comment_parts = []
+                            if main_issue and main_issue.lower() != "nan": comment_parts.append(f"Issue: {main_issue}")
+                            if product_grp and product_grp.lower() != "nan": comment_parts.append(f"Product: {product_grp}")
+                            if description and description.lower() != "nan": comment_parts.append(f"Desc: {description}")
+                            if status and status.lower() != "nan": comment_parts.append(f"Status: {status}")
+                            if status_reason and status_reason.lower() != "nan": comment_parts.append(f"Reason: {status_reason}")
 
-    # Button to open/toggle the multi-tab Excel file
-    btn_label = "❌ Close Excel File" if st.session_state.show_excel_file else "📊 Open Excel Log Sheet"
-    if st.button(btn_label, key="btn_toggle_excel"):
-        st.session_state.show_excel_file = not st.session_state.show_excel_file
-        st.rerun()
+                            all_cases.append({
+                                "_id": f"{tab_name}_{case_no}",
+                                "Case Number": case_no,
+                                "Owner": tab_name,
+                                "Target Date": case_date if case_date and case_date.lower() != "nan" else str(date.today()),
+                                "Type": contact_type if contact_type and contact_type.lower() != "nan" else "N/A",
+                                "Comment": " | ".join(comment_parts),
+                                "QA_Score": 9,
+                                "QA_Feedback": ""
+                            })
+            except Exception:
+                continue
+        return all_cases
 
-    if st.session_state.show_excel_file:
-        st.markdown("---")
-        st.markdown("### 📑 Excel Workbook - Select Staff Tab")
-        
-        # Display tabs for each owner
-        staff_tabs = st.tabs(excel_tabs_list)
+    db_cases = get_cases_from_db()
+    sheet_cases = fetch_cases_from_sheets()
 
-        for owner_name, staff_tab in zip(excel_tabs_list, staff_tabs):
-            with staff_tab:
-                st.markdown(f"#### 👤 {owner_name}'s Log Sheet")
-                
-                curr_df = st.session_state.excel_sheets_data[owner_name].copy()
-                
-                # Ensure minimum 5 editable rows with typed defaults
-                if len(curr_df) < 5:
-                    extra_rows = pd.DataFrame([{
-                        "Date": pd.NaT, 
-                        "Contact Type": None, 
-                        "Case #": "", 
-                        "Main Issue": None, 
-                        "Product Group": "", 
-                        "Description": "", 
-                        "Status": "", 
-                        "Status Reason": ""
-                    } for _ in range(5 - len(curr_df))])
-                    curr_df = pd.concat([curr_df, extra_rows], ignore_index=True)
+    merged_cases_dict = {c["_id"]: c for c in db_cases if "_id" in c}
+    for sc in sheet_cases:
+        if sc["_id"] not in merged_cases_dict:
+            merged_cases_dict[sc["_id"]] = sc
 
-                # Explicitly enforce types to satisfy Streamlit column_config requirements
-                curr_df["Date"] = pd.to_datetime(curr_df["Date"]).dt.date
-                for str_col in ["Case #", "Product Group", "Description", "Status", "Status Reason"]:
-                    curr_df[str_col] = curr_df[str_col].fillna("").astype(str)
-
-                edited_df = st.data_editor(
-                    curr_df,
-                    num_rows="dynamic",
-                    use_container_width=True,
-                    key=f"editor_{owner_name}",
-                    column_config={
-                        "Date": st.column_config.DateColumn("Date", format="YYYY-MM-DD"),
-                        "Contact Type": st.column_config.SelectboxColumn("Contact Type", options=["Call", "Chat", "MFQ"]),
-                        "Case #": st.column_config.TextColumn("Case #"),
-                        "Main Issue": st.column_config.SelectboxColumn("Main Issue", options=["Troubleshooting", "RMA", "Licensing", "Misrouted/Disconnected", "Out of Scope"]),
-                        "Product Group": st.column_config.TextColumn("Product Group"),
-                        "Description": st.column_config.TextColumn("Description"),
-                        "Status": st.column_config.TextColumn("Status"),
-                        "Status Reason": st.column_config.TextColumn("Status Reason"),
-                    }
-                )
-
-                # Auto-populate date on non-empty case rows if date is missing
-                today_date = date.today()
-                for idx, row in edited_df.iterrows():
-                    if str(row.get("Case #", "")).strip() and pd.isna(row.get("Date")):
-                        edited_df.at[idx, "Date"] = today_date
-
-                st.session_state.excel_sheets_data[owner_name] = edited_df
-
-                if st.button(f"💾 Save & Sync Cases for {owner_name}", key=f"save_tab_{owner_name}"):
-                    saved_count = 0
-                    valid_rows = edited_df[edited_df["Case #"].astype(str).str.strip() != ""]
-                    
-                    for _, row in valid_rows.iterrows():
-                        entry_date = str(row["Date"]) if pd.notna(row["Date"]) else str(today_date)
-                        case_num = str(row["Case #"]).strip()
-                        c_type = row["Contact Type"] if pd.notna(row["Contact Type"]) and row["Contact Type"] else "Call"
-                        
-                        new_case = {
-                            "Date": entry_date,
-                            "Target Date": entry_date,
-                            "Owner": owner_name,
-                            "Type": c_type,
-                            "Case Number": case_num,
-                            "Main Issue": row["Main Issue"],
-                            "Product Group": row["Product Group"],
-                            "Description": row["Description"],
-                            "Status": row["Status"],
-                            "Status Reason": row["Status Reason"],
-                            "Comment": "",
-                            "QA_SLO_SLA": "Met",
-                            "QA_Initial_Consecutive_Resp": "Met",
-                            "QA_Case_Status_Update": "Met",
-                            "QA_Issue_Field_Updated": "Met",
-                            "QA_Case_Comments_Probing": "Met",
-                            "QA_Collaborations_Logging": "Met",
-                            "QA_Entitlement_Validation": "Met",
-                            "QA_Account_Validation": "Met",
-                            "QA_Case_Routing": "Met",
-                            "QA_Score": 9,
-                            "QA_Feedback": ""
-                        }
-                        save_case_to_db(new_case)
-                        saved_count += 1
-
-                    if saved_count > 0:
-                        st.success(f"Successfully recorded {saved_count} case(s) for {owner_name}!")
-                        st.cache_data.clear()
-                        st.rerun()
-                    else:
-                        st.warning("No valid case numbers found to save.")
-
-    st.divider()
-    st.subheader("📚 Cases")
+    cases_list = list(merged_cases_dict.values())
 
     if cases_list:
         df_cases = pd.DataFrame(cases_list)
@@ -1092,7 +1031,7 @@ with tab_case:
                 with st.expander(expander_label, expanded=(has_comment or has_qa_fb)):
                     st.markdown(f"""
                         **Owner:** {case.get('Owner','')}  
-                        **Date:** {case.get('Target Date', case.get('Date', str(date.today())))}  
+                        **Target Date:** {case.get('Target Date', str(date.today()))}  
                         **Contact Type:** {case.get('Type','')}  
                         **Case Number:** {case.get('Case Number','')}  
                         **QA Score:** `{qa_score} / 9`
@@ -1119,7 +1058,8 @@ with tab_case:
             if t_edit:
                 with st.container(border=True):
                     st.markdown(f"#### Edit Case #{case.get('Case Number','')}")
-                    owner_list = sorted(list(st.session_state.staff_roster.keys())) or excel_tabs_list
+                    owner_list = sorted(list(st.session_state.staff_roster.keys())) or ["Unknown"]
+                    c_types = ["Call", "Chat", "MFQ"]
                     edit_owner = st.selectbox("Record Assignment Owner", owner_list, index=owner_list.index(case.get("Owner")) if case.get("Owner") in owner_list else 0, key=f"owner_{case['_id']}")
                     
                     try:
@@ -1128,7 +1068,6 @@ with tab_case:
                         default_target = date.today()
                     edit_target_date = st.date_input("Target Date", value=default_target, key=f"target_date_{case['_id']}")
                     
-                    c_types = ["Call", "Chat", "MFQ"]
                     edit_type = st.selectbox("Interaction Channel Profile", c_types, index=c_types.index(case.get("Type")) if case.get("Type") in c_types else 0, key=f"type_{case['_id']}")
                     edit_case_number = st.text_input("Identified Case Identifier", value=case.get("Case Number", ""), key=f"case_num_{case['_id']}")
                     
@@ -1137,11 +1076,11 @@ with tab_case:
                             {"_id": case["_id"]},
                             {"$set": {
                                 "Target Date": str(edit_target_date),
-                                "Date": str(edit_target_date),
                                 "Owner": edit_owner, 
                                 "Type": edit_type,
                                 "Case Number": edit_case_number
-                            }}
+                            }},
+                            upsert=True
                         )
                         st.cache_data.clear()
                         st.success("Case profile properties modified successfully.")
@@ -1217,7 +1156,8 @@ with tab_case:
                                 "QA_Case_Routing": q_routing,
                                 "QA_Score": computed_score,
                                 "QA_Feedback": qa_feedback_str
-                            }}
+                            }},
+                            upsert=True
                         )
                         st.cache_data.clear()
                         st.success("QA evaluation saved successfully!")
@@ -1317,7 +1257,6 @@ with tab_dev:
         f_col1, f_col2, f_col3 = st.columns(3)
         filter_month = f_col1.selectbox("Month", options=range(1, 13), index=date.today().month - 1, format_func=lambda x: calendar.month_name[x],key="dev_f_month")
         filter_year = f_col2.number_input("Year", value=date.today().year, key="dev_f_year")
-        # 8. Default to current day entries only
         filter_date = f_col3.date_input("Specific Date", value=date.today(), key="dev_f_date")
         apply_filter = st.button("Apply Filter")
 
@@ -1327,7 +1266,6 @@ with tab_dev:
         df['Date'] = pd.to_datetime(df['Date']).dt.date
         df = df[df["Name"] != "Jeff Bote"]
         
-        # Default behavior & manual filter handling: default filter by current date
         if filter_date:
             df = df[df['Date'] == filter_date]
         else:
