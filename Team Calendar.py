@@ -69,7 +69,7 @@ def fetch_approved_requests_from_db():
     try:
         return list(
             collection.find({
-                "type": {"$in": ["PTO", "Wellness", "Sick Leave"]},
+                "type": {"$in": ["PTO", "Wellness", "SL/EL"]},
                 "status": "Approved",
             })
         )
@@ -82,7 +82,7 @@ def fetch_pending_requests_from_db():
     try:
         return list(
             collection.find({
-                "type": {"$in": ["PTO", "Wellness", "Sick Leave"]},
+                "type": {"$in": ["PTO", "Wellness", "SL/EL"]},
                 "status": "Pending",
             })
         )
@@ -809,7 +809,7 @@ with tab_req:
             with row_cols[1]:
                 st.selectbox(
                     "Type",
-                    ["PTO", "Wellness", "Sick Leave"],
+                    ["PTO", "Wellness", "SL/EL"],
                     label_visibility="collapsed",
                     key=f"type_{i}",
                 )
@@ -854,7 +854,7 @@ with tab_req:
                     )
                     continue
 
-                if req_type == "Sick Leave":
+                if req_type == "SL/EL":
                     initial_status = "Approved"
                     new_req = {
                         "name": selected_name,
@@ -3044,7 +3044,7 @@ with tab_adm:
                     date_val.month == selected_month
                     and date_val.year == selected_year
                 ):
-                    if r.get("type") in ["Wellness", "PTO", "Sick Leave"]:
+                    if r.get("type") in ["Wellness", "PTO", "SL/EL"]:
                         r_copy = r.copy()
                         r_copy["parsed_date"] = date_val
                         filtered_history_requests.append(r_copy)
