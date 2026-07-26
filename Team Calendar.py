@@ -1853,7 +1853,7 @@ with tab_case:
 
                 with st.expander(
                     expander_label,
-                    expanded=(is_audited and (not is_passed or has_qa_fb)),
+                    expanded=False,
                 ):
                     score_display = (
                         f"`{qa_score} / 9` ({'PASSED' if is_passed else 'FAILED'})"
@@ -1868,6 +1868,23 @@ with tab_case:
                         **Case Number:** {case.get('Case Number','')}  
                         **QA Score:** {score_display}
                         """)
+
+                    # TABLE VIEW FOR AUDITED QA SCORECARD RESULTS
+                    if is_audited:
+                        st.markdown("#### 📋 QA Audit Evaluation Summary")
+                        scorecard_data = [
+                            {"Category": "1️⃣ Timely Engagement", "Criterion": "SLO / SLA", "Type": "Standard", "Status": case.get("QA_SLO_SLA", "Met")},
+                            {"Category": "1️⃣ Timely Engagement", "Criterion": "Initial & Consecutive Responses", "Type": "Standard", "Status": case.get("QA_Initial_Consecutive_Resp", "Met")},
+                            {"Category": "1️⃣ Timely Engagement", "Criterion": "Case Status Update", "Type": "Standard", "Status": case.get("QA_Case_Status_Update", "Met")},
+                            {"Category": "2️⃣ Documentations", "Criterion": "Issue Field Description/Freq/Start Date", "Type": "Standard", "Status": case.get("QA_Issue_Field_Updated", "Met")},
+                            {"Category": "2️⃣ Documentations", "Criterion": "Comments with Probing Q&A", "Type": "🚨 Non-negotiable", "Status": case.get("QA_Case_Comments_Probing", "Met")},
+                            {"Category": "2️⃣ Documentations", "Criterion": "Collaborations / Logging", "Type": "🚨 Non-negotiable", "Status": case.get("QA_Collaborations_Logging", "Met")},
+                            {"Category": "3️⃣ Validation Process", "Criterion": "Entitlement Validation", "Type": "🚨 Non-negotiable", "Status": case.get("QA_Entitlement_Validation", "Met")},
+                            {"Category": "3️⃣ Validation Process", "Criterion": "Account Validation Process", "Type": "Standard", "Status": case.get("QA_Account_Validation", "Met")},
+                            {"Category": "4️⃣ Process and Policy", "Criterion": "UVA, SDI, Private Case Routing", "Type": "🚨 Non-negotiable", "Status": case.get("QA_Case_Routing", "Met")},
+                        ]
+                        df_scorecard = pd.DataFrame(scorecard_data)
+                        st.dataframe(df_scorecard, use_container_width=True, hide_index=True)
 
                     if case.get("QA_Feedback"):
                         st.info(f"📝 **QA Feedback:** {case.get('QA_Feedback')}")
@@ -1975,10 +1992,22 @@ with tab_case:
                         f" #{case.get('Case Number','')}"
                     )
 
+                    # Password check required if the case has already been audited
+                    is_already_audited = case.get("QA_Audited", False)
+                    qa_pwd_valid = True
+
+                    if is_already_audited:
+                        st.warning("🔒 **Security Gate:** Editing an audited QA record requires authorization.")
+                        qa_edit_password = st.text_input(
+                            "Enter Admin Password to Modify QA Audit",
+                            type="password",
+                            key=f"pwd_qa_edit_{case['_id']}"
+                        )
+                        qa_pwd_valid = (qa_edit_password == "Password1234")
+
                     # Audited status toggle with dynamic AUDITED / NOT AUDITED label
                     is_audited_val = case.get("QA_Audited", False)
 
-                    # Determine label state based on current session state or initial value
                     toggle_key = f"qa_audited_toggle_{case['_id']}"
                     current_toggle_state = st.session_state.get(
                         toggle_key, is_audited_val
@@ -2124,28 +2153,31 @@ with tab_case:
                     if st.button(
                         "💾 Save QA Scorecard", key=f"btn_save_qa_{case['_id']}"
                     ):
-                        collection.update_one(
-                            {"_id": case["_id"]},
-                            {
-                                "$set": {
-                                    "QA_SLO_SLA": q_slo,
-                                    "QA_Initial_Consecutive_Resp": q_resp,
-                                    "QA_Case_Status_Update": q_update,
-                                    "QA_Issue_Field_Updated": q_issue,
-                                    "QA_Case_Comments_Probing": q_probing,
-                                    "QA_Collaborations_Logging": q_collab,
-                                    "QA_Entitlement_Validation": q_entitle,
-                                    "QA_Account_Validation": q_account,
-                                    "QA_Case_Routing": q_routing,
-                                    "QA_Score": computed_score,
-                                    "QA_Audited": audited_status,
-                                    "QA_Feedback": qa_feedback_str,
-                                }
-                            },
-                        )
-                        get_cases_from_db.clear()
-                        st.success("QA evaluation saved successfully!")
-                        st.rerun()
+                        if is_already_audited and not qa_pwd_valid:
+                            st.error("❌ Unauthorized: Incorrect password provided for editing audited record.")
+                        else:
+                            collection.update_one(
+                                {"_id": case["_id"]},
+                                {
+                                    "$set": {
+                                        "QA_SLO_SLA": q_slo,
+                                        "QA_Initial_Consecutive_Resp": q_resp,
+                                        "QA_Case_Status_Update": q_update,
+                                        "QA_Issue_Field_Updated": q_issue,
+                                        "QA_Case_Comments_Probing": q_probing,
+                                        "QA_Collaborations_Logging": q_collab,
+                                        "QA_Entitlement_Validation": q_entitle,
+                                        "QA_Account_Validation": q_account,
+                                        "QA_Case_Routing": q_routing,
+                                        "QA_Score": computed_score,
+                                        "QA_Audited": audited_status,
+                                        "QA_Feedback": qa_feedback_str,
+                                    }
+                                },
+                            )
+                            get_cases_from_db.clear()
+                            st.success("QA evaluation saved successfully!")
+                            st.rerun()
 
     else:
         st.info("No active system case records match filter parameters.")
