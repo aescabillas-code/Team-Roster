@@ -420,7 +420,7 @@ def render_request(req, key_prefix):
 tab_names = [
     "📅 Calendar",
     "📝 Request",
-    "📈 Productivity/Deviation Monitoring",
+    "📈 Reports",
     "🔍 Case Tracker",
     "🔀 Deviation",
     "🔑 Admin",
@@ -1697,6 +1697,11 @@ with tab_case:
                 col for col in qa_cols if col in df_cases.columns
             ]
             df_qa = df_cases[available_qa_cols] if available_qa_cols else df_cases
+            
+            # Filter to only include audited records
+            if "QA_Audited" in df_qa.columns:
+                df_qa = df_qa[df_qa["QA_Audited"] == True]
+
             csv_qa = df_qa.to_csv(index=False).encode("utf-8")
             st.download_button(
                 "🎯 Download QA Audit Report CSV",
