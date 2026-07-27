@@ -2619,17 +2619,19 @@ with tab_adm:
             st.subheader("👥 Roster Management")
             roster = st.session_state.staff_roster
         
-            # Added Employee ID column: adjusted grid ratios to [2, 2, 2, 2, 2]
-            grid_cols = st.columns([2, 2, 2, 2, 2])
+            # Expand the columns list so Edit and Remove each get their own dedicated column
+            # [Emp ID, Name, Nickname, Birthday, Edit Btn, Remove Btn]
+            grid_cols = st.columns([1.5, 2, 2, 2, 0.8, 0.8])
             grid_cols[0].write("**Emp ID**")
             grid_cols[1].write("**Name**")
             grid_cols[2].write("**Nickname**")
             grid_cols[3].write("**Birthday**")
-            grid_cols[4].write("**Actions**")
+            grid_cols[4].write("**Edit**")
+            grid_cols[5].write("**Delete**")
         
             if roster:
                 for name, data in roster.items():
-                    r_cols = st.columns([2, 2, 2, 2, 2])
+                    r_cols = st.columns([1.5, 2, 2, 2, 0.8, 0.8])
                     r_cols[0].write(data.get("emp_id", "N/A"))
                     r_cols[1].write(name)
                     r_cols[2].write(data.get("nick", ""))
@@ -2649,10 +2651,8 @@ with tab_adm:
                         else str(bday_val)
                     )
         
-                    # Split Actions column into two action buttons: Edit and Remove
-                    act_btn1, act_btn2 = r_cols[4].columns(2)
-                    if act_btn1.button("✏️", key=f"edit_staff_{name}", help="Edit"):
-                        # Pre-populate the form with this staff member's details for editing
+                    # Placed directly into columns 4 and 5 (no nesting required)
+                    if r_cols[4].button("✏️", key=f"edit_staff_{name}", help="Edit"):
                         st.session_state.new_staff_entries = [{
                             "emp_id": data.get("emp_id", ""),
                             "name": name,
@@ -2666,7 +2666,7 @@ with tab_adm:
                         }]
                         st.rerun()
         
-                    if act_btn2.button("🗑️", key=f"del_staff_{name}", help="Remove"):
+                    if r_cols[5].button("🗑️", key=f"del_staff_{name}", help="Remove"):
                         delete_staff(name)
                         st.rerun()
             else:
