@@ -915,6 +915,14 @@ with tab_req:
         "Year", value=current_date.year, key="history_year_select"
     )
     
+    # 1. Fetch roster_list from database to map full name -> emp_id
+    roster_doc = collection.find_one({"type": "roster_list"})
+    roster_data = roster_doc.get("data", {}) if roster_doc else {}
+    roster_lookup = {
+        name: details.get("emp_id", "N/A") 
+        for name, details in roster_data.items()
+    }
+
     # Helper function to format full names as "Last Name, First Name"
     def format_last_first(full_name):
         if not full_name or not isinstance(full_name, str):
@@ -932,6 +940,13 @@ with tab_req:
         except Exception:
             return str(date_val)
     
+    # Helper function to get emp_id from roster lookup or request data
+    def get_emp_id(req):
+        name = req.get("name", "")
+        if name in roster_lookup and roster_lookup[name]:
+            return roster_lookup[name]
+        return req.get("emp_id", "N/A")
+
     filtered_app = [
         r
         for r in global_approved_requests
@@ -940,6 +955,10 @@ with tab_req:
     ]
     
     if filtered_app:
+        # Populate emp_id directly from the database roster lookup
+        for req in filtered_app:
+            req["emp_id"] = get_emp_id(req)
+
         df_display = pd.DataFrame(filtered_app)
         # Sort by date
         df_display["sort_date"] = pd.to_datetime(df_display["date"])
@@ -950,10 +969,6 @@ with tab_req:
     
         # Reformat name to "Last Name, First Name"
         df_display["formatted_name"] = df_display["name"].apply(format_last_first)
-    
-        # Ensure emp_id column exists
-        if "emp_id" not in df_display.columns:
-            df_display["emp_id"] = "N/A"
     
         df_display = df_display[["emp_id", "formatted_date", "formatted_name", "type"]]
         df_display.columns = ["Employee ID", "Date", "Name", "Type"]
@@ -973,7 +988,10 @@ with tab_req:
             except Exception:
                 continue
             if req_date.month == f_m and req_date.year == f_y:
-                filtered_pending.append(r)
+                # Populate emp_id directly from database roster lookup
+                r_copy = dict(r)
+                r_copy["emp_id"] = get_emp_id(r_copy)
+                filtered_pending.append(r_copy)
     
         if filtered_pending:
             df_pending = pd.DataFrame(filtered_pending)
@@ -986,10 +1004,6 @@ with tab_req:
     
             # Reformat name to "Last Name, First Name"
             df_pending["formatted_name"] = df_pending["name"].apply(format_last_first)
-    
-            # Ensure emp_id column exists
-            if "emp_id" not in df_pending.columns:
-                df_pending["emp_id"] = "N/A"
     
             df_pending_display = df_pending[["emp_id", "formatted_date", "formatted_name", "type"]].copy()
             df_pending_display.columns = ["Employee ID", "Date", "Name", "Type"]
@@ -3138,6 +3152,21 @@ with tab_adm:
                     key="history_filter_year",
                 )
             
+            # 1. Fetch roster_list from database to map full name -> emp_id
+            roster_doc = collection.find_one({"type": "roster_list"})
+            roster_data = roster_doc.get("data", {}) if roster_doc else {}
+            roster_lookup = {
+                name: details.get("emp_id", "N/A")
+                for name, details in roster_data.items()
+            }
+
+            # Helper function to get emp_id from roster lookup or request data
+            def get_emp_id(req):
+                name = req.get("name", "")
+                if name in roster_lookup and roster_lookup[name]:
+                    return roster_lookup[name]
+                return req.get("emp_id", "N/A")
+
             # Helper function to format full names as "Last Name, First Name"
             def format_last_first(full_name):
                 if not full_name or not isinstance(full_name, str):
@@ -3167,8 +3196,10 @@ with tab_adm:
                         r_copy = r.copy()
                         r_copy["parsed_date"] = date_val
                         
+                        # Populate emp_id dynamically from database roster lookup
+                        r_copy["emp_id"] = get_emp_id(r_copy)
+
                         # Format date string to M/D/YYYY (e.g., 7/28/2026)
-                        # %-m and %-d remove leading zeros on Unix/Linux systems
                         try:
                             r_copy["date"] = date_val.strftime("%-m/%-d/%Y")
                         except ValueError:
@@ -3187,10 +3218,6 @@ with tab_adm:
                 # Reformat name to "Last Name, First Name"
                 if "name" in history_df.columns:
                     history_df["name"] = history_df["name"].apply(format_last_first)
-            
-                # Ensure emp_id exists in the dataframe
-                if "emp_id" not in history_df.columns:
-                    history_df["emp_id"] = "N/A"
             
                 if "type" in history_df.columns:
                     history_df.rename(
