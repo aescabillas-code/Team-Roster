@@ -2618,19 +2618,22 @@ with tab_adm:
         with col_left:
             st.subheader("👥 Roster Management")
             roster = st.session_state.staff_roster
-
-            grid_cols = st.columns([2, 2, 2, 2])
-            grid_cols[0].write("**Name**")
-            grid_cols[1].write("**Nickname**")
-            grid_cols[2].write("**Birthday**")
-            grid_cols[3].write("**Actions**")
-
+        
+            # Added Employee ID column: adjusted grid ratios to [2, 2, 2, 2, 2]
+            grid_cols = st.columns([2, 2, 2, 2, 2])
+            grid_cols[0].write("**Emp ID**")
+            grid_cols[1].write("**Name**")
+            grid_cols[2].write("**Nickname**")
+            grid_cols[3].write("**Birthday**")
+            grid_cols[4].write("**Actions**")
+        
             if roster:
                 for name, data in roster.items():
-                    r_cols = st.columns([2, 2, 2, 2])
-                    r_cols[0].write(name)
-                    r_cols[1].write(data.get("nick", ""))
-
+                    r_cols = st.columns([2, 2, 2, 2, 2])
+                    r_cols[0].write(data.get("emp_id", "N/A"))
+                    r_cols[1].write(name)
+                    r_cols[2].write(data.get("nick", ""))
+        
                     bday_val = data.get("bday")
                     if isinstance(bday_val, str):
                         try:
@@ -2639,32 +2642,55 @@ with tab_adm:
                             ).date()
                         except ValueError:
                             bday_val = date.today()
-
-                    r_cols[2].write(
+        
+                    r_cols[3].write(
                         bday_val.strftime("%B %d")
                         if hasattr(bday_val, "strftime")
                         else str(bday_val)
                     )
-
-                    if r_cols[3].button("Remove", key=f"del_staff_{name}"):
+        
+                    # Split Actions column into two action buttons: Edit and Remove
+                    act_btn1, act_btn2 = r_cols[4].columns(2)
+                    if act_btn1.button("✏️", key=f"edit_staff_{name}", help="Edit"):
+                        # Pre-populate the form with this staff member's details for editing
+                        st.session_state.new_staff_entries = [{
+                            "emp_id": data.get("emp_id", ""),
+                            "name": name,
+                            "nick": data.get("nick", ""),
+                            "bday": (
+                                bday_val
+                                if isinstance(bday_val, date)
+                                else date.today()
+                            ),
+                            "rest_days": data.get("rest_days", []),
+                        }]
+                        st.rerun()
+        
+                    if act_btn2.button("🗑️", key=f"del_staff_{name}", help="Remove"):
                         delete_staff(name)
                         st.rerun()
             else:
                 st.write("*No staff members configured in the roster database.*")
-
-            st.markdown("### ➕ Add Multiple Staff")
+        
+            st.markdown("### ➕ Add / Edit Staff")
             if "new_staff_entries" not in st.session_state:
                 st.session_state.new_staff_entries = [{
+                    "emp_id": "",
                     "name": "",
                     "nick": "",
                     "bday": date.today(),
                     "rest_days": [],
                 }]
-
+        
             for idx, staff in enumerate(st.session_state.new_staff_entries):
                 st.markdown(f"#### Staff Member #{idx + 1}")
                 inner_c1, inner_c2 = st.columns(2)
                 with inner_c1:
+                    staff["emp_id"] = st.text_input(
+                        "Employee ID",
+                        value=staff.get("emp_id", ""),
+                        key=f"multi_staff_empid_{idx}",
+                    )
                     staff["name"] = st.text_input(
                         "Staff Name",
                         value=staff["name"],
@@ -2696,11 +2722,12 @@ with tab_adm:
                         default=staff["rest_days"],
                         key=f"multi_staff_rest_{idx}",
                     )
-
+        
             col_add, col_save = st.columns(2)
             with col_add:
                 if st.button("➕ Add Row", key="btn_add_staff_row"):
                     st.session_state.new_staff_entries.append({
+                        "emp_id": "",
                         "name": "",
                         "nick": "",
                         "bday": date.today(),
@@ -2719,6 +2746,7 @@ with tab_adm:
                             staff["bday"].day,
                         )
                         save_staff(staff["name"], {
+                            "emp_id": staff.get("emp_id", ""),
                             "bday": bday_datetime,
                             "nick": (
                                 staff["nick"]
@@ -2728,18 +2756,19 @@ with tab_adm:
                             "rest_days": staff["rest_days"],
                         })
                         added_count += 1
-
+        
                     st.success(
                         f"{added_count} staff record(s) saved successfully!"
                     )
                     st.session_state.new_staff_entries = [{
+                        "emp_id": "",
                         "name": "",
                         "nick": "",
                         "bday": date.today(),
                         "rest_days": [],
                     }]
                     st.rerun()
-
+        
             st.markdown("---")
 
             st.subheader("🗓️ Calendar Block Updates")
