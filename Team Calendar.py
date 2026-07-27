@@ -1128,7 +1128,7 @@ with tab_prod:
 
         st.divider()
 
-        st.header("📈 Productivity Monitoring & Operational Analysis")
+        st.header("📈 Utilization Monitoring & Operational Analysis")
         st.markdown("### 📦 Cases Count")
         if not monthly_df.empty:
             if type_col:
@@ -1175,7 +1175,7 @@ with tab_prod:
         else:
             st.info("No deviation entries found for selected month.")
 
-        st.markdown("## 📈 Daily Productivity & Deviation Trends")
+        st.markdown("## 📈 Daily Utilization & Deviation Trends")
 
         daily_owner_prod = (
             monthly_df.groupby(["Day_Str", "Owner"])
@@ -1221,7 +1221,7 @@ with tab_prod:
             filtered_prod = daily_owner_prod
             filtered_dev = daily_dev_trend
 
-        st.markdown("### 📈 Daily Productivity")
+        st.markdown("### 📈 Daily Utilization")
         if not filtered_prod.empty:
             prod_line_chart = (
                 alt.Chart(filtered_prod)
@@ -1245,7 +1245,7 @@ with tab_prod:
             st.altair_chart(prod_line_chart, use_container_width=True)
         else:
             st.info(
-                "No productivity chart data available for current selection."
+                "No utilization chart data available for current selection."
             )
 
         st.markdown("### 🔀 Daily Deviation")
@@ -1274,7 +1274,7 @@ with tab_prod:
             st.info("No deviation trend data available for current selection.")
 
         st.markdown(
-            "## 📊 Operational Analysis: Productivity vs. Deviations"
+            "## 📊 Operational Analysis: Utilization vs. Deviations"
         )
 
         total_monthly_prod_count = (
@@ -1499,7 +1499,7 @@ with tab_prod:
                     "Adherence At-Risk",
                     "Under-Reporting",
                 ],
-                "Productivity (Output)": ["High", "High/Medium", "Low", "Low"],
+                "Output": ["High", "High/Medium", "Low", "Low"],
                 "Deviation Frequency": ["Low", "High", "High", "Low"],
                 "Operational Diagnosis": [
                     "Optimal floor engagement and adherence.",
