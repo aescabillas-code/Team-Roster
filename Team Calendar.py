@@ -902,7 +902,7 @@ with tab_req:
 
     st.subheader("Approved History")
     f_c1, f_c2 = st.columns(2)
-
+    
     month_names = list(calendar.month_name)[1:]
     selected_month_name = f_c1.selectbox(
         "Month",
@@ -914,23 +914,55 @@ with tab_req:
     f_y = f_c2.number_input(
         "Year", value=current_date.year, key="history_year_select"
     )
-
+    
+    # Helper function to format full names as "Last Name, First Name"
+    def format_last_first(full_name):
+        if not full_name or not isinstance(full_name, str):
+            return ""
+        parts = full_name.strip().split()
+        if len(parts) > 1:
+            return f"{parts[-1]}, {' '.join(parts[:-1])}"
+        return full_name
+    
+    # Helper function to format dates as M/D/YYYY
+    def format_m_d_yyyy(date_val):
+        try:
+            dt = pd.to_datetime(date_val)
+            return f"{dt.month}/{dt.day}/{dt.year}"
+        except Exception:
+            return str(date_val)
+    
     filtered_app = [
         r
         for r in global_approved_requests
         if int(r["date"].split("-")[1]) == f_m
         and int(r["date"].split("-")[0]) == f_y
     ]
-
+    
     if filtered_app:
-        df_display = pd.DataFrame(filtered_app)[["date", "name", "type"]]
-        df_display.columns = ["Date", "Name", "Type"]
+        df_display = pd.DataFrame(filtered_app)
+        # Sort by date
+        df_display["sort_date"] = pd.to_datetime(df_display["date"])
+        df_display = df_display.sort_values(by="sort_date", ascending=True)
+    
+        # Reformat date to M/D/YYYY
+        df_display["formatted_date"] = df_display["date"].apply(format_m_d_yyyy)
+    
+        # Reformat name to "Last Name, First Name"
+        df_display["formatted_name"] = df_display["name"].apply(format_last_first)
+    
+        # Ensure emp_id column exists
+        if "emp_id" not in df_display.columns:
+            df_display["emp_id"] = "N/A"
+    
+        df_display = df_display[["emp_id", "formatted_date", "formatted_name", "type"]]
+        df_display.columns = ["Employee ID", "Date", "Name", "Type"]
         st.dataframe(df_display, hide_index=True, use_container_width=True)
     else:
         st.write("No records found.")
-
+    
     st.subheader("📥 Pending Requests Overview")
-
+    
     if global_pending_requests:
         filtered_pending = []
         for r in global_pending_requests:
@@ -942,14 +974,26 @@ with tab_req:
                 continue
             if req_date.month == f_m and req_date.year == f_y:
                 filtered_pending.append(r)
-
+    
         if filtered_pending:
             df_pending = pd.DataFrame(filtered_pending)
+            # Sort by date
             df_pending["sort_date"] = pd.to_datetime(df_pending["date"])
             df_pending = df_pending.sort_values(by="sort_date", ascending=True)
-            df_pending_display = df_pending[["date", "name", "type"]].copy()
-            df_pending_display.columns = ["Date", "Name", "Type"]
-
+    
+            # Reformat date to M/D/YYYY
+            df_pending["formatted_date"] = df_pending["date"].apply(format_m_d_yyyy)
+    
+            # Reformat name to "Last Name, First Name"
+            df_pending["formatted_name"] = df_pending["name"].apply(format_last_first)
+    
+            # Ensure emp_id column exists
+            if "emp_id" not in df_pending.columns:
+                df_pending["emp_id"] = "N/A"
+    
+            df_pending_display = df_pending[["emp_id", "formatted_date", "formatted_name", "type"]].copy()
+            df_pending_display.columns = ["Employee ID", "Date", "Name", "Type"]
+    
             calculated_height = (len(df_pending_display) * 35) + 45
             st.dataframe(
                 df_pending_display,
@@ -967,7 +1011,7 @@ with tab_req:
             "*No pending requests await administrator review authorization"
             " logs.*"
         )
-
+    
 # --- TAB 3: PRODUCTIVITY MONITORING ---
 with tab_prod:
     cases = get_cases_from_db()
@@ -3093,9 +3137,18 @@ with tab_adm:
                     index=year_options.index(current_year),
                     key="history_filter_year",
                 )
-
+            
+            # Helper function to format full names as "Last Name, First Name"
+            def format_last_first(full_name):
+                if not full_name or not isinstance(full_name, str):
+                    return ""
+                parts = full_name.strip().split()
+                if len(parts) > 1:
+                    return f"{parts[-1]}, {' '.join(parts[:-1])}"
+                return full_name
+            
             filtered_history_requests = []
-
+            
             for r in global_approved_requests:
                 date_val = r.get("date")
                 if isinstance(date_val, str):
@@ -3105,7 +3158,7 @@ with tab_adm:
                         ).date()
                     except ValueError:
                         continue
-
+            
                 if (
                     date_val.month == selected_month
                     and date_val.year == selected_year
@@ -3113,44 +3166,66 @@ with tab_adm:
                     if r.get("type") in ["Wellness", "PTO", "SL/EL"]:
                         r_copy = r.copy()
                         r_copy["parsed_date"] = date_val
+                        
+                        # Format date string to M/D/YYYY (e.g., 7/28/2026)
+                        # %-m and %-d remove leading zeros on Unix/Linux systems
+                        try:
+                            r_copy["date"] = date_val.strftime("%-m/%-d/%Y")
+                        except ValueError:
+                            # Windows fallback (using # instead of -)
+                            r_copy["date"] = date_val.strftime("%#m/%#d/%Y")
+                            
                         filtered_history_requests.append(r_copy)
-
+            
             if filtered_history_requests:
                 st.markdown("#### Approved Requests Summary")
                 history_df = pd.DataFrame(filtered_history_requests)
                 history_df.sort_values(
                     by="parsed_date", ascending=True, inplace=True
                 )
-
+            
+                # Reformat name to "Last Name, First Name"
+                if "name" in history_df.columns:
+                    history_df["name"] = history_df["name"].apply(format_last_first)
+            
+                # Ensure emp_id exists in the dataframe
+                if "emp_id" not in history_df.columns:
+                    history_df["emp_id"] = "N/A"
+            
                 if "type" in history_df.columns:
                     history_df.rename(
                         columns={"type": "Request Type"}, inplace=True
                     )
-
-                for col in ["date", "name", "status"]:
-                    if col in history_df.columns:
-                        history_df.rename(
-                            columns={col: col.capitalize()}, inplace=True
-                        )
-
+            
+                # Rename columns for presentation
+                history_df.rename(
+                    columns={
+                        "emp_id": "Employee ID",
+                        "date": "Date",
+                        "name": "Name",
+                        "status": "Status",
+                    },
+                    inplace=True,
+                )
+            
                 columns_to_drop = ["_id", "parsed_date", "email", "viewed"]
                 history_display_df = history_df.drop(
                     columns=columns_to_drop, errors="ignore"
                 )
-
-                desired_order = ["Date", "Name", "Request Type", "Status"]
+            
+                desired_order = ["Employee ID", "Date", "Name", "Request Type", "Status"]
                 existing_cols = [
                     c for c in desired_order if c in history_display_df.columns
                 ]
                 extra_cols = [
                     c for c in history_display_df.columns if c not in desired_order
                 ]
-
+            
                 history_display_df = history_display_df[
                     existing_cols + extra_cols
                 ]
                 history_height = (len(history_display_df) * 35) + 45
-
+            
                 st.dataframe(
                     history_display_df,
                     hide_index=True,
@@ -3162,5 +3237,5 @@ with tab_adm:
                     "*No verified history logs found matching calendar"
                     " dimensions.*"
                 )
-
-        st.markdown("</div>", unsafe_allow_html=True)
+            
+            st.markdown("</div>", unsafe_allow_html=True)
