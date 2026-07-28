@@ -1,4 +1,5 @@
 import calendar
+from datetime import datetime
 from datetime import date, datetime, time, timedelta
 import re
 import altair as alt
@@ -91,6 +92,38 @@ def fetch_pending_requests_from_db():
 
 
 # --- DB MUTATION HELPERS ---
+def calculate_duration_mins(start_str: str, end_str: str) -> int:
+    """Calculates duration in minutes between start and end times.
+
+    Handles continuous time transitions across 12-hour/24-hour boundaries
+    (e.g., 11:51 to 01:00 yields 69 minutes).
+    """
+    if not start_str or not end_str:
+        return 0
+
+    fmt = "%H:%M"
+    try:
+        s_time = datetime.strptime(start_str.strip(), fmt)
+        e_time = datetime.strptime(end_str.strip(), fmt)
+    except ValueError:
+        return 0
+
+    s_mins = s_time.hour * 60 + s_time.minute
+    e_mins = e_time.hour * 60 + e_time.minute
+
+    # If end time is smaller than start time (e.g. 11:51 -> 01:00 or 11:51 -> 1:00)
+    if e_mins < s_mins:
+        # If end hour is in 12-hour clock style (< 12), convert to 13:00+ equivalent (+12 hrs)
+        if e_time.hour < 12:
+            e_mins += 12 * 60
+
+        # If it's still less than start time (e.g. 23:51 to 01:00 overnight in 24h format), add full 24 hrs
+        if e_mins < s_mins:
+            e_mins += 12 * 60
+
+    duration = e_mins - s_mins
+    return max(0, duration)
+    
 def clear_requests_cache():
     fetch_approved_requests_from_db.clear()
     fetch_pending_requests_from_db.clear()
