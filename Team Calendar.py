@@ -94,21 +94,31 @@ def fetch_pending_requests_from_db():
 # --- DB MUTATION HELPERS ---
 
 def calculate_duration_mins(start_str: str, end_str: str) -> int:
-    """Calculates duration in minutes between start_str and end_str (HH:MM format).
+    """Calculates duration in minutes.
 
-    Handles overnight shifts where end time is on the next day.
+    Supports both 24-hour ("23:51") and 12-hour ("11:51 PM") formats, as well
+    as standard overnight calculations.
     """
-    try:
-        fmt = "%H:%M"
-        t_start = datetime.strptime(start_str.strip(), fmt)
-        t_end = datetime.strptime(end_str.strip(), fmt)
+    fmt_list = ["%H:%M", "%I:%M %p", "%I:%M%p"]
 
-        # Calculate difference in minutes
+    def parse_time(time_str):
+        clean_str = time_str.strip()
+        for fmt in fmt_list:
+            try:
+                return datetime.strptime(clean_str, fmt)
+            except ValueError:
+                pass
+        raise ValueError(f"Cannot parse time: {time_str}")
+
+    try:
+        t_start = parse_time(start_str)
+        t_end = parse_time(end_str)
+
         diff_mins = int((t_end - t_start).total_seconds() / 60)
 
-        # If end time is earlier than start time, add 24 hours (1440 minutes) for overnight shift
+        # If negative, add 24 hours (1440 mins) to span across midnight
         if diff_mins < 0:
-            diff_mins += 1440  # 24 hours * 60 mins
+            diff_mins += 1440
 
         return diff_mins
     except Exception:
