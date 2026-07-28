@@ -2331,6 +2331,8 @@ with tab_dev:
         calc_mins = calculate_duration_mins(entry["start"], entry["end"])
         if calc_mins > 0:
             entry["duration"] = f"{calc_mins}m"
+        else:
+            entry["duration"] = "0m"
 
         with row_cols[2]:
             st.text_input(
