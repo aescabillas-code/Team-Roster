@@ -2305,51 +2305,53 @@ with tab_dev:
     hdr_cols[4].markdown("**Reason of Deviation**")
 
     for idx, entry in enumerate(st.session_state.bulk_deviation_entries):
-        row_cols = st.columns([2, 2, 2, 2, 4])
-        with row_cols[0]:
-            start_val = st.text_input(
-                "Start",
-                value=entry["start"],
-                label_visibility="collapsed",
-                key=f"dev_matrix_start_{idx}",
-            )
-            entry["start"] = start_val
-        with row_cols[1]:
-            end_val = st.text_input(
-                "End",
-                value=entry["end"],
-                label_visibility="collapsed",
-                key=f"dev_matrix_end_{idx}",
-            )
-            entry["end"] = end_val
+    row_cols = st.columns([2, 2, 2, 2, 4])
 
-        calc_mins = calculate_duration_mins(entry["start"], entry["end"])
-        if calc_mins > 0:
-            entry["duration"] = f"{calc_mins}m"
+    with row_cols[0]:
+        entry["start"] = st.text_input(
+            "Start",
+            value=entry["start"],
+            label_visibility="collapsed",
+            key=f"dev_matrix_start_{idx}",
+        )
 
-        with row_cols[2]:
-            st.text_input(
-                "Duration",
-                value=entry["duration"],
-                label_visibility="collapsed",
-                key=f"dev_matrix_dur_{idx}",
-                disabled=True,
-            )
-        with row_cols[3]:
-            entry["aux"] = st.text_input(
-                "Aux",
-                value=entry["aux"],
-                label_visibility="collapsed",
-                key=f"dev_matrix_aux_{idx}",
-            )
-        with row_cols[4]:
-            entry["reason"] = st.text_area(
-                "Reason",
-                value=entry["reason"],
-                label_visibility="collapsed",
-                key=f"dev_matrix_reas_{idx}",
-                height=68,
-            )
+    with row_cols[1]:
+        entry["end"] = st.text_input(
+            "End",
+            value=entry["end"],
+            label_visibility="collapsed",
+            key=f"dev_matrix_end_{idx}",
+        )
+
+    # Calculate duration ALWAYS (no 'if calc_mins > 0' condition)
+    calc_mins = calculate_duration_mins(entry["start"], entry["end"])
+    entry["duration"] = f"{calc_mins}m" if calc_mins > 0 else "0m"
+
+    with row_cols[2]:
+        # Do NOT pass key=... to disabled text_input if you want it to reflect dynamic state changes
+        st.text_input(
+            "Duration",
+            value=entry["duration"],
+            label_visibility="collapsed",
+            disabled=True,
+        )
+
+    with row_cols[3]:
+        entry["aux"] = st.text_input(
+            "Aux",
+            value=entry["aux"],
+            label_visibility="collapsed",
+            key=f"dev_matrix_aux_{idx}",
+        )
+
+    with row_cols[4]:
+        entry["reason"] = st.text_area(
+            "Reason",
+            value=entry["reason"],
+            label_visibility="collapsed",
+            key=f"dev_matrix_reas_{idx}",
+            height=68,
+        )
 
     ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([2, 2, 4])
     with ctrl_col1:
