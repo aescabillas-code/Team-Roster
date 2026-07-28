@@ -1,5 +1,4 @@
 import calendar
-from datetime import datetime
 from datetime import date, datetime, time, timedelta
 import re
 import altair as alt
@@ -92,26 +91,6 @@ def fetch_pending_requests_from_db():
 
 
 # --- DB MUTATION HELPERS ---
-
-def calculate_duration_mins(start_str: str, end_str: str) -> int:
-    try:
-        # Split hours and minutes directly to avoid format strictness
-        s_parts = [int(x) for x in start_str.strip().split(":")]
-        e_parts = [int(x) for x in end_str.strip().split(":")]
-
-        s_mins = s_parts[0] * 60 + s_parts[1]
-        e_mins = e_parts[0] * 60 + e_parts[1]
-
-        diff_mins = e_mins - s_mins
-
-        # If end time is earlier than start time (overnight / 12-hour rollover)
-        if diff_mins < 0:
-            diff_mins += 720  # -651 + 720 = 69 mins
-
-        return diff_mins
-    except Exception:
-        return 0
-        
 def clear_requests_cache():
     fetch_approved_requests_from_db.clear()
     fetch_pending_requests_from_db.clear()
@@ -2305,7 +2284,6 @@ with tab_dev:
 
     for idx, entry in enumerate(st.session_state.bulk_deviation_entries):
         row_cols = st.columns([2, 2, 2, 2, 4])
-    
         with row_cols[0]:
             start_val = st.text_input(
                 "Start",
@@ -2314,7 +2292,6 @@ with tab_dev:
                 key=f"dev_matrix_start_{idx}",
             )
             entry["start"] = start_val
-    
         with row_cols[1]:
             end_val = st.text_input(
                 "End",
@@ -2323,24 +2300,19 @@ with tab_dev:
                 key=f"dev_matrix_end_{idx}",
             )
             entry["end"] = end_val
-    
-        # 1. Calculate duration minutes
+
         calc_mins = calculate_duration_mins(entry["start"], entry["end"])
-        dur_str = f"{calc_mins}m" if calc_mins > 0 else "0m"
-        entry["duration"] = dur_str
-    
-        # 2. Force Streamlit's session state key to update directly
-        dur_key = f"dev_matrix_dur_{idx}"
-        st.session_state[dur_key] = dur_str
-    
+        if calc_mins > 0:
+            entry["duration"] = f"{calc_mins}m"
+
         with row_cols[2]:
             st.text_input(
                 "Duration",
+                value=entry["duration"],
                 label_visibility="collapsed",
-                key=dur_key,
+                key=f"dev_matrix_dur_{idx}",
                 disabled=True,
             )
-    
         with row_cols[3]:
             entry["aux"] = st.text_input(
                 "Aux",
@@ -2348,7 +2320,6 @@ with tab_dev:
                 label_visibility="collapsed",
                 key=f"dev_matrix_aux_{idx}",
             )
-    
         with row_cols[4]:
             entry["reason"] = st.text_area(
                 "Reason",
