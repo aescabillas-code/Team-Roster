@@ -93,10 +93,10 @@ def fetch_pending_requests_from_db():
 
 # --- DB MUTATION HELPERS ---
 def calculate_duration_mins(start_str: str, end_str: str) -> int:
-    """Calculates duration in minutes between start and end times.
+    """Calculates duration in minutes.
 
-    Handles continuous time transitions across 12-hour/24-hour boundaries
-    (e.g., 11:51 to 01:00 yields 69 minutes).
+    If start time is greater than end time (e.g. Start 11:51, End 01:00), it
+    subtracts 12 hours from the start time before calculating the difference.
     """
     if not start_str or not end_str:
         return 0
@@ -111,15 +111,9 @@ def calculate_duration_mins(start_str: str, end_str: str) -> int:
     s_mins = s_time.hour * 60 + s_time.minute
     e_mins = e_time.hour * 60 + e_time.minute
 
-    # If end time is smaller than start time (e.g. 11:51 -> 01:00 or 11:51 -> 1:00)
-    if e_mins < s_mins:
-        # If end hour is in 12-hour clock style (< 12), convert to 13:00+ equivalent (+12 hrs)
-        if e_time.hour < 12:
-            e_mins += 12 * 60
-
-        # If it's still less than start time (e.g. 23:51 to 01:00 overnight in 24h format), add full 24 hrs
-        if e_mins < s_mins:
-            e_mins += 12 * 60
+    # If start is bigger than end, subtract 12 hours (720 mins) from start time
+    if s_mins > e_mins:
+        s_mins -= 12 * 60
 
     duration = e_mins - s_mins
     return max(0, duration)
@@ -2337,8 +2331,6 @@ with tab_dev:
         calc_mins = calculate_duration_mins(entry["start"], entry["end"])
         if calc_mins > 0:
             entry["duration"] = f"{calc_mins}m"
-        else:
-            entry["duration"] = "0m"
 
         with row_cols[2]:
             st.text_input(
@@ -2435,7 +2427,7 @@ with tab_dev:
         filter_date_mode = d_col1.selectbox(
             "Filter Date By",
             ["Specific Date", "Month & Year", "All Time"],
-            index=0,
+            index=0,  # Defaults to "Specific Date"
             key="dev_filter_date_mode",
         )
 
@@ -2473,12 +2465,7 @@ with tab_dev:
                 (df["Date"].apply(lambda x: x.month) == f_month)
                 & (df["Date"].apply(lambda x: x.year) == f_year)
             ]
-
-        # Convert Start Time and End Time columns for CSV extract
-        if "Start Time" in df.columns:
-            df["Start Time"] = df["Start Time"].apply(format_to_12hr)
-        if "End Time" in df.columns:
-            df["End Time"] = df["End Time"].apply(format_to_12hr)
+        # "All Time" applies no filtering on df["Date"]
 
         filtered_records = df.to_dict(orient="records")
 
@@ -2491,8 +2478,7 @@ with tab_dev:
         if filtered_records:
             items_per_page = 10
             total_dev_pages = max(
-                1,
-                (len(filtered_records) + items_per_page - 1) // items_per_page,
+                1, (len(filtered_records) + items_per_page - 1) // items_per_page
             )
 
             dp_col1, dp_col2 = st.columns([1, 4])
@@ -2547,8 +2533,8 @@ with tab_dev:
                 r_cols[2].write(str(dev.get("Manager", "")))
                 r_cols[3].write(str(dev.get("Name", "")))
                 r_cols[4].write(str(dev.get("Shift Time", "Not Set")))
-                r_cols[5].write(format_to_12hr(str(dev.get("Start Time", ""))))
-                r_cols[6].write(format_to_12hr(str(dev.get("End Time", ""))))
+                r_cols[5].write(str(dev.get("Start Time", "")))
+                r_cols[6].write(str(dev.get("End Time", "")))
                 r_cols[7].write(str(dev.get("Total Mins", 0)))
                 r_cols[8].write(str(dev.get("Aux", "N/A")))
                 r_cols[9].write(str(dev.get("Reason", "")))
@@ -2630,20 +2616,17 @@ with tab_dev:
                         if st.button(
                             "Save Changes", key=f"save_ed_dev_{dev['_id']}"
                         ):
-                            update_deviation_in_db(
-                                dev["_id"],
-                                {
-                                    "Date": str(edit_date),
-                                    "Manager": edit_manager,
-                                    "Name": edit_name,
-                                    "Shift Time": edit_shift,
-                                    "Start Time": str(edit_start),
-                                    "End Time": str(edit_end),
-                                    "Total Mins": edit_mins,
-                                    "Aux": edit_aux,
-                                    "Reason": edit_reason,
-                                },
-                            )
+                            update_deviation_in_db(dev["_id"], {
+                                "Date": str(edit_date),
+                                "Manager": edit_manager,
+                                "Name": edit_name,
+                                "Shift Time": edit_shift,
+                                "Start Time": str(edit_start),
+                                "End Time": str(edit_end),
+                                "Total Mins": edit_mins,
+                                "Aux": edit_aux,
+                                "Reason": edit_reason,
+                            })
                             st.success("Deviation record updated completely!")
                             st.rerun()
 
