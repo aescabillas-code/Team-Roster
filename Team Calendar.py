@@ -1,4 +1,5 @@
 import calendar
+from datetime import datetime
 from datetime import date, datetime, time, timedelta
 import re
 import altair as alt
@@ -2285,21 +2286,23 @@ with tab_dev:
     for idx, entry in enumerate(st.session_state.bulk_deviation_entries):
         row_cols = st.columns([2, 2, 2, 2, 4])
         with row_cols[0]:
-            start_val = st.text_input(
+            start_time = st.time_input(
                 "Start",
-                value=entry["start"],
-                label_visibility="collapsed",
+                value=datetime.strptime(entry["start"], "%H:%M").       label_visibility="collapsed",
                 key=f"dev_matrix_start_{idx}",
+                format="hh:mm a",   # 12-hour format with AM/PM
             )
-            entry["start"] = start_val
+            entry["start"] = start_time.strftime("%H:%M")
+        
         with row_cols[1]:
-            end_val = st.text_input(
+            end_time = st.time_input(
                 "End",
-                value=entry["end"],
+                value=datetime.strptime(d"], "%H:%M").time(),
                 label_visibility="collapsed",
                 key=f"dev_matrix_end_{idx}",
+                format="hh:mm a",   # 12-hour format with AM/PM
             )
-            entry["end"] = end_val
+            entry["end"] = end_time.strftime("%H:%M")
 
         calc_mins = calculate_duration_mins(entry["start"], entry["end"])
         if calc_mins > 0:
