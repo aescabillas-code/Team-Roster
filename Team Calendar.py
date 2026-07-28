@@ -1,5 +1,4 @@
 import calendar
-from datetime import date, datetime
 from datetime import date, datetime, time, timedelta
 import re
 import altair as alt
@@ -92,19 +91,6 @@ def fetch_pending_requests_from_db():
 
 
 # --- DB MUTATION HELPERS ---
-def format_to_12hr(time_str: str) -> str:
-    """Converts a time string (e.g., '14:30' or '14:30:00') to 12-hour format with AM/PM."""
-    if not time_str or not isinstance(time_str, str):
-        return time_str
-    time_str = time_str.strip()
-    for fmt in ("%H:%M", "%H:%M:%S", "%I:%M %p", "%I:%M%p"):
-        try:
-            parsed = datetime.strptime(time_str, fmt)
-            return parsed.strftime("%I:%M %p")
-        except ValueError:
-            continue
-    return time_str
-    
 def clear_requests_cache():
     fetch_approved_requests_from_db.clear()
     fetch_pending_requests_from_db.clear()
