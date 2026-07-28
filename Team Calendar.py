@@ -95,14 +95,16 @@ def fetch_pending_requests_from_db():
 
 def calculate_duration_mins(start_str: str, end_str: str) -> int:
     try:
-        fmt = "%H:%M"
-        t_start = datetime.strptime(start_str.strip(), fmt)
-        t_end = datetime.strptime(end_str.strip(), fmt)
+        # Split hours and minutes directly to avoid format strictness
+        s_parts = [int(x) for x in start_str.strip().split(":")]
+        e_parts = [int(x) for x in end_str.strip().split(":")]
 
-        diff_mins = int((t_end - t_start).total_seconds() / 60)
+        s_mins = s_parts[0] * 60 + s_parts[1]
+        e_mins = e_parts[0] * 60 + e_parts[1]
 
-        # If end time is smaller than start time (e.g. 11:51 to 01:00)
-        # Add 12 hours (720 mins) or 24 hours depending on 12-hr vs 24-hr intent
+        diff_mins = e_mins - s_mins
+
+        # If end time is earlier than start time (overnight / 12-hour rollover)
         if diff_mins < 0:
             diff_mins += 720  # -651 + 720 = 69 mins
 
@@ -2305,31 +2307,37 @@ with tab_dev:
         row_cols = st.columns([2, 2, 2, 2, 4])
     
         with row_cols[0]:
-            entry["start"] = st.text_input(
+            start_val = st.text_input(
                 "Start",
                 value=entry["start"],
                 label_visibility="collapsed",
                 key=f"dev_matrix_start_{idx}",
             )
+            entry["start"] = start_val
     
         with row_cols[1]:
-            entry["end"] = st.text_input(
+            end_val = st.text_input(
                 "End",
                 value=entry["end"],
                 label_visibility="collapsed",
                 key=f"dev_matrix_end_{idx}",
             )
+            entry["end"] = end_val
     
-        # Calculate duration ALWAYS (no 'if calc_mins > 0' condition)
+        # 1. Calculate duration minutes
         calc_mins = calculate_duration_mins(entry["start"], entry["end"])
-        entry["duration"] = f"{calc_mins}m" if calc_mins > 0 else "0m"
+        dur_str = f"{calc_mins}m" if calc_mins > 0 else "0m"
+        entry["duration"] = dur_str
+    
+        # 2. Force Streamlit's session state key to update directly
+        dur_key = f"dev_matrix_dur_{idx}"
+        st.session_state[dur_key] = dur_str
     
         with row_cols[2]:
-            # Do NOT pass key=... to disabled text_input if you want it to reflect dynamic state changes
             st.text_input(
                 "Duration",
-                value=entry["duration"],
                 label_visibility="collapsed",
+                key=dur_key,
                 disabled=True,
             )
     
