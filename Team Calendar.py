@@ -1,5 +1,5 @@
 import calendar
-from datetime import datetime
+from datetime import date, datetime
 from datetime import date, datetime, time, timedelta
 import re
 import altair as alt
@@ -11,35 +11,7 @@ import streamlit as st
 
 st.set_page_config(layout="wide")
 
-def calculate_duration_mins(start_str: str, end_str: str) -> int:
-    """Calculates duration in minutes, supporting both 12-hr and 24-hr string formats."""
-    formats = ["%I:%M %p", "%I:%M%p", "%H:%M"]
 
-    start_dt, end_dt = None, None
-
-    # Try parsing start time
-    for fmt in formats:
-        try:
-            start_dt = datetime.strptime(start_str.strip(), fmt)
-            break
-        except ValueError:
-            continue
-
-    # Try parsing end time
-    for fmt in formats:
-        try:
-            end_dt = datetime.strptime(end_str.strip(), fmt)
-            break
-        except ValueError:
-            continue
-
-    if not start_dt or not end_dt:
-        return 0
-
-    # Calculate difference in minutes
-    diff = (end_dt - start_dt).total_seconds() / 60
-    return int(diff) if diff > 0 else 0
-    
 # --- DATABASE HELPERS & CONNECTION ---
 @st.cache_resource
 def get_mongo_client():
@@ -120,6 +92,19 @@ def fetch_pending_requests_from_db():
 
 
 # --- DB MUTATION HELPERS ---
+def format_to_12hr(time_str: str) -> str:
+    """Converts a time string (e.g., '14:30' or '14:30:00') to 12-hour format with AM/PM."""
+    if not time_str or not isinstance(time_str, str):
+        return time_str
+    time_str = time_str.strip()
+    for fmt in ("%H:%M", "%H:%M:%S", "%I:%M %p", "%I:%M%p"):
+        try:
+            parsed = datetime.strptime(time_str, fmt)
+            return parsed.strftime("%I:%M %p")
+        except ValueError:
+            continue
+    return time_str
+    
 def clear_requests_cache():
     fetch_approved_requests_from_db.clear()
     fetch_pending_requests_from_db.clear()
@@ -2295,23 +2280,18 @@ with tab_dev:
         st.write(f"**Shift Time:** `{shift_time}`")
 
     st.markdown("### 📊 Bulk Entry Log")
-
-    # Clear old 24-hr session state values if present
-    if "bulk_deviation_entries" not in st.session_state or any(
-        "AM" not in e.get("start", "") and "PM" not in e.get("start", "")
-        for e in st.session_state.bulk_deviation_entries
-    ):
+    if "bulk_deviation_entries" not in st.session_state:
         st.session_state.bulk_deviation_entries = [{
-            "start": "09:00 AM",
-            "end": "09:30 AM",
+            "start": "09:00",
+            "end": "09:30",
             "duration": "30m",
             "aux": "",
             "reason": "",
         }]
 
     hdr_cols = st.columns([2, 2, 2, 2, 4])
-    hdr_cols[0].markdown("**Start Time (e.g. 09:00 AM)**")
-    hdr_cols[1].markdown("**End Time (e.g. 09:30 AM)**")
+    hdr_cols[0].markdown("**Start Time (HH:MM)**")
+    hdr_cols[1].markdown("**End Time (HH:MM)**")
     hdr_cols[2].markdown("**Duration**")
     hdr_cols[3].markdown("**Aux**")
     hdr_cols[4].markdown("**Reason of Deviation**")
@@ -2319,22 +2299,25 @@ with tab_dev:
     for idx, entry in enumerate(st.session_state.bulk_deviation_entries):
         row_cols = st.columns([2, 2, 2, 2, 4])
         with row_cols[0]:
-            entry["start"] = st.text_input(
+            start_val = st.text_input(
                 "Start",
-                value=entry.get("start", "09:00 AM"),
+                value=entry["start"],
                 label_visibility="collapsed",
                 key=f"dev_matrix_start_{idx}",
             )
+            entry["start"] = start_val
         with row_cols[1]:
-            entry["end"] = st.text_input(
+            end_val = st.text_input(
                 "End",
-                value=entry.get("end", "09:30 AM"),
+                value=entry["end"],
                 label_visibility="collapsed",
                 key=f"dev_matrix_end_{idx}",
             )
+            entry["end"] = end_val
 
         calc_mins = calculate_duration_mins(entry["start"], entry["end"])
-        entry["duration"] = f"{calc_mins}m" if calc_mins > 0 else "0m"
+        if calc_mins > 0:
+            entry["duration"] = f"{calc_mins}m"
 
         with row_cols[2]:
             st.text_input(
@@ -2364,8 +2347,8 @@ with tab_dev:
     with ctrl_col1:
         if st.button("➕ Add Row", key="btn_add_dev_matrix_row"):
             st.session_state.bulk_deviation_entries.append({
-                "start": "09:00 AM",
-                "end": "09:30 AM",
+                "start": "09:00",
+                "end": "09:30",
                 "duration": "30m",
                 "aux": "",
                 "reason": "",
@@ -2381,6 +2364,7 @@ with tab_dev:
     with ctrl_col3:
         if st.button("💾 Submit All", key="btn_save_batch_deviations"):
             records_saved = 0
+            has_zero_error = False
 
             for entry in st.session_state.bulk_deviation_entries:
                 total_mins = calculate_duration_mins(
@@ -2388,6 +2372,7 @@ with tab_dev:
                 )
 
                 if total_mins <= 0:
+                    has_zero_error = True
                     st.error(
                         f"❌ Invalid duration for time slot {entry['start']} -"
                         f" {entry['end']}. Duration cannot be 0 minutes."
@@ -2413,8 +2398,8 @@ with tab_dev:
                     " deviation entities!"
                 )
                 st.session_state.bulk_deviation_entries = [{
-                    "start": "09:00 AM",
-                    "end": "09:30 AM",
+                    "start": "09:00",
+                    "end": "09:30",
                     "duration": "30m",
                     "aux": "",
                     "reason": "",
