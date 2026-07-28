@@ -1,5 +1,4 @@
 import calendar
-from datetime import datetime, time
 from datetime import date, datetime, time, timedelta
 import re
 import altair as alt
@@ -2269,56 +2268,43 @@ with tab_dev:
     st.markdown("### 📊 Bulk Entry Log")
     if "bulk_deviation_entries" not in st.session_state:
         st.session_state.bulk_deviation_entries = [{
-            "start": time(9, 0),
-            "end": time(9, 30),
+            "start": "09:00",
+            "end": "09:30",
             "duration": "30m",
             "aux": "",
             "reason": "",
         }]
 
+    hdr_cols = st.columns([2, 2, 2, 2, 4])
+    hdr_cols[0].markdown("**Start Time (HH:MM)**")
+    hdr_cols[1].markdown("**End Time (HH:MM)**")
+    hdr_cols[2].markdown("**Duration**")
+    hdr_cols[3].markdown("**Aux**")
+    hdr_cols[4].markdown("**Reason of Deviation**")
+
     for idx, entry in enumerate(st.session_state.bulk_deviation_entries):
         row_cols = st.columns([2, 2, 2, 2, 4])
-    
-        # Convert to datetime.time if it was stored as string previously
-        start_val = entry["start"]
-        if isinstance(start_val, str):
-            try:
-                start_val = datetime.strptime(start_val, "%H:%M").time()
-            except ValueError:
-                start_val = time(9, 0)
-    
-        end_val = entry["end"]
-        if isinstance(end_val, str):
-            try:
-                end_val = datetime.strptime(end_val, "%H:%M").time()
-            except ValueError:
-                end_val = time(9, 30)
-    
         with row_cols[0]:
-            entry["start"] = st.time_input(
+            start_val = st.text_input(
                 "Start",
-                value=start_val,
-                step=300,
+                value=entry["start"],
                 label_visibility="collapsed",
                 key=f"dev_matrix_start_{idx}",
             )
-    
+            entry["start"] = start_val
         with row_cols[1]:
-            entry["end"] = st.time_input(
+            end_val = st.text_input(
                 "End",
-                value=end_val,
-                step=300,
+                value=entry["end"],
                 label_visibility="collapsed",
                 key=f"dev_matrix_end_{idx}",
             )
-    
-        # Format time objects to 12-hour strings for duration calculation/saving
-        start_str = entry["start"].strftime("%I:%M %p")
-        end_str = entry["end"].strftime("%I:%M %p")
-    
-        calc_mins = calculate_duration_mins(start_str, end_str)
-        entry["duration"] = f"{calc_mins}m" if calc_mins > 0 else "0m"
-    
+            entry["end"] = end_val
+
+        calc_mins = calculate_duration_mins(entry["start"], entry["end"])
+        if calc_mins > 0:
+            entry["duration"] = f"{calc_mins}m"
+
         with row_cols[2]:
             st.text_input(
                 "Duration",
@@ -2347,8 +2333,8 @@ with tab_dev:
     with ctrl_col1:
         if st.button("➕ Add Row", key="btn_add_dev_matrix_row"):
             st.session_state.bulk_deviation_entries.append({
-                "start": time(9, 0),
-                "end": time(9, 30),
+                "start": "09:00",
+                "end": "09:30",
                 "duration": "30m",
                 "aux": "",
                 "reason": "",
@@ -2367,18 +2353,15 @@ with tab_dev:
             has_zero_error = False
 
             for entry in st.session_state.bulk_deviation_entries:
-                start_formatted = entry["start"].strftime("%I:%M %p")
-                end_formatted = entry["end"].strftime("%I:%M %p")
-
                 total_mins = calculate_duration_mins(
-                    start_formatted, end_formatted
+                    entry["start"], entry["end"]
                 )
 
                 if total_mins <= 0:
                     has_zero_error = True
                     st.error(
-                        f"❌ Invalid duration for time slot {start_formatted} -"
-                        f" {end_formatted}. Duration cannot be 0 minutes."
+                        f"❌ Invalid duration for time slot {entry['start']} -"
+                        f" {entry['end']}. Duration cannot be 0 minutes."
                     )
                     continue
 
@@ -2387,8 +2370,8 @@ with tab_dev:
                     "Manager": manager,
                     "Name": name,
                     "Shift Time": shift_time,
-                    "Start Time": start_formatted,
-                    "End Time": end_formatted,
+                    "Start Time": str(entry["start"].strip()),
+                    "End Time": str(entry["end"].strip()),
                     "Total Mins": total_mins,
                     "Aux": entry["aux"],
                     "Reason": entry["reason"],
@@ -2401,14 +2384,14 @@ with tab_dev:
                     " deviation entities!"
                 )
                 st.session_state.bulk_deviation_entries = [{
-                    "start": time(9, 0),
-                    "end": time(9, 30),
+                    "start": "09:00",
+                    "end": "09:30",
                     "duration": "30m",
                     "aux": "",
                     "reason": "",
                 }]
                 st.rerun()
-                
+
     st.divider()
     st.subheader("Deviation Report")
 
