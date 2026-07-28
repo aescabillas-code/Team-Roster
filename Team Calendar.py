@@ -2268,13 +2268,13 @@ with tab_dev:
 
     st.markdown("### 📊 Bulk Entry Log")
     if "bulk_deviation_entries" not in st.session_state:
-    st.session_state.bulk_deviation_entries = [{
-        "start": time(9, 0),
-        "end": time(9, 30),
-        "duration": "30m",
-        "aux": "",
-        "reason": "",
-    }]
+        st.session_state.bulk_deviation_entries = [{
+            "start": time(9, 0),
+            "end": time(9, 30),
+            "duration": "30m",
+            "aux": "",
+            "reason": "",
+        }]
 
     for idx, entry in enumerate(st.session_state.bulk_deviation_entries):
         row_cols = st.columns([2, 2, 2, 2, 4])
