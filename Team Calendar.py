@@ -1,4 +1,5 @@
 import calendar
+from datetime import datetime
 from datetime import date, datetime, time, timedelta
 import re
 import altair as alt
@@ -91,6 +92,28 @@ def fetch_pending_requests_from_db():
 
 
 # --- DB MUTATION HELPERS ---
+
+def calculate_duration_mins(start_str: str, end_str: str) -> int:
+    """Calculates duration in minutes between start_str and end_str (HH:MM format).
+
+    Handles overnight shifts where end time is on the next day.
+    """
+    try:
+        fmt = "%H:%M"
+        t_start = datetime.strptime(start_str.strip(), fmt)
+        t_end = datetime.strptime(end_str.strip(), fmt)
+
+        # Calculate difference in minutes
+        diff_mins = int((t_end - t_start).total_seconds() / 60)
+
+        # If end time is earlier than start time, add 24 hours (1440 minutes) for overnight shift
+        if diff_mins < 0:
+            diff_mins += 1440  # 24 hours * 60 mins
+
+        return diff_mins
+    except Exception:
+        return 0
+        
 def clear_requests_cache():
     fetch_approved_requests_from_db.clear()
     fetch_pending_requests_from_db.clear()
