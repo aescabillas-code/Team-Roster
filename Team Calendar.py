@@ -2269,16 +2269,16 @@ with tab_dev:
     st.markdown("### 📊 Bulk Entry Log")
     if "bulk_deviation_entries" not in st.session_state:
         st.session_state.bulk_deviation_entries = [{
-            "start": time(9, 0),
-            "end": time(9, 30),
+            "start": "09:00 AM",
+            "end": "09:30 AM",
             "duration": "30m",
             "aux": "",
             "reason": "",
         }]
 
     hdr_cols = st.columns([2, 2, 2, 2, 4])
-    hdr_cols[0].markdown("**Start Time (12-hr)**")
-    hdr_cols[1].markdown("**End Time (12-hr)**")
+    hdr_cols[0].markdown("**Start Time (HH:MM AM/PM)**")
+    hdr_cols[1].markdown("**End Time (HH:MM AM/PM)**")
     hdr_cols[2].markdown("**Duration**")
     hdr_cols[3].markdown("**Aux**")
     hdr_cols[4].markdown("**Reason of Deviation**")
@@ -2286,29 +2286,21 @@ with tab_dev:
     for idx, entry in enumerate(st.session_state.bulk_deviation_entries):
         row_cols = st.columns([2, 2, 2, 2, 4])
         with row_cols[0]:
-            start_val = st.time_input(
+            entry["start"] = st.text_input(
                 "Start",
                 value=entry["start"],
-                step=300,  # 5 minute increments
                 label_visibility="collapsed",
                 key=f"dev_matrix_start_{idx}",
             )
-            entry["start"] = start_val
         with row_cols[1]:
-            end_val = st.time_input(
+            entry["end"] = st.text_input(
                 "End",
                 value=entry["end"],
-                step=300,
                 label_visibility="collapsed",
                 key=f"dev_matrix_end_{idx}",
             )
-            entry["end"] = end_val
 
-        # Format time objects to string formatted for duration calculation
-        start_str = entry["start"].strftime("%I:%M %p")
-        end_str = entry["end"].strftime("%I:%M %p")
-
-        calc_mins = calculate_duration_mins(start_str, end_str)
+        calc_mins = calculate_duration_mins(entry["start"], entry["end"])
         if calc_mins > 0:
             entry["duration"] = f"{calc_mins}m"
         else:
