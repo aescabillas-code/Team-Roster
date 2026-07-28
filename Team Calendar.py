@@ -2364,8 +2364,8 @@ with tab_dev:
     with ctrl_col1:
         if st.button("➕ Add Row", key="btn_add_dev_matrix_row"):
             st.session_state.bulk_deviation_entries.append({
-                "start": "09:00",
-                "end": "09:30",
+                "start": "09:00 AM",
+                "end": "09:30 AM",
                 "duration": "30m",
                 "aux": "",
                 "reason": "",
@@ -2381,7 +2381,6 @@ with tab_dev:
     with ctrl_col3:
         if st.button("💾 Submit All", key="btn_save_batch_deviations"):
             records_saved = 0
-            has_zero_error = False
 
             for entry in st.session_state.bulk_deviation_entries:
                 total_mins = calculate_duration_mins(
@@ -2389,7 +2388,6 @@ with tab_dev:
                 )
 
                 if total_mins <= 0:
-                    has_zero_error = True
                     st.error(
                         f"❌ Invalid duration for time slot {entry['start']} -"
                         f" {entry['end']}. Duration cannot be 0 minutes."
@@ -2415,8 +2413,8 @@ with tab_dev:
                     " deviation entities!"
                 )
                 st.session_state.bulk_deviation_entries = [{
-                    "start": "09:00",
-                    "end": "09:30",
+                    "start": "09:00 AM",
+                    "end": "09:30 AM",
                     "duration": "30m",
                     "aux": "",
                     "reason": "",
