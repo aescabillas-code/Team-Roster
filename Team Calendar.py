@@ -101,13 +101,10 @@ def calculate_duration_mins(start_str: str, end_str: str) -> int:
 
         diff_mins = int((t_end - t_start).total_seconds() / 60)
 
+        # If end time is smaller than start time (e.g. 11:51 to 01:00)
+        # Add 12 hours (720 mins) or 24 hours depending on 12-hr vs 24-hr intent
         if diff_mins < 0:
-            # If 24-hour format (e.g., 23:51 to 01:00)
-            if t_start.hour >= 12:
-                diff_mins += 1440
-            # If 12-hour format without PM (e.g., 11:51 to 01:00)
-            else:
-                diff_mins += 720
+            diff_mins += 720  # -651 + 720 = 69 mins
 
         return diff_mins
     except Exception:
