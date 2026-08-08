@@ -101,11 +101,26 @@ def fetch_pending_requests_from_db():
         return []
 
 
+@st.cache_data(ttl=60)
+def fetch_rtm_processed_requests_from_db():
+    try:
+        return list(
+            collection.find({
+                "type": {"$in": ["PTO", "Wellness", "SL/EL"]},
+                "rtm_status": {"$in": ["Approved", "Rejected"]},
+            })
+        )
+    except Exception:
+        return []
+
+
 # --- DB MUTATION HELPERS ---
 def clear_requests_cache():
     fetch_approved_requests_from_db.clear()
     fetch_pending_requests_from_db.clear()
     fetch_rejected_requests_from_db.clear()
+    fetch_rtm_processed_requests_from_db.clear()
+
 
 def bulk_update_requests(request_ids, status):
     collection.update_many(
@@ -289,22 +304,15 @@ global_approved_requests = fetch_approved_requests_from_db()
 global_pending_requests = fetch_pending_requests_from_db()
 global_rejected_requests = fetch_rejected_requests_from_db()
 
-# Fetch RTM requests from DB if available, otherwise initialize as empty list
-if "df_rtm_display" in locals() and "rtm_status" in df_rtm_display.columns:
-    df_rtm_display["RTM_Approved"] = df_rtm_display["rtm_status"].apply(
-        lambda status: status == "Approved" if pd.notna(status) else False
-    )
-else:
-    if "df_rtm_display" in locals():
-        df_rtm_display["RTM_Approved"] = False
-    
-if "global_rtm_processed_requests" not in locals() and "global_rtm_processed_requests" not in st.session_state:
-    try:
-        global_rtm_processed_requests = fetch_rtm_processed_requests_from_db()
-    except NameError:
-        global_rtm_processed_requests = []
-else:
-    global_rtm_processed_requests = st.session_state.get("global_rtm_processed_requests", [])
+# Filter for approved display on Tab 1 calendar and sidebar (RTM approved or auto-approved SL/EL)
+global_approved_calendar_requests = [
+    r
+    for r in global_approved_requests
+    if r.get("rtm_status") == "Approved" or r.get("type") == "SL/EL"
+]
+
+# Fetch RTM requests from DB
+global_rtm_processed_requests = fetch_rtm_processed_requests_from_db()
 
 # --- GLOBAL CSS STYLING ---
 st.markdown(
@@ -418,9 +426,16 @@ st.markdown(
 
 # --- NOTIFICATION BAR ---
 if st.session_state.notifications:
-    html_content = '<div class="alert-container"><div class="flash-red" style="margin-bottom: 10px;">⚠️ ATTENTION: New System Notifications Detected!</div>'
+    html_content = (
+        '<div class="alert-container"><div class="flash-red" style="margin-bottom:'
+        ' 10px;">⚠️ ATTENTION: New System Notifications Detected!</div>'
+    )
     for n in st.session_state.notifications:
-        html_content += f'<div style="background-color: #fff3cd; padding: 10px; border-radius: 5px; margin: 5px 0; border-left: 5px solid #ffecb5; color: #856404;"><b>System Notice:</b> {n}</div>'
+        html_content += (
+            f'<div style="background-color: #fff3cd; padding: 10px;'
+            ' border-radius: 5px; margin: 5px 0; border-left: 5px solid'
+            f' #ffecb5; color: #856404;"><b>System Notice:</b> {n}</div>'
+        )
     html_content += "</div>"
     st.markdown(html_content, unsafe_allow_html=True)
 
@@ -568,7 +583,7 @@ with tab_cal:
             for name in roster.keys():
                 p_status = [
                     r["type"]
-                    for r in global_approved_requests
+                    for r in global_approved_calendar_requests
                     if str(r["date"]) == str(view_date) and r["name"] == name
                 ]
                 if p_status:
@@ -630,7 +645,7 @@ with tab_cal:
                     d = date(year, month, day)
                     approved = [
                         r
-                        for r in global_approved_requests
+                        for r in global_approved_calendar_requests
                         if str(r["date"]) == str(d)
                     ]
                     away_names = [r["name"] for r in approved]
@@ -757,7 +772,7 @@ with tab_cal:
 
             p_status = [
                 r["type"]
-                for r in global_approved_requests
+                for r in global_approved_calendar_requests
                 if str(r["date"]) == str(day) and r["name"] == name
             ]
             if p_status:
@@ -996,13 +1011,11 @@ with tab_req:
     # --- Section: Approved or Rejected by RTM ---
     st.subheader("Approved / Rejected by RTM")
     
-    # Safely retrieve requests list if undefined
-    rtm_requests = globals().get("global_rtm_processed_requests", [])
+    rtm_requests = global_rtm_processed_requests
 
     filtered_rtm = []
     for r in rtm_requests:
         try:
-            # Handle both string date formats ("YYYY-MM-DD") and datetime objects
             if isinstance(r.get("date"), str):
                 parts = r["date"].split("-")
                 r_month, r_year = int(parts[1]), int(parts[0])
@@ -1020,8 +1033,7 @@ with tab_req:
     if filtered_rtm:
         df_rtm_display = pd.DataFrame(filtered_rtm)
 
-        # Ensure required columns exist even if missing from dictionaries
-        for col in ["date", "name", "type", "status", "emp_id"]:
+        for col in ["date", "name", "type", "rtm_status", "emp_id"]:
             if col not in df_rtm_display.columns:
                 df_rtm_display[col] = "N/A"
 
@@ -1031,8 +1043,7 @@ with tab_req:
         df_rtm_display["formatted_date"] = df_rtm_display["date"].apply(format_m_d_yyyy)
         df_rtm_display["formatted_name"] = df_rtm_display["name"].apply(format_last_first)
 
-        # Select and rename final display columns
-        df_rtm_display = df_rtm_display[["emp_id", "formatted_date", "formatted_name", "type", "status"]]
+        df_rtm_display = df_rtm_display[["emp_id", "formatted_date", "formatted_name", "type", "rtm_status"]]
         df_rtm_display.columns = ["Employee ID", "Date", "Name", "Type", "Status"]
 
         st.dataframe(df_rtm_display, hide_index=True, use_container_width=True)
@@ -3087,14 +3098,14 @@ with tab_adm:
 
         with col_right:
             st.subheader("📥 Approval Center")
-        
+
             def get_all_requests_dataframe(requests_list, select_all_values=False):
                 filtered = [
                     r for r in requests_list if r.get("type") in ["Wellness", "PTO"]
                 ]
                 if not filtered:
                     return pd.DataFrame()
-        
+
                 data = {
                     "Select": [select_all_values] * len(filtered),
                     "Date": [r.get("date", "") for r in filtered],
@@ -3107,7 +3118,7 @@ with tab_adm:
                 df.sort_values(by="Date", inplace=True)
                 df.reset_index(drop=True, inplace=True)
                 return df
-        
+
             if "admin_msg" not in st.session_state:
                 st.session_state.admin_msg = None
             if st.session_state.admin_msg:
@@ -3121,18 +3132,18 @@ with tab_adm:
                 ):
                     st.session_state.admin_msg = None
                     st.rerun()
-        
+
             select_all = st.checkbox(
                 "Select All Pending Requests", key="global_select_all"
             )
-        
+
             all_requests_df = get_all_requests_dataframe(
                 global_pending_requests, select_all_values=select_all
             )
-        
+
             if not all_requests_df.empty:
                 calculated_height = max(150, min(800, (len(all_requests_df) * 35) + 40))
-        
+
                 edited_df = st.data_editor(
                     all_requests_df,
                     hide_index=True,
@@ -3154,15 +3165,15 @@ with tab_adm:
                 )
             else:
                 st.write("*No pending Wellness or PTO requests.*")
-        
+
             if not all_requests_df.empty:
                 st.markdown("---")
                 btn_col1, btn_col2, btn_col3, btn_col4 = st.columns(4)
-        
+
                 def get_selected_ids(base_df, session_key):
                     selected_ids = []
                     current_select_states = base_df["Select"].tolist()
-        
+
                     if (
                         session_key in st.session_state
                         and "edited_rows" in st.session_state[session_key]
@@ -3171,12 +3182,12 @@ with tab_adm:
                         for row_idx, edit_dict in edits.items():
                             if "Select" in edit_dict:
                                 current_select_states[int(row_idx)] = edit_dict["Select"]
-        
+
                     for idx, is_selected in enumerate(current_select_states):
                         if is_selected:
                             selected_ids.append(base_df.iloc[idx]["_id"])
                     return selected_ids
-        
+
                 def process_df_edits(base_df, session_key):
                     """Applies inline edits made directly in st.data_editor back to MongoDB/state."""
                     if (
@@ -3193,7 +3204,7 @@ with tab_adm:
                             }
                             if update_fields:
                                 update_request_fields(target_id, update_fields)
-        
+
                 with btn_col1:
                     if st.button(
                         "✅ Approve Selected",
@@ -3213,7 +3224,7 @@ with tab_adm:
                             st.rerun()
                         else:
                             st.warning("Please select at least one request to approve.")
-        
+
                 with btn_col2:
                     if st.button(
                         "❌ Deny Selected",
@@ -3245,7 +3256,7 @@ with tab_adm:
                             "Pending request edits saved successfully!",
                         )
                         st.rerun()
-        
+
                 with btn_col4:
                     if st.button(
                         "🗑️ Delete Selected Pending",
@@ -3265,7 +3276,7 @@ with tab_adm:
                             st.warning(
                                 "Please select at least one pending request to delete."
                             )
-        
+
             st.divider()
             st.subheader("Approved History")
             filter_col1, filter_col2 = st.columns(2)
@@ -3301,21 +3312,20 @@ with tab_adm:
                     index=year_options.index(current_year),
                     key="history_filter_year",
                 )
-        
-            # Fetch roster_list from database to map full name -> emp_id
+
             roster_doc = collection.find_one({"type": "roster_list"})
             roster_data = roster_doc.get("data", {}) if roster_doc else {}
             roster_lookup = {
                 name: details.get("emp_id", "N/A")
                 for name, details in roster_data.items()
             }
-        
+
             def get_emp_id(req):
                 name = req.get("name", "")
                 if name in roster_lookup and roster_lookup[name]:
                     return roster_lookup[name]
                 return req.get("emp_id", "N/A")
-        
+
             def format_last_first(full_name):
                 if not full_name or not isinstance(full_name, str):
                     return ""
@@ -3323,9 +3333,9 @@ with tab_adm:
                 if len(parts) > 1:
                     return f"{parts[-1]}, {' '.join(parts[:-1])}"
                 return full_name
-        
+
             filtered_history_requests = []
-        
+
             for r in global_approved_requests:
                 date_val = r.get("date")
                 if isinstance(date_val, str):
@@ -3335,7 +3345,7 @@ with tab_adm:
                         ).date()
                     except ValueError:
                         continue
-        
+
                 if (
                     date_val.month == selected_month
                     and date_val.year == selected_year
@@ -3348,20 +3358,20 @@ with tab_adm:
                             r_copy["date"] = date_val.strftime("%-m/%-d/%Y")
                         except ValueError:
                             r_copy["date"] = date_val.strftime("%#m/%#d/%Y")
-        
+
                         filtered_history_requests.append(r_copy)
-        
+
             if filtered_history_requests:
                 st.markdown("#### Approved Requests Summary")
                 history_df = pd.DataFrame(filtered_history_requests)
                 history_df.sort_values(by="parsed_date", ascending=True, inplace=True)
-        
+
                 if "name" in history_df.columns:
                     history_df["name"] = history_df["name"].apply(format_last_first)
-        
+
                 if "type" in history_df.columns:
                     history_df.rename(columns={"type": "Request Type"}, inplace=True)
-        
+
                 history_df.rename(
                     columns={
                         "emp_id": "Employee ID",
@@ -3371,15 +3381,15 @@ with tab_adm:
                     },
                     inplace=True,
                 )
-        
+
                 columns_to_drop = ["parsed_date", "email", "viewed"]
                 history_display_df = history_df.drop(
                     columns=columns_to_drop, errors="ignore"
                 )
-        
+
                 if "Select" not in history_display_df.columns:
                     history_display_df.insert(0, "Select", False)
-        
+
                 desired_order = [
                     "Select",
                     "Employee ID",
@@ -3394,10 +3404,10 @@ with tab_adm:
                 extra_cols = [
                     c for c in history_display_df.columns if c not in desired_order
                 ]
-        
+
                 history_display_df = history_display_df[existing_cols + extra_cols]
                 history_height = (len(history_display_df) * 35) + 45
-        
+
                 edited_approved_df = st.data_editor(
                     history_display_df,
                     hide_index=True,
@@ -3467,7 +3477,7 @@ with tab_adm:
                 st.write(
                     "*No verified history logs found matching calendar dimensions.*"
                 )
-        
+
             # --- REJECTED HISTORY VIEW ---
             st.divider()
             st.subheader("Rejected History")
@@ -3612,14 +3622,13 @@ with tab_adm:
                             st.warning("Please tick at least one rejected entry to delete.")
             else:
                 st.write("*No rejected requests found matching the selected month and year.*")
-        
+
             # --- RTM SECOND-LEVEL APPROVAL ---
             st.divider()
             st.subheader("🛡️ RTM Verification & Approval Level")
-        
+
             if filtered_history_requests:
                 rtm_df = pd.DataFrame(filtered_history_requests)
-                # Check if rtm_status exists in the DataFrame
                 if "rtm_status" in rtm_df.columns:
                     rtm_df["RTM_Approved"] = rtm_df["rtm_status"].apply(
                         lambda status: status == "Approved" if pd.notna(status) else False
@@ -3630,10 +3639,10 @@ with tab_adm:
                 else:
                     rtm_df["RTM_Approved"] = False
                     rtm_df["RTM_Rejected"] = False
-        
+
                 if "name" in rtm_df.columns:
                     rtm_df["name"] = rtm_df["name"].apply(format_last_first)
-        
+
                 rtm_df.rename(
                     columns={
                         "emp_id": "Employee ID",
@@ -3643,7 +3652,7 @@ with tab_adm:
                     },
                     inplace=True,
                 )
-        
+
                 rtm_display_df = rtm_df[
                     [
                         "_id",
@@ -3655,7 +3664,7 @@ with tab_adm:
                         "Request Type",
                     ]
                 ]
-        
+
                 rtm_height = (len(rtm_display_df) * 35) + 45
                 edited_rtm = st.data_editor(
                     rtm_display_df,
@@ -3677,11 +3686,11 @@ with tab_adm:
                     height=rtm_height,
                     key="editor_rtm_approval",
                 )
-        
+
                 if st.button("💾 Save RTM Approvals", type="primary"):
                     rtm_approved_ids = []
                     rtm_rejected_ids = []
-        
+
                     if (
                         "editor_rtm_approval" in st.session_state
                         and "edited_rows" in st.session_state["editor_rtm_approval"]
@@ -3695,12 +3704,12 @@ with tab_adm:
                                 rtm_approved_ids.append(req_id)
                             elif edit_d.get("RTM_Rejected"):
                                 rtm_rejected_ids.append(req_id)
-        
+
                     if rtm_approved_ids:
                         bulk_update_rtm_status(rtm_approved_ids, "Approved")
                     if rtm_rejected_ids:
                         bulk_update_rtm_status(rtm_rejected_ids, "Rejected")
-        
+
                     st.session_state.admin_msg = (
                         "success",
                         "RTM review status updated successfully!",
@@ -3708,5 +3717,5 @@ with tab_adm:
                     st.rerun()
             else:
                 st.write("*No approved requests available for RTM verification.*")
-        
+
             st.markdown("</div>", unsafe_allow_html=True)
