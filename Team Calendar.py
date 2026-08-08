@@ -3371,7 +3371,11 @@ with tab_adm:
             # --- REJECTED HISTORY VIEW ---
             st.divider()
             st.subheader("Rejected History")
-        
+
+            # Ensure global_rejected_requests exists to prevent NameError
+            if "global_rejected_requests" not in globals():
+                global_rejected_requests = []
+
             filtered_rejected_requests = []
             for r in global_rejected_requests:
                 date_val = r.get("date")
@@ -3382,8 +3386,11 @@ with tab_adm:
                         ).date()
                     except ValueError:
                         continue
-        
-                if date_val.month == selected_month and date_val.year == selected_year:
+
+                if (
+                    date_val.month == selected_month
+                    and date_val.year == selected_year
+                ):
                     if r.get("type") in ["Wellness", "PTO", "SL/EL"]:
                         r_copy = r.copy()
                         r_copy["parsed_date"] = date_val
@@ -3393,59 +3400,6 @@ with tab_adm:
                         except ValueError:
                             r_copy["date"] = date_val.strftime("%#m/%#d/%Y")
                         filtered_rejected_requests.append(r_copy)
-        
-            if filtered_rejected_requests:
-                st.markdown("#### Rejected Requests Summary")
-                rejected_df = pd.DataFrame(filtered_rejected_requests)
-                rejected_df.sort_values(by="parsed_date", ascending=True, inplace=True)
-        
-                if "name" in rejected_df.columns:
-                    rejected_df["name"] = rejected_df["name"].apply(format_last_first)
-        
-                if "type" in rejected_df.columns:
-                    rejected_df.rename(columns={"type": "Request Type"}, inplace=True)
-        
-                rejected_df.rename(
-                    columns={
-                        "emp_id": "Employee ID",
-                        "date": "Date",
-                        "name": "Name",
-                        "status": "Status",
-                    },
-                    inplace=True,
-                )
-        
-                rejected_display_df = rejected_df.drop(
-                    columns=["parsed_date", "email", "viewed", "_id"], errors="ignore"
-                )
-        
-                desired_order = [
-                    "Employee ID",
-                    "Date",
-                    "Name",
-                    "Request Type",
-                    "Status",
-                ]
-                existing_cols = [
-                    c for c in desired_order if c in rejected_display_df.columns
-                ]
-                extra_cols = [
-                    c for c in rejected_display_df.columns if c not in desired_order
-                ]
-        
-                rejected_display_df = rejected_display_df[existing_cols + extra_cols]
-                rejected_height = (len(rejected_display_df) * 35) + 45
-        
-                st.dataframe(
-                    rejected_display_df,
-                    hide_index=True,
-                    use_container_width=True,
-                    height=rejected_height,
-                )
-            else:
-                st.write(
-                    "*No rejected history logs found matching calendar dimensions.*"
-                )
         
             # --- RTM SECOND-LEVEL APPROVAL ---
             st.divider()
