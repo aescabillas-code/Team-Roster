@@ -33,7 +33,6 @@ def fetch_roster_doc():
 
 
 @st.cache_data(ttl=120)
-
 def fetch_calendar_doc():
     try:
         return collection.find_one({"type": "calendar_data"}) or {}
@@ -79,7 +78,17 @@ def fetch_approved_requests_from_db():
 
 
 @st.cache_data(ttl=60)
-global_rejected_requests = list(collection.find({"status": "Rejected"}))
+def fetch_rejected_requests_from_db():
+    try:
+        return list(collection.find({"status": "Rejected"}))
+    except Exception:
+        return []
+
+
+global_rejected_requests = fetch_rejected_requests_from_db()
+
+
+@st.cache_data(ttl=60)
 def fetch_pending_requests_from_db():
     try:
         return list(
@@ -96,11 +105,29 @@ def fetch_pending_requests_from_db():
 def clear_requests_cache():
     fetch_approved_requests_from_db.clear()
     fetch_pending_requests_from_db.clear()
+    fetch_rejected_requests_from_db.clear()
 
 
 def bulk_update_requests(request_ids, status):
     collection.update_many(
         {"_id": {"$in": request_ids}}, {"$set": {"status": status}}
+    )
+    clear_requests_cache()
+
+
+def bulk_delete_requests(request_ids):
+    collection.delete_many({"_id": {"$in": request_ids}})
+    clear_requests_cache()
+
+
+def update_request_fields(request_id, update_dict):
+    collection.update_one({"_id": request_id}, {"$set": update_dict})
+    clear_requests_cache()
+
+
+def bulk_update_rtm_status(request_ids, rtm_status):
+    collection.update_many(
+        {"_id": {"$in": request_ids}}, {"$set": {"rtm_status": rtm_status}}
     )
     clear_requests_cache()
 
@@ -902,7 +929,7 @@ with tab_req:
             st.session_state.request_count = 1
             st.rerun()
 
-    st.subheader("Approved History")
+    # 1. Render date filters first so all sections can access f_m and f_y
     f_c1, f_c2 = st.columns(2)
     
     month_names = list(calendar.month_name)[1:]
@@ -917,7 +944,7 @@ with tab_req:
         "Year", value=current_date.year, key="history_year_select"
     )
     
-    # 1. Fetch roster_list from database to map full name -> emp_id
+    # 2. Fetch roster_list from database to map full name -> emp_id
     roster_doc = collection.find_one({"type": "roster_list"})
     roster_data = roster_doc.get("data", {}) if roster_doc else {}
     roster_lookup = {
@@ -949,6 +976,34 @@ with tab_req:
             return roster_lookup[name]
         return req.get("emp_id", "N/A")
 
+    # --- Section: Approved or Rejected by RTM ---
+    st.subheader("Approved / Rejected by RTM")
+    filtered_rtm = [
+        r
+        for r in global_rtm_processed_requests
+        if int(r["date"].split("-")[1]) == f_m
+        and int(r["date"].split("-")[0]) == f_y
+    ]
+
+    if filtered_rtm:
+        for req in filtered_rtm:
+            req["emp_id"] = get_emp_id(req)
+
+        df_rtm_display = pd.DataFrame(filtered_rtm)
+        df_rtm_display["sort_date"] = pd.to_datetime(df_rtm_display["date"])
+        df_rtm_display = df_rtm_display.sort_values(by="sort_date", ascending=True)
+
+        df_rtm_display["formatted_date"] = df_rtm_display["date"].apply(format_m_d_yyyy)
+        df_rtm_display["formatted_name"] = df_rtm_display["name"].apply(format_last_first)
+
+        df_rtm_display = df_rtm_display[["emp_id", "formatted_date", "formatted_name", "type", "status"]]
+        df_rtm_display.columns = ["Employee ID", "Date", "Name", "Type", "Status"]
+        st.dataframe(df_rtm_display, hide_index=True, use_container_width=True)
+    else:
+        st.write("No records found.")
+
+    # --- Section: Approved History ---
+    st.subheader("Approved History")
     filtered_app = [
         r
         for r in global_approved_requests
@@ -957,19 +1012,14 @@ with tab_req:
     ]
     
     if filtered_app:
-        # Populate emp_id directly from the database roster lookup
         for req in filtered_app:
             req["emp_id"] = get_emp_id(req)
 
         df_display = pd.DataFrame(filtered_app)
-        # Sort by date
         df_display["sort_date"] = pd.to_datetime(df_display["date"])
         df_display = df_display.sort_values(by="sort_date", ascending=True)
     
-        # Reformat date to M/D/YYYY
         df_display["formatted_date"] = df_display["date"].apply(format_m_d_yyyy)
-    
-        # Reformat name to "Last Name, First Name"
         df_display["formatted_name"] = df_display["name"].apply(format_last_first)
     
         df_display = df_display[["emp_id", "formatted_date", "formatted_name", "type"]]
@@ -978,6 +1028,7 @@ with tab_req:
     else:
         st.write("No records found.")
     
+    # --- Section: Rejected History ---
     st.subheader("Rejected History")
     filtered_rej = [
         r
@@ -1003,6 +1054,7 @@ with tab_req:
     else:
         st.write("No records found.")
 
+    # --- Section: Pending Requests Overview ---
     st.subheader("📥 Pending Requests Overview")
     
     if global_pending_requests:
@@ -1015,21 +1067,16 @@ with tab_req:
             except Exception:
                 continue
             if req_date.month == f_m and req_date.year == f_y:
-                # Populate emp_id directly from database roster lookup
                 r_copy = dict(r)
                 r_copy["emp_id"] = get_emp_id(r_copy)
                 filtered_pending.append(r_copy)
     
         if filtered_pending:
             df_pending = pd.DataFrame(filtered_pending)
-            # Sort by date
             df_pending["sort_date"] = pd.to_datetime(df_pending["date"])
             df_pending = df_pending.sort_values(by="sort_date", ascending=True)
     
-            # Reformat date to M/D/YYYY
             df_pending["formatted_date"] = df_pending["date"].apply(format_m_d_yyyy)
-    
-            # Reformat name to "Last Name, First Name"
             df_pending["formatted_name"] = df_pending["name"].apply(format_last_first)
     
             df_pending_display = df_pending[["emp_id", "formatted_date", "formatted_name", "type"]].copy()
@@ -3073,7 +3120,7 @@ with tab_adm:
         
             if not all_requests_df.empty:
                 st.markdown("---")
-                btn_col1, btn_col2, btn_col3 = st.columns(3)
+                btn_col1, btn_col2, btn_col3, btn_col4 = st.columns(4)
         
                 def get_selected_ids(base_df, session_key):
                     selected_ids = []
@@ -3107,7 +3154,7 @@ with tab_adm:
                                 for k, v in edit_dict.items()
                                 if k != "Select"
                             }
-                            if update_fields and "update_request_fields" in globals():
+                            if update_fields:
                                 update_request_fields(target_id, update_fields)
         
                 with btn_col1:
@@ -3149,8 +3196,20 @@ with tab_adm:
                             st.rerun()
                         else:
                             st.warning("Please select at least one request to deny.")
-        
+
                 with btn_col3:
+                    if st.button(
+                        "💾 Save Edits",
+                        use_container_width=True,
+                    ):
+                        process_df_edits(all_requests_df, "editor_all_requests")
+                        st.session_state.admin_msg = (
+                            "success",
+                            "Pending request edits saved successfully!",
+                        )
+                        st.rerun()
+        
+                with btn_col4:
                     if st.button(
                         "🗑️ Delete Selected Pending",
                         use_container_width=True,
@@ -3206,7 +3265,7 @@ with tab_adm:
                     key="history_filter_year",
                 )
         
-            # 1. Fetch roster_list from database to map full name -> emp_id
+            # Fetch roster_list from database to map full name -> emp_id
             roster_doc = collection.find_one({"type": "roster_list"})
             roster_data = roster_doc.get("data", {}) if roster_doc else {}
             roster_lookup = {
@@ -3214,14 +3273,12 @@ with tab_adm:
                 for name, details in roster_data.items()
             }
         
-            # Helper function to get emp_id from roster lookup or request data
             def get_emp_id(req):
                 name = req.get("name", "")
                 if name in roster_lookup and roster_lookup[name]:
                     return roster_lookup[name]
                 return req.get("emp_id", "N/A")
         
-            # Helper function to format full names as "Last Name, First Name"
             def format_last_first(full_name):
                 if not full_name or not isinstance(full_name, str):
                     return ""
@@ -3249,15 +3306,10 @@ with tab_adm:
                     if r.get("type") in ["Wellness", "PTO", "SL/EL"]:
                         r_copy = r.copy()
                         r_copy["parsed_date"] = date_val
-        
-                        # Populate emp_id dynamically from database roster lookup
                         r_copy["emp_id"] = get_emp_id(r_copy)
-        
-                        # Format date string to M/D/YYYY (e.g., 7/28/2026)
                         try:
                             r_copy["date"] = date_val.strftime("%-m/%-d/%Y")
                         except ValueError:
-                            # Windows fallback (using # instead of -)
                             r_copy["date"] = date_val.strftime("%#m/%#d/%Y")
         
                         filtered_history_requests.append(r_copy)
@@ -3267,14 +3319,12 @@ with tab_adm:
                 history_df = pd.DataFrame(filtered_history_requests)
                 history_df.sort_values(by="parsed_date", ascending=True, inplace=True)
         
-                # Reformat name to "Last Name, First Name"
                 if "name" in history_df.columns:
                     history_df["name"] = history_df["name"].apply(format_last_first)
         
                 if "type" in history_df.columns:
                     history_df.rename(columns={"type": "Request Type"}, inplace=True)
         
-                # Rename columns for presentation
                 history_df.rename(
                     columns={
                         "emp_id": "Employee ID",
@@ -3331,40 +3381,51 @@ with tab_adm:
                     height=history_height,
                     key="editor_approved_requests",
                 )
-        
-                if st.button("🗑️ Delete Selected Approved", key="btn_delete_approved"):
-                    selected_approved_ids = []
-                    if (
-                        "editor_approved_requests" in st.session_state
-                        and "edited_rows"
-                        in st.session_state["editor_approved_requests"]
-                    ):
-                        edits = st.session_state["editor_approved_requests"][
-                            "edited_rows"
-                        ]
-                        current_states = history_display_df["Select"].tolist()
-                        for r_idx, edit_dict in edits.items():
-                            if "Select" in edit_dict:
-                                current_states[int(r_idx)] = edit_dict["Select"]
-                        for idx, is_sel in enumerate(current_states):
-                            if is_sel:
-                                selected_approved_ids.append(
-                                    history_display_df.iloc[idx]["_id"]
-                                )
-                    else:
-                        selected_approved_ids = history_display_df[
-                            history_display_df["Select"]
-                        ]["_id"].tolist()
-        
-                    if selected_approved_ids:
-                        bulk_delete_requests(selected_approved_ids)
+
+                app_col1, app_col2 = st.columns(2)
+                with app_col1:
+                    if st.button("💾 Save Approved Edits", key="btn_save_approved_edits", use_container_width=True):
+                        process_df_edits(history_display_df, "editor_approved_requests")
                         st.session_state.admin_msg = (
                             "success",
-                            f"Successfully deleted {len(selected_approved_ids)} approved requests!",
+                            "Approved request edits saved successfully!",
                         )
                         st.rerun()
-                    else:
-                        st.warning("Please tick at least one approved entry to delete.")
+
+                with app_col2:
+                    if st.button("🗑️ Delete Selected Approved", key="btn_delete_approved", use_container_width=True):
+                        selected_approved_ids = []
+                        if (
+                            "editor_approved_requests" in st.session_state
+                            and "edited_rows"
+                            in st.session_state["editor_approved_requests"]
+                        ):
+                            edits = st.session_state["editor_approved_requests"][
+                                "edited_rows"
+                            ]
+                            current_states = history_display_df["Select"].tolist()
+                            for r_idx, edit_dict in edits.items():
+                                if "Select" in edit_dict:
+                                    current_states[int(r_idx)] = edit_dict["Select"]
+                            for idx, is_sel in enumerate(current_states):
+                                if is_sel:
+                                    selected_approved_ids.append(
+                                        history_display_df.iloc[idx]["_id"]
+                                    )
+                        else:
+                            selected_approved_ids = history_display_df[
+                                history_display_df["Select"]
+                            ]["_id"].tolist()
+
+                        if selected_approved_ids:
+                            bulk_delete_requests(selected_approved_ids)
+                            st.session_state.admin_msg = (
+                                "success",
+                                f"Successfully deleted {len(selected_approved_ids)} approved requests!",
+                            )
+                            st.rerun()
+                        else:
+                            st.warning("Please tick at least one approved entry to delete.")
             else:
                 st.write(
                     "*No verified history logs found matching calendar dimensions.*"
@@ -3374,10 +3435,7 @@ with tab_adm:
             st.divider()
             st.subheader("Rejected History")
 
-            # Ensure global_rejected_requests exists to prevent NameError
-            if "global_rejected_requests" not in globals():
-                global_rejected_requests = []
-
+            global_rejected_requests = fetch_rejected_requests_from_db()
             filtered_rejected_requests = []
             for r in global_rejected_requests:
                 date_val = r.get("date")
@@ -3402,6 +3460,121 @@ with tab_adm:
                         except ValueError:
                             r_copy["date"] = date_val.strftime("%#m/%#d/%Y")
                         filtered_rejected_requests.append(r_copy)
+
+            if filtered_rejected_requests:
+                st.markdown("#### Rejected Requests Summary")
+                rejected_df = pd.DataFrame(filtered_rejected_requests)
+                rejected_df.sort_values(by="parsed_date", ascending=True, inplace=True)
+
+                if "name" in rejected_df.columns:
+                    rejected_df["name"] = rejected_df["name"].apply(format_last_first)
+
+                if "type" in rejected_df.columns:
+                    rejected_df.rename(columns={"type": "Request Type"}, inplace=True)
+
+                rejected_df.rename(
+                    columns={
+                        "emp_id": "Employee ID",
+                        "date": "Date",
+                        "name": "Name",
+                        "status": "Status",
+                    },
+                    inplace=True,
+                )
+
+                columns_to_drop = ["parsed_date", "email", "viewed"]
+                rejected_display_df = rejected_df.drop(
+                    columns=columns_to_drop, errors="ignore"
+                )
+
+                if "Select" not in rejected_display_df.columns:
+                    rejected_display_df.insert(0, "Select", False)
+
+                desired_order = [
+                    "Select",
+                    "Employee ID",
+                    "Date",
+                    "Name",
+                    "Request Type",
+                    "Status",
+                ]
+                existing_cols = [
+                    c for c in desired_order if c in rejected_display_df.columns
+                ]
+                extra_cols = [
+                    c for c in rejected_display_df.columns if c not in desired_order
+                ]
+
+                rejected_display_df = rejected_display_df[existing_cols + extra_cols]
+                rejected_height = (len(rejected_display_df) * 35) + 45
+
+                edited_rejected_df = st.data_editor(
+                    rejected_display_df,
+                    hide_index=True,
+                    column_config={
+                        "Select": st.column_config.CheckboxColumn(default=False),
+                        "Employee ID": st.column_config.TextColumn(disabled=True),
+                        "Date": st.column_config.TextColumn(disabled=False),
+                        "Name": st.column_config.TextColumn(disabled=False),
+                        "Request Type": st.column_config.SelectboxColumn(
+                            options=["Wellness", "PTO", "SL/EL"], disabled=False
+                        ),
+                        "Status": st.column_config.SelectboxColumn(
+                            options=["Approved", "Pending", "Rejected"], disabled=False
+                        ),
+                        "_id": None,
+                    },
+                    use_container_width=True,
+                    height=rejected_height,
+                    key="editor_rejected_requests",
+                )
+
+                rej_col1, rej_col2 = st.columns(2)
+                with rej_col1:
+                    if st.button("💾 Save Rejected Edits", key="btn_save_rejected_edits", use_container_width=True):
+                        process_df_edits(rejected_display_df, "editor_rejected_requests")
+                        st.session_state.admin_msg = (
+                            "success",
+                            "Rejected request edits saved successfully!",
+                        )
+                        st.rerun()
+
+                with rej_col2:
+                    if st.button("🗑️ Delete Selected Rejected", key="btn_delete_rejected", use_container_width=True):
+                        selected_rejected_ids = []
+                        if (
+                            "editor_rejected_requests" in st.session_state
+                            and "edited_rows"
+                            in st.session_state["editor_rejected_requests"]
+                        ):
+                            edits = st.session_state["editor_rejected_requests"][
+                                "edited_rows"
+                            ]
+                            current_states = rejected_display_df["Select"].tolist()
+                            for r_idx, edit_dict in edits.items():
+                                if "Select" in edit_dict:
+                                    current_states[int(r_idx)] = edit_dict["Select"]
+                            for idx, is_sel in enumerate(current_states):
+                                if is_sel:
+                                    selected_rejected_ids.append(
+                                        rejected_display_df.iloc[idx]["_id"]
+                                    )
+                        else:
+                            selected_rejected_ids = rejected_display_df[
+                                rejected_display_df["Select"]
+                            ]["_id"].tolist()
+
+                        if selected_rejected_ids:
+                            bulk_delete_requests(selected_rejected_ids)
+                            st.session_state.admin_msg = (
+                                "success",
+                                f"Successfully deleted {len(selected_rejected_ids)} rejected requests!",
+                            )
+                            st.rerun()
+                        else:
+                            st.warning("Please tick at least one rejected entry to delete.")
+            else:
+                st.write("*No rejected requests found matching the selected month and year.*")
         
             # --- RTM SECOND-LEVEL APPROVAL ---
             st.divider()
