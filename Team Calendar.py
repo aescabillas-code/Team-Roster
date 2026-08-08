@@ -285,13 +285,18 @@ st.session_state.calendar_data = {
     for k, v in raw_cal_data.items()
 }
 
-global_approved_requests = global_approved_requests if 'global_approved_requests' in locals() else []
-global_rejected_requests = global_rejected_requests if 'global_rejected_requests' in locals() else []
-global_pending_requests = global_pending_requests if 'global_pending_requests' in locals() else []
+global_approved_requests = fetch_approved_requests_from_db()
+global_pending_requests = fetch_pending_requests_from_db()
+global_rejected_requests = fetch_rejected_requests_from_db()
 
-# Add initialization for global_rtm_processed_requests
-if 'global_rtm_processed_requests' not in locals() and 'global_rtm_processed_requests' not in st.session_state:
-    global_rtm_processed_requests = []
+# Fetch RTM requests from DB if available, otherwise initialize as empty list
+if "global_rtm_processed_requests" not in locals() and "global_rtm_processed_requests" not in st.session_state:
+    try:
+        global_rtm_processed_requests = fetch_rtm_processed_requests_from_db()
+    except NameError:
+        global_rtm_processed_requests = []
+else:
+    global_rtm_processed_requests = st.session_state.get("global_rtm_processed_requests", [])
 
 # --- GLOBAL CSS STYLING ---
 st.markdown(
