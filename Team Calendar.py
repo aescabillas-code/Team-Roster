@@ -3168,7 +3168,6 @@ with tab_adm:
                 st.write("*No pending Wellness or PTO requests.*")
         
             if not all_requests_df.empty:
-                st.markdown("---")
                 btn_col1, btn_col2, btn_col3, btn_col4 = st.columns(4)
         
                 def get_selected_ids(base_df, session_key):
@@ -3277,7 +3276,7 @@ with tab_adm:
                             st.warning(
                                 "Please select at least one pending request to delete."
                             )
-        
+            st.markdown("---")
             # Shared Month/Year filters used for Approved, Rejected, and RTM views
             filter_col1, filter_col2 = st.columns(2)
             with filter_col1:
