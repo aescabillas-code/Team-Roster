@@ -114,6 +114,14 @@ def fetch_resources_from_db():
         return []
 
 
+@st.cache_data(ttl=60)
+def fetch_scorecards_from_db():
+    try:
+        return list(collection.find({"type": "scorecard"}))
+    except Exception:
+        return []
+
+
 # --- DB MUTATION HELPERS ---
 def clear_requests_cache():
     fetch_approved_requests_from_db.clear()
@@ -236,6 +244,26 @@ def delete_resource_from_db(resource_id):
     fetch_resources_from_db.clear()
 
 
+def save_scorecard_to_db(scorecard_doc):
+    scorecard_doc["type"] = "scorecard"
+    collection.update_one(
+        {
+            "type": "scorecard",
+            "name": scorecard_doc["name"],
+            "month": scorecard_doc["month"],
+            "year": scorecard_doc["year"],
+        },
+        {"$set": scorecard_doc},
+        upsert=True,
+    )
+    fetch_scorecards_from_db.clear()
+
+
+def delete_scorecard_from_db(scorecard_id):
+    collection.delete_one({"_id": scorecard_id})
+    fetch_scorecards_from_db.clear()
+
+
 def get_request_limits(req_date):
     cal_doc = fetch_calendar_doc()
     selected_config = cal_doc.get("data", {}).get(str(req_date), {})
@@ -263,6 +291,63 @@ def calculate_duration_mins(start_str, end_str):
         return max(0, diff_mins)
     except Exception:
         return 0
+
+
+# --- SCORECARD MATRIX CALCULATIONS ---
+def calculate_attendance_score(val):
+    if val >= 98.0:
+        return 5
+    elif val >= 96.5:
+        return 4
+    elif val >= 95.0:
+        return 3
+    elif val >= 92.0:
+        return 2
+    elif val >= 88.0:
+        return 1
+    return 0
+
+
+def calculate_csat_score(val):
+    if val >= 4.8:
+        return 5
+    elif val >= 4.5:
+        return 4
+    elif val >= 4.0:
+        return 3
+    elif val >= 3.5:
+        return 2
+    elif val >= 3.0:
+        return 1
+    return 0
+
+
+def calculate_qa_score(val):
+    if val >= 95.0:
+        return 5
+    elif val >= 92.5:
+        return 4
+    elif val >= 90.0:
+        return 3
+    elif val >= 85.0:
+        return 2
+    elif val >= 80.0:
+        return 1
+    return 0
+
+
+def calculate_adherence_score(val):
+    if val >= 92.0:
+        return 5
+    elif val >= 88.5:
+        return 4
+    elif val >= 85.0:
+        return 3
+    elif val >= 80.0:
+        return 2
+    elif val >= 75.0:
+        return 1
+    return 0
 
 
 # --- INITIAL CONFIG & STATE ---
@@ -492,11 +577,11 @@ def render_request(req, key_prefix):
 tab_names = [
     "📅 Calendar",
     "📝 Request",
-    "🔗 Resources & Links",
+    "💯 Performance Scorecard",
     "🔑 Admin",
 ]
 
-tab_cal, tab_req, tab_res, tab_adm = st.tabs(tab_names)
+tab_cal, tab_req, tab_sc, tab_adm = st.tabs(tab_names)
 
 # --- TAB 1: CALENDAR ---
 with tab_cal:
@@ -1178,87 +1263,90 @@ with tab_req:
             " logs.*"
         )
 
-# --- TAB 3: RESOURCES & LINKS ---
-with tab_res:
-    st.subheader("🔗 Team Resources, Links & Files")
+# --- TAB 3: PERFORMANCE SCORECARD ---
+with tab_sc:
+    st.subheader("💯 Roster Performance Scorecard")
 
-    col_add_res, col_list_res = st.columns([1, 2])
+    sc_col1, sc_col2 = st.columns(2)
+    m_options = list(calendar.month_name)[1:]
+    sc_selected_month = sc_col1.selectbox(
+        "Scorecard Month",
+        m_options,
+        index=current_date.month - 1,
+        key="sc_month_select",
+    )
+    sc_m_num = m_options.index(sc_selected_month) + 1
+    sc_selected_year = sc_col2.number_input(
+        "Scorecard Year", value=current_date.year, key="sc_year_select"
+    )
 
-    with col_add_res:
-        st.markdown("### ➕ Add Resource")
-        res_category = st.selectbox(
-            "Category",
-            ["Link", "File Upload"],
-            key="res_category_select"
+    with st.expander("📌 KPI Target & Scoring Scale Matrix Reference"):
+        st.markdown(
+            """
+            | KPI Component | Goal (Score 3) | Score 5 | Score 4 | Score 2 | Score 1 | Score 0 |
+            | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+            | **Attendance** | **95.0%** | $\ge$ 98.0% | 96.5% - 97.9% | 92.0% - 94.9% | 88.0% - 91.9% | < 88.0% |
+            | **CSAT** | **5.00** | $\ge$ 4.80 | 4.50 - 4.79 | 3.50 - 3.99 | 3.00 - 3.49 | < 3.00 |
+            | **QA** | **90.0%** | $\ge$ 95.0% | 92.5% - 94.9% | 85.0% - 89.9% | 80.0% - 84.9% | < 80.0% |
+            | **Adherence** | **85.0%** | $\ge$ 92.0% | 88.5% - 91.9% | 80.0% - 84.9% | 75.0% - 79.9% | < 75.0% |
+            """
         )
-        res_title = st.text_input("Title / Description", key="res_title_input")
 
-        if res_category == "Link":
-            res_url = st.text_input("URL Link", key="res_url_input")
-            if st.button("Save Link", key="btn_save_link_res"):
-                if res_title and res_url:
-                    resource_doc = {
-                        "category": "Link",
-                        "title": res_title,
-                        "url": res_url,
-                        "created_at": datetime.now(local_tz).strftime("%Y-%m-%d %H:%M:%S")
-                    }
-                    save_resource_to_db(resource_doc)
-                    st.success("Link added successfully!")
-                    st.rerun()
-                else:
-                    st.error("Please enter both a Title and a valid URL.")
+    scorecard_entries = fetch_scorecards_from_db()
+    current_roster = st.session_state.staff_roster
 
-        elif res_category == "File Upload":
-            uploaded_file = st.file_uploader("Choose File", key="res_file_uploader")
-            if st.button("Save File", key="btn_save_file_res"):
-                if res_title and uploaded_file is not None:
-                    file_bytes = uploaded_file.read()
-                    resource_doc = {
-                        "category": "File Upload",
-                        "title": res_title,
-                        "filename": uploaded_file.name,
-                        "file_data": file_bytes,
-                        "created_at": datetime.now(local_tz).strftime("%Y-%m-%d %H:%M:%S")
-                    }
-                    save_resource_to_db(resource_doc)
-                    st.success("File stored successfully!")
-                    st.rerun()
-                else:
-                    st.error("Please enter a Title and attach a File.")
+    sc_rows = []
+    if current_roster:
+        for name, info in current_roster.items():
+            emp_id = info.get("emp_id", "N/A") if isinstance(info, dict) else "N/A"
 
-    with col_list_res:
-        st.markdown("### 📁 Stored Resources")
-        resources_list = fetch_resources_from_db()
+            # Find matching doc for this month/year/name
+            match_doc = next(
+                (
+                    s
+                    for s in scorecard_entries
+                    if s.get("name") == name
+                    and s.get("month") == sc_m_num
+                    and s.get("year") == sc_selected_year
+                ),
+                None,
+            )
 
-        if resources_list:
-            for r in resources_list:
-                r_id = r.get("_id")
-                r_cat = r.get("category", "Link")
-                r_title = r.get("title", "Untitled")
-                r_date = r.get("created_at", "")
+            if match_doc:
+                att_val = float(match_doc.get("attendance", 0.0))
+                csat_val = float(match_doc.get("csat", 0.0))
+                qa_val = float(match_doc.get("qa", 0.0))
+                adh_val = float(match_doc.get("adherence", 0.0))
+            else:
+                att_val, csat_val, qa_val, adh_val = 0.0, 0.0, 0.0, 0.0
 
-                with st.expander(f"{'🔗' if r_cat == 'Link' else '📄'} {r_title} ({r_cat})"):
-                    st.write(f"**Added:** {r_date}")
+            att_score = calculate_attendance_score(att_val)
+            csat_score = calculate_csat_score(csat_val)
+            qa_score = calculate_qa_score(qa_val)
+            adh_score = calculate_adherence_score(adh_val)
+            overall_score = round(
+                (att_score + csat_score + qa_score + adh_score) / 4.0, 2
+            )
 
-                    if r_cat == "Link":
-                        st.markdown(f"**URL:** [{r.get('url')}]({r.get('url')})")
-                    elif r_cat == "File Upload":
-                        st.write(f"**Filename:** {r.get('filename')}")
-                        if "file_data" in r:
-                            st.download_button(
-                                label="📥 Download File",
-                                data=r["file_data"],
-                                file_name=r.get("filename", "download"),
-                                key=f"dl_file_{r_id}"
-                            )
+            sc_rows.append({
+                "Employee ID": emp_id,
+                "Staff Name": name,
+                "Attendance (%)": f"{att_val:.1f}%",
+                "Attendance Score": att_score,
+                "CSAT": f"{csat_val:.2f}",
+                "CSAT Score": csat_score,
+                "QA (%)": f"{qa_val:.1f}%",
+                "QA Score": qa_score,
+                "Adherence (%)": f"{adh_val:.1f}%",
+                "Adherence Score": adh_score,
+                "Overall Score (Max 5)": overall_score,
+            })
 
-                    if st.button("🗑️ Delete Resource", key=f"del_res_{r_id}"):
-                        delete_resource_from_db(r_id)
-                        st.success("Resource deleted.")
-                        st.rerun()
-        else:
-            st.info("No resources or links stored yet.")
+    if sc_rows:
+        sc_df = pd.DataFrame(sc_rows)
+        st.dataframe(sc_df, hide_index=True, use_container_width=True)
+    else:
+        st.info("No staff members configured in the roster database.")
 
 # --- TAB 4: ADMIN PANEL ---
 with tab_adm:
@@ -1456,6 +1544,107 @@ with tab_adm:
                     }]
                     st.rerun()
         
+            st.markdown("---")
+
+            st.subheader("📊 Scorecard Data Input")
+            if roster:
+                sc_admin_cols = st.columns(2)
+                sc_admin_month_str = sc_admin_cols[0].selectbox(
+                    "Select Month",
+                    list(calendar.month_name)[1:],
+                    index=current_date.month - 1,
+                    key="sc_admin_m",
+                )
+                sc_admin_m_num = (
+                    list(calendar.month_name)[1:].index(sc_admin_month_str) + 1
+                )
+                sc_admin_year = sc_admin_cols[1].number_input(
+                    "Select Year", value=current_date.year, key="sc_admin_y"
+                )
+
+                sc_target_staff = st.selectbox(
+                    "Select Roster Member",
+                    list(roster.keys()),
+                    key="sc_admin_staff_select",
+                )
+
+                # Fetch existing record if available
+                existing_sc_docs = fetch_scorecards_from_db()
+                existing_sc = next(
+                    (
+                        s
+                        for s in existing_sc_docs
+                        if s.get("name") == sc_target_staff
+                        and s.get("month") == sc_admin_m_num
+                        and s.get("year") == sc_admin_year
+                    ),
+                    {},
+                )
+
+                with st.form("sc_admin_input_form"):
+                    st.markdown(
+                        f"**Input Metrics for:** `{sc_target_staff}`"
+                        f" ({sc_admin_month_str} {sc_admin_year})"
+                    )
+
+                    c_att, c_csat = st.columns(2)
+                    in_att = c_att.number_input(
+                        "Attendance (%)",
+                        min_value=0.0,
+                        max_value=100.0,
+                        value=float(existing_sc.get("attendance", 95.0)),
+                        step=0.1,
+                        key="in_sc_att",
+                    )
+                    in_csat = c_csat.number_input(
+                        "CSAT Rating (0.0 - 5.0)",
+                        min_value=0.0,
+                        max_value=5.0,
+                        value=float(existing_sc.get("csat", 5.0)),
+                        step=0.1,
+                        key="in_sc_csat",
+                    )
+
+                    c_qa, c_adh = st.columns(2)
+                    in_qa = c_qa.number_input(
+                        "QA Score (%)",
+                        min_value=0.0,
+                        max_value=100.0,
+                        value=float(existing_sc.get("qa", 90.0)),
+                        step=0.1,
+                        key="in_sc_qa",
+                    )
+                    in_adh = c_adh.number_input(
+                        "Adherence (%)",
+                        min_value=0.0,
+                        max_value=100.0,
+                        value=float(existing_sc.get("adherence", 85.0)),
+                        step=0.1,
+                        key="in_sc_adh",
+                    )
+
+                    btn_sc_submit = st.form_submit_button(
+                        "💾 Save Scorecard Data", type="primary"
+                    )
+
+                    if btn_sc_submit:
+                        sc_doc = {
+                            "name": sc_target_staff,
+                            "month": sc_admin_m_num,
+                            "year": sc_admin_year,
+                            "attendance": in_att,
+                            "csat": in_csat,
+                            "qa": in_qa,
+                            "adherence": in_adh,
+                        }
+                        save_scorecard_to_db(sc_doc)
+                        st.success(
+                            f"Scorecard entries saved successfully for {sc_target_staff}!"
+                        )
+                        st.rerun()
+            else:
+                st.write("*No staff members configured in the roster database.*")
+
             st.markdown("---")
 
             st.subheader("🗓️ Calendar Block Updates")
