@@ -19,8 +19,8 @@ def get_mongo_client():
 
 
 client = get_mongo_client()
-db = client["my_database"]
-collection = db["my_collection"]
+db = client["TeamRoster"]
+collection = db["Team Roster Collection"]
 
 
 # --- CACHED DATA FETCHERS (Optimized TTL & Projections) ---
