@@ -3047,7 +3047,8 @@ with tab_adm:
             unavailable = [
                 r["name"]
                 for r in global_approved_requests
-                if str(r["date"]) == str(base_date)
+                if str(r.get("date")) == str(base_date)
+                and r.get("rtm_status") == "Approved"
             ]
             available = (
                 [n for n in roster.keys() if n not in unavailable]
