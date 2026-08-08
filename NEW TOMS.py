@@ -305,41 +305,35 @@ def calculate_attendance_score(val):
         return 3
     elif val >= 92.0:
         return 2
-    elif val >= 88.0:
-        return 1
-    return 0
+    return 1
 
 
 def calculate_csat_score(val):
     if val is None:
         return None
-    if val >= 4.8:
+    if val >= 9.0:
         return 5
-    elif val >= 4.5:
+    elif val >= 7.0:
         return 4
-    elif val >= 4.0:
+    elif val >= 5.0:
         return 3
-    elif val >= 3.5:
-        return 2
     elif val >= 3.0:
-        return 1
-    return 0
+        return 2
+    return 1
 
 
 def calculate_qa_score(val):
     if val is None:
         return None
-    if val >= 95.0:
+    if val >= 98.0:
         return 5
-    elif val >= 92.5:
+    elif val >= 96.5:
         return 4
-    elif val >= 90.0:
+    elif val >= 95.0:
         return 3
-    elif val >= 85.0:
+    elif val >= 90.0:
         return 2
-    elif val >= 80.0:
-        return 1
-    return 0
+    return 1
 
 
 def calculate_adherence_score(val):
@@ -353,9 +347,7 @@ def calculate_adherence_score(val):
         return 3
     elif val >= 80.0:
         return 2
-    elif val >= 75.0:
-        return 1
-    return 0
+    return 1
 
 
 # --- INITIAL CONFIG & STATE ---
@@ -1291,12 +1283,12 @@ with tab_sc:
     with st.expander("📌 KPI Target & Scoring Scale Matrix Reference"):
         st.markdown(
             """
-            | KPI Component | Goal (Score 3) | Score 5 | Score 4 | Score 2 | Score 1 | Score 0 |
+            | KPI Component | Goal (Score 3) | Score 5 | Score 4 | Score 3 | Score 2 | Score 1 |
             | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-            | **Attendance** | **95.0%** | $\ge$ 98.0% | 96.5% - 97.9% | 92.0% - 94.9% | 88.0% - 91.9% | < 88.0% |
-            | **CSAT** | **5.00** | $\ge$ 4.80 | 4.50 - 4.79 | 3.50 - 3.99 | 3.00 - 3.49 | < 3.00 |
-            | **QA** | **90.0%** | $\ge$ 95.0% | 92.5% - 94.9% | 85.0% - 89.9% | 80.0% - 84.9% | < 80.0% |
-            | **Adherence** | **85.0%** | $\ge$ 92.0% | 88.5% - 91.9% | 80.0% - 84.9% | 75.0% - 79.9% | < 75.0% |
+            | **Attendance** | **95.0%** | $\ge$ 98.0% | 96.5% - 97.9% | 95.0% - 96.4% | 92.0% - 94.9% | < 92.0% |
+            | **CSAT** | **5.00** | $\ge$ 9.00 | 7.00 - 8.99 | 5.00 - 6.99 | 3.00 - 4.99 | < 3.00 |
+            | **QA** | **95.0%** | $\ge$ 98.0% | 96.5% - 97.9% | 95.0% - 96.4% | 90.0% - 94.9% | < 90.0% |
+            | **Adherence** | **85.0%** | $\ge$ 92.0% | 88.5% - 91.9% | 85.0% - 88.4% | 80.0% - 84.9% | < 80.0% |
             """
         )
 
@@ -1306,9 +1298,8 @@ with tab_sc:
     sc_rows = []
     if current_roster:
         for name, info in current_roster.items():
-            emp_id = info.get("emp_id", "N/A") if isinstance(info, dict) else "N/A"
+            emp_id = info.get("emp_id", "") if isinstance(info, dict) else ""
 
-            # Find matching doc for this month/year/name
             match_doc = next(
                 (
                     s
@@ -1333,31 +1324,42 @@ with tab_sc:
             qa_score = calculate_qa_score(qa_val)
             adh_score = calculate_adherence_score(adh_val)
 
-            # Recalculate overall score dynamically distributing weight among available metrics
             valid_scores = [s for s in [att_score, csat_score, qa_score, adh_score] if s is not None]
             if valid_scores:
                 overall_score = round(sum(valid_scores) / len(valid_scores), 2)
+                overall_display = f"**{overall_score:.2f}**"
+                if overall_score >= 3.0:
+                    overall_display = f"<span style='color:green; font-weight:bold;'>{overall_score:.2f}</span>"
+                else:
+                    overall_display = f"<span style='color:red; font-weight:bold;'>{overall_score:.2f}</span>"
             else:
                 overall_score = 0.0
+                overall_display = ""
 
             sc_rows.append({
-                "Employee ID": emp_id,
+                "Employee ID": emp_id if emp_id else "",
                 "Staff Name": name,
-                "Attendance (%)": f"{float(att_val):.1f}%" if att_val is not None else "N/A",
-                "Attendance Score": att_score if att_score is not None else "N/A",
-                "CSAT": f"{float(csat_val):.2f}" if csat_val is not None else "N/A",
-                "CSAT Score": csat_score if csat_score is not None else "N/A",
-                "QA (%)": f"{float(qa_val):.1f}%" if qa_val is not None else "N/A",
-                "QA Score": qa_score if qa_score is not None else "N/A",
-                "Adherence (%)": f"{float(adh_val):.1f}%" if adh_val is not None else "N/A",
-                "Adherence Score": adh_score if adh_score is not None else "N/A",
-                "Overall Score (Max 5)": overall_score,
+                "Attendance (%)": f"{float(att_val):.1f}%" if att_val is not None else "",
+                "Attendance Score": att_score if att_score is not None else "",
+                "CSAT": f"{float(csat_val):.2f}" if csat_val is not None else "",
+                "CSAT Score": csat_score if csat_score is not None else "",
+                "QA (%)": f"{float(qa_val):.1f}%" if qa_val is not None else "",
+                "QA Score": qa_score if qa_score is not None else "",
+                "Adherence (%)": f"{float(adh_val):.1f}%" if adh_val is not None else "",
+                "Adherence Score": adh_score if adh_score is not None else "",
+                "Overall Score (Max 5)": overall_display,
             })
 
     if sc_rows:
         sc_df = pd.DataFrame(sc_rows)
-        sc_df = sc_df.sort_values(by="Overall Score (Max 5)", ascending=False)
-        st.dataframe(sc_df, hide_index=True, use_container_width=True)
+        if "Overall Score (Max 5)" in sc_df.columns:
+            raw_scores = [
+                float(re.sub(r'<[^>]*>', '', str(val))) if str(val).strip() != "" else 0.0
+                for val in sc_df["Overall Score (Max 5)"]
+            ]
+            sc_df["_sort_score"] = raw_scores
+            sc_df = sc_df.sort_values(by="_sort_score", ascending=False).drop(columns=["_sort_score"])
+        st.markdown(sc_df.to_html(escape=False, index=False), unsafe_allow_html=True)
     else:
         st.info("No staff members configured in the roster database.")
 
@@ -1407,8 +1409,6 @@ with tab_adm:
             st.subheader("👥 Roster Management")
             roster = st.session_state.staff_roster
         
-            # Expand the columns list so Edit and Remove each get their own dedicated column
-            # [Emp ID, Name, Nickname, Birthday, Edit Btn, Remove Btn]
             grid_cols = st.columns([1.5, 2, 2, 2, 0.8, 0.8])
             grid_cols[0].write("**Emp ID**")
             grid_cols[1].write("**Name**")
@@ -1439,7 +1439,6 @@ with tab_adm:
                         else str(bday_val)
                     )
         
-                    # Placed directly into columns 4 and 5 (no nesting required)
                     if r_cols[4].button("✏️", key=f"edit_staff_{name}", help="Edit"):
                         st.session_state.new_staff_entries = [{
                             "emp_id": data.get("emp_id", ""),
@@ -1569,7 +1568,6 @@ with tab_adm:
                     if st.button("🚀 Process & Save Uploaded Excel Scorecards", key="btn_process_excel_sc"):
                         processed_count = 0
                         for _, row in excel_df.iterrows():
-                            # Expecting columns like Name, Month, Year, Attendance, CSAT, QA, Adherence (flexible mapping fallback)
                             name_val = str(row.get("Name", row.get("Staff Name", ""))).strip()
                             if not name_val or name_val not in roster:
                                 continue
@@ -1626,7 +1624,6 @@ with tab_adm:
                     key="sc_admin_staff_select",
                 )
 
-                # Fetch existing record if available
                 existing_sc_docs = fetch_scorecards_from_db()
                 existing_sc = next(
                     (
@@ -1655,9 +1652,9 @@ with tab_adm:
                         key="in_sc_att",
                     )
                     in_csat = c_csat.number_input(
-                        "CSAT Rating (0.0 - 5.0) (Leave 0 if N/A)",
+                        "CSAT Rating (0.0 - 10.0) (Leave 0 if N/A)",
                         min_value=0.0,
-                        max_value=5.0,
+                        max_value=10.0,
                         value=float(existing_sc.get("csat", 5.0) if existing_sc.get("csat") is not None else 0.0),
                         step=0.1,
                         key="in_sc_csat",
@@ -1668,7 +1665,7 @@ with tab_adm:
                         "QA Score (%) (Leave 0 if N/A)",
                         min_value=0.0,
                         max_value=100.0,
-                        value=float(existing_sc.get("qa", 90.0) if existing_sc.get("qa") is not None else 0.0),
+                        value=float(existing_sc.get("qa", 95.0) if existing_sc.get("qa") is not None else 0.0),
                         step=0.1,
                         key="in_sc_qa",
                     )
@@ -1888,7 +1885,6 @@ with tab_adm:
                     st.session_state.admin_msg = None
                     st.rerun()
         
-            # --- 1. PENDING REQUESTS ---
             select_all = st.checkbox(
                 "Select All Pending Requests", key="global_select_all"
             )
@@ -1944,7 +1940,6 @@ with tab_adm:
                     return selected_ids
         
                 def process_df_edits(base_df, session_key):
-                    """Applies inline edits made directly in st.data_editor back to MongoDB/state."""
                     if (
                         session_key in st.session_state
                         and "edited_rows" in st.session_state[session_key]
@@ -2036,7 +2031,6 @@ with tab_adm:
                                 "Please select at least one pending request to delete."
                             )
             st.markdown("---")
-            # Shared Month/Year filters used for Approved, Rejected, and RTM views
             filter_col1, filter_col2 = st.columns(2)
             with filter_col1:
                 month_options = {
@@ -2119,7 +2113,6 @@ with tab_adm:
         
                         filtered_history_requests.append(r_copy)
         
-            # --- 2. RTM SECOND-LEVEL APPROVAL ---
             st.subheader("🛡️ RTM Verification & Approval Level")
         
             if filtered_history_requests:
@@ -2243,7 +2236,6 @@ with tab_adm:
             else:
                 st.write("*No approved requests available for RTM verification.*")
         
-            # --- 3. APPROVED HISTORY VIEW ---
             st.subheader("Approved History")
             
             if filtered_history_requests:
@@ -2251,13 +2243,11 @@ with tab_adm:
                 history_df = pd.DataFrame(filtered_history_requests)
                 history_df.sort_values(by="parsed_date", ascending=True, inplace=True)
             
-                # 1. Standardize column name from 'rtm_status' to 'RTM Status'
                 if "rtm_status" in history_df.columns:
                     history_df.rename(columns={"rtm_status": "RTM Status"}, inplace=True)
                 elif "RTM Status" not in history_df.columns:
                     history_df["RTM Status"] = "Pending"
             
-                # 2. Convert None, NaN, or empty values to "Pending"
                 history_df["RTM Status"] = history_df["RTM Status"].fillna("Pending")
                 history_df["RTM Status"] = history_df["RTM Status"].apply(
                     lambda x: "Pending" if x is None or pd.isna(x) or str(x).strip() in ["", "None", "nan"] else x
@@ -2333,7 +2323,6 @@ with tab_adm:
                 app_col1, app_col2 = st.columns(2)
                 with app_col1:
                     if st.button("💾 Save Edit", key="btn_save_approved_edits", use_container_width=True):
-                        # Save inline edits back to the backend
                         if (
                             "editor_approved_requests" in st.session_state
                             and "edited_rows" in st.session_state["editor_approved_requests"]
@@ -2394,16 +2383,12 @@ with tab_adm:
                     "*No verified history logs found matching calendar dimensions.*"
                 )
         
-            # --- 4. REJECTED HISTORY VIEW ---
             st.subheader("Rejected History")
         
-            # Fetch rejected requests from DB and aggregate with RTM rejected requests
             global_rejected_requests = fetch_rejected_requests_from_db()
         
-            # Collect IDs of DB rejected requests to avoid duplicate entries
             existing_rejected_ids = {str(r.get("_id")) for r in global_rejected_requests if r.get("_id")}
         
-            # Include requests rejected specifically during RTM review
             rtm_rejected_requests = [
                 r for r in filtered_history_requests
                 if r.get("rtm_status") == "Rejected" and str(r.get("_id")) not in existing_rejected_ids
