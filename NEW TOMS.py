@@ -295,6 +295,8 @@ def calculate_duration_mins(start_str, end_str):
 
 # --- SCORECARD MATRIX CALCULATIONS ---
 def calculate_attendance_score(val):
+    if val is None:
+        return None
     if val >= 98.0:
         return 5
     elif val >= 96.5:
@@ -309,6 +311,8 @@ def calculate_attendance_score(val):
 
 
 def calculate_csat_score(val):
+    if val is None:
+        return None
     if val >= 4.8:
         return 5
     elif val >= 4.5:
@@ -323,6 +327,8 @@ def calculate_csat_score(val):
 
 
 def calculate_qa_score(val):
+    if val is None:
+        return None
     if val >= 95.0:
         return 5
     elif val >= 92.5:
@@ -337,6 +343,8 @@ def calculate_qa_score(val):
 
 
 def calculate_adherence_score(val):
+    if val is None:
+        return None
     if val >= 92.0:
         return 5
     elif val >= 88.5:
@@ -1313,37 +1321,42 @@ with tab_sc:
             )
 
             if match_doc:
-                att_val = float(match_doc.get("attendance", 0.0))
-                csat_val = float(match_doc.get("csat", 0.0))
-                qa_val = float(match_doc.get("qa", 0.0))
-                adh_val = float(match_doc.get("adherence", 0.0))
+                att_val = match_doc.get("attendance")
+                csat_val = match_doc.get("csat")
+                qa_val = match_doc.get("qa")
+                adh_val = match_doc.get("adherence")
             else:
-                att_val, csat_val, qa_val, adh_val = 0.0, 0.0, 0.0, 0.0
+                att_val, csat_val, qa_val, adh_val = None, None, None, None
 
             att_score = calculate_attendance_score(att_val)
             csat_score = calculate_csat_score(csat_val)
             qa_score = calculate_qa_score(qa_val)
             adh_score = calculate_adherence_score(adh_val)
-            overall_score = round(
-                (att_score + csat_score + qa_score + adh_score) / 4.0, 2
-            )
+
+            # Recalculate overall score dynamically distributing weight among available metrics
+            valid_scores = [s for s in [att_score, csat_score, qa_score, adh_score] if s is not None]
+            if valid_scores:
+                overall_score = round(sum(valid_scores) / len(valid_scores), 2)
+            else:
+                overall_score = 0.0
 
             sc_rows.append({
                 "Employee ID": emp_id,
                 "Staff Name": name,
-                "Attendance (%)": f"{att_val:.1f}%",
-                "Attendance Score": att_score,
-                "CSAT": f"{csat_val:.2f}",
-                "CSAT Score": csat_score,
-                "QA (%)": f"{qa_val:.1f}%",
-                "QA Score": qa_score,
-                "Adherence (%)": f"{adh_val:.1f}%",
-                "Adherence Score": adh_score,
+                "Attendance (%)": f"{float(att_val):.1f}%" if att_val is not None else "N/A",
+                "Attendance Score": att_score if att_score is not None else "N/A",
+                "CSAT": f"{float(csat_val):.2f}" if csat_val is not None else "N/A",
+                "CSAT Score": csat_score if csat_score is not None else "N/A",
+                "QA (%)": f"{float(qa_val):.1f}%" if qa_val is not None else "N/A",
+                "QA Score": qa_score if qa_score is not None else "N/A",
+                "Adherence (%)": f"{float(adh_val):.1f}%" if adh_val is not None else "N/A",
+                "Adherence Score": adh_score if adh_score is not None else "N/A",
                 "Overall Score (Max 5)": overall_score,
             })
 
     if sc_rows:
         sc_df = pd.DataFrame(sc_rows)
+        sc_df = sc_df.sort_values(by="Overall Score (Max 5)", ascending=False)
         st.dataframe(sc_df, hide_index=True, use_container_width=True)
     else:
         st.info("No staff members configured in the roster database.")
@@ -1547,6 +1560,51 @@ with tab_adm:
             st.markdown("---")
 
             st.subheader("📊 Scorecard Data Input")
+            
+            uploaded_excel = st.file_uploader("Upload Scorecard Excel File", type=["xlsx", "xls"], key="sc_excel_upload")
+            if uploaded_excel is not None:
+                try:
+                    excel_df = pd.read_excel(uploaded_excel)
+                    st.write("Preview of Uploaded Data:", excel_df.head(2))
+                    if st.button("🚀 Process & Save Uploaded Excel Scorecards", key="btn_process_excel_sc"):
+                        processed_count = 0
+                        for _, row in excel_df.iterrows():
+                            # Expecting columns like Name, Month, Year, Attendance, CSAT, QA, Adherence (flexible mapping fallback)
+                            name_val = str(row.get("Name", row.get("Staff Name", ""))).strip()
+                            if not name_val or name_val not in roster:
+                                continue
+                            
+                            try:
+                                m_val = int(row.get("Month", current_date.month))
+                            except Exception:
+                                m_val = current_date.month
+                                
+                            try:
+                                y_val = int(row.get("Year", current_date.year))
+                            except Exception:
+                                y_val = current_date.year
+                                
+                            att_val = float(row.get("Attendance", row.get("Attendance (%)", 0.0))) if pd.notnull(row.get("Attendance", row.get("Attendance (%)"))) else None
+                            csat_val = float(row.get("CSAT", row.get("CSAT Rating", 0.0))) if pd.notnull(row.get("CSAT", row.get("CSAT Rating"))) else None
+                            qa_val = float(row.get("QA", row.get("QA Score (%)", 0.0))) if pd.notnull(row.get("QA", row.get("QA Score (%)"))) else None
+                            adh_val = float(row.get("Adherence", row.get("Adherence (%)", 0.0))) if pd.notnull(row.get("Adherence", row.get("Adherence (%)"))) else None
+
+                            sc_doc = {
+                                "name": name_val,
+                                "month": m_val,
+                                "year": y_val,
+                                "attendance": att_val,
+                                "csat": csat_val,
+                                "qa": qa_val,
+                                "adherence": adh_val,
+                            }
+                            save_scorecard_to_db(sc_doc)
+                            processed_count += 1
+                        st.success(f"Successfully processed and saved {processed_count} scorecard entries from Excel file!")
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"Error processing Excel file: {e}")
+
             if roster:
                 sc_admin_cols = st.columns(2)
                 sc_admin_month_str = sc_admin_cols[0].selectbox(
@@ -1589,36 +1647,36 @@ with tab_adm:
 
                     c_att, c_csat = st.columns(2)
                     in_att = c_att.number_input(
-                        "Attendance (%)",
+                        "Attendance (%) (Leave 0 if N/A)",
                         min_value=0.0,
                         max_value=100.0,
-                        value=float(existing_sc.get("attendance", 95.0)),
+                        value=float(existing_sc.get("attendance", 95.0) if existing_sc.get("attendance") is not None else 0.0),
                         step=0.1,
                         key="in_sc_att",
                     )
                     in_csat = c_csat.number_input(
-                        "CSAT Rating (0.0 - 5.0)",
+                        "CSAT Rating (0.0 - 5.0) (Leave 0 if N/A)",
                         min_value=0.0,
                         max_value=5.0,
-                        value=float(existing_sc.get("csat", 5.0)),
+                        value=float(existing_sc.get("csat", 5.0) if existing_sc.get("csat") is not None else 0.0),
                         step=0.1,
                         key="in_sc_csat",
                     )
 
                     c_qa, c_adh = st.columns(2)
                     in_qa = c_qa.number_input(
-                        "QA Score (%)",
+                        "QA Score (%) (Leave 0 if N/A)",
                         min_value=0.0,
                         max_value=100.0,
-                        value=float(existing_sc.get("qa", 90.0)),
+                        value=float(existing_sc.get("qa", 90.0) if existing_sc.get("qa") is not None else 0.0),
                         step=0.1,
                         key="in_sc_qa",
                     )
                     in_adh = c_adh.number_input(
-                        "Adherence (%)",
+                        "Adherence (%) (Leave 0 if N/A)",
                         min_value=0.0,
                         max_value=100.0,
-                        value=float(existing_sc.get("adherence", 85.0)),
+                        value=float(existing_sc.get("adherence", 85.0) if existing_sc.get("adherence") is not None else 0.0),
                         step=0.1,
                         key="in_sc_adh",
                     )
@@ -1632,10 +1690,10 @@ with tab_adm:
                             "name": sc_target_staff,
                             "month": sc_admin_m_num,
                             "year": sc_admin_year,
-                            "attendance": in_att,
-                            "csat": in_csat,
-                            "qa": in_qa,
-                            "adherence": in_adh,
+                            "attendance": in_att if in_att > 0 else None,
+                            "csat": in_csat if in_csat > 0 else None,
+                            "qa": in_qa if in_qa > 0 else None,
+                            "adherence": in_adh if in_adh > 0 else None,
                         }
                         save_scorecard_to_db(sc_doc)
                         st.success(
