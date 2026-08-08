@@ -33,6 +33,8 @@ def fetch_roster_doc():
 
 
 @st.cache_data(ttl=120)
+global_rejected_requests = list(collection.find({"status": "Rejected"}))
+
 def fetch_calendar_doc():
     try:
         return collection.find_one({"type": "calendar_data"}) or {}
