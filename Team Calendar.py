@@ -1008,14 +1008,18 @@ with tab_req:
             return roster_lookup[name]
         return req.get("emp_id", "N/A")
 
-    # --- Section: Approved or Rejected by RTM ---
-    st.subheader("Approved / Rejected by RTM")
+    # --- Section: Approved by RTM ---
+    st.subheader("RTM Approved Requests")
     
     rtm_requests = global_rtm_processed_requests
 
     filtered_rtm = []
     for r in rtm_requests:
         try:
+            # Filter specifically for RTM Approved status
+            if r.get("rtm_status") != "Approved":
+                continue
+
             if isinstance(r.get("date"), str):
                 parts = r["date"].split("-")
                 r_month, r_year = int(parts[1]), int(parts[0])
@@ -1051,7 +1055,7 @@ with tab_req:
         st.write("No records found.")
 
     # --- Section: Approved History ---
-    st.subheader("Approved History")
+    st.subheader("Manager Approved Requests")
     filtered_app = [
         r
         for r in global_approved_requests
@@ -1077,13 +1081,30 @@ with tab_req:
         st.write("No records found.")
     
     # --- Section: Rejected History ---
-    st.subheader("Rejected History")
-    filtered_rej = [
-        r
-        for r in global_rejected_requests
-        if int(r["date"].split("-")[1]) == f_m
-        and int(r["date"].split("-")[0]) == f_y
+    st.subheader("Rejected Requests")
+
+    # Get IDs from global_rejected_requests to avoid duplicate entries
+    existing_rej_ids = {str(r.get("_id")) for r in global_rejected_requests if r.get("_id")}
+
+    # Include requests marked as 'Rejected' in RTM verification
+    rtm_rejected = [
+        r for r in global_approved_requests
+        if r.get("rtm_status") == "Rejected" and str(r.get("_id")) not in existing_rej_ids
     ]
+
+    all_rej_source = global_rejected_requests + rtm_rejected
+    filtered_rej = []
+
+    for r in all_rej_source:
+        date_str = str(r.get("date", ""))
+        try:
+            parts = date_str.split("-")
+            r_year = int(parts[0])
+            r_month = int(parts[1])
+            if r_month == f_m and r_year == f_y:
+                filtered_rej.append(r)
+        except (ValueError, IndexError):
+            continue
 
     if filtered_rej:
         for req in filtered_rej:
@@ -3441,7 +3462,7 @@ with tab_adm:
         
                 rtm_col1, rtm_col2, rtm_col3 = st.columns(3)
                 with rtm_col1:
-                    if st.button("✅ Approve Selected RTM", type="primary", use_container_width=True):
+                    if st.button("✅ Approve Selected", type="primary", use_container_width=True):
                         target_rtm_ids = get_selected_rtm_ids(rtm_display_df, "editor_rtm_approval")
                         if target_rtm_ids:
                             bulk_update_rtm_status(target_rtm_ids, "Approved")
@@ -3454,7 +3475,7 @@ with tab_adm:
                             st.warning("Please select at least one entry to approve.")
         
                 with rtm_col2:
-                    if st.button("❌ Reject Selected RTM", type="secondary", use_container_width=True):
+                    if st.button("❌ Reject Selected", type="secondary", use_container_width=True):
                         target_rtm_ids = get_selected_rtm_ids(rtm_display_df, "editor_rtm_approval")
                         if target_rtm_ids:
                             bulk_update_rtm_status(target_rtm_ids, "Rejected")
@@ -3467,7 +3488,7 @@ with tab_adm:
                             st.warning("Please select at least one entry to reject.")
         
                 with rtm_col3:
-                    if st.button("💾 Save RTM Status Edits", use_container_width=True):
+                    if st.button("💾 Save Edit", use_container_width=True):
                         if (
                             "editor_rtm_approval" in st.session_state
                             and "edited_rows" in st.session_state["editor_rtm_approval"]
@@ -3487,18 +3508,30 @@ with tab_adm:
         
             # --- 3. APPROVED HISTORY VIEW ---
             st.subheader("Approved History")
-        
+            
             if filtered_history_requests:
                 st.markdown("#### Approved Requests Summary")
                 history_df = pd.DataFrame(filtered_history_requests)
                 history_df.sort_values(by="parsed_date", ascending=True, inplace=True)
-        
+            
+                # 1. Standardize column name from 'rtm_status' to 'RTM Status'
+                if "rtm_status" in history_df.columns:
+                    history_df.rename(columns={"rtm_status": "RTM Status"}, inplace=True)
+                elif "RTM Status" not in history_df.columns:
+                    history_df["RTM Status"] = "Pending"
+            
+                # 2. Convert None, NaN, or empty values to "Pending"
+                history_df["RTM Status"] = history_df["RTM Status"].fillna("Pending")
+                history_df["RTM Status"] = history_df["RTM Status"].apply(
+                    lambda x: "Pending" if x is None or pd.isna(x) or str(x).strip() in ["", "None", "nan"] else x
+                )
+            
                 if "name" in history_df.columns:
                     history_df["name"] = history_df["name"].apply(format_last_first)
-        
+            
                 if "type" in history_df.columns:
                     history_df.rename(columns={"type": "Request Type"}, inplace=True)
-        
+            
                 history_df.rename(
                     columns={
                         "emp_id": "Employee ID",
@@ -3508,15 +3541,15 @@ with tab_adm:
                     },
                     inplace=True,
                 )
-        
+            
                 columns_to_drop = ["parsed_date", "email", "viewed"]
                 history_display_df = history_df.drop(
                     columns=columns_to_drop, errors="ignore"
                 )
-        
+            
                 if "Select" not in history_display_df.columns:
                     history_display_df.insert(0, "Select", False)
-        
+            
                 desired_order = [
                     "Select",
                     "Employee ID",
@@ -3524,6 +3557,7 @@ with tab_adm:
                     "Name",
                     "Request Type",
                     "Status",
+                    "RTM Status",
                 ]
                 existing_cols = [
                     c for c in desired_order if c in history_display_df.columns
@@ -3531,10 +3565,10 @@ with tab_adm:
                 extra_cols = [
                     c for c in history_display_df.columns if c not in desired_order
                 ]
-        
+            
                 history_display_df = history_display_df[existing_cols + extra_cols]
                 history_height = (len(history_display_df) * 35) + 45
-        
+            
                 edited_approved_df = st.data_editor(
                     history_display_df,
                     hide_index=True,
@@ -3549,34 +3583,52 @@ with tab_adm:
                         "Status": st.column_config.SelectboxColumn(
                             options=["Approved", "Pending", "Rejected"], disabled=False
                         ),
+                        "RTM Status": st.column_config.SelectboxColumn(
+                            options=["Pending", "Approved", "Rejected"], disabled=False
+                        ),
                         "_id": None,
                     },
                     use_container_width=True,
                     height=history_height,
                     key="editor_approved_requests",
                 )
-        
+            
                 app_col1, app_col2 = st.columns(2)
                 with app_col1:
-                    if st.button("💾 Save Approved Edits", key="btn_save_approved_edits", use_container_width=True):
-                        process_df_edits(history_display_df, "editor_approved_requests")
+                    if st.button("💾 Save Edit", key="btn_save_approved_edits", use_container_width=True):
+                        # Save inline edits back to the backend
+                        if (
+                            "editor_approved_requests" in st.session_state
+                            and "edited_rows" in st.session_state["editor_approved_requests"]
+                        ):
+                            edits = st.session_state["editor_approved_requests"]["edited_rows"]
+                            for row_idx, edit_dict in edits.items():
+                                target_id = history_display_df.iloc[int(row_idx)]["_id"]
+                                update_fields = {}
+                                for k, v in edit_dict.items():
+                                    if k == "Select":
+                                        continue
+                                    elif k == "RTM Status":
+                                        update_fields["rtm_status"] = v
+                                    else:
+                                        update_fields[k.lower().replace(" ", "_")] = v
+                                if update_fields:
+                                    update_request_fields(target_id, update_fields)
+            
                         st.session_state.admin_msg = (
                             "success",
                             "Approved request edits saved successfully!",
                         )
                         st.rerun()
-        
+            
                 with app_col2:
-                    if st.button("🗑️ Delete Selected Approved", key="btn_delete_approved", use_container_width=True):
+                    if st.button("🗑️ Delete Selected", key="btn_delete_approved", use_container_width=True):
                         selected_approved_ids = []
                         if (
                             "editor_approved_requests" in st.session_state
-                            and "edited_rows"
-                            in st.session_state["editor_approved_requests"]
+                            and "edited_rows" in st.session_state["editor_approved_requests"]
                         ):
-                            edits = st.session_state["editor_approved_requests"][
-                                "edited_rows"
-                            ]
+                            edits = st.session_state["editor_approved_requests"]["edited_rows"]
                             current_states = history_display_df["Select"].tolist()
                             for r_idx, edit_dict in edits.items():
                                 if "Select" in edit_dict:
@@ -3590,7 +3642,7 @@ with tab_adm:
                             selected_approved_ids = history_display_df[
                                 history_display_df["Select"]
                             ]["_id"].tolist()
-        
+            
                         if selected_approved_ids:
                             bulk_delete_requests(selected_approved_ids)
                             st.session_state.admin_msg = (
@@ -3717,7 +3769,7 @@ with tab_adm:
         
                 rej_col1, rej_col2 = st.columns(2)
                 with rej_col1:
-                    if st.button("💾 Save Rejected Edits", key="btn_save_rejected_edits", use_container_width=True):
+                    if st.button("💾 Save Edit", key="btn_save_rejected_edits", use_container_width=True):
                         process_df_edits(rejected_display_df, "editor_rejected_requests")
                         st.session_state.admin_msg = (
                             "success",
@@ -3726,7 +3778,7 @@ with tab_adm:
                         st.rerun()
         
                 with rej_col2:
-                    if st.button("🗑️ Delete Selected Rejected", key="btn_delete_rejected", use_container_width=True):
+                    if st.button("🗑️ Delete Selected", key="btn_delete_rejected", use_container_width=True):
                         selected_rejected_ids = []
                         if (
                             "editor_rejected_requests" in st.session_state
