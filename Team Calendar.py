@@ -3619,15 +3619,17 @@ with tab_adm:
         
             if filtered_history_requests:
                 rtm_df = pd.DataFrame(filtered_history_requests)
+                # Check if rtm_status exists in the DataFrame
                 if "rtm_status" in rtm_df.columns:
                     rtm_df["RTM_Approved"] = rtm_df["rtm_status"].apply(
                         lambda status: status == "Approved" if pd.notna(status) else False
                     )
+                    rtm_df["RTM_Rejected"] = rtm_df["rtm_status"].apply(
+                        lambda status: status == "Rejected" if pd.notna(status) else False
+                    )
                 else:
                     rtm_df["RTM_Approved"] = False
-                rtm_df["RTM_Rejected"] = rtm_df.get("rtm_status", "").apply(
-                    lambda x: x == "Rejected"
-                )
+                    rtm_df["RTM_Rejected"] = False
         
                 if "name" in rtm_df.columns:
                     rtm_df["name"] = rtm_df["name"].apply(format_last_first)
