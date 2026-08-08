@@ -987,26 +987,46 @@ with tab_req:
 
     # --- Section: Approved or Rejected by RTM ---
     st.subheader("Approved / Rejected by RTM")
-    filtered_rtm = [
-        r
-        for r in global_rtm_processed_requests
-        if int(r["date"].split("-")[1]) == f_m
-        and int(r["date"].split("-")[0]) == f_y
-    ]
+    
+    # Safely retrieve requests list if undefined
+    rtm_requests = globals().get("global_rtm_processed_requests", [])
+
+    filtered_rtm = []
+    for r in rtm_requests:
+        try:
+            # Handle both string date formats ("YYYY-MM-DD") and datetime objects
+            if isinstance(r.get("date"), str):
+                parts = r["date"].split("-")
+                r_month, r_year = int(parts[1]), int(parts[0])
+            else:
+                dt = pd.to_datetime(r.get("date"))
+                r_month, r_year = dt.month, dt.year
+
+            if r_month == f_m and r_year == f_y:
+                r_copy = dict(r)
+                r_copy["emp_id"] = get_emp_id(r_copy)
+                filtered_rtm.append(r_copy)
+        except Exception:
+            continue
 
     if filtered_rtm:
-        for req in filtered_rtm:
-            req["emp_id"] = get_emp_id(req)
-
         df_rtm_display = pd.DataFrame(filtered_rtm)
-        df_rtm_display["sort_date"] = pd.to_datetime(df_rtm_display["date"])
+
+        # Ensure required columns exist even if missing from dictionaries
+        for col in ["date", "name", "type", "status", "emp_id"]:
+            if col not in df_rtm_display.columns:
+                df_rtm_display[col] = "N/A"
+
+        df_rtm_display["sort_date"] = pd.to_datetime(df_rtm_display["date"], errors="coerce")
         df_rtm_display = df_rtm_display.sort_values(by="sort_date", ascending=True)
 
         df_rtm_display["formatted_date"] = df_rtm_display["date"].apply(format_m_d_yyyy)
         df_rtm_display["formatted_name"] = df_rtm_display["name"].apply(format_last_first)
 
+        # Select and rename final display columns
         df_rtm_display = df_rtm_display[["emp_id", "formatted_date", "formatted_name", "type", "status"]]
         df_rtm_display.columns = ["Employee ID", "Date", "Name", "Type", "Status"]
+
         st.dataframe(df_rtm_display, hide_index=True, use_container_width=True)
     else:
         st.write("No records found.")
