@@ -1336,16 +1336,23 @@ with tab_sc:
                 overall_score = 0.0
                 overall_display = ""
 
+            def format_metric_cell(val, goal, is_pct=True):
+                if val is None:
+                    return ""
+                color = "green" if val >= goal else "red"
+                formatted_num = f"{val:.1f}%" if is_pct else f"{val:.2f}"
+                return f"<span style='color:{color}; font-weight:bold;'>{formatted_num}</span>"
+
             sc_rows.append({
                 "Employee ID": emp_id if emp_id else "",
                 "Staff Name": name,
-                "Attendance (%)": f"{float(att_val):.1f}%" if att_val is not None else "",
+                "Attendance (%)": format_metric_cell(att_val, 95.0, True),
                 "Attendance Score": att_score if att_score is not None else "",
-                "CSAT": f"{float(csat_val):.2f}" if csat_val is not None else "",
+                "CSAT": format_metric_cell(csat_val, 5.00, False),
                 "CSAT Score": csat_score if csat_score is not None else "",
-                "QA (%)": f"{float(qa_val):.1f}%" if qa_val is not None else "",
+                "QA (%)": format_metric_cell(qa_val, 90.0, True),
                 "QA Score": qa_score if qa_score is not None else "",
-                "Adherence (%)": f"{float(adh_val):.1f}%" if adh_val is not None else "",
+                "Adherence (%)": format_metric_cell(adh_val, 85.0, True),
                 "Adherence Score": adh_score if adh_score is not None else "",
                 "Overall Score (Max 5)": overall_display,
             })
@@ -1359,7 +1366,30 @@ with tab_sc:
             ]
             sc_df["_sort_score"] = raw_scores
             sc_df = sc_df.sort_values(by="_sort_score", ascending=False).drop(columns=["_sort_score"])
-        st.markdown(sc_df.to_html(escape=False, index=False), unsafe_allow_html=True)
+        
+        table_html = sc_df.to_html(escape=False, index=False)
+        table_html = table_html.replace('<thead>', '<thead style="text-align: center;">')
+        table_html = table_html.replace('<td>', '<td style="text-align: center;">')
+        for col_idx in range(2, len(sc_df.columns)):
+            old_td = f'<td>'
+            # To specifically target data cells from index 2 onwards, we can use a custom approach or regex substitution if needed, but standard HTML table styling applies text-align center across columns easily via CSS or specific replacement:
+        
+        # Using a CSS injection approach for the scorecard container table cells to left-align the first two columns and center the rest:
+        st.markdown(
+            """
+            <style>
+            table.dataframe th, table.dataframe td {
+                text-align: center !important;
+            }
+            table.dataframe th:nth-child(1), table.dataframe td:nth-child(1),
+            table.dataframe th:nth-child(2), table.dataframe td:nth-child(2) {
+                text-align: left !important;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+        st.markdown(table_html, unsafe_allow_html=True)
     else:
         st.info("No staff members configured in the roster database.")
 
