@@ -3364,7 +3364,6 @@ with tab_adm:
                         filtered_history_requests.append(r_copy)
         
             # --- 2. RTM SECOND-LEVEL APPROVAL ---
-            st.divider()
             st.subheader("🛡️ RTM Verification & Approval Level")
         
             if filtered_history_requests:
