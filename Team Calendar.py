@@ -3486,7 +3486,6 @@ with tab_adm:
                 st.write("*No approved requests available for RTM verification.*")
         
             # --- 3. APPROVED HISTORY VIEW ---
-            st.divider()
             st.subheader("Approved History")
         
             if filtered_history_requests:
@@ -3607,7 +3606,6 @@ with tab_adm:
                 )
         
             # --- 4. REJECTED HISTORY VIEW ---
-            st.divider()
             st.subheader("Rejected History")
         
             # Fetch rejected requests from DB and aggregate with RTM rejected requests
