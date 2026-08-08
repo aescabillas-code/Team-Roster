@@ -3278,8 +3278,6 @@ with tab_adm:
                                 "Please select at least one pending request to delete."
                             )
         
-            st.divider()
-        
             # Shared Month/Year filters used for Approved, Rejected, and RTM views
             filter_col1, filter_col2 = st.columns(2)
             with filter_col1:
