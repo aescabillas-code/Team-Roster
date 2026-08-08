@@ -3232,6 +3232,7 @@ with tab_adm:
                         "✅ Approve Selected",
                         type="primary",
                         use_container_width=True,
+                        key="btn_approve_pending_selected",
                     ):
                         process_df_edits(all_requests_df, "editor_all_requests")
                         target_ids = get_selected_ids(
@@ -3246,12 +3247,13 @@ with tab_adm:
                             st.rerun()
                         else:
                             st.warning("Please select at least one request to approve.")
-        
+            
                 with btn_col2:
                     if st.button(
                         "❌ Deny Selected",
                         type="secondary",
                         use_container_width=True,
+                        key="btn_deny_pending_selected",
                     ):
                         process_df_edits(all_requests_df, "editor_all_requests")
                         target_ids = get_selected_ids(
@@ -3266,11 +3268,12 @@ with tab_adm:
                             st.rerun()
                         else:
                             st.warning("Please select at least one request to deny.")
-        
+            
                 with btn_col3:
                     if st.button(
                         "💾 Save Edits",
                         use_container_width=True,
+                        key="btn_save_pending_edits",
                     ):
                         process_df_edits(all_requests_df, "editor_all_requests")
                         st.session_state.admin_msg = (
@@ -3278,11 +3281,12 @@ with tab_adm:
                             "Pending request edits saved successfully!",
                         )
                         st.rerun()
-        
+            
                 with btn_col4:
                     if st.button(
                         "🗑️ Delete Selected Pending",
                         use_container_width=True,
+                        key="btn_delete_pending_selected",
                     ):
                         target_ids = get_selected_ids(
                             all_requests_df, "editor_all_requests"
