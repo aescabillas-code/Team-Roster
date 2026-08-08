@@ -33,7 +33,6 @@ def fetch_roster_doc():
 
 
 @st.cache_data(ttl=120)
-global_rejected_requests = list(collection.find({"status": "Rejected"}))
 
 def fetch_calendar_doc():
     try:
@@ -80,6 +79,7 @@ def fetch_approved_requests_from_db():
 
 
 @st.cache_data(ttl=60)
+global_rejected_requests = list(collection.find({"status": "Rejected"}))
 def fetch_pending_requests_from_db():
     try:
         return list(
