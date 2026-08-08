@@ -290,12 +290,13 @@ global_pending_requests = fetch_pending_requests_from_db()
 global_rejected_requests = fetch_rejected_requests_from_db()
 
 # Fetch RTM requests from DB if available, otherwise initialize as empty list
-if "rtm_status" in rtm_df.columns:
-    rtm_df["RTM_Approved"] = rtm_df["rtm_status"].apply(
+if "df_rtm_display" in locals() and "rtm_status" in df_rtm_display.columns:
+    df_rtm_display["RTM_Approved"] = df_rtm_display["rtm_status"].apply(
         lambda status: status == "Approved" if pd.notna(status) else False
     )
 else:
-    rtm_df["RTM_Approved"] = False
+    if "df_rtm_display" in locals():
+        df_rtm_display["RTM_Approved"] = False
     
 if "global_rtm_processed_requests" not in locals() and "global_rtm_processed_requests" not in st.session_state:
     try:
