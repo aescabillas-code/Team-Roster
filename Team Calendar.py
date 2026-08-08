@@ -107,7 +107,6 @@ def clear_requests_cache():
     fetch_pending_requests_from_db.clear()
     fetch_rejected_requests_from_db.clear()
 
-
 def bulk_update_requests(request_ids, status):
     collection.update_many(
         {"_id": {"$in": request_ids}}, {"$set": {"status": status}}
@@ -286,8 +285,13 @@ st.session_state.calendar_data = {
     for k, v in raw_cal_data.items()
 }
 
-global_approved_requests = fetch_approved_requests_from_db()
-global_pending_requests = fetch_pending_requests_from_db()
+global_approved_requests = global_approved_requests if 'global_approved_requests' in locals() else []
+global_rejected_requests = global_rejected_requests if 'global_rejected_requests' in locals() else []
+global_pending_requests = global_pending_requests if 'global_pending_requests' in locals() else []
+
+# Add initialization for global_rtm_processed_requests
+if 'global_rtm_processed_requests' not in locals() and 'global_rtm_processed_requests' not in st.session_state:
+    global_rtm_processed_requests = []
 
 # --- GLOBAL CSS STYLING ---
 st.markdown(
