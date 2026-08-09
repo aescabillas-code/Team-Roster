@@ -1453,12 +1453,6 @@ with tab_sc:
             table.dataframe th, table.dataframe td {
                 text-align: center !important;
             }
-            table.dataframe th:nth-child(1), table.dataframe th:nth-child(2) {
-                text-align: left !important;
-            }
-            table.dataframe tr:last-child td:nth-child(1) {
-                text-align: center !important;
-            }
             </style>
             """,
             unsafe_allow_html=True
