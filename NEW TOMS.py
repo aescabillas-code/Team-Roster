@@ -1437,7 +1437,7 @@ with tab_sc:
         # Merge first and second columns specifically for the overall team score row
         table_html = re.sub(
             r'<td>___TEAM_SCORE_MARKER___</td>\s*<td></td>',
-            '<td colspan="2"><b>Overall Team Score</b></td>',
+            '<td colspan="2" style="text-align: center;"><b>Overall Team Score</b></td>',
             table_html
         )
         
@@ -1453,9 +1453,11 @@ with tab_sc:
             table.dataframe th, table.dataframe td {
                 text-align: center !important;
             }
-            table.dataframe th:nth-child(1), table.dataframe td:nth-child(1),
-            table.dataframe th:nth-child(2), table.dataframe td:nth-child(2) {
+            table.dataframe th:nth-child(1), table.dataframe th:nth-child(2) {
                 text-align: left !important;
+            }
+            table.dataframe tr:last-child td:nth-child(1) {
+                text-align: center !important;
             }
             </style>
             """,
