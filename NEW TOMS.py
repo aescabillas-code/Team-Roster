@@ -1376,7 +1376,7 @@ with tab_sc:
             
             if not jeff_df.empty:
                 # Compute average of all scores and KPI scores for Jeff Bote
-                j_att_scores = [calculate_attendance_score(s.get("attendance")) for s in scorecard_entries if s.get("name") == jeff_df.iloc[0]["Staff Name"] and s.get("month") == sc_m_num and s.get("year"] == sc_selected_year]
+                j_att_scores = [calculate_attendance_score(s.get("attendance")) for s in scorecard_entries if s.get("name") == jeff_df.iloc[0]["Staff Name"] and s.get("month") == sc_m_num and s.get("year") == sc_selected_year]
                 # To be precise, calculate average based on the rows or compute standard team average/Jeff's average
                 # User instructions: "scorecard for Jeff Bote should be the average of all score and KPI score and should be tagged as Overall Team Score only. It should be at the bottom of the table and should be bold"
                 all_valid_scores_for_jeff = []
