@@ -1265,7 +1265,7 @@ with tab_req:
 
 # --- TAB 3: PERFORMANCE SCORECARD ---
 with tab_sc:
-    st.subheader("💯 Roster Performance Scorecard")
+    st.subheader("💯 Scorecard")
 
     sc_col1, sc_col2 = st.columns(2)
     m_options = list(calendar.month_name)[1:]
@@ -1283,7 +1283,7 @@ with tab_sc:
     with st.expander("📌 KPI Target & Scoring Scale Matrix Reference"):
         st.markdown(
             """
-            | KPI Component | Goal (Score 3) | Score 5 | Score 4 | Score 3 | Score 2 | Score 1 |
+            | KPI Component | Goal | 5 | 4 | 3 | 2 | 1 |
             | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
             | **Attendance** | **95.0%** | $\ge$ 98.0% | 96.5% - 97.9% | 95.0% - 96.4% | 92.0% - 94.9% | < 92.0% |
             | **CSAT** | **5.00** | $\ge$ 9.00 | 7.00 - 8.99 | 5.00 - 6.99 | 3.00 - 4.99 | < 3.00 |
@@ -1343,9 +1343,11 @@ with tab_sc:
                 formatted_num = f"{val:.1f}%" if is_pct else f"{val:.2f}"
                 return f"<span style='color:{color}; font-weight:bold;'>{formatted_num}</span>"
 
+            display_name = f"{name} (SME)" if name.lower() == "jane paula manlangit" else name
+
             sc_rows.append({
                 "Employee ID": emp_id if emp_id else "",
-                "Staff Name": name,
+                "Staff Name": display_name,
                 "Attendance (%)": format_metric_cell(att_val, 95.0, True),
                 "Attendance Score": att_score if att_score is not None else "",
                 "CSAT": format_metric_cell(csat_val, 5.00, False),
@@ -1436,6 +1438,9 @@ with tab_sc:
         st.markdown(
             """
             <style>
+            table.dataframe {
+                width: 100% !important;
+            }
             table.dataframe th, table.dataframe td {
                 text-align: center !important;
             }
