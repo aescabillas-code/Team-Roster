@@ -1405,8 +1405,9 @@ with tab_sc:
                     formatted_num = f"{val:.1f}%" if is_pct else f"{val:.2f}"
                     return f"<b><span style='color:{color};'>{formatted_num}</span></b>"
 
-                jeff_df["Employee ID"] = ""
-                jeff_df["Staff Name"] = "<b>Overall Team Score</b>"
+                # Use a unique marker to identify and replace these cells in the HTML step
+                jeff_df["Employee ID"] = "___TEAM_SCORE_MARKER___"
+                jeff_df["Staff Name"] = ""
                 
                 jeff_df["Attendance (%)"] = fmt_bold_cell(avg_att_val, 95.0, True)
                 jeff_df["Attendance Score"] = f"<b>{avg_att_score:.2f}</b>" if not pd.isna(avg_att_score) else ""
@@ -1432,6 +1433,14 @@ with tab_sc:
             sc_df = sc_df.drop(columns=["_sort_score"])
         
         table_html = sc_df.to_html(escape=False, index=False)
+        
+        # Merge first and second columns specifically for the overall team score row
+        table_html = re.sub(
+            r'<td>___TEAM_SCORE_MARKER___</td>\s*<td></td>',
+            '<td colspan="2"><b>Overall Team Score</b></td>',
+            table_html
+        )
+        
         table_html = table_html.replace('<thead>', '<thead style="text-align: center;">')
         table_html = table_html.replace('<td>', '<td style="text-align: center;">')
         
