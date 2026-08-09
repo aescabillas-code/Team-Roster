@@ -1297,12 +1297,6 @@ with tab_sc:
 
     sc_rows = []
     if current_roster:
-        all_att_scores = []
-        all_csat_scores = []
-        all_qa_scores = []
-        all_adh_scores = []
-        all_overall_scores = []
-
         for name, info in current_roster.items():
             emp_id = info.get("emp_id", "") if isinstance(info, dict) else ""
 
@@ -1330,27 +1324,17 @@ with tab_sc:
             qa_score = calculate_qa_score(qa_val)
             adh_score = calculate_adherence_score(adh_val)
 
-            if att_score is not None:
-                all_att_scores.append(att_score)
-            if csat_score is not None:
-                all_csat_scores.append(csat_score)
-            if qa_score is not None:
-                all_qa_scores.append(qa_score)
-            if adh_score is not None:
-                all_adh_scores.append(adh_score)
-
             valid_scores = [s for s in [att_score, csat_score, qa_score, adh_score] if s is not None]
             if valid_scores:
                 overall_score = round(sum(valid_scores) / len(valid_scores), 2)
-                all_overall_scores.append(overall_score)
+                overall_display = f"**{overall_score:.2f}**"
+                if overall_score >= 3.0:
+                    overall_display = f"<span style='color:green; font-weight:bold;'>{overall_score:.2f}</span>"
+                else:
+                    overall_display = f"<span style='color:red; font-weight:bold;'>{overall_score:.2f}</span>"
             else:
-                overall_score = None
-
-            def format_score_cell(score_val):
-                if score_val is None:
-                    return ""
-                color = "green" if score_val >= 3.0 else "red"
-                return f"<span style='color:{color}; font-weight:bold;'>{score_val:.2f}</span>" if isinstance(score_val, float) else f"<span style='color:{color}; font-weight:bold;'>{score_val}</span>"
+                overall_score = 0.0
+                overall_display = ""
 
             def format_metric_cell(val, goal, is_pct=True):
                 if val is None:
@@ -1363,54 +1347,65 @@ with tab_sc:
                 "Employee ID": emp_id if emp_id else "",
                 "Staff Name": name,
                 "Attendance (%)": format_metric_cell(att_val, 95.0, True),
-                "Attendance Score": format_score_cell(att_score),
+                "Attendance Score": att_score if att_score is not None else "",
                 "CSAT": format_metric_cell(csat_val, 5.00, False),
-                "CSAT Score": format_score_cell(csat_score),
+                "CSAT Score": csat_score if csat_score is not None else "",
                 "QA (%)": format_metric_cell(qa_val, 90.0, True),
-                "QA Score": format_score_cell(qa_score),
+                "QA Score": qa_score if qa_score is not None else "",
                 "Adherence (%)": format_metric_cell(adh_val, 85.0, True),
-                "Adherence Score": format_score_cell(adh_score),
-                "Overall Score (Max 5)": format_score_cell(overall_score) if overall_score is not None else "",
-                "_sort_score": overall_score if overall_score is not None else 0.0,
+                "Adherence Score": adh_score if adh_score is not None else "",
+                "Overall Score (Max 5)": overall_display,
             })
-
-        # Insert Overall Team Score row for Jeff Bote if requested
-        team_att_avg = round(sum(all_att_scores) / len(all_att_scores), 2) if all_att_scores else None
-        team_csat_avg = round(sum(all_csat_scores) / len(all_csat_scores), 2) if all_csat_scores else None
-        team_qa_avg = round(sum(all_qa_scores) / len(all_qa_scores), 2) if all_qa_scores else None
-        team_adh_avg = round(sum(all_adh_scores) / len(all_adh_scores), 2) if all_adh_scores else None
-        team_overall_avg = round(sum(all_overall_scores) / len(all_overall_scores), 2) if all_overall_scores else None
-
-        def format_score_cell(score_val):
-            if score_val is None:
-                return ""
-            color = "green" if score_val >= 3.0 else "red"
-            return f"<span style='color:{color}; font-weight:bold;'>{score_val:.2f}</span>" if isinstance(score_val, float) else f"<span style='color:{color}; font-weight:bold;'>{score_val}</span>"
-
-        jeff_row = {
-            "Employee ID": "",
-            "Staff Name": "Jeff Bote",
-            "Attendance (%)": "",
-            "Attendance Score": format_score_cell(team_att_avg),
-            "CSAT": "",
-            "CSAT Score": format_score_cell(team_csat_avg),
-            "QA (%)": "",
-            "QA Score": format_score_cell(team_qa_avg),
-            "Adherence (%)": "",
-            "Adherence Score": format_score_cell(team_adh_avg),
-            "Overall Score (Max 5)": format_score_cell(team_overall_avg),
-            "_sort_score": team_overall_avg if team_overall_avg is not None else 0.0,
-        }
-        # Tagging or renaming/adding Jeff Bote as Overall Team Score
-        sc_rows.append(jeff_row)
 
     if sc_rows:
         sc_df = pd.DataFrame(sc_rows)
-        sc_df = sc_df.sort_values(by="_sort_score", ascending=False).drop(columns=["_sort_score"])
+        if "Overall Score (Max 5)" in sc_df.columns:
+            raw_scores = [
+                float(re.sub(r'<[^>]*>', '', str(val))) if str(val).strip() != "" else 0.0
+                for val in sc_df["Overall Score (Max 5)"]
+            ]
+            sc_df["_sort_score"] = raw_scores
+            
+            # Separate Jeff Bote if present
+            jeff_mask = sc_df["Staff Name"].str.lower() == "jeff bote"
+            jeff_df = sc_df[jeff_mask].copy()
+            regular_df = sc_df[~jeff_mask].copy()
+            
+            # Sort regular rows by score descending
+            regular_df = regular_df.sort_values(by="_sort_score", ascending=False)
+            
+            if not jeff_df.empty:
+                # Compute average of all scores and KPI scores for Jeff Bote
+                j_att_scores = [calculate_attendance_score(s.get("attendance")) for s in scorecard_entries if s.get("name") == jeff_df.iloc[0]["Staff Name"] and s.get("month") == sc_m_num and s.get("year"] == sc_selected_year]
+                # To be precise, calculate average based on the rows or compute standard team average/Jeff's average
+                # User instructions: "scorecard for Jeff Bote should be the average of all score and KPI score and should be tagged as Overall Team Score only. It should be at the bottom of the table and should be bold"
+                all_valid_scores_for_jeff = []
+                for s in scorecard_entries:
+                    if s.get("name") == jeff_df.iloc[0]["Staff Name"] and s.get("month") == sc_m_num and s.get("year") == sc_selected_year:
+                        for m_k in ["attendance", "csat", "qa", "adherence"]:
+                            val = s.get(m_k)
+                            if val is not None:
+                                if m_k == "attendance": sc_val = calculate_attendance_score(val)
+                                elif m_k == "csat": sc_val = calculate_csat_score(val)
+                                elif m_k == "qa": sc_val = calculate_qa_score(val)
+                                elif m_k == "adherence": sc_val = calculate_adherence_score(val)
+                                if sc_val is not None: all_valid_scores_for_jeff.append(sc_val)
+                
+                if all_valid_scores_for_jeff:
+                    jeff_avg = sum(all_valid_scores_for_jeff) / len(all_valid_scores_for_jeff)
+                else:
+                    jeff_avg = 0.0
+                
+                jeff_df["Overall Score (Max 5)"] = f"<b><span style='color:green;'>{jeff_avg:.2f}</span></b>" if jeff_avg >= 3.0 else f"<b><span style='color:red;'>{jeff_avg:.2f}</span></b>"
+                jeff_df["Staff Name"] = "<b>Overall Team Score</b>"
+                jeff_df["_sort_score"] = -999.0 # Ensure it goes to the bottom
+                
+                sc_df = pd.concat([regular_df, jeff_df], ignore_index=True)
+            else:
+                sc_df = regular_df.sort_values(by="_sort_score", ascending=False)
+            
+            sc_df = sc_df.drop(columns=["_sort_score"])
         
-        # Rename Jeff Bote row label to Overall Team Score / Jeff Bote
-        sc_df.loc[sc_df["Staff Name"] == "Jeff Bote", "Staff Name"] = "Overall Team Score (Jeff Bote)"
-
         table_html = sc_df.to_html(escape=False, index=False)
         table_html = table_html.replace('<thead>', '<thead style="text-align: center;">')
         table_html = table_html.replace('<td>', '<td style="text-align: center;">')
