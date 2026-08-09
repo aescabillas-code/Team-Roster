@@ -1360,6 +1360,7 @@ with tab_sc:
     if sc_rows:
         sc_df = pd.DataFrame(sc_rows)
         if "Overall Score (Max 5)" in sc_df.columns:
+            # Extract pure numbers from HTML elements to use for sorting
             raw_scores = [
                 float(re.sub(r'<[^>]*>', '', str(val))) if str(val).strip() != "" else 0.0
                 for val in sc_df["Overall Score (Max 5)"]
@@ -1375,30 +1376,52 @@ with tab_sc:
             regular_df = regular_df.sort_values(by="_sort_score", ascending=False)
             
             if not jeff_df.empty:
-                # Compute average of all scores and KPI scores for Jeff Bote
-                j_att_scores = [calculate_attendance_score(s.get("attendance")) for s in scorecard_entries if s.get("name") == jeff_df.iloc[0]["Staff Name"] and s.get("month") == sc_m_num and s.get("year") == sc_selected_year]
-                # To be precise, calculate average based on the rows or compute standard team average/Jeff's average
-                # User instructions: "scorecard for Jeff Bote should be the average of all score and KPI score and should be tagged as Overall Team Score only. It should be at the bottom of the table and should be bold"
-                all_valid_scores_for_jeff = []
-                for s in scorecard_entries:
-                    if s.get("name") == jeff_df.iloc[0]["Staff Name"] and s.get("month") == sc_m_num and s.get("year") == sc_selected_year:
-                        for m_k in ["attendance", "csat", "qa", "adherence"]:
-                            val = s.get(m_k)
-                            if val is not None:
-                                if m_k == "attendance": sc_val = calculate_attendance_score(val)
-                                elif m_k == "csat": sc_val = calculate_csat_score(val)
-                                elif m_k == "qa": sc_val = calculate_qa_score(val)
-                                elif m_k == "adherence": sc_val = calculate_adherence_score(val)
-                                if sc_val is not None: all_valid_scores_for_jeff.append(sc_val)
+                # Helper function to extract numbers from formatted table cells and average them
+                def get_col_avg(df, col_name):
+                    raw_str = df[col_name].astype(str).str.replace(r'<[^>]*>', '', regex=True).str.replace('%', '', regex=False).str.strip()
+                    numeric_series = pd.to_numeric(raw_str, errors='coerce')
+                    return numeric_series.mean()
+
+                # Calculate team averages directly from the visible rows of the other staff
+                avg_att_val = get_col_avg(regular_df, "Attendance (%)")
+                avg_att_score = get_col_avg(regular_df, "Attendance Score")
+                avg_csat_val = get_col_avg(regular_df, "CSAT")
+                avg_csat_score = get_col_avg(regular_df, "CSAT Score")
+                avg_qa_val = get_col_avg(regular_df, "QA (%)")
+                avg_qa_score = get_col_avg(regular_df, "QA Score")
+                avg_adh_val = get_col_avg(regular_df, "Adherence (%)")
+                avg_adh_score = get_col_avg(regular_df, "Adherence Score")
                 
-                if all_valid_scores_for_jeff:
-                    jeff_avg = sum(all_valid_scores_for_jeff) / len(all_valid_scores_for_jeff)
-                else:
-                    jeff_avg = 0.0
+                valid_overalls = [x for x in regular_df["_sort_score"] if x > 0]
+                avg_overall = sum(valid_overalls) / len(valid_overalls) if valid_overalls else 0.0
                 
-                jeff_df["Overall Score (Max 5)"] = f"<b><span style='color:green;'>{jeff_avg:.2f}</span></b>" if jeff_avg >= 3.0 else f"<b><span style='color:red;'>{jeff_avg:.2f}</span></b>"
+                # Format output with bolding for the entire bottom row
+                def fmt_bold_cell(val, goal, is_pct=True):
+                    if pd.isna(val):
+                        return ""
+                    color = "green" if val >= goal else "red"
+                    formatted_num = f"{val:.1f}%" if is_pct else f"{val:.2f}"
+                    return f"<b><span style='color:{color};'>{formatted_num}</span></b>"
+
+                jeff_df["Employee ID"] = ""
                 jeff_df["Staff Name"] = "<b>Overall Team Score</b>"
-                jeff_df["_sort_score"] = -999.0 # Ensure it goes to the bottom
+                
+                jeff_df["Attendance (%)"] = fmt_bold_cell(avg_att_val, 95.0, True)
+                jeff_df["Attendance Score"] = f"<b>{avg_att_score:.2f}</b>" if not pd.isna(avg_att_score) else ""
+                
+                jeff_df["CSAT"] = fmt_bold_cell(avg_csat_val, 5.00, False)
+                jeff_df["CSAT Score"] = f"<b>{avg_csat_score:.2f}</b>" if not pd.isna(avg_csat_score) else ""
+                
+                jeff_df["QA (%)"] = fmt_bold_cell(avg_qa_val, 90.0, True)
+                jeff_df["QA Score"] = f"<b>{avg_qa_score:.2f}</b>" if not pd.isna(avg_qa_score) else ""
+                
+                jeff_df["Adherence (%)"] = fmt_bold_cell(avg_adh_val, 85.0, True)
+                jeff_df["Adherence Score"] = f"<b>{avg_adh_score:.2f}</b>" if not pd.isna(avg_adh_score) else ""
+                
+                overall_color = "green" if avg_overall >= 3.0 else "red"
+                jeff_df["Overall Score (Max 5)"] = f"<b><span style='color:{overall_color};'>{avg_overall:.2f}</span></b>"
+                
+                jeff_df["_sort_score"] = -999.0 # Forces row to the very bottom
                 
                 sc_df = pd.concat([regular_df, jeff_df], ignore_index=True)
             else:
@@ -1427,7 +1450,7 @@ with tab_sc:
         st.markdown(table_html, unsafe_allow_html=True)
     else:
         st.info("No staff members configured in the roster database.")
-
+        
 # --- TAB 4: ADMIN PANEL ---
 with tab_adm:
     st.markdown(
