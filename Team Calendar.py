@@ -8,6 +8,7 @@ from pymongo import MongoClient
 import pytz
 import streamlit as st
 import smtplib
+import time
 
 st.set_page_config(layout="wide")
 
@@ -972,6 +973,8 @@ with tab_req:
                 st.success(
                     "All operational entries successfully verified and processed!"
                 )
+                time.sleep(3)
+
                 st.session_state.request_count = 1
                 st.rerun()
                     
