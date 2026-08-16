@@ -888,44 +888,77 @@ with tab_req:
             add_row_triggered = st.form_submit_button("➕ Add New Row")
         with action_cols[1]:
             submit_triggered = st.form_submit_button(
-                        "✅ Submit Entries", type="primary"
-                    )
+                "✅ Submit Entries", type="primary"
+            )
             
         if add_row_triggered:
-                    st.session_state.request_count += 1
-                    st.rerun()
+            if selected_name == "Select Name...":
+                st.warning("⚠️ Please select a valid employee name to proceed.")
+            else:
+                st.session_state.request_count += 1
+                st.rerun()
 
         if submit_triggered:
-                    if selected_name == "Select Name...":
-                        st.warning("⚠️ Please select a valid employee name to proceed.")
-                    else:
-                    running_caps = {}
-                    existing_requests = (
-                        global_pending_requests + global_approved_requests
+            if selected_name == "Select Name...":
+                st.warning("⚠️ Please select a valid employee name to proceed.")
+            else:
+                running_caps = {}
+                existing_requests = (
+                    global_pending_requests + global_approved_requests
+                )
+
+                for i in range(st.session_state.request_count):
+                    req_date = st.session_state[f"date_{i}"]
+                    req_type = st.session_state[f"type_{i}"]
+                    date_str = str(req_date)
+                    cap_key = f"{req_type}_{date_str}"
+
+                    is_already_requested = any(
+                        r.get("name") == selected_name
+                        and str(r.get("date")) == date_str
+                        and r.get("status") in ["Pending", "Approved"]
+                        for r in existing_requests
                     )
 
-                    for i in range(st.session_state.request_count):
-                        req_date = st.session_state[f"date_{i}"]
-                        req_type = st.session_state[f"type_{i}"]
-                        date_str = str(req_date)
-                        cap_key = f"{req_type}_{date_str}"
+                    if is_already_requested:
+                        st.warning(
+                            f"⚠️ A request for {selected_name} on {req_date} already"
+                            " exists."
+                        )
+                        continue
 
-                        is_already_requested = any(
-                            r.get("name") == selected_name
-                            and str(r.get("date")) == date_str
-                            and r.get("status") in ["Pending", "Approved"]
-                            for r in existing_requests
+                    if req_type == "SL/EL":
+                        initial_status = "Approved"
+                        new_req = {
+                            "name": selected_name,
+                            "date": date_str,
+                            "type": req_type,
+                            "status": initial_status,
+                        }
+                        save_request_to_db(new_req, req_type)
+                        send_request_email_notification(selected_name, date_str, req_type)
+                    else:
+                        limits = get_request_limits(req_date)
+                        limit_value = (
+                            limits["PTO_per_day"]
+                            if req_type == "PTO"
+                            else limits["Wellness_per_day"]
                         )
 
-                        if is_already_requested:
-                            st.warning(
-                                f"⚠️ A request for {selected_name} on {req_date} already"
-                                " exists."
+                        if cap_key not in running_caps:
+                            db_count = sum(
+                                1
+                                for r in existing_requests
+                                if r.get("type") == req_type
+                                and str(r.get("date")) == date_str
+                                and r.get("status") in ["Pending", "Approved"]
                             )
-                            continue
+                            running_caps[cap_key] = db_count
 
-                        if req_type == "SL/EL":
-                            initial_status = "Approved"
+                        if running_caps[cap_key] >= limit_value:
+                            st.error(f"❌ Limit reached for {req_type} on {req_date}.")
+                        else:
+                            initial_status = "Pending"
                             new_req = {
                                 "name": selected_name,
                                 "date": date_str,
@@ -934,43 +967,13 @@ with tab_req:
                             }
                             save_request_to_db(new_req, req_type)
                             send_request_email_notification(selected_name, date_str, req_type)
-                        else:
-                            limits = get_request_limits(req_date)
-                            limit_value = (
-                                limits["PTO_per_day"]
-                                if req_type == "PTO"
-                                else limits["Wellness_per_day"]
-                            )
+                            running_caps[cap_key] += 1
 
-                            if cap_key not in running_caps:
-                                db_count = sum(
-                                    1
-                                    for r in existing_requests
-                                    if r.get("type") == req_type
-                                    and str(r.get("date")) == date_str
-                                    and r.get("status") in ["Pending", "Approved"]
-                                )
-                                running_caps[cap_key] = db_count
-
-                            if running_caps[cap_key] >= limit_value:
-                                st.error(f"❌ Limit reached for {req_type} on {req_date}.")
-                            else:
-                                initial_status = "Pending"
-                                new_req = {
-                                    "name": selected_name,
-                                    "date": date_str,
-                                    "type": req_type,
-                                    "status": initial_status,
-                                }
-                                save_request_to_db(new_req, req_type)
-                                send_request_email_notification(selected_name, date_str, req_type)
-                                running_caps[cap_key] += 1
-
-                    st.success(
-                        "All operational entries successfully verified and processed!"
-                    )
-                    st.session_state.request_count = 1
-                    st.rerun()
+                st.success(
+                    "All operational entries successfully verified and processed!"
+                )
+                st.session_state.request_count = 1
+                st.rerun()
                     
     # 1. Render date filters first so all sections can access f_m and f_y
     f_c1, f_c2 = st.columns(2)
