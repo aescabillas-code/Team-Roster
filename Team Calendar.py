@@ -844,7 +844,7 @@ with tab_req:
                 server.login(sender_email, sender_password)
                 server.sendmail(sender_email, [recipient_email], msg.as_string())
                 
-            st.success("Email sent successfully!") # Temporary success check
+            st.toast("Email sent successfully! 📧", icon="✅")
             
         except Exception as e:
             st.error(f"Failed to send email: {e}")
