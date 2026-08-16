@@ -1058,6 +1058,7 @@ with tab_req:
             if r_month == f_m and r_year == f_y:
                 r_copy = dict(r)
                 r_copy["emp_id"] = get_emp_id(r_copy)
+                r_copy["rtm_status"] = r.get("rtm_status", r.get("status", "N/A"))
                 filtered_rtm.append(r_copy)
         except Exception:
             continue
@@ -1065,7 +1066,7 @@ with tab_req:
     if filtered_rtm:
         df_rtm_display = pd.DataFrame(filtered_rtm)
 
-        for col in ["date", "name", "type", "status", "emp_id"]:
+        for col in ["date", "name", "rtm_status", "emp_id", "type", "status"]:
             if col not in df_rtm_display.columns:
                 df_rtm_display[col] = "N/A"
 
@@ -1075,8 +1076,8 @@ with tab_req:
         df_rtm_display["formatted_date"] = df_rtm_display["date"].apply(format_m_d_yyyy)
         df_rtm_display["formatted_name"] = df_rtm_display["name"].apply(format_last_first)
 
-        df_rtm_display = df_rtm_display[["formatted_name", "emp_id", "formatted_date", "type"]]
-        df_rtm_display.columns = ["Name", "Employee ID", "Date", "Type"]
+        df_rtm_display = df_rtm_display[["formatted_name", "emp_id", "formatted_date", "rtm_status"]]
+        df_rtm_display.columns = ["Name", "Employee ID", "Date", "RTM Status"]
 
         st.dataframe(df_rtm_display, hide_index=True, use_container_width=True)
     else:
@@ -1137,6 +1138,7 @@ with tab_req:
             if req_date.month == f_m and req_date.year == f_y:
                 r_copy = dict(r)
                 r_copy["emp_id"] = get_emp_id(r_copy)
+                r_copy["status"] = r.get("status", "Pending")
                 filtered_pending.append(r_copy)
     
         if filtered_pending:
@@ -1147,8 +1149,8 @@ with tab_req:
             df_pending["formatted_date"] = df_pending["date"].apply(format_m_d_yyyy)
             df_pending["formatted_name"] = df_pending["name"].apply(format_last_first)
     
-            df_pending_display = df_pending[["formatted_name", "emp_id", "formatted_date", "type"]].copy()
-            df_pending_display.columns = ["Name", "Employee ID", "Date", "Type"]
+            df_pending_display = df_pending[["formatted_name", "emp_id", "formatted_date", "status"]].copy()
+            df_pending_display.columns = ["Name", "Employee ID", "Date", "Status"]
     
             calculated_height = (len(df_pending_display) * 35) + 45
             st.dataframe(
@@ -1801,14 +1803,15 @@ with tab_adm:
                 if date_val.month == selected_month and date_val.year == selected_year:
                     r_copy = r.copy()
                     r_copy["emp_id"] = get_emp_id(r_copy)
+                    r_copy["rtm_status"] = r.get("rtm_status", r.get("status", "N/A"))
                     r_copy["formatted_date"] = format_m_d_yyyy(date_val) if 'format_m_d_yyyy' in globals() else date_val.strftime("%m/%d/%Y")
                     r_copy["formatted_name"] = format_last_first(r_copy["name"])
                     rtm_approved_list.append(r_copy)
             
             if rtm_approved_list:
                 df_rtm_adm = pd.DataFrame(rtm_approved_list)
-                df_rtm_adm = df_rtm_adm[["formatted_name", "emp_id", "formatted_date", "type"]]
-                df_rtm_adm.columns = ["Name", "Employee ID", "Date", "Type"]
+                df_rtm_adm = df_rtm_adm[["formatted_name", "emp_id", "formatted_date", "rtm_status"]]
+                df_rtm_adm.columns = ["Name", "Employee ID", "Date", "RTM Status"]
                 df_rtm_adm = df_rtm_adm.sort_values(by="Date", key=pd.to_datetime)
                 st.dataframe(df_rtm_adm, hide_index=True, use_container_width=True)
             else:
