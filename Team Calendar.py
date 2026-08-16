@@ -124,8 +124,11 @@ def clear_requests_cache():
 
 
 def bulk_update_requests(request_ids, status):
+    update_data = {"status": status}
+    if status == "Approved":
+        update_data["rtm_status"] = "Pending"
     collection.update_many(
-        {"_id": {"$in": request_ids}}, {"$set": {"status": status}}
+        {"_id": {"$in": request_ids}}, {"$set": update_data}
     )
     clear_requests_cache()
 
@@ -207,12 +210,21 @@ def delete_request_from_db(req):
 
 
 def update_request_status_in_db(req, status):
-    collection.update_one({"_id": req["_id"]}, {"$set": {"status": status}})
+    update_data = {"status": status}
+    if status == "Approved":
+        update_data["rtm_status"] = "Pending"
+    collection.update_one({"_id": req["_id"]}, {"$set": update_data})
     clear_requests_cache()
 
 
 def save_request_to_db(req, request_type):
     req["type"] = request_type
+    if request_type == "SL/EL":
+        req["status"] = "Approved"
+        req["rtm_status"] = "Approved"
+    else:
+        req["status"] = "Pending"
+        req["rtm_status"] = "Pending"
     collection.insert_one(req)
     clear_requests_cache()
 
@@ -1250,8 +1262,6 @@ with tab_adm:
             st.subheader("👥 Roster Management")
             roster = st.session_state.staff_roster
         
-            # Expand the columns list so Edit and Remove each get their own dedicated column
-            # [Emp ID, Name, Nickname, Birthday, Edit Btn, Remove Btn]
             grid_cols = st.columns([1.5, 2, 2, 2, 0.8, 0.8])
             grid_cols[0].write("**Emp ID**")
             grid_cols[1].write("**Name**")
@@ -1282,7 +1292,6 @@ with tab_adm:
                         else str(bday_val)
                     )
         
-                    # Placed directly into columns 4 and 5 (no nesting required)
                     if r_cols[4].button("✏️", key=f"edit_staff_{name}", help="Edit"):
                         st.session_state.new_staff_entries = [{
                             "emp_id": data.get("emp_id", ""),
@@ -1586,7 +1595,6 @@ with tab_adm:
                     st.session_state.admin_msg = None
                     st.rerun()
         
-            # --- Manager Level Approval (Pending Manager Approval) ---
             select_all = st.checkbox(
                 "Select All Pending Requests", key="global_select_all"
             )
@@ -1643,7 +1651,6 @@ with tab_adm:
                     return selected_ids
         
                 def process_df_edits(base_df, session_key):
-                    """Applies inline edits made directly in st.data_editor back to MongoDB/state."""
                     if (
                         session_key in st.session_state
                         and "edited_rows" in st.session_state[session_key]
@@ -1736,7 +1743,6 @@ with tab_adm:
                             )
             st.markdown("---")
             
-            # Shared Month/Year filters used for Approved, Rejected, and RTM views
             filter_col1, filter_col2 = st.columns(2)
             with filter_col1:
                 month_options = {
@@ -1817,6 +1823,7 @@ with tab_adm:
                 df_rtm_adm = pd.DataFrame(rtm_approved_list)
                 df_rtm_adm = df_rtm_adm[["formatted_name", "emp_id", "formatted_date", "type"]]
                 df_rtm_adm.columns = ["Name", "Employee ID", "Date", "Type"]
+                df_rtm_adm = df_rtm_adm.sort_values(by="Date", key=pd.to_datetime)
                 st.dataframe(df_rtm_adm, hide_index=True, use_container_width=True)
             else:
                 st.write("No records found.")
@@ -1932,7 +1939,6 @@ with tab_adm:
             # --- 3. MANAGER LEVEL APPROVAL VIEW ---
             st.subheader("Manager Level Approval")
             
-            # Fetch current pending requests (Wellness and PTO)
             current_pending_requests = fetch_pending_requests_from_db()
             filtered_manager_pending = [
                 r for r in current_pending_requests if r.get("type") in ["Wellness", "PTO"]
