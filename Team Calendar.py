@@ -959,6 +959,7 @@ with tab_req:
                             "status": initial_status,
                         }
                         save_request_to_db(new_req, req_type)
+                        send_request_email_notification(selected_name, date_str, req_type)
                         running_caps[cap_key] += 1
 
             st.success(
