@@ -829,25 +829,24 @@ with tab_req:
     from email.mime.text import MIMEText
 
     def send_request_email_notification(employee_name, req_date, req_type):
-        try:
-            sender_email = st.secrets["email"]["sender"]
-            sender_password = st.secrets["email"]["password"]
-            recipient_email = "arianne-may.escabillas@hpe.com"
-
-            msg_body = f"A new leave request has been submitted by {employee_name}.\n\nType: {req_type}\nDate: {req_date}"
-            msg = MIMEText(msg_body)
-            msg["Subject"] = f"New Leave Request Submitted: {req_type} - {employee_name}"
-            msg["From"] = sender_email
-            msg["To"] = recipient_email
-
-            with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-                server.login(sender_email, sender_password)
-                server.sendmail(sender_email, [recipient_email], msg.as_string())
-                
-            st.success ("Email sent successfully! 📧", icon="✅")
-            
-        except Exception as e:
-            st.error(f"Failed to send email: {e}")
+      try:
+        sender_email = st.secrets["email"]["sender"]
+        sender_password = st.secrets["email"]["password"]
+        recipient_email = "arianne-may.escabillas@hpe.com"
+    
+        msg_body = f"A new leave request has been submitted by {employee_name}.\n\nType: {req_type}\nDate: {req_date}"
+        msg = MIMEText(msg_body)
+        msg["Subject"] = f"New Leave Request Submitted: {req_type} - {employee_name}"
+        msg["From"] = "Leave Request Notification"
+        msg["To"] = recipient_email
+    
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+          server.login(sender_email, sender_password)
+          server.sendmail(sender_email, [recipient_email], msg.as_string())
+    
+        st.success("Email sent successfully! 📧", icon="✅")
+      except Exception as e:
+        st.error(f"Failed to send email: {e}", icon="❌")
             
     st.subheader("PTO / Wellness / SL Request Form")
 
