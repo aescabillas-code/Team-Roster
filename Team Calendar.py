@@ -883,9 +883,9 @@ with tab_req:
 
         st.markdown("<br>", unsafe_allow_html=True)
         
-    if selected_name == "Select Name...":
+        if selected_name == "Select Name...":
                 st.warning("⚠️ Please select a valid employee name to proceed.")
-            else:
+        else:
                 action_cols = st.columns([1, 1, 2])
                 with action_cols[0]:
                     add_row_triggered = st.form_submit_button("➕ Add New Row")
