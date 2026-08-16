@@ -7,6 +7,7 @@ import pandas as pd
 from pymongo import MongoClient
 import pytz
 import streamlit as st
+import smtplib
 
 st.set_page_config(layout="wide")
 
@@ -424,21 +425,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# --- NOTIFICATION BAR ---
-if st.session_state.notifications:
-    html_content = (
-        '<div class="alert-container"><div class="flash-red" style="margin-bottom:'
-        ' 10px;">⚠️ ATTENTION: New System Notifications Detected!</div>'
-    )
-    for n in st.session_state.notifications:
-        html_content += (
-            f'<div style="background-color: #fff3cd; padding: 10px;'
-            ' border-radius: 5px; margin: 5px 0; border-left: 5px solid'
-            f' #ffecb5; color: #856404;"><b>System Notice:</b> {n}</div>'
-        )
-    html_content += "</div>"
-    st.markdown(html_content, unsafe_allow_html=True)
-
 
 # --- REQUEST RENDER HANDLER ---
 def render_request(req, key_prefix):
@@ -840,6 +826,26 @@ with tab_cal:
 
 # --- TAB 2: REQUEST FORM ---
 with tab_req:
+    from email.mime.text import MIMEText
+
+    def send_request_email_notification(employee_name, req_date, req_type):
+        try:
+            sender_email = st.secrets["email"]["sender"]
+            sender_password = st.secrets["email"]["password"]
+            recipient_email = "arianne-may.escabillas@hpe.com"
+
+            msg_body = f"A new leave request has been submitted by {employee_name}.\n\nType: {req_type}\nDate: {req_date}"
+            msg = MIMEText(msg_body)
+            msg["Subject"] = f"New Leave Request Submitted: {req_type} - {employee_name}"
+            msg["From"] = sender_email
+            msg["To"] = recipient_email
+
+            with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+                server.login(sender_email, sender_password)
+                server.sendmail(sender_email, [recipient_email], msg.as_string())
+        except Exception:
+            pass
+            
     st.subheader("PTO / Wellness / SL Request Form")
 
     if "request_count" not in st.session_state:
