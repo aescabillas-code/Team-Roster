@@ -1058,7 +1058,7 @@ with tab_req:
             if r_month == f_m and r_year == f_y:
                 r_copy = dict(r)
                 r_copy["emp_id"] = get_emp_id(r_copy)
-                r_copy["rtm_status"] = r.get("rtm_status", r.get("status", "N/A"))
+                r_copy["rtm_status"] = r.get("rtm_status", r.get("rtm_status", "N/A"))
                 filtered_rtm.append(r_copy)
         except Exception:
             continue
@@ -1803,7 +1803,7 @@ with tab_adm:
                 if date_val.month == selected_month and date_val.year == selected_year:
                     r_copy = r.copy()
                     r_copy["emp_id"] = get_emp_id(r_copy)
-                    r_copy["rtm_status"] = r.get("rtm_status", r.get("status", "N/A"))
+                    r_copy["rtm_status"] = r.get("rtm_status", r.get("rtm_status", "N/A"))
                     r_copy["formatted_date"] = format_m_d_yyyy(date_val) if 'format_m_d_yyyy' in globals() else date_val.strftime("%m/%d/%Y")
                     r_copy["formatted_name"] = format_last_first(r_copy["name"])
                     rtm_approved_list.append(r_copy)
