@@ -1034,7 +1034,7 @@ with tab_req:
         return req.get("emp_id", "N/A")
 
     # --- Section: Approved by RTM & Auto-Approved SL/EL ---
-    st.subheader("RTM_Approved")
+    st.subheader("RTM Approved")
     
     rtm_requests = global_rtm_processed_requests
     auto_sl_requests = [
@@ -1785,7 +1785,7 @@ with tab_adm:
                 return full_name
         
             # --- Section: RTM_Approved & Auto-Approved SL/EL ---
-            st.subheader("RTM_Approved")
+            st.subheader("RTM Approved")
             rtm_approved_list = []
             auto_sl_list = [r for r in global_approved_requests if r.get("type") == "SL/EL"]
             
