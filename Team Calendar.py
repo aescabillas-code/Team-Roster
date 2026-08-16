@@ -8,7 +8,6 @@ from pymongo import MongoClient
 import pytz
 import streamlit as st
 import smtplib
-import time
 
 st.set_page_config(layout="wide")
 
@@ -845,7 +844,7 @@ with tab_req:
                 server.login(sender_email, sender_password)
                 server.sendmail(sender_email, [recipient_email], msg.as_string())
                 
-            st.toast("Email sent successfully! 📧", icon="✅")
+            st.success ("Email sent successfully! 📧", icon="✅")
             
         except Exception as e:
             st.error(f"Failed to send email: {e}")
@@ -973,7 +972,6 @@ with tab_req:
                 st.success(
                     "All operational entries successfully verified and processed!"
                 )
-                time.sleep(3)
 
                 st.session_state.request_count = 1
                 st.rerun()
