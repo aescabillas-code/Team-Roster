@@ -843,8 +843,11 @@ with tab_req:
             with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
                 server.login(sender_email, sender_password)
                 server.sendmail(sender_email, [recipient_email], msg.as_string())
-        except Exception:
-            pass
+                
+            st.success("Email sent successfully!") # Temporary success check
+            
+        except Exception as e:
+            st.error(f"Failed to send email: {e}")
             
     st.subheader("PTO / Wellness / SL Request Form")
 
