@@ -71,7 +71,7 @@ def fetch_approved_requests_from_db():
         return list(
             collection.find({
                 "type": {"$in": ["PTO", "Wellness", "SL/EL"]},
-                "status": {"$in": ["RTM_Pending", "RTM_Approved"]},
+                "status": "Approved",
             })
         )
     except Exception:
@@ -108,7 +108,7 @@ def fetch_rtm_processed_requests_from_db():
         return list(
             collection.find({
                 "type": {"$in": ["PTO", "Wellness", "SL/EL"]},
-                "status": "RTM_Approved",
+                "rtm_status": {"$in": ["Approved", "Rejected"]},
             })
         )
     except Exception:
@@ -124,8 +124,11 @@ def clear_requests_cache():
 
 
 def bulk_update_requests(request_ids, status):
+    update_data = {"status": status}
+    if status == "Approved":
+        update_data["rtm_status"] = "Pending"
     collection.update_many(
-        {"_id": {"$in": request_ids}}, {"$set": {"status": status}}
+        {"_id": {"$in": request_ids}}, {"$set": update_data}
     )
     clear_requests_cache()
 
@@ -140,9 +143,9 @@ def update_request_fields(request_id, update_dict):
     clear_requests_cache()
 
 
-def bulk_update_rtm_status(request_ids, status):
+def bulk_update_rtm_status(request_ids, rtm_status):
     collection.update_many(
-        {"_id": {"$in": request_ids}}, {"$set": {"status": status}}
+        {"_id": {"$in": request_ids}}, {"$set": {"rtm_status": rtm_status}}
     )
     clear_requests_cache()
 
@@ -208,6 +211,8 @@ def delete_request_from_db(req):
 
 def update_request_status_in_db(req, status):
     update_data = {"status": status}
+    if status == "Approved":
+        update_data["rtm_status"] = "Pending"
     collection.update_one({"_id": req["_id"]}, {"$set": update_data})
     clear_requests_cache()
 
@@ -215,9 +220,11 @@ def update_request_status_in_db(req, status):
 def save_request_to_db(req, request_type):
     req["type"] = request_type
     if request_type == "SL/EL":
-        req["status"] = "RTM_Approved"
+        req["status"] = "Approved"
+        req["rtm_status"] = "Approved"
     else:
         req["status"] = "Pending"
+        req["rtm_status"] = "Pending"
     collection.insert_one(req)
     clear_requests_cache()
 
@@ -310,11 +317,11 @@ global_approved_requests = fetch_approved_requests_from_db()
 global_pending_requests = fetch_pending_requests_from_db()
 global_rejected_requests = fetch_rejected_requests_from_db()
 
-# Filter for approved display on Tab 1 calendar and sidebar (RTM_Approved or auto-approved SL/EL)
+# Filter for approved display on Tab 1 calendar and sidebar (RTM approved or auto-approved SL/EL)
 global_approved_calendar_requests = [
     r
     for r in global_approved_requests
-    if r.get("status") == "RTM_Approved" or r.get("type") == "SL/EL"
+    if r.get("rtm_status") == "Approved" or r.get("type") == "SL/EL"
 ]
 
 # Fetch RTM requests from DB
@@ -444,7 +451,7 @@ def render_request(req, key_prefix):
     if not st.session_state.get(denial_key):
         c1, c2 = st.columns(2)
         if c1.button("Approve", key=f"app_{key_prefix}_{unique_id}"):
-            update_request_status_in_db(req, "RTM_Pending")
+            update_request_status_in_db(req, "Approved")
             st.success("Approved!")
             st.rerun()
         if c2.button("Deny", key=f"den_{key_prefix}_{unique_id}"):
@@ -926,7 +933,7 @@ with tab_req:
                     is_already_requested = any(
                         r.get("name") == selected_name
                         and str(r.get("date")) == date_str
-                        and r.get("status") in ["Pending", "RTM_Pending", "RTM_Approved"]
+                        and r.get("status") in ["Pending", "Approved"]
                         for r in existing_requests
                     )
 
@@ -938,7 +945,7 @@ with tab_req:
                         continue
 
                     if req_type == "SL/EL":
-                        initial_status = "RTM_Approved"
+                        initial_status = "Approved"
                         new_req = {
                             "name": selected_name,
                             "date": date_str,
@@ -961,7 +968,7 @@ with tab_req:
                                 for r in existing_requests
                                 if r.get("type") == req_type
                                 and str(r.get("date")) == date_str
-                                and r.get("status") in ["Pending", "RTM_Pending", "RTM_Approved"]
+                                and r.get("status") in ["Pending", "Approved"]
                             )
                             running_caps[cap_key] = db_count
 
@@ -1045,7 +1052,7 @@ with tab_req:
     filtered_rtm = []
     for r in rtm_requests + auto_sl_requests:
         try:
-            if r.get("type") != "SL/EL" and r.get("rtm_status") != "RTM_Approved":
+            if r.get("type") != "SL/EL" and r.get("rtm_status") != "Approved":
                 continue
 
             if isinstance(r.get("date"), str):
@@ -1058,7 +1065,6 @@ with tab_req:
             if r_month == f_m and r_year == f_y:
                 r_copy = dict(r)
                 r_copy["emp_id"] = get_emp_id(r_copy)
-                r_copy["rtm_status"] = r.get("rtm_status", r.get("rtm_status", "N/A"))
                 filtered_rtm.append(r_copy)
         except Exception:
             continue
@@ -1066,7 +1072,7 @@ with tab_req:
     if filtered_rtm:
         df_rtm_display = pd.DataFrame(filtered_rtm)
 
-        for col in ["date", "name", "rtm_status", "emp_id", "type", "status"]:
+        for col in ["date", "name", "type", "rtm_status", "emp_id"]:
             if col not in df_rtm_display.columns:
                 df_rtm_display[col] = "N/A"
 
@@ -1076,8 +1082,8 @@ with tab_req:
         df_rtm_display["formatted_date"] = df_rtm_display["date"].apply(format_m_d_yyyy)
         df_rtm_display["formatted_name"] = df_rtm_display["name"].apply(format_last_first)
 
-        df_rtm_display = df_rtm_display[["formatted_name", "emp_id", "formatted_date", "rtm_status"]]
-        df_rtm_display.columns = ["Name", "Employee ID", "Date", "RTM Status"]
+        df_rtm_display = df_rtm_display[["formatted_name", "emp_id", "formatted_date", "type"]]
+        df_rtm_display.columns = ["Name", "Employee ID", "Date", "Type"]
 
         st.dataframe(df_rtm_display, hide_index=True, use_container_width=True)
     else:
@@ -1091,7 +1097,7 @@ with tab_req:
         try:
             if r.get("type") == "SL/EL":
                 continue
-            if r.get("status") != "RTM_Pending":
+            if r.get("rtm_status") == "Approved":
                 continue
 
             date_val = r.get("date")
@@ -1138,7 +1144,6 @@ with tab_req:
             if req_date.month == f_m and req_date.year == f_y:
                 r_copy = dict(r)
                 r_copy["emp_id"] = get_emp_id(r_copy)
-                r_copy["status"] = r.get("status", "Pending")
                 filtered_pending.append(r_copy)
     
         if filtered_pending:
@@ -1149,8 +1154,8 @@ with tab_req:
             df_pending["formatted_date"] = df_pending["date"].apply(format_m_d_yyyy)
             df_pending["formatted_name"] = df_pending["name"].apply(format_last_first)
     
-            df_pending_display = df_pending[["formatted_name", "emp_id", "formatted_date", "status"]].copy()
-            df_pending_display.columns = ["Name", "Employee ID", "Date", "Status"]
+            df_pending_display = df_pending[["formatted_name", "emp_id", "formatted_date", "type"]].copy()
+            df_pending_display.columns = ["Name", "Employee ID", "Date", "Type"]
     
             calculated_height = (len(df_pending_display) * 35) + 45
             st.dataframe(
@@ -1173,7 +1178,14 @@ with tab_req:
     # --- Section: Rejected History ---
     st.subheader("Rejected Requests")
 
-    all_rej_source = global_rejected_requests
+    existing_rej_ids = {str(r.get("_id")) for r in global_rejected_requests if r.get("_id")}
+
+    rtm_rejected = [
+        r for r in global_approved_requests
+        if r.get("rtm_status") == "Rejected" and str(r.get("_id")) not in existing_rej_ids
+    ]
+
+    all_rej_source = global_rejected_requests + rtm_rejected
     filtered_rej = []
 
     for r in all_rej_source:
@@ -1496,7 +1508,7 @@ with tab_adm:
                 r["name"]
                 for r in global_approved_requests
                 if str(r.get("date")) == str(base_date)
-                and r.get("status") == "RTM_Approved"
+                and r.get("rtm_status") == "Approved"
             ]
             available = (
                 [n for n in roster.keys() if n not in unavailable]
@@ -1606,7 +1618,7 @@ with tab_adm:
                             options=["Wellness", "PTO", "SL/EL"], disabled=False
                         ),
                         "Status": st.column_config.SelectboxColumn(
-                            options=["Pending", "RTM_Pending", "RTM_Approved", "Rejected"], disabled=False
+                            options=["Pending", "Approved", "Rejected"], disabled=False
                         ),
                         "_id": None,
                     },
@@ -1666,7 +1678,7 @@ with tab_adm:
                             all_requests_df, "editor_all_requests"
                         )
                         if target_ids:
-                            bulk_update_requests(target_ids, "RTM_Pending")
+                            bulk_update_requests(target_ids, "Approved")
                             st.session_state.admin_msg = (
                                 "success",
                                 f"Successfully approved {len(target_ids)} requests!",
@@ -1786,13 +1798,13 @@ with tab_adm:
                     return f"{parts[-1]}, {' '.join(parts[:-1])}"
                 return full_name
         
-            # --- Section: RTM_Approved & Auto-Approved SL/EL ---
+            # --- Section: RTM Approved & Auto-Approved SL/EL ---
             st.subheader("RTM Approved")
             rtm_approved_list = []
             auto_sl_list = [r for r in global_approved_requests if r.get("type") == "SL/EL"]
             
             for r in global_rtm_processed_requests + auto_sl_list:
-                if r.get("type") != "SL/EL" and r.get("rtm_status") != "RTM_Approved":
+                if r.get("type") != "SL/EL" and r.get("rtm_status") != "Approved":
                     continue
                 date_val = r.get("date")
                 if isinstance(date_val, str):
@@ -1803,15 +1815,14 @@ with tab_adm:
                 if date_val.month == selected_month and date_val.year == selected_year:
                     r_copy = r.copy()
                     r_copy["emp_id"] = get_emp_id(r_copy)
-                    r_copy["rtm_status"] = r.get("rtm_status", r.get("rtm_status", "N/A"))
                     r_copy["formatted_date"] = format_m_d_yyyy(date_val) if 'format_m_d_yyyy' in globals() else date_val.strftime("%m/%d/%Y")
                     r_copy["formatted_name"] = format_last_first(r_copy["name"])
                     rtm_approved_list.append(r_copy)
             
             if rtm_approved_list:
                 df_rtm_adm = pd.DataFrame(rtm_approved_list)
-                df_rtm_adm = df_rtm_adm[["formatted_name", "emp_id", "formatted_date", "rtm_status"]]
-                df_rtm_adm.columns = ["Name", "Employee ID", "Date", "RTM Status"]
+                df_rtm_adm = df_rtm_adm[["formatted_name", "emp_id", "formatted_date", "type"]]
+                df_rtm_adm.columns = ["Name", "Employee ID", "Date", "Type"]
                 df_rtm_adm = df_rtm_adm.sort_values(by="Date", key=pd.to_datetime)
                 st.dataframe(df_rtm_adm, hide_index=True, use_container_width=True)
             else:
@@ -1848,7 +1859,7 @@ with tab_adm:
         
             rtm_pending_adm = []
             for r in filtered_history_requests:
-                if r.get("type") == "SL/EL" or r.get("status") != "RTM_Pending":
+                if r.get("type") == "SL/EL" or r.get("rtm_status") == "Approved":
                     continue
                 date_val = r.get("parsed_date")
                 if not date_val:
@@ -1899,7 +1910,7 @@ with tab_adm:
                     if st.button("✅ Approve Selected RTM", key="btn_approve_rtm_selected"):
                         t_ids = get_rtm_selected_ids(df_rtm_adm_pending, "editor_rtm_adm_pending")
                         if t_ids:
-                            bulk_update_rtm_status(t_ids, "RTM_Approved")
+                            bulk_update_rtm_status(t_ids, "Approved")
                             st.success("Successfully approved selected RTM requests!")
                             st.rerun()
                         else:
@@ -1981,7 +1992,7 @@ with tab_adm:
                             options=["Wellness", "PTO"], disabled=False
                         ),
                         "Status": st.column_config.SelectboxColumn(
-                            options=["Pending", "RTM_Pending", "Rejected"], disabled=False
+                            options=["Pending", "Approved", "Rejected"], disabled=False
                         ),
                     },
                     use_container_width=True,
@@ -2007,10 +2018,10 @@ with tab_adm:
                     if st.button("✅ Approve Selected", key="btn_approve_manager_selected", use_container_width=True):
                         target_ids = get_manager_selected_ids(manager_display_df, "editor_manager_level_approval")
                         if target_ids:
-                            bulk_update_requests(target_ids, "RTM_Pending")
+                            bulk_update_requests(target_ids, "Approved")
                             st.session_state.admin_msg = (
                                 "success",
-                                f"Successfully approved {len(target_ids)} requests! Sent to RTM Pending list.",
+                                f"Successfully approved {len(target_ids)} requests! Removed from pending list.",
                             )
                             st.rerun()
                         else:
@@ -2048,7 +2059,14 @@ with tab_adm:
             st.subheader("Rejected History")
         
             global_rejected_requests = fetch_rejected_requests_from_db()
-            all_rejected_source = global_rejected_requests
+            existing_rejected_ids = {str(r.get("_id")) for r in global_rejected_requests if r.get("_id")}
+        
+            rtm_rejected_requests = [
+                r for r in filtered_history_requests
+                if r.get("rtm_status") == "Rejected" and str(r.get("_id")) not in existing_rejected_ids
+            ]
+        
+            all_rejected_source = global_rejected_requests + rtm_rejected_requests
             filtered_rejected_requests = []
         
             for r in all_rejected_source:
@@ -2134,7 +2152,7 @@ with tab_adm:
                             options=["Wellness", "PTO", "SL/EL"], disabled=False
                         ),
                         "Status": st.column_config.SelectboxColumn(
-                            options=["Approved", "Pending", "RTM_Pending", "RTM_Approved", "Rejected"], disabled=False
+                            options=["Approved", "Pending", "Rejected"], disabled=False
                         ),
                         "_id": None,
                     },
