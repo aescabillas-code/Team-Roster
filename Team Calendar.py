@@ -481,12 +481,10 @@ def render_request(req, key_prefix):
 tab_names = [
     "📅 Calendar",
     "📝 Request",
-    "📈 Reports",
-    "🔀 Deviation",
     "🔑 Admin",
 ]
 
-tab_cal, tab_req, tab_prod, tab_dev, tab_adm = st.tabs(tab_names)
+tab_cal, tab_req, tab_adm = st.tabs(tab_names)
 
 # --- TAB 1: CALENDAR ---
 with tab_cal:
