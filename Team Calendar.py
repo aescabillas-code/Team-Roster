@@ -832,7 +832,11 @@ with tab_req:
       try:
         sender_email = st.secrets["email"]["sender"]
         sender_password = st.secrets["email"]["password"]
-        recipient_email = "arianne-may.escabillas@hpe.com"
+        recipient_emails = [
+        "arianne-may.escabillas@hpe.com",
+        "jeff.bote@hpe.com",
+        "jane-paula.manlangit@hpe.com",
+    ]
     
         msg_body = f"A new leave request has been submitted by {employee_name}.\n\nType: {req_type}\nDate: {req_date}"
         msg = MIMEText(msg_body)
