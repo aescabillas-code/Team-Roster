@@ -1045,7 +1045,7 @@ with tab_req:
     filtered_rtm = []
     for r in rtm_requests + auto_sl_requests:
         try:
-            if r.get("type") != "SL/EL" and r.get("status") != "RTM_Approved":
+            if r.get("type") != "SL/EL" and r.get("rtm_status") != "RTM_Approved":
                 continue
 
             if isinstance(r.get("date"), str):
@@ -1792,7 +1792,7 @@ with tab_adm:
             auto_sl_list = [r for r in global_approved_requests if r.get("type") == "SL/EL"]
             
             for r in global_rtm_processed_requests + auto_sl_list:
-                if r.get("type") != "SL/EL" and r.get("status") != "RTM_Approved":
+                if r.get("type") != "SL/EL" and r.get("rtm_status") != "RTM_Approved":
                     continue
                 date_val = r.get("date")
                 if isinstance(date_val, str):
