@@ -1074,29 +1074,36 @@ with tab_req:
 
     # --- Section: Approved History ---
     st.subheader("Manager Approved Requests")
-    filtered_app = [
-        r
-        for r in global_approved_requests
-        if int(r["date"].split("-")[1]) == f_m
-        and int(r["date"].split("-")[0]) == f_y
-    ]
-    
-    if filtered_app:
-        for req in filtered_app:
-            req["emp_id"] = get_emp_id(req)
+    filtered_app = []
+    for r in global_approved_requests:
+      try:
+        # Filter out requests that are already approved by RTM so they are removed from this list
+        if r.get("rtm_status") == "Approved":
+          continue
 
-        df_display = pd.DataFrame(filtered_app)
-        df_display["sort_date"] = pd.to_datetime(df_display["date"])
-        df_display = df_display.sort_values(by="sort_date", ascending=True)
-    
-        df_display["formatted_date"] = df_display["date"].apply(format_m_d_yyyy)
-        df_display["formatted_name"] = df_display["name"].apply(format_last_first)
-    
-        df_display = df_display[["emp_id", "formatted_date", "formatted_name", "type"]]
-        df_display.columns = ["Employee ID", "Date", "Name", "Type"]
-        st.dataframe(df_display, hide_index=True, use_container_width=True)
+        if int(r["date"].split("-")[1]) == f_m and int(
+            r["date"].split("-")[0]
+        ) == f_y:
+          filtered_app.append(r)
+      except Exception:
+        continue
+
+    if filtered_app:
+      for req in filtered_app:
+        req["emp_id"] = get_emp_id(req)
+
+      df_display = pd.DataFrame(filtered_app)
+      df_display["sort_date"] = pd.to_datetime(df_display["date"])
+      df_display = df_display.sort_values(by="sort_date", ascending=True)
+
+      df_display["formatted_date"] = df_display["date"].apply(format_m_d_yyyy)
+      df_display["formatted_name"] = df_display["name"].apply(format_last_first)
+
+      df_display = df_display[["emp_id", "formatted_date", "formatted_name", "type"]]
+      df_display.columns = ["Employee ID", "Date", "Name", "Type"]
+      st.dataframe(df_display, hide_index=True, use_container_width=True)
     else:
-        st.write("No records found.")
+      st.write("No records found.")
     
     # --- Section: Rejected History ---
     st.subheader("Rejected Requests")
