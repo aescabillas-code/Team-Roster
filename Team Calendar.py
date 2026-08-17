@@ -1807,11 +1807,65 @@ with tab_adm:
                     rtm_approved_list.append(r_copy)
             
             if rtm_approved_list:
-                df_rtm_adm = pd.DataFrame(rtm_approved_list)
-                df_rtm_adm = df_rtm_adm[["formatted_name", "emp_id", "formatted_date", "type"]]
-                df_rtm_adm.columns = ["Name", "Employee ID", "Date", "Type"]
-                df_rtm_adm = df_rtm_adm.sort_values(by="Date", key=pd.to_datetime)
-                st.dataframe(df_rtm_adm, hide_index=True, use_container_width=True)
+                df_rtm_app = pd.DataFrame(rtm_approved_list)
+                if "Select" not in df_rtm_app.columns:
+                    df_rtm_app.insert(0, "Select", False)
+                
+                df_rtm_app = df_rtm_app[["Select", "formatted_name", "emp_id", "formatted_date", "type", "_id"]]
+                df_rtm_app.columns = ["Select", "Name", "Employee ID", "Date", "Type", "_id"]
+                df_rtm_app = df_rtm_app.sort_values(by="Date", key=pd.to_datetime)
+                
+                edited_rtm_app = st.data_editor(
+                    df_rtm_app,
+                    hide_index=True,
+                    column_config={
+                        "Select": st.column_config.CheckboxColumn(default=False),
+                        "Name": st.column_config.TextColumn(disabled=False),
+                        "Employee ID": st.column_config.TextColumn(disabled=True),
+                        "Date": st.column_config.TextColumn(disabled=False),
+                        "Type": st.column_config.SelectboxColumn(
+                            options=["Wellness", "PTO", "SL/EL"], disabled=False
+                        ),
+                        "_id": None,
+                    },
+                    use_container_width=True,
+                    key="editor_rtm_approved"
+                )
+                
+                rtm_app_col1, rtm_app_col2 = st.columns(2)
+                
+                def get_rtm_app_selected_ids(base_df, session_key):
+                    selected = []
+                    current_states = base_df["Select"].tolist()
+                    if session_key in st.session_state and "edited_rows" in st.session_state[session_key]:
+                        for r_idx, ed in st.session_state[session_key]["edited_rows"].items():
+                            if "Select" in ed:
+                                current_states[int(r_idx)] = ed["Select"]
+                    for idx, sel in enumerate(current_states):
+                        if sel:
+                            selected.append(base_df.iloc[idx]["_id"])
+                    return selected
+            
+                with rtm_app_col1:
+                    if st.button("💾 Save Edits", key="btn_save_rtm_approved_edits", use_container_width=True):
+                        process_df_edits(df_rtm_app, "editor_rtm_approved")
+                        st.session_state.admin_msg = (
+                            "success",
+                            "RTM approved request edits saved successfully!",
+                        )
+                        st.rerun()
+                with rtm_app_col2:
+                    if st.button("🗑️ Delete Selected RTM Approved", key="btn_delete_rtm_approved", use_container_width=True):
+                        t_ids = get_rtm_app_selected_ids(df_rtm_app, "editor_rtm_approved")
+                        if t_ids:
+                            bulk_delete_requests(t_ids)
+                            st.session_state.admin_msg = (
+                                "success",
+                                f"Successfully deleted {len(t_ids)} RTM approved requests!",
+                            )
+                            st.rerun()
+                        else:
+                            st.warning("Select at least one request to delete.")
             else:
                 st.write("No records found.")
         
