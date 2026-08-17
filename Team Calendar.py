@@ -842,29 +842,29 @@ with tab_req:
 
     def send_request_email_notification(employee_name, req_date, req_type):
         try:
-          sender_email = st.secrets["email"]["sender"]
-          sender_password = st.secrets["email"]["password"]
-          recipient_emails = [
-              "arianne-may.escabillas@hpe.com",
-              "jeff.bote@hpe.com",
-              "jane-paula.manlangit@hpe.com",
-          ]
-    
-          msg_body = f"A new leave request has been submitted by {employee_name}.\n\nType: {req_type}\nDate: {req_date}"
-          msg = MIMEText(msg_body)
-          msg["Subject"] = (
-              f"New Leave Request Submitted: {req_type} - {employee_name}"
-          )
-          msg["From"] = "Leave Request Notification"
-          msg["To"] = ", ".join(recipient_emails)
-    
-          with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-            server.login(sender_email, sender_password)
-            server.sendmail(sender_email, recipient_emails, msg.as_string())
-    
-          st.success("Email sent successfully! 📧", icon="✅")
+            sender_email = st.secrets["email"]["sender"]
+            sender_password = st.secrets["email"]["password"]
+            recipient_emails = [
+                "arianne-may.escabillas@hpe.com",
+                "jeff.bote@hpe.com",
+                "jane-paula.manlangit@hpe.com",
+            ]
+
+            msg_body = f"A new leave request has been submitted by {employee_name}.\n\nType: {req_type}\nDate: {req_date}"
+            msg = MIMEText(msg_body)
+            msg["Subject"] = (
+                f"New Leave Request Submitted: {req_type} - {employee_name}"
+            )
+            msg["From"] = "Leave Request Notification"
+            msg["To"] = ", ".join(recipient_emails)
+
+            with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+                server.login(sender_email, sender_password)
+                server.sendmail(sender_email, recipient_emails, msg.as_string())
+
+            st.success("Email sent successfully! 📧", icon="✅")
         except Exception as e:
-          st.error(f"Failed to send email: {e}", icon="❌")
+            st.error(f"Failed to send email: {e}", icon="❌")
             
     st.subheader("PTO / Wellness / SL Request Form")
 
@@ -993,7 +993,6 @@ with tab_req:
                 st.session_state.request_count = 1
                 st.rerun()
                     
-    # 1. Render date filters first so all sections can access f_m and f_y
     f_c1, f_c2 = st.columns(2)
     
     month_names = list(calendar.month_name)[1:]
@@ -1008,7 +1007,6 @@ with tab_req:
         "Year", value=current_date.year, key="history_year_select"
     )
     
-    # 2. Fetch roster_list from database to map full name -> emp_id
     roster_doc = collection.find_one({"type": "roster_list"})
     roster_data = roster_doc.get("data", {}) if roster_doc else {}
     roster_lookup = {
@@ -1016,7 +1014,6 @@ with tab_req:
         for name, details in roster_data.items()
     }
 
-    # Helper function to format full names as "Last Name, First Name"
     def format_last_first(full_name):
         if not full_name or not isinstance(full_name, str):
             return ""
@@ -1025,7 +1022,6 @@ with tab_req:
             return f"{parts[-1]}, {' '.join(parts[:-1])}"
         return full_name
     
-    # Helper function to format dates as M/D/YYYY
     def format_m_d_yyyy(date_val):
         try:
             dt = pd.to_datetime(date_val)
@@ -1033,14 +1029,12 @@ with tab_req:
         except Exception:
             return str(date_val)
     
-    # Helper function to get emp_id from roster lookup or request data
     def get_emp_id(req):
         name = req.get("name", "")
         if name in roster_lookup and roster_lookup[name]:
             return roster_lookup[name]
         return req.get("emp_id", "N/A")
 
-    # --- Section: Approved by RTM & Auto-Approved SL/EL ---
     st.subheader("RTM Approved")
     
     rtm_requests = global_rtm_processed_requests
@@ -1089,7 +1083,6 @@ with tab_req:
     else:
         st.write("No records found.")
 
-    # --- Section: RTM Verification & Approval Level (Pending RTM Approval) ---
     st.subheader("Pending RTM Approval")
     
     filtered_rtm_pending = []
@@ -1130,7 +1123,6 @@ with tab_req:
     else:
         st.write("No records found.")
 
-    # --- Section: Manager Level Approval (Pending Manager Approval) ---
     st.subheader("Manager Level Approval")
     if global_pending_requests:
         filtered_pending = []
@@ -1175,7 +1167,6 @@ with tab_req:
             " logs.*"
         )
     
-    # --- Section: Rejected History ---
     st.subheader("Rejected Requests")
 
     existing_rej_ids = {str(r.get("_id")) for r in global_rejected_requests if r.get("_id")}
@@ -1798,7 +1789,6 @@ with tab_adm:
                     return f"{parts[-1]}, {' '.join(parts[:-1])}"
                 return full_name
         
-            # --- Section: RTM Approved & Auto-Approved SL/EL ---
             st.subheader("RTM Approved")
             rtm_approved_list = []
             auto_sl_list = [r for r in global_approved_requests if r.get("type") == "SL/EL"]
@@ -1828,7 +1818,6 @@ with tab_adm:
             else:
                 st.write("No records found.")
         
-            # --- Section: RTM Verification & Approval Level ---
             st.subheader("🛡️ Pending RTM Approval")
         
             filtered_history_requests = []
@@ -1936,7 +1925,6 @@ with tab_adm:
             else:
                 st.write("No records found.")
         
-            # --- 3. MANAGER LEVEL APPROVAL VIEW ---
             st.subheader("Manager Level Approval")
             
             current_pending_requests = fetch_pending_requests_from_db()
@@ -2055,7 +2043,6 @@ with tab_adm:
             else:
                 st.write("*No pending Wellness or PTO requests awaiting manager level approval.*")
         
-            # --- 4. REJECTED HISTORY VIEW ---
             st.subheader("Rejected History")
         
             global_rejected_requests = fetch_rejected_requests_from_db()
