@@ -1100,7 +1100,7 @@ with tab_req:
         try:
             if r.get("type") == "SL/EL":
                 continue
-            if r.get("rtm_status") != "Pending":
+            if r.get("status") != "Approved":
                 continue
 
             date_str = str(r.get("date", ""))
@@ -1864,7 +1864,7 @@ with tab_adm:
         
             rtm_pending_adm = []
             for r in filtered_history_requests:
-                if r.get("type") == "SL/EL" or r.get("rtm_status") == "Approved":
+                if r.get("type") == "SL/EL" or r.get("status") == "Approved":
                     continue
                 date_val = r.get("parsed_date")
                 if not date_val:
