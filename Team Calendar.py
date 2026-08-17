@@ -1090,7 +1090,7 @@ with tab_req:
         try:
             if r.get("type") == "SL/EL":
                 continue
-            if r.get("status") == "Approved" or r.get("rtm_status") == "Approved":
+            if r.get("status") == "Approved" or r.get("status") == "Approved":
                 continue
 
             date_val = r.get("date")
@@ -1123,7 +1123,7 @@ with tab_req:
     else:
         st.write("No records found.")
 
-    st.subheader("Manager Level Approval")
+    st.subheader("Pending Manager Approval")
     if global_pending_requests:
         filtered_pending = []
         for r in global_pending_requests:
