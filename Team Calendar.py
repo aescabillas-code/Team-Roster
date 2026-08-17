@@ -1054,6 +1054,16 @@ with tab_req:
             if r.get("type") != "SL/EL" and r.get("rtm_status") != "Approved":
                 continue
 
+            date_str = str(r.get("date", ""))
+            try:
+                parts = date_str.split("-")
+                r_year = int(parts[0])
+                r_month = int(parts[1])
+                if r_month != f_m or r_year != f_y:
+                    continue
+            except (ValueError, IndexError):
+                continue
+
             if r_id:
                 seen_ids_rtm.add(r_id)
 
@@ -1093,6 +1103,16 @@ with tab_req:
             if r.get("rtm_status") != "Pending":
                 continue
 
+            date_str = str(r.get("date", ""))
+            try:
+                parts = date_str.split("-")
+                r_year = int(parts[0])
+                r_month = int(parts[1])
+                if r_month != f_m or r_year != f_y:
+                    continue
+            except (ValueError, IndexError):
+                continue
+
             r_copy = dict(r)
             r_copy["emp_id"] = get_emp_id(r_copy)
             filtered_rtm_pending.append(r_copy)
@@ -1121,6 +1141,16 @@ with tab_req:
             if r.get("type") not in ["Wellness", "PTO"]:
                 continue
             try:
+                date_str = str(r.get("date", ""))
+                try:
+                    parts = date_str.split("-")
+                    r_year = int(parts[0])
+                    r_month = int(parts[1])
+                    if r_month != f_m or r_year != f_y:
+                        continue
+                except (ValueError, IndexError):
+                    continue
+
                 r_copy = dict(r)
                 r_copy["emp_id"] = get_emp_id(r_copy)
                 filtered_pending.append(r_copy)
