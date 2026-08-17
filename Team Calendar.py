@@ -1791,7 +1791,7 @@ with tab_adm:
         
             st.subheader("RTM Approved")
             rtm_approved_list = []
-            auto_sl_list = [r for r in global_approved_requests if r.get("type"] == "SL/EL"]
+            auto_sl_list = [r for r in global_approved_requests if r.get("type") == "SL/EL"]
             
             for r in global_rtm_processed_requests + auto_sl_list:
                 if r.get("type") != "SL/EL" and r.get("rtm_status") != "Approved":
