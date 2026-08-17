@@ -221,7 +221,7 @@ def save_request_to_db(req, request_type):
     req["type"] = request_type
     if request_type == "SL/EL":
         req["status"] = "Approved"
-        req["rtm_status"] = "Approved"
+        req["rtm_status"] = "Pending"
     else:
         req["status"] = "Pending"
         req["rtm_status"] = "Pending"
@@ -946,11 +946,13 @@ with tab_req:
 
                     if req_type == "SL/EL":
                         initial_status = "Approved"
+                        rtm_initial_status = "Pending"
                         new_req = {
                             "name": selected_name,
                             "date": date_str,
                             "type": req_type,
                             "status": initial_status,
+                            "rtm_status": rtm_initial_status,
                         }
                         save_request_to_db(new_req, req_type)
                         send_request_email_notification(selected_name, date_str, req_type)
@@ -976,11 +978,13 @@ with tab_req:
                             st.error(f"❌ Limit reached for {req_type} on {req_date}.")
                         else:
                             initial_status = "Pending"
+                            rtm_initial_status = "Pending"
                             new_req = {
                                 "name": selected_name,
                                 "date": date_str,
                                 "type": req_type,
                                 "status": initial_status,
+                                "rtm_status": rtm_initial_status,
                             }
                             save_request_to_db(new_req, req_type)
                             send_request_email_notification(selected_name, date_str, req_type)
@@ -1038,15 +1042,11 @@ with tab_req:
     st.subheader("RTM Approved")
     
     rtm_requests = global_rtm_processed_requests
-    auto_sl_requests = [
-        r for r in global_approved_requests
-        if r.get("type") == "SL/EL"
-    ]
 
     filtered_rtm = []
-    for r in rtm_requests + auto_sl_requests:
+    for r in rtm_requests:
         try:
-            if r.get("type") != "SL/EL" and r.get("rtm_status") != "Approved":
+            if r.get("rtm_status") != "Approved":
                 continue
 
             if isinstance(r.get("date"), str):
@@ -1088,9 +1088,7 @@ with tab_req:
     filtered_rtm_pending = []
     for r in global_approved_requests:
         try:
-            if r.get("type") == "SL/EL":
-                continue
-            if r.get("status") == "Approved" or r.get("status") == "Approved":
+            if r.get("rtm_status") != "Pending":
                 continue
 
             date_val = r.get("date")
@@ -1127,7 +1125,7 @@ with tab_req:
     if global_pending_requests:
         filtered_pending = []
         for r in global_pending_requests:
-            if r.get("type") not in ["Wellness", "PTO"]:
+            if r.get("status") != "Pending":
                 continue
             try:
                 req_date = pd.to_datetime(r["date"])
@@ -1158,7 +1156,7 @@ with tab_req:
             )
         else:
             st.info(
-                f"ℹ️ No pending Wellness or PTO requests found for"
+                f"ℹ️ No pending requests found for"
                 f" {selected_month_name} {int(f_y)}."
             )
     else:
@@ -1553,7 +1551,7 @@ with tab_adm:
         
             def get_all_requests_dataframe(requests_list, select_all_values=False):
                 filtered = [
-                    r for r in requests_list if r.get("type") in ["Wellness", "PTO"]
+                    r for r in requests_list if r.get("status") == "Pending"
                 ]
                 if not filtered:
                     return pd.DataFrame()
@@ -1618,7 +1616,7 @@ with tab_adm:
                     key="editor_all_requests",
                 )
             else:
-                st.write("*No pending Wellness or PTO requests.*")
+                st.write("*No pending requests.*")
         
             if not all_requests_df.empty:
                 btn_col1, btn_col2, btn_col3, btn_col4 = st.columns(4)
@@ -1791,10 +1789,9 @@ with tab_adm:
         
             st.subheader("RTM Approved")
             rtm_approved_list = []
-            auto_sl_list = [r for r in global_approved_requests if r.get("type") == "SL/EL"]
             
-            for r in global_rtm_processed_requests + auto_sl_list:
-                if r.get("type") != "SL/EL" and r.get("rtm_status") != "Approved":
+            for r in global_rtm_processed_requests:
+                if r.get("rtm_status") != "Approved":
                     continue
                 date_val = r.get("date")
                 if isinstance(date_val, str):
@@ -1848,7 +1845,7 @@ with tab_adm:
         
             rtm_pending_adm = []
             for r in filtered_history_requests:
-                if r.get("type") == "SL/EL" or r.get("status") == "Approved":
+                if r.get("rtm_status") != "Pending":
                     continue
                 date_val = r.get("parsed_date")
                 if not date_val:
