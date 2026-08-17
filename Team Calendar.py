@@ -1044,32 +1044,22 @@ with tab_req:
     ]
 
     filtered_rtm = []
-    seen_ids_rtm = set()
     for r in rtm_requests + auto_sl_requests:
         try:
-            r_id = str(r.get("_id", ""))
-            if r_id and r_id in seen_ids_rtm:
-                continue
-                
             if r.get("type") != "SL/EL" and r.get("rtm_status") != "Approved":
                 continue
 
-            date_str = str(r.get("date", ""))
-            try:
-                parts = date_str.split("-")
-                r_year = int(parts[0])
-                r_month = int(parts[1])
-                if r_month != f_m or r_year != f_y:
-                    continue
-            except (ValueError, IndexError):
-                continue
+            if isinstance(r.get("date"), str):
+                parts = r["date"].split("-")
+                r_month, r_year = int(parts[1]), int(parts[0])
+            else:
+                dt = pd.to_datetime(r.get("date"))
+                r_month, r_year = dt.month, dt.year
 
-            if r_id:
-                seen_ids_rtm.add(r_id)
-
-            r_copy = dict(r)
-            r_copy["emp_id"] = get_emp_id(r_copy)
-            filtered_rtm.append(r_copy)
+            if r_month == f_m and r_year == f_y:
+                r_copy = dict(r)
+                r_copy["emp_id"] = get_emp_id(r_copy)
+                filtered_rtm.append(r_copy)
         except Exception:
             continue
 
@@ -1100,22 +1090,21 @@ with tab_req:
         try:
             if r.get("type") == "SL/EL":
                 continue
-            if r.get("status") != "Approved":
+            if r.get("status") == "Approved" or r.get("rtm_status") == "Approved":
                 continue
 
-            date_str = str(r.get("date", ""))
-            try:
-                parts = date_str.split("-")
-                r_year = int(parts[0])
-                r_month = int(parts[1])
-                if r_month != f_m or r_year != f_y:
-                    continue
-            except (ValueError, IndexError):
-                continue
+            date_val = r.get("date")
+            if isinstance(date_val, str):
+                parts = date_val.split("-")
+                r_year, r_month = int(parts[0]), int(parts[1])
+            else:
+                dt = pd.to_datetime(date_val)
+                r_year, r_month = dt.year, dt.month
 
-            r_copy = dict(r)
-            r_copy["emp_id"] = get_emp_id(r_copy)
-            filtered_rtm_pending.append(r_copy)
+            if r_month == f_m and r_year == f_y:
+                r_copy = dict(r)
+                r_copy["emp_id"] = get_emp_id(r_copy)
+                filtered_rtm_pending.append(r_copy)
         except Exception:
             continue
 
@@ -1134,28 +1123,20 @@ with tab_req:
     else:
         st.write("No records found.")
 
-    st.subheader("Pending Manager Approval")
+    st.subheader("Manager Level Approval")
     if global_pending_requests:
         filtered_pending = []
         for r in global_pending_requests:
             if r.get("type") not in ["Wellness", "PTO"]:
                 continue
             try:
-                date_str = str(r.get("date", ""))
-                try:
-                    parts = date_str.split("-")
-                    r_year = int(parts[0])
-                    r_month = int(parts[1])
-                    if r_month != f_m or r_year != f_y:
-                        continue
-                except (ValueError, IndexError):
-                    continue
-
+                req_date = pd.to_datetime(r["date"])
+            except Exception:
+                continue
+            if req_date.month == f_m and req_date.year == f_y:
                 r_copy = dict(r)
                 r_copy["emp_id"] = get_emp_id(r_copy)
                 filtered_pending.append(r_copy)
-            except Exception:
-                continue
     
         if filtered_pending:
             df_pending = pd.DataFrame(filtered_pending)
@@ -1176,7 +1157,10 @@ with tab_req:
                 height=calculated_height,
             )
         else:
-            st.info("ℹ️ No pending Wellness or PTO requests found.")
+            st.info(
+                f"ℹ️ No pending Wellness or PTO requests found for"
+                f" {selected_month_name} {int(f_y)}."
+            )
     else:
         st.write(
             "*No pending requests await administrator review authorization"
