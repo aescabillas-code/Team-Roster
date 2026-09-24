@@ -323,10 +323,45 @@ h2 { font-size:16px !important; color:#14344d; margin-top:8px !important; }
 h3 { font-size:13px !important; color:#173b56; margin-top:7px !important; }
 p, label, .stCaption { font-size:11px; }
 
+
+/* Hide Streamlit's application chrome so the TV/dashboard view
+   contains only the CaseFlow interface. */
+[data-testid="stToolbar"],
+[data-testid="stDecoration"],
+[data-testid="stStatusWidget"],
+[data-testid="stAppDeployButton"],
+#MainMenu,
+footer {
+  display:none !important;
+}
+header[data-testid="stHeader"] {
+  height:0 !important;
+  min-height:0 !important;
+}
+
 /* Profile popover */
 .profile-anchor {
   text-align:right;
 }
+
+/* Reference-style profile button */
+[data-testid="stPopover"] button {
+  font-size:10px !important;
+  min-height:28px !important;
+}
+
+/* Compact tab-like segmented controls */
+.stTabs [data-baseweb="tab-list"] {
+  gap:2px;
+  background:#eef3f6;
+  padding:2px;
+  border-radius:4px;
+}
+.stTabs [data-baseweb="tab"] {
+  font-size:10px !important;
+  padding:5px 9px !important;
+}
+
 </style>
 """,
     unsafe_allow_html=True,
@@ -1065,6 +1100,26 @@ def render_reference_header(title, subtitle="", admin=False):
         unsafe_allow_html=True,
     )
 
+
+def render_reference_topbar(title, subtitle, user):
+    """Top strip used consistently across every CaseFlow tab."""
+    role_label = "Admin" if user.get("role") == "admin" else "Agent"
+    st.markdown(
+        f"""
+        <div class="reference-topbar">
+          <div>
+            <h1>{title}</h1>
+            <p>{subtitle}</p>
+          </div>
+          <div style="text-align:right;font-size:10px;opacity:.92;">
+            <b>{user.get('first_name','')} {user.get('last_name','')}</b><br>
+            {role_label}
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 # ------------------------- Sidebar ----------------------------
 
 def render_profile_menu(user):
@@ -1112,9 +1167,9 @@ def render_profile_menu(user):
 def render_sidebar(user):
     """Compact reference-style text navigation; no radio buttons."""
     if user["role"] == "admin":
-        options = ["Dashboard", "Agent Schedule", "Cases", "Agents", "Requests", "Reports", "Settings"]
+        options = ["Dashboard", "Cases", "Agents", "Schedule", "Requests", "Reports", "Salesforce", "Settings"]
     else:
-        options = ["Dashboard", "My Schedule", "My Cases", "Requests", "Profile"]
+        options = ["Dashboard", "My Cases", "Schedule", "Requests"]
 
     if "nav_page" not in st.session_state or st.session_state.nav_page not in options:
         st.session_state.nav_page = "Dashboard"
@@ -1229,6 +1284,12 @@ def render_case_list(cases, user, title="Active Cases"):
 
 def render_dashboard(user):
     db = get_db()
+    render_reference_topbar(
+        "TEAM OVERVIEW" if user.get("role") == "admin" else "MY CASE DASHBOARD",
+        "Overall queue status, agent stats and alerts" if user.get("role") == "admin"
+        else "Overview of assigned cases, quick stats and alerts",
+        user,
+    )
     render_alerts(user)
 
     cases = get_cases_for_user(user["email"], user["role"])
@@ -1311,6 +1372,10 @@ def render_agent_status_strip():
 # ------------------------- Case detail ------------------------
 
 def render_case_detail(user):
+    render_reference_header(
+        "Case Details",
+        "View, update and manage the selected case",
+    )
     case_id = st.session_state.get("selected_case")
     case = get_case(case_id)
     if not case:
@@ -1676,6 +1741,45 @@ def render_reports(user):
     schedule_count = db["schedules"].count_documents({"schedule_date": today})
     st.metric("Published schedules today", schedule_count)
 
+
+def render_salesforce(user):
+    render_reference_header(
+        "Salesforce (Admin)",
+        "Access Salesforce cases and external case data — Admin only",
+    )
+    st.markdown(
+        """
+        <div class="panel-card" style="padding:14px;">
+          <div style="font-size:16px;font-weight:800;color:#12314a;">
+            Salesforce Integration
+          </div>
+          <div style="font-size:11px;color:#657485;margin-top:4px;">
+            External case access is restricted to administrators.
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    c1, c2 = st.columns([1, 2])
+    with c1:
+        st.markdown(
+            '<div style="font-size:42px;text-align:center;padding:18px;">☁️</div>',
+            unsafe_allow_html=True,
+        )
+    with c2:
+        st.markdown("**Open Salesforce**")
+        st.caption(DEFAULT_SF_URL)
+        st.link_button(
+            "Open Salesforce",
+            DEFAULT_SF_URL,
+            use_container_width=True,
+        )
+        st.info(
+            "Salesforce API credentials can be added later. "
+            "The external integration remains Admin-only."
+        )
+
+
 def render_settings(user):
     render_reference_header("Settings (Admin)", "Manage system settings, PTO allocation, roles and integrations")
     st.subheader("External Salesforce")
@@ -1775,25 +1879,27 @@ def main():
         render_case_detail(user)
     elif page == "Dashboard":
         render_dashboard(user)
-    elif page == "My Schedule":
-        render_my_schedule(user)
+    elif page == "Schedule":
+        if user["role"] == "admin":
+            render_admin_schedule(user)
+        else:
+            render_my_schedule(user)
     elif page == "My Cases":
+        render_reference_header("My Cases (Agent)", "View and update assigned cases")
         render_case_list(get_cases_for_user(user["email"], user["role"]), user, "My Active Cases")
     elif page == "Requests":
         if user["role"] == "admin":
             render_requests_admin(user)
         else:
             render_requests(user)
-    elif page == "Profile":
-        render_profile(user)
-    elif page == "Agent Schedule":
-        render_admin_schedule(user)
     elif page == "Cases":
         render_admin_cases(user)
     elif page == "Agents":
         render_agents(user)
     elif page == "Reports":
         render_reports(user)
+    elif page == "Salesforce":
+        render_salesforce(user)
     elif page == "Settings":
         render_settings(user)
 
