@@ -1,87 +1,97 @@
+# HPE Team Operations Control Center
 
-# HPE Case Operations Control Center — Streamlit MVP
+## MongoDB
 
-## Run locally
+The app uses the requested database structure:
 
-```bash
-python -m venv .venv
-# Windows: .venv\Scripts\activate
-# macOS/Linux: source .venv/bin/activate
-
-pip install -r requirements.txt
-streamlit run app.py
+```python
+client = get_mongo_client()
+db = client["TeamRoster"]
+collection = db["Team Roster Collection"]
 ```
 
-The app creates `case_control_center.db` automatically.
+Set `MONGODB_URI` in the environment/deployment secrets. The app creates indexes and these collections: `Team Roster Collection`, `cases`, `case_history`, `notifications`, `schedules`, `schedule_requests`, `attendance`, and `app_settings`.
 
-## Included in this MVP
-
-- Mandatory sign-in and account creation
-- Regular and admin role separation
-- Employee profile fields requested in the specification
-- Secure password hashing with PBKDF2 (do not use this SQLite/demo auth as a substitute for enterprise SSO)
-- Modern responsive dashboard designed for wide/TV display
-- Retractable Streamlit sidebar
-- Search
-- KPI tiles for Total Active, Critical, Due Soon and On Track
-- Clickable KPI filtering
-- Active-case list sorted by urgency
-- Red/yellow/green urgency treatment
-- Case detail view and history
-- Regular-agent case bucket
-- Agent case status updates
-- Contract breach tagging and reason
-- Salesforce case link
-- Optional Salesforce pull for admins
-- Auto-assignment to available agents using least-active-load logic
-- Agent aux states, including Unscheduled Break
-- Admin agent aux monitoring
-- Admin ability to take an agent out of assignment / restore them
-- Admin case reassignment
-- Agent alerts for critical, due-soon and 24-hour stale cases
-- Schedule tab for agents
-- PTO / schedule / swap request capture
-- Admin schedule request approval/rejection
-- Admin activity creation
-- CSV report extraction
-- Automatic UI polling for near-real-time database updates
-
-## Important production changes
-
-This is a functional MVP scaffold, not a production HPE deployment. Before production:
-
-1. Replace local password authentication with HPE-approved SSO/identity provider.
-2. Store employee personal information in an approved encrypted database with proper retention and access controls.
-3. Use PostgreSQL/Azure SQL/etc. rather than SQLite for concurrent users.
-4. Implement transactional queue locking for auto-assignment so two app instances cannot assign the same case simultaneously.
-5. Add a background worker/event consumer for true event-driven Salesforce ingestion.
-6. Add Salesforce OAuth / Connected App and field mapping approved by your Salesforce administrators.
-7. Add email/Teams notifications through an approved enterprise connector/service.
-8. Add audit logging, permission checks, CSRF/session hardening and security monitoring.
-9. Implement the exact workforce-management rules for breaks/lunch, hourly queue coverage, PTO allocation and swap approval.
-10. Deploy behind HTTPS and your organization's identity/security controls.
-
-## Salesforce environment variables
-
-Example:
+## Run
 
 ```bash
-SF_USERNAME="service.account@hpe.com"
-SF_PASSWORD="..."
-SF_SECURITY_TOKEN="..."
-SF_DOMAIN="login"
+pip install -r requirements_mongodb.txt
+streamlit run hpe_team_operations_app.py
 ```
 
-For Streamlit Cloud or another deployment platform, put these in the platform's secret manager rather than in source code.
+## Included
 
-## Real-time behavior
+- Popup Sign In / Sign Up
+- HPE email validation
+- Passwords saved as salted PBKDF2 hashes
+- `arianne-may.escabillas@hpe.com` automatically bootstrapped as admin
+- Super-admin role changes for other users
+- Regular-agent default aux: `Busy - Away`
+- Admin default aux: `Admin Task`
+- `Available`, `Busy - Away`, `Break`, `Unscheduled Break`, `Lunch`, `In a Meeting`, `Coaching`, `Admin Task`, `Offline`
+- Searchable task/case dashboard
+- Total Active / Critical / Due Soon / On Track KPI tiles
+- Clickable KPI filters
+- Urgency sorting and red/yellow/green visual treatment
+- Task progress and last update
+- Agent availability/current aux/current active load/assigned-today distribution
+- Automatic assignment only to available agents
+- Fair assignment based on active load, assigned-today count and assignment timestamp
+- Agent case alerts for newly assigned, critical, due-soon and 24-hour stale cases
+- Status/progress updates
+- Contract-breach reason + editable generated vendor message
+- Salesforce case link, email link and vendor call link/number copy field
+- Admin agent kick/offline and restore controls
+- Admin bucket view and ageing alerts
+- Admin reassignment
+- Admin-only Salesforce pull
+- CSV extraction
+- Daily and MTD adherence/attendance views
+- Agent day/week/month schedules
+- Automatic break/lunch schedule generation with staggered coverage
+- Admin schedule/activity editing
+- PTO allocation check with exact no-allocation error
+- Sick Leave and Emergency Leave auto-approval
+- Schedule swap approval once both agents agree, without further admin approval
+- Admin notifications for submitted requests and processed approvals
+- Retractable sidebar
+- Wide modern TV/mirror-cast layout
+- Lightweight polling with stable Streamlit session state so polling does not intentionally reset the agent's current activity
+- MongoDB indexes for common case/assignment/schedule queries
 
-The dashboard polls the database every 15 seconds using `streamlit-autorefresh`. This means users do not manually refresh the browser. For true real-time production behavior, use an event/queue mechanism or database change notifications and push updates through an appropriate service.
+## Realtime / performance
 
-## Automatic assignment
+Default polling is 15 seconds. Change with `REFRESH_SECONDS`. The app keeps selected case, navigation and search/filter state in `st.session_state`; heartbeat writes are throttled. For very large deployments, use MongoDB change streams/background workers and a push layer rather than high-frequency Streamlit polling.
 
-A new case is assigned only to active regular agents whose aux is `Available`. The current MVP chooses the available agent with the lowest active-case load. The assignment logic should be replaced with your actual queue/WFM rules, including skills, priority, language, shift, concurrency and coverage requirements.
+## Salesforce
 
-## Privacy
+Admin-only. Add later through secrets:
 
-The signup form collects birthday, home address and phone number because they were part of the requested specification. In a real enterprise application, confirm that each field is necessary, provide the appropriate privacy notice, restrict access, encrypt sensitive data and follow the organization's retention policy.
+```text
+SF_USERNAME
+SF_PASSWORD
+SF_SECURITY_TOKEN
+SF_DOMAIN=login
+```
+
+The Salesforce code is isolated in the admin page so your Salesforce URL/API mapping can be replaced without changing the agent dashboard.
+
+## Attendance/adherence source
+
+Populate `attendance` with records like:
+
+```json
+{
+  "user_id": "<mongo user id>",
+  "date": "2026-09-24",
+  "planned_minutes": 480,
+  "adherent_minutes": 450,
+  "attendance_status": "Present"
+}
+```
+
+The app calculates daily and MTD adherence from those records.
+
+## Production requirements
+
+Use HPE-approved SSO, encrypted/controlled storage for employee personal data, TLS, least-privilege MongoDB credentials, enterprise email/notification services, Salesforce OAuth/Connected App, audit/retention controls, and an atomic queue-claim/transaction mechanism for concurrent auto-assignment workers. The provided assignment algorithm is an MVP implementation of the requested fairness rules.
