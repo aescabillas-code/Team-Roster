@@ -1,4 +1,3 @@
-
 import os
 import re
 import io
@@ -272,30 +271,98 @@ def get_db():
     return get_mongo_client()[DB_NAME]
 
 def init_db():
+    """Initialize indexes safely for an existing Team Roster Collection."""
     db = get_db()
-    db[USER_COLLECTION].create_index([("email", ASCENDING)], unique=True)
-    db[USER_COLLECTION].create_index([("employee_id", ASCENDING)], unique=True, sparse=True)
-    db["cases"].create_index([("status", ASCENDING), ("due_at", ASCENDING)])
-    db["cases"].create_index([("assigned_to", ASCENDING), ("status", ASCENDING)])
-    db["cases"].create_index([("created_at", DESCENDING)])
-    db["alerts"].create_index([("user_email", ASCENDING), ("read", ASCENDING), ("created_at", DESCENDING)])
-    db["schedules"].create_index([("email", ASCENDING), ("schedule_date", ASCENDING)])
-    db["requests"].create_index([("status", ASCENDING), ("created_at", DESCENDING)])
-    db["audit_logs"].create_index([("created_at", DESCENDING)])
+    user_collection = db[USER_COLLECTION]
 
-    # Guarantee the requested owner is an admin.
-    db[USER_COLLECTION].update_one(
-        {"email": AUTO_ADMIN_EMAIL},
-        {"$set": {"role": "admin", "email": AUTO_ADMIN_EMAIL, "updated_at": now()},
-         "$setOnInsert": {
-             "first_name": "Arianne May",
-             "last_name": "Escabillas",
-             "created_at": now(),
-             "aux": "Admin Task",
-             "active": True,
-         }},
-        upsert=True,
-    )
+    # Legacy roster records may have missing/null/empty emails.
+    # Empty strings are not useful account emails, so remove only those.
+    user_collection.update_many({"email": ""}, {"$unset": {"email": ""}})
+    user_collection.update_many({"employee_id": ""}, {"$unset": {"employee_id": ""}})
+
+    # Replace an old non-partial email index. A normal unique index treats
+    # multiple missing/null email values as duplicates.
+    try:
+        indexes = list(user_collection.list_indexes())
+        old_email = next((i for i in indexes if i.get("name") == "email_1"), None)
+        if old_email and not old_email.get("partialFilterExpression"):
+            user_collection.drop_index("email_1")
+
+        user_collection.create_index(
+            [("email", ASCENDING)],
+            name="email_1",
+            unique=True,
+            partialFilterExpression={"email": {"$type": "string"}},
+        )
+    except PyMongoError as exc:
+        st.warning(f"Email index warning: {exc}")
+
+    # Employee IDs follow the same safe pattern.
+    try:
+        indexes = list(user_collection.list_indexes())
+        old_emp = next((i for i in indexes if i.get("name") == "employee_id_1"), None)
+        if old_emp and not old_emp.get("partialFilterExpression"):
+            user_collection.drop_index("employee_id_1")
+
+        user_collection.create_index(
+            [("employee_id", ASCENDING)],
+            name="employee_id_1",
+            unique=True,
+            partialFilterExpression={"employee_id": {"$type": "string"}},
+        )
+    except PyMongoError as exc:
+        st.warning(f"Employee ID index warning: {exc}")
+
+    # Operational indexes.
+    db["cases"].create_index([ ("status", ASCENDING), ("due_at", ASCENDING) ], name="case_status_due")
+    db["cases"].create_index([ ("assigned_to", ASCENDING), ("status", ASCENDING) ], name="case_assignment_status")
+    db["cases"].create_index([ ("created_at", DESCENDING) ], name="case_created")
+    db["alerts"].create_index([ ("user_email", ASCENDING), ("read", ASCENDING), ("created_at", DESCENDING) ], name="alert_user_read_created")
+    db["schedules"].create_index([ ("email", ASCENDING), ("schedule_date", ASCENDING) ], name="schedule_user_date")
+    db["requests"].create_index([ ("status", ASCENDING), ("created_at", DESCENDING) ], name="request_status_created")
+    db["audit_logs"].create_index([ ("created_at", DESCENDING) ], name="audit_created")
+
+    # Guarantee the requested owner remains an admin.
+    admin_email = normalize_email(AUTO_ADMIN_EMAIL)
+    admin = user_collection.find_one({"email": admin_email})
+    if admin:
+        user_collection.update_one(
+            {"_id": admin["_id"]},
+            {"$set": {
+                "email": admin_email,
+                "role": "admin",
+                "aux": "Admin Task",
+                "active": True,
+                "kicked": False,
+                "updated_at": now(),
+            }}
+        )
+    else:
+        try:
+            user_collection.insert_one({
+                "first_name": "Arianne May",
+                "last_name": "Escabillas",
+                "employee_id": "AUTO-ADMIN",
+                "email": admin_email,
+                "role": "admin",
+                "aux": "Admin Task",
+                "active": True,
+                "kicked": False,
+                "created_at": now(),
+                "updated_at": now(),
+                "daily_case_count": 0,
+                "mtd_case_count": 0,
+                "pto_allocation": {"PTO": 0, "Sick Leave": 0, "Emergency Leave": 0},
+            })
+        except DuplicateKeyError:
+            admin = user_collection.find_one({"email": admin_email})
+            if admin:
+                user_collection.update_one(
+                    {"_id": admin["_id"]},
+                    {"$set": {"role": "admin", "aux": "Admin Task", "active": True, "kicked": False, "updated_at": now()}}
+                )
+            else:
+                raise
 
 def audit(action, actor, target=None, details=None):
     get_db()["audit_logs"].insert_one({
