@@ -94,55 +94,239 @@ st.markdown(
     """
 <style>
 :root {
-  --navy:#10243e;
-  --blue:#1769aa;
+  --navy:#062b49;
+  --navy2:#0a3d61;
+  --blue:#0879bd;
+  --blue2:#145b86;
+  --teal:#0d6d68;
   --green:#16855b;
-  --yellow:#c98b00;
-  --red:#c63c3c;
-  --bg:#f4f7fb;
+  --yellow:#d5a20a;
+  --red:#d33b3b;
+  --purple:#7754a5;
+  --bg:#eef3f6;
   --card:#ffffff;
-  --muted:#68778d;
+  --line:#d7e0e7;
+  --muted:#657485;
+  --text:#183047;
 }
-html, body, [class*="css"] { font-family: Inter, Arial, sans-serif; }
-[data-testid="stAppViewContainer"] { background:var(--bg); }
-[data-testid="stHeader"] { background:rgba(0,0,0,0); }
-.block-container { padding-top: 1rem; max-width: 1800px; }
-.hero {
-  background:linear-gradient(135deg,#10243e,#1769aa);
-  color:white; border-radius:18px; padding:20px 24px; margin-bottom:16px;
-  box-shadow:0 8px 24px rgba(16,36,62,.12);
+
+/* Overall canvas */
+html, body, [class*="css"] {
+  font-family: Inter, Arial, sans-serif;
 }
-.hero h1 { margin:0; font-size:28px; }
-.hero p { margin:5px 0 0; opacity:.85; }
+[data-testid="stAppViewContainer"] {
+  background:var(--bg);
+}
+[data-testid="stHeader"] {
+  background:transparent;
+}
+.block-container {
+  padding-top:.35rem;
+  padding-left:.45rem;
+  padding-right:.45rem;
+  padding-bottom:.5rem;
+  max-width:1550px;
+}
+
+/* Sidebar — compact navy navigation like the reference */
+[data-testid="stSidebar"] {
+  background:linear-gradient(180deg,#062b49 0%,#073652 100%);
+  border-right:0;
+}
+[data-testid="stSidebar"] > div:first-child {
+  padding:8px 8px 12px 8px;
+}
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] {
+  color:#fff;
+}
+[data-testid="stSidebar"] .stCaption,
+[data-testid="stSidebar"] small {
+  color:#d7e8f2 !important;
+}
+[data-testid="stSidebar"] button {
+  border:0 !important;
+  border-radius:3px !important;
+  background:transparent !important;
+  color:#eaf5fb !important;
+  text-align:left !important;
+  justify-content:flex-start !important;
+  min-height:31px !important;
+  padding:4px 8px !important;
+  font-size:12px !important;
+  box-shadow:none !important;
+}
+[data-testid="stSidebar"] button:hover {
+  background:#0b5279 !important;
+}
+[data-testid="stSidebar"] hr {
+  border-color:rgba(255,255,255,.15);
+}
+
+/* Reference-style top/page bars */
+.reference-topbar {
+  background:#082f4d;
+  color:#fff;
+  border-radius:5px;
+  padding:7px 11px;
+  margin-bottom:5px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+}
+.reference-topbar h1 {
+  margin:0;
+  font-size:22px;
+  letter-spacing:.2px;
+  font-weight:800;
+}
+.reference-topbar p {
+  margin:0;
+  font-size:11px;
+  opacity:.9;
+}
+.page-title-bar {
+  background:#0c466b;
+  color:#fff;
+  border-radius:5px;
+  padding:7px 10px;
+  margin:2px 0 6px 0;
+}
+.page-title-bar .title {
+  font-size:15px;
+  font-weight:800;
+  margin:0;
+}
+.page-title-bar .subtitle {
+  font-size:10px;
+  margin-top:1px;
+  opacity:.92;
+}
+
+/* White content cards */
+[data-testid="stVerticalBlockBorderWrapper"] {
+  border-radius:6px !important;
+}
+.case-card,
+.metric-card,
+.panel-card {
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:5px;
+  box-shadow:0 1px 3px rgba(20,40,60,.08);
+}
 .metric-card {
-  background:white; border:1px solid #e5eaf0; border-radius:16px;
-  padding:14px 16px; box-shadow:0 3px 12px rgba(20,40,70,.06);
-  min-height:100px;
+  padding:8px 10px;
+  min-height:72px;
 }
-.metric-title { color:#6b7788; font-size:13px; }
-.metric-value { font-size:30px; font-weight:750; color:#10243e; }
-.metric-sub { color:#7b8797; font-size:12px; }
-.case-red { border-left:6px solid #c63c3c !important; }
-.case-yellow { border-left:6px solid #c98b00 !important; }
-.case-green { border-left:6px solid #16855b !important; }
+.metric-title {
+  color:#627385;
+  font-size:10px;
+  font-weight:600;
+}
+.metric-value {
+  font-size:24px;
+  line-height:1.05;
+  font-weight:800;
+  color:#12314a;
+}
+.metric-sub {
+  color:#7a8896;
+  font-size:9px;
+}
 .case-card {
-  background:white; border:1px solid #e3e9f0; border-radius:13px;
-  padding:12px 15px; margin-bottom:8px;
+  padding:7px 9px;
+  margin-bottom:5px;
 }
-.case-id { color:#1769aa; font-weight:700; }
-.muted { color:#6b7788; }
+.case-id {
+  color:#0879bd;
+  font-weight:800;
+  font-size:11px;
+}
+.muted {
+  color:#667789;
+  font-size:10px;
+}
+.small-note {
+  font-size:9px;
+  color:#6c7c8b;
+}
 .badge {
- display:inline-block; border-radius:999px; padding:3px 9px; font-size:11px;
- background:#edf2f7; margin-right:4px;
+  display:inline-block;
+  border-radius:4px;
+  padding:2px 5px;
+  font-size:9px;
+  background:#edf2f7;
+  margin-right:3px;
+  color:#405366;
 }
-.badge-red { background:#fdeaea; color:#a52222; }
-.badge-yellow { background:#fff4d6; color:#8c6300; }
-.badge-green { background:#e4f6ee; color:#0b7048; }
+.badge-red {
+  background:#ffdfe0;
+  color:#a32222;
+}
+.badge-yellow {
+  background:#fff0bf;
+  color:#7e6000;
+}
+.badge-green {
+  background:#d9f3e6;
+  color:#086c46;
+}
+.case-red {
+  border-left:4px solid var(--red) !important;
+}
+.case-yellow {
+  border-left:4px solid var(--yellow) !important;
+}
+.case-green {
+  border-left:4px solid var(--green) !important;
+}
 .alert-box {
- background:#fff7df; border:1px solid #efd37a; padding:10px 12px;
- border-radius:10px; margin-bottom:8px;
+  background:#fff5d8;
+  border:1px solid #eed17a;
+  padding:6px 8px;
+  border-radius:4px;
+  margin-bottom:5px;
+  font-size:10px;
 }
-.small-note { font-size:12px; color:#6b7788; }
+
+/* Compact controls / tables */
+.stButton > button,
+.stDownloadButton > button,
+.stFormSubmitButton > button {
+  border-radius:4px !important;
+  min-height:30px !important;
+  padding:4px 10px !important;
+  font-size:11px !important;
+}
+.stTextInput input,
+.stTextArea textarea,
+.stSelectbox div[data-baseweb="select"],
+.stDateInput input,
+.stTimeInput input {
+  border-radius:4px !important;
+  font-size:11px !important;
+}
+[data-testid="stDataFrame"] {
+  border:1px solid var(--line);
+  border-radius:5px;
+}
+[data-testid="stMetric"] {
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:5px;
+  padding:6px;
+}
+
+/* Make Streamlit headings compact like the reference */
+h1 { font-size:21px !important; color:#14344d; }
+h2 { font-size:16px !important; color:#14344d; margin-top:8px !important; }
+h3 { font-size:13px !important; color:#173b56; margin-top:7px !important; }
+p, label, .stCaption { font-size:11px; }
+
+/* Profile popover */
+.profile-anchor {
+  text-align:right;
+}
 </style>
 """,
     unsafe_allow_html=True,
@@ -403,6 +587,7 @@ def create_alert(email, title, message, severity="info"):
 
 # ------------------------- Auth -------------------------------
 
+@st.cache_data(ttl=2, show_spinner=False)
 def get_user(email):
     return get_db()[USER_COLLECTION].find_one({"email": normalize_email(email)})
 
@@ -731,6 +916,7 @@ def deny_request(request_id, admin_email):
 
 # ------------------------- Data helpers -----------------------
 
+@st.cache_data(ttl=2, show_spinner=False)
 def get_cases_for_user(user):
     db = get_db()
     q = {"status": {"$nin": ["Completed", "Cancelled"]}}
@@ -738,6 +924,7 @@ def get_cases_for_user(user):
         q["assigned_to"] = user["email"]
     return list(db["cases"].find(q).sort([("priority", ASCENDING), ("due_at", ASCENDING)]).limit(1000))
 
+@st.cache_data(ttl=2, show_spinner=False)
 def get_case(case_id):
     try:
         from bson import ObjectId
@@ -752,6 +939,8 @@ def save_case_update(case_id, user, fields):
     fields["last_updated_by"] = user["email"]
     result = db["cases"].update_one({"_id": case_id}, {"$set": fields})
     if result.modified_count:
+        get_case.clear()
+        get_cases_for_user.clear()
         audit("case_updated", user["email"], oid_str(case_id), fields)
         return True
     return False
@@ -858,49 +1047,98 @@ def login_screen():
                     except Exception as exc:
                         st.error(str(exc))
 
+def render_reference_header(title, subtitle="", admin=False):
+    """Compact header matching the uploaded CaseFlow reference image."""
+    st.markdown(
+        f"""
+        <div class="page-title-bar">
+          <div class="title">{title}</div>
+          <div class="subtitle">{subtitle}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 # ------------------------- Sidebar ----------------------------
 
+def render_profile_menu(user):
+    """Profile and AUX control in the upper-right corner."""
+    name = f"{user.get('first_name','')} {user.get('last_name','')}".strip() or user["email"]
+
+    with st.popover(f"👤 {name} ▾", use_container_width=True):
+        st.markdown(f"**{name}**")
+        st.caption(user["email"])
+        st.caption(f"Role: {user.get('role','regular').title()}")
+
+        aux_options = AUX_OPTIONS if user.get("role") == "admin" else [
+            "Available", "Break", "Lunch", "In a Meeting", "Coaching",
+            "Busy - Away", "Unscheduled Break"
+        ]
+        default_aux = user.get("aux") or (
+            "Admin Task" if user.get("role") == "admin" else "Busy - Away"
+        )
+        if default_aux not in aux_options:
+            default_aux = aux_options[0]
+
+        aux = st.selectbox(
+            "AUX",
+            aux_options,
+            index=aux_options.index(default_aux),
+            key="profile_aux",
+        )
+
+        if st.button("Save AUX", key="profile_save_aux", use_container_width=True):
+            get_db()[USER_COLLECTION].update_one(
+                {"email": user["email"]},
+                {"$set": {"aux": aux, "updated_at": now()}}
+            )
+            st.session_state.user["aux"] = aux
+            audit("aux_changed", user["email"], details={"aux": aux})
+            st.success("AUX updated.")
+            st.rerun()
+
+        st.divider()
+        st.write(f"**Employee ID:** {user.get('employee_id','—')}")
+        if st.button("Sign out", key="profile_signout", use_container_width=True):
+            logout()
+
+
 def render_sidebar(user):
+    """Compact reference-style text navigation; no radio buttons."""
+    if user["role"] == "admin":
+        options = ["Dashboard", "Agent Schedule", "Cases", "Agents", "Requests", "Reports", "Settings"]
+    else:
+        options = ["Dashboard", "My Schedule", "My Cases", "Requests", "Profile"]
+
+    if "nav_page" not in st.session_state or st.session_state.nav_page not in options:
+        st.session_state.nav_page = "Dashboard"
+
     with st.sidebar:
         st.markdown("### HPE CaseFlow")
         st.caption(f"{user.get('first_name','')} {user.get('last_name','')}")
         st.caption(user["email"])
+        st.divider()
 
+        for option in options:
+            active = st.session_state.nav_page == option
+            if st.button(
+                f"▸ {option}" if active else option,
+                key=f"nav_word_{option}",
+                use_container_width=True,
+                type="secondary",
+            ):
+                if st.session_state.nav_page != option:
+                    st.session_state.nav_page = option
+                    st.session_state.pop("selected_case", None)
+                    st.rerun()
+
+        st.divider()
         unread = unread_alerts(user["email"])
         if unread:
             st.warning(f"🔔 {len(unread)} unread alert(s)")
 
-        if user["role"] == "admin":
-            options = ["Dashboard", "Agent Schedule", "Cases", "Agents", "Requests", "Reports", "Settings"]
-        else:
-            options = ["Dashboard", "My Schedule", "My Cases", "Requests", "Profile"]
+    return st.session_state.nav_page
 
-        page = st.radio("Navigation", options, key="nav_page")
-
-        st.divider()
-        st.markdown("**Current AUX**")
-        aux_options = AUX_OPTIONS if user["role"] == "admin" else [
-            "Available", "Break", "Lunch", "In a Meeting", "Coaching", "Busy - Away", "Unscheduled Break"
-        ]
-        current_aux = st.selectbox("AUX", aux_options, index=aux_options.index(user.get("aux", "Busy - Away"))
-                                   if user.get("aux", "Busy - Away") in aux_options else 0,
-                                   key="current_aux")
-        if st.button("Save AUX", use_container_width=True):
-            get_db()[USER_COLLECTION].update_one(
-                {"email": user["email"]},
-                {"$set": {"aux": current_aux, "updated_at": now()}}
-            )
-            st.session_state.user["aux"] = current_aux
-            audit("aux_changed", user["email"], details={"aux": current_aux})
-            st.success("AUX updated.")
-            st.rerun()
-
-        if st.button("Refresh now", use_container_width=True):
-            st.rerun()
-        if st.button("Sign out", use_container_width=True):
-            logout()
-
-    return page
 
 # ------------------------- Dashboard --------------------------
 
@@ -985,8 +1223,6 @@ def render_case_list(cases, user, title="Active Cases"):
 
 def render_dashboard(user):
     db = get_db()
-    auto_assign_new_cases()
-    generate_case_alerts(user["email"])
     render_alerts(user)
 
     cases = get_cases_for_user(user)
@@ -1003,14 +1239,9 @@ def render_dashboard(user):
         due_soon = [c for c in active if case_bucket(c) == "Due Soon"]
         on_track = [c for c in active if case_bucket(c) == "On Track"]
 
-    st.markdown(
-        f"""
-        <div class="hero">
-          <h1>{'Admin Command Center' if user['role']=='admin' else 'My Case Dashboard'}</h1>
-          <p>{now().strftime('%A, %B %d, %Y · %I:%M %p')} · Live queue monitoring</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    render_reference_header(
+        "Dashboard (Admin)" if user["role"] == "admin" else "Dashboard (Agent)",
+        f"{now().strftime('%A, %B %d, %Y · %I:%M %p')} · Live queue monitoring"
     )
 
     cols = st.columns(4)
@@ -1164,7 +1395,7 @@ def render_case_detail(user):
 # ------------------------- Regular pages ---------------------
 
 def render_my_schedule(user):
-    st.header("My Schedule")
+    render_reference_header("Schedule (Agent)", "View your schedule for the day, week or month")
     view = st.radio("View", ["Day", "Week", "Month"], horizontal=True)
     days = {"Day": 1, "Week": 7, "Month": 31}[view]
     start = date.today()
@@ -1184,7 +1415,7 @@ def render_my_schedule(user):
     st.dataframe(df, use_container_width=True, hide_index=True)
 
 def render_requests(user):
-    st.header("Leave & Schedule Requests")
+    render_reference_header("Requests (Agent)", "Submit leave, PTO or schedule swap requests")
     st.caption("Sick Leave and Emergency Leave are auto-approved. PTO is auto-approved only when allocation is available.")
 
     request_type = st.selectbox("Request type", REQUEST_TYPES)
@@ -1231,7 +1462,7 @@ def render_requests(user):
         } for r in reqs]), use_container_width=True, hide_index=True)
 
 def render_profile(user):
-    st.header("My Profile")
+    render_reference_header("Profile (Agent)", "Personal details, role and PTO information")
     st.write(f"**Name:** {user.get('first_name')} {user.get('last_name')}")
     st.write(f"**Employee ID:** {user.get('employee_id','—')}")
     st.write(f"**Email:** {user.get('email')}")
@@ -1246,7 +1477,7 @@ def render_profile(user):
 # ------------------------- Admin pages ------------------------
 
 def render_admin_schedule(user):
-    st.header("Agent Schedule")
+    render_reference_header("Schedule (Admin)", "Manage and approve agent schedules")
     st.caption("Approve schedule changes/requests and publish queue coverage schedules.")
 
     c1, c2 = st.columns(2)
@@ -1312,7 +1543,7 @@ def render_admin_schedule(user):
         st.dataframe(pd.DataFrame(coverage), use_container_width=True, hide_index=True)
 
 def render_admin_cases(user):
-    st.header("All Cases")
+    render_reference_header("Cases (Admin)", "View, reassign and manage all cases")
     cases = list(get_db()["cases"].find().sort("created_at", DESCENDING).limit(2000))
     render_case_list(cases, user, "Case Management")
 
@@ -1326,7 +1557,7 @@ def render_admin_cases(user):
             (st.success if ok else st.error)(f"Assigned to {result}" if ok else result)
 
 def render_agents(user):
-    st.header("Agent Management")
+    render_reference_header("Agents (Admin)", "View agent status, AUX and case distribution")
     agents = list(get_db()[USER_COLLECTION].find().sort([("role", ASCENDING), ("first_name", ASCENDING)]))
     rows = []
     for a in agents:
@@ -1393,7 +1624,7 @@ def render_agents(user):
             st.rerun()
 
 def render_requests_admin(user):
-    st.header("Requests")
+    render_reference_header("Requests (Admin)", "View and process agent requests")
     reqs = list(get_db()["requests"].find().sort("created_at", DESCENDING).limit(200))
     if not reqs:
         st.info("No requests.")
@@ -1407,7 +1638,7 @@ def render_requests_admin(user):
     } for r in reqs]), use_container_width=True, hide_index=True)
 
 def render_reports(user):
-    st.header("Reports")
+    render_reference_header("Reports (Admin)", "Extract reports and view adherence")
     db = get_db()
     users = list(db[USER_COLLECTION].find({"role":"regular"}))
     rows = []
@@ -1440,7 +1671,7 @@ def render_reports(user):
     st.metric("Published schedules today", schedule_count)
 
 def render_settings(user):
-    st.header("Settings")
+    render_reference_header("Settings (Admin)", "Manage system settings, PTO allocation, roles and integrations")
     st.subheader("External Salesforce")
     st.write("Admin-only Salesforce access:")
     st.link_button("Open Salesforce", DEFAULT_SF_URL)
@@ -1523,10 +1754,16 @@ def main():
                     "updated_at":now(),
                 }}
             )
+            get_user.clear()
             user = get_user(AUTO_ADMIN_EMAIL)
             st.session_state.user = user
 
     page = render_sidebar(user)
+
+    # Reference image places the user profile at the upper-right of the content area.
+    _title_col, _profile_col = st.columns([8.5, 1.5])
+    with _profile_col:
+        render_profile_menu(user)
 
     if st.session_state.get("selected_case"):
         render_case_detail(user)
