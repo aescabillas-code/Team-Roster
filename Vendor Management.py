@@ -18,14 +18,11 @@ st.markdown('''<style>
 </style>''',unsafe_allow_html=True)
 
 @st.cache_resource(show_spinner=False)
-
-def get_mongo_client():
-    uri = st.secrets["mongo"]["uri"]
-    return MongoClient(uri)
-
-client = get_mongo_client()
-db = client["TeamRoster"]
-collection = db["Team Roster Collection"]
+def mongo():
+    uri=st.secrets.get('MONGO_URI',None) if hasattr(st,'secrets') else None
+    uri=uri or os.getenv('MONGO_URI')
+    if not uri: raise RuntimeError('MONGO_URI is not configured.')
+    return MongoClient(uri,maxPoolSize=30,serverSelectionTimeoutMS=5000)
 
 def db(): return mongo()['TeamRoster']
 def C():
