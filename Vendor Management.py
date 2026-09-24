@@ -1,3 +1,28 @@
+"""
+HPE CaseFlow
+Modern Streamlit case/task management dashboard.
+
+Install:
+    pip install -r requirements.txt
+
+MongoDB:
+    Set MONGODB_URI in Streamlit secrets or environment.
+    The app uses:
+        db = client["TeamRoster"]
+        roster = db[ROSTER_COLLECTION_NAME]
+    Default roster collection: "roster_list"
+    Set ROSTER_COLLECTION_NAME="Team Roster Collection" if that is the existing collection.
+
+The current presence/aux state is intentionally stored in a short-lived `presence`
+collection so all agent/admin sessions can see it in near-real-time without
+polluting the roster record. A TTL index removes stale presence records.
+
+Salesforce:
+    Set SALESFORCE_URL in secrets/env when ready. The admin-only Salesforce page
+    is already wired as a launch point. The actual API sync is isolated in
+    `salesforce_fetch_cases()` so it can be replaced with your OAuth/API code later.
+"""
+
 from __future__ import annotations
 
 import base64
