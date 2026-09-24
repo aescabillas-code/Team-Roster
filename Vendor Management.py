@@ -14,7 +14,7 @@ try:
 except ImportError:
     Salesforce = None
 
-st.set_page_config(page_title="HPE Case Operations Control Center", page_icon="◈",
+st.set_page_config(page_title="Vendor Management Case Monitoring Dashboard", page_icon="◈",
                    layout="wide", initial_sidebar_state="collapsed")
 
 DB_PATH = os.getenv("CASE_DB_PATH", "case_control_center.db")
