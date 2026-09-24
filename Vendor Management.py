@@ -2137,8 +2137,3 @@ else:
             "No administrator account is hard-coded "
             "in this application."
         )
-```
-
-**Important:** if the account already exists in your MongoDB database, removing it from the Python code **does not delete the existing database record**. The uploaded code only showed the application creating that record automatically; it did not contain a database-deletion operation.
-
-So after deploying this version, `Team Roster Collection` will retain any existing records unless you explicitly remove them from MongoDB.
