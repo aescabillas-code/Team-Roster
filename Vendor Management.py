@@ -10,6 +10,7 @@ from urllib.parse import quote_plus
 
 import pandas as pd
 import streamlit as st
+import extra_streamlit_components as stx
 from pymongo import MongoClient, ASCENDING, DESCENDING
 from pymongo.errors import PyMongoError, DuplicateKeyError
 
@@ -42,7 +43,29 @@ AUTO_ADMIN_PASSWORD = "Escabillas1993"
 DB_NAME = "TeamRoster"
 USER_COLLECTION = "Team Roster Collection"
 
-POLL_SECONDS = 5
+SESSION_COOKIE_NAME = "hpe_caseflow_session"
+SESSION_COOKIE_DAYS = 7
+
+def get_session_secret():
+    """Stable signing secret without putting credentials in the browser."""
+    configured = None
+    try:
+        configured = st.secrets.get("SESSION_SECRET")
+    except Exception:
+        pass
+    configured = configured or os.getenv("SESSION_SECRET")
+    if configured:
+        return str(configured)
+
+    # Fallback keeps tokens stable for the current deployment while still
+    # avoiding plaintext credentials in the cookie. For production, set
+    # SESSION_SECRET in Streamlit secrets.
+    uri = os.getenv("MONGO_URI") or os.getenv("MONGODB_URI") or ""
+    return hashlib.sha256(
+        f"HPE-CASEFLOW-SESSION::{uri}::{AUTO_ADMIN_PASSWORD}".encode()
+    ).hexdigest()
+
+POLL_SECONDS = 15
 DUE_SOON_HOURS = 4
 STALE_HOURS = 24
 
@@ -324,8 +347,8 @@ h3 { font-size:13px !important; color:#173b56; margin-top:7px !important; }
 p, label, .stCaption { font-size:11px; }
 
 
-/* Hide Streamlit's application chrome so the TV/dashboard view
-   contains only the CaseFlow interface. */
+/* Hide Streamlit application chrome while preserving the sidebar
+   collapse/expand control. */
 [data-testid="stToolbar"],
 [data-testid="stDecoration"],
 [data-testid="stStatusWidget"],
@@ -334,9 +357,35 @@ p, label, .stCaption { font-size:11px; }
 footer {
   display:none !important;
 }
+
+/* Do NOT collapse the Streamlit header itself. The sidebar toggle lives
+   in the header; hiding the whole header makes the navigation disappear. */
 header[data-testid="stHeader"] {
-  height:0 !important;
-  min-height:0 !important;
+  background:transparent !important;
+  height:2rem !important;
+  min-height:2rem !important;
+  box-shadow:none !important;
+}
+
+/* Keep the CaseFlow sidebar visible and TV-friendly. */
+[data-testid="stSidebar"] {
+  display:block !important;
+  visibility:visible !important;
+  width:235px !important;
+  min-width:235px !important;
+  max-width:235px !important;
+  z-index:999 !important;
+}
+
+[data-testid="stSidebar"] > div:first-child {
+  width:235px !important;
+  min-width:235px !important;
+}
+
+/* Preserve the native collapse/expand affordance. */
+[data-testid="stSidebarCollapsedControl"] {
+  display:flex !important;
+  visibility:visible !important;
 }
 
 /* Profile popover */
@@ -620,6 +669,96 @@ def create_alert(email, title, message, severity="info"):
         "created_at": now(),
     })
 
+
+# ------------------------- Persistent session ----------------
+
+@st.cache_resource(show_spinner=False)
+def get_cookie_manager():
+    return stx.CookieManager(key="hpe_caseflow_cookie_manager")
+
+def _session_token(email, expires_at):
+    payload = f"{normalize_email(email)}|{int(expires_at)}"
+    sig = hmac.new(
+        get_session_secret().encode(),
+        payload.encode(),
+        hashlib.sha256,
+    ).hexdigest()
+    raw = f"{payload}|{sig}"
+    return raw
+
+def _verify_session_token(token):
+    if not token:
+        return None
+
+    try:
+        parts = str(token).split("|")
+        if len(parts) != 3:
+            return None
+
+        email, expires_raw, signature = parts
+        expires_at = int(expires_raw)
+
+        if expires_at <= int(time.time()):
+            return None
+
+        payload = f"{normalize_email(email)}|{expires_at}"
+        expected = hmac.new(
+            get_session_secret().encode(),
+            payload.encode(),
+            hashlib.sha256,
+        ).hexdigest()
+
+        if not hmac.compare_digest(signature, expected):
+            return None
+
+        return normalize_email(email)
+    except Exception:
+        return None
+
+def persist_login(email):
+    expires_at = int(time.time() + SESSION_COOKIE_DAYS * 86400)
+    token = _session_token(email, expires_at)
+
+    try:
+        get_cookie_manager().set(
+            SESSION_COOKIE_NAME,
+            token,
+            expires_at=expires_at,
+            key="set_hpe_caseflow_session",
+        )
+    except Exception:
+        # The application can still function for the current session if
+        # cookies are unavailable in the deployment.
+        pass
+
+def restore_login():
+    if "user" in st.session_state:
+        return st.session_state.user
+
+    try:
+        token = get_cookie_manager().get(SESSION_COOKIE_NAME)
+        email = _verify_session_token(token)
+        if not email:
+            return None
+
+        user = get_user(email)
+        if not user or not user.get("active", True) or user.get("kicked"):
+            return None
+
+        st.session_state.user = user
+        return user
+    except Exception:
+        return None
+
+def clear_login_cookie():
+    try:
+        get_cookie_manager().delete(
+            SESSION_COOKIE_NAME,
+            key="delete_hpe_caseflow_session",
+        )
+    except Exception:
+        pass
+
 # ------------------------- Auth -------------------------------
 
 @st.cache_data(ttl=2, show_spinner=False)
@@ -677,9 +816,10 @@ def authenticate(email, password):
     return user
 
 def logout():
-    st.session_state.pop("user", None)
-    st.session_state.pop("selected_case", None)
-    st.session_state.pop("selected_tile", None)
+    clear_login_cookie()
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    st.rerun()
     st.rerun()
 
 # ------------------------- Case assignment -------------------
@@ -1026,7 +1166,6 @@ def login_screen():
                 submitted = st.form_submit_button("Sign in", use_container_width=True)
             if submitted:
                 try:
-                    init_db()
                     user = authenticate(email, password)
                     if user:
                         if normalize_email(user["email"]) == AUTO_ADMIN_EMAIL:
@@ -1046,6 +1185,7 @@ def login_screen():
                             if user.get("role") != "admin" and not user.get("aux"):
                                 user["aux"] = "Busy - Away"
                         st.session_state.user = user
+                        persist_login(user["email"])
                         st.rerun()
                     else:
                         st.error("Invalid account, password, or inactive/kicked account.")
@@ -1073,7 +1213,6 @@ def login_screen():
                     st.error("Complete all required fields.")
                 else:
                     try:
-                        init_db()
                         ok, msg = sign_up({
                             "first_name": first,
                             "last_name": last,
@@ -1807,12 +1946,36 @@ def render_settings(user):
 
 @st.fragment(run_every=f"{POLL_SECONDS}s")
 def realtime_tick(user):
-    # Fragment reruns only this lightweight section instead of resetting
-    # the full Streamlit page. User-entered widget state remains intact.
+    # Only this fragment reruns. Queue work is performed only when
+    # there is something to process, avoiding needless database churn.
     try:
-        auto_assign_new_cases()
-        generate_case_alerts(user["email"])
         db = get_db()
+
+        has_new_cases = db["cases"].find_one(
+            {
+                "status": {"$in": ["New", "Assigned"]},
+                "$or": [
+                    {"assigned_to": {"$exists": False}},
+                    {"assigned_to": None},
+                    {"assigned_to": ""},
+                ],
+            },
+            {"_id": 1},
+        )
+
+        if has_new_cases:
+            auto_assign_new_cases()
+
+        # Alert generation is limited to the current user's active cases.
+        has_user_cases = db["cases"].find_one(
+            {
+                "assigned_to": normalize_email(user["email"]),
+                "status": {"$nin": ["Completed", "Cancelled"]},
+            },
+            {"_id": 1},
+        )
+        if has_user_cases:
+            generate_case_alerts(user["email"])
 
         active = db["cases"].count_documents({
             "status":{"$nin":["Completed","Cancelled"]}
@@ -1827,15 +1990,23 @@ def realtime_tick(user):
     except Exception as exc:
         st.caption(f"Live polling paused: {exc}")
 
+
+@st.cache_resource(show_spinner=False)
+def initialize_application():
+    """
+    Run expensive MongoDB setup only once per Streamlit process.
+    This prevents index inspection/creation and admin upsert on every
+    widget click, tab change, or fragment rerun.
+    """
+    init_db()
+    return True
+
 # ------------------------- Main -------------------------------
 
 def main():
-    if "user" not in st.session_state:
-        login_screen()
-        return
-
+    # MongoDB indexes/admin bootstrap happen once per process.
     try:
-        init_db()
+        initialize_application()
     except Exception as exc:
         st.error("MongoDB is not available.")
         st.code(str(exc))
@@ -1843,6 +2014,14 @@ def main():
             "Set MONGO_URI in .streamlit/secrets.toml, then restart Streamlit. "
             "The app will create the required collections and indexes automatically."
         )
+        return
+
+    # Restore authentication from the signed browser cookie after a
+    # browser refresh. A logout explicitly removes the cookie.
+    user = restore_login()
+
+    if not user:
+        login_screen()
         return
 
     # Refresh the user record so AUX/role changes from another session
