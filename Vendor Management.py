@@ -562,29 +562,29 @@ footer { visibility:hidden !important; }
 
 /* ===== Authentication — matches uploaded Sign In / Sign Up reference ===== */
 .auth-page {
-  min-height:calc(100vh - 30px);
-  padding:16px 0;
+  min-height:calc(100vh - 8px);
+  padding:0;
   background:
     radial-gradient(circle at 18% 8%, rgba(68,142,204,.72), transparent 35%),
     linear-gradient(135deg,#5e98c5 0%,#326b9b 55%,#285c88 100%);
   border-radius:0;
 }
-.auth-page > [data-testid="stHorizontalBlock"] {
+body:has(.auth-page) [data-testid="stHorizontalBlock"] {
   max-width:1000px !important;
-  min-height:690px;
-  margin:28px auto !important;
+  min-height:680px;
+  margin:0 auto !important;
   background:#f8fafc;
   border-radius:17px;
   overflow:hidden;
   box-shadow:0 18px 45px rgba(7,34,62,.25);
   gap:0 !important;
 }
-.auth-page [data-testid="column"] {
+body:has(.auth-page) [data-testid="column"] {
   padding:0 !important;
 }
 .auth-brand-panel {
   position:relative;
-  height:690px;
+  height:680px;
   overflow:hidden;
   background:
     linear-gradient(180deg,rgba(4,44,83,.96) 0%,rgba(4,48,88,.91) 58%,rgba(5,43,76,.97) 100%);
@@ -645,6 +645,7 @@ footer { visibility:hidden !important; }
   margin-top:24px;
 }
 .feature-icon {
+  font-family: Arial, "Segoe UI Symbol", sans-serif;
   width:36px;
   flex:0 0 36px;
   color:#7fc0ff;
@@ -678,7 +679,7 @@ footer { visibility:hidden !important; }
   mask-image:linear-gradient(to bottom,transparent 0%,rgba(0,0,0,.72) 17%,#000 40%);
 }
 .auth-form-heading {
-  padding:74px 42px 14px;
+  padding:38px 42px 14px;
 }
 .auth-form-heading h1 {
   margin:0 !important;
@@ -693,18 +694,18 @@ footer { visibility:hidden !important; }
   color:#627286 !important;
   font-size:14px !important;
 }
-.auth-page [data-testid="stForm"] {
+body:has(.auth-page) [data-testid="stForm"] {
   border:0 !important;
   padding:0 42px !important;
 }
-.auth-page [data-testid="stTextInput"] label,
-.auth-page [data-testid="stDateInput"] label {
+body:has(.auth-page) [data-testid="stTextInput"] label,
+body:has(.auth-page) [data-testid="stDateInput"] label {
   color:#17283e !important;
   font-size:12px !important;
   font-weight:750 !important;
 }
-.auth-page [data-testid="stTextInput"] input,
-.auth-page [data-testid="stDateInput"] input {
+body:has(.auth-page) [data-testid="stTextInput"] input,
+body:has(.auth-page) [data-testid="stDateInput"] input {
   height:43px !important;
   border:1px solid #d4dce5 !important;
   border-radius:7px !important;
@@ -714,23 +715,23 @@ footer { visibility:hidden !important; }
   padding-left:13px !important;
   box-shadow:inset 0 1px 2px rgba(15,38,61,.03) !important;
 }
-.auth-page [data-testid="stTextInput"] input:focus,
-.auth-page [data-testid="stDateInput"] input:focus {
+body:has(.auth-page) [data-testid="stTextInput"] input:focus,
+body:has(.auth-page) [data-testid="stDateInput"] input:focus {
   border-color:#1876c5 !important;
   box-shadow:0 0 0 2px rgba(24,118,197,.10) !important;
 }
-.auth-page [data-testid="stTextInput"] {
+body:has(.auth-page) [data-testid="stTextInput"] {
   margin-bottom:7px !important;
 }
-.auth-page [data-testid="stCheckbox"] {
+body:has(.auth-page) [data-testid="stCheckbox"] {
   margin-top:2px !important;
 }
-.auth-page [data-testid="stCheckbox"] label p {
+body:has(.auth-page) [data-testid="stCheckbox"] label p {
   font-size:12px !important;
   color:#22354a !important;
 }
-.auth-page [data-testid="stFormSubmitButton"] button,
-.auth-page .stButton > button {
+body:has(.auth-page) [data-testid="stFormSubmitButton"] button,
+body:has(.auth-page) .stButton > button {
   height:44px !important;
   border-radius:7px !important;
   border:1px solid #0b72c7 !important;
@@ -740,12 +741,12 @@ footer { visibility:hidden !important; }
   font-weight:750 !important;
   box-shadow:none !important;
 }
-.auth-page [data-testid="stFormSubmitButton"] button:hover,
-.auth-page .stButton > button:hover {
+body:has(.auth-page) [data-testid="stFormSubmitButton"] button:hover,
+body:has(.auth-page) .stButton > button:hover {
   background:#096bb3 !important;
   border-color:#096bb3 !important;
 }
-.auth-page .auth-forgot {
+body:has(.auth-page) .auth-forgot {
   text-align:right;
   margin:-38px 43px 24px 0;
   color:#0b67ac;
@@ -784,7 +785,7 @@ footer { visibility:hidden !important; }
   font-size:12px;
   color:#52657a;
 }
-.auth-page button[key="go_signup"] {
+body:has(.auth-page) button[key="go_signup"] {
   margin:0 42px !important;
   width:calc(100% - 84px) !important;
   background:#f8fbfe !important;
@@ -794,10 +795,10 @@ footer { visibility:hidden !important; }
 .signup-heading {
   padding-top:20px;
 }
-.auth-page .signup-heading + [data-testid="stForm"] {
+body:has(.auth-page) .signup-heading + [data-testid="stForm"] {
   padding-bottom:0 !important;
 }
-.auth-page [data-testid="stForm"] [data-testid="stTextArea"] {
+body:has(.auth-page) [data-testid="stForm"] [data-testid="stTextArea"] {
   margin-bottom:0 !important;
 }
 .auth-bottom-login {
@@ -806,7 +807,7 @@ footer { visibility:hidden !important; }
   color:#69798b;
   font-size:12px;
 }
-.auth-page button[key="go_signin"] {
+body:has(.auth-page) button[key="go_signin"] {
   height:auto !important;
   min-height:24px !important;
   width:auto !important;
@@ -819,7 +820,7 @@ footer { visibility:hidden !important; }
   font-size:12px !important;
 }
 @media (max-width: 900px) {
-  .auth-page > [data-testid="stHorizontalBlock"] {
+  body:has(.auth-page) [data-testid="stHorizontalBlock"] {
     margin:10px !important;
   }
   .auth-brand-panel {
@@ -829,7 +830,7 @@ footer { visibility:hidden !important; }
     margin-top:17px;
   }
   .auth-form-heading {
-    padding-top:35px;
+    padding-top:24px;
   }
 }
 </style>
@@ -1593,7 +1594,7 @@ def login_screen():
                 <div class="caseflow-subtitle">Team Task and Case<br>Management</div>
 
                 <div class="auth-feature">
-                  <div class="feature-icon">▣</div>
+                  <div class="feature-icon">▤</div>
                   <div><b>Manage Cases</b><small>Track and resolve tasks<br>efficiently</small></div>
                 </div>
                 <div class="auth-feature">
@@ -1605,7 +1606,7 @@ def login_screen():
                   <div><b>Real-Time Visibility</b><small>Stay informed and in control</small></div>
                 </div>
                 <div class="auth-feature">
-                  <div class="feature-icon">♢</div>
+                  <div class="feature-icon">◇</div>
                   <div><b>Secure Access</b><small>HPE employees only</small></div>
                 </div>
               </div>
