@@ -917,11 +917,17 @@ def deny_request(request_id, admin_email):
 # ------------------------- Data helpers -----------------------
 
 @st.cache_data(ttl=2, show_spinner=False)
-def get_cases_for_user(user):
+def get_cases_for_user(email, role):
+    """Cached case query using only hashable primitive arguments.
+
+    Do not pass the full MongoDB user document into st.cache_data: MongoDB
+    documents can contain ObjectId/other unhashable values and Streamlit will
+    attempt to pickle/hash the argument before executing the function.
+    """
     db = get_db()
     q = {"status": {"$nin": ["Completed", "Cancelled"]}}
-    if user["role"] != "admin":
-        q["assigned_to"] = user["email"]
+    if role != "admin":
+        q["assigned_to"] = normalize_email(email)
     return list(db["cases"].find(q).sort([("priority", ASCENDING), ("due_at", ASCENDING)]).limit(1000))
 
 @st.cache_data(ttl=2, show_spinner=False)
@@ -1225,7 +1231,7 @@ def render_dashboard(user):
     db = get_db()
     render_alerts(user)
 
-    cases = get_cases_for_user(user)
+    cases = get_cases_for_user(user["email"], user["role"])
     active = [c for c in cases if is_active_case(c)]
 
     critical = [c for c in active if case_bucket(c) == "Critical"]
@@ -1772,7 +1778,7 @@ def main():
     elif page == "My Schedule":
         render_my_schedule(user)
     elif page == "My Cases":
-        render_case_list(get_cases_for_user(user), user, "My Active Cases")
+        render_case_list(get_cases_for_user(user["email"], user["role"]), user, "My Active Cases")
     elif page == "Requests":
         if user["role"] == "admin":
             render_requests_admin(user)
