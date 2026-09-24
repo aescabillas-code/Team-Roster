@@ -1,56 +1,17 @@
-"""
-HPE CaseFlow - Streamlit single-file application
-
-Features
-- Modern HPE-inspired UI based on the supplied reference images.
-- Mandatory sign-in / sign-up flow.
-- User profiles stored in TeamRoster / Team Roster Collection with type='roster_list'.
-- Passwords are stored as bcrypt hashes, never plaintext.
-- Auto-admin seed: Admin@Admin.com / Admin1234 (change with environment variables).
-- Regular-agent and admin navigation with retractable sidebar.
-- Dashboard tiles, urgency sorting, case details, alerts, schedules, requests,
-  attendance/adherence, agent presence and distribution.
-- Automatic case assignment using availability + least-load/fairness scoring.
-- Transient live AUX presence is synced through a short-lived Mongo collection
-  (live_presence) so other browser sessions can see it without permanently
-  writing AUX to roster records. If Mongo is unavailable, an in-process fallback
-  is used for local development.
-- Admin-only Salesforce integration link.
-- Optional Salesforce REST hook via environment variables.
-- CSV report export.
-- Polling is limited to small, cache-friendly fragments so switching tabs does not
-  cause a full application data reload.
-
-Run:
-    pip install -r requirements.txt
-    streamlit run hpe_caseflow_streamlit.py
-
-Environment variables (all optional):
-    MONGODB_URI=mongodb://localhost:27017
-    ADMIN_EMAIL=Admin@Admin.com
-    ADMIN_PASSWORD=Admin1234
-    SALESFORCE_URL=https://hp.lightning.force.com/
-    REALTIME_SECONDS=5
-    APP_TIMEZONE=Asia/Manila
-
-If get_mongo_client() already exists in your project, replace the get_mongo_client()
-implementation below with your existing helper.
-"""
-
 from __future__ import annotations
 
 import base64
 import hashlib
-import io
-import json
+import hmac
+import html
 import os
 import secrets
-import smtplib
-import time
 from pathlib import Path
-from datetime import date, datetime, timedelta, timezone
-from email.message import EmailMessage
+import uuid
+from datetime import date, datetime, time, timedelta
+from functools import lru_cache
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import quote
 
 import pandas as pd
 import streamlit as st
@@ -58,1401 +19,1947 @@ from bson import ObjectId
 from pymongo import ASCENDING, DESCENDING, MongoClient, ReturnDocument
 from pymongo.errors import DuplicateKeyError, PyMongoError
 
-try:
-    import bcrypt
-except ImportError:  # graceful fallback for environments where bcrypt is unavailable
-    bcrypt = None
-
-try:
-    from zoneinfo import ZoneInfo
-except ImportError:
-    ZoneInfo = None
-
-
 # -----------------------------------------------------------------------------
-# CONFIG
+# Page / constants
 # -----------------------------------------------------------------------------
+
+st.set_page_config(
+    page_title="HPE CaseFlow",
+    page_icon="▣",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
 APP_NAME = "HPE CaseFlow"
-SALESFORCE_URL = os.getenv("SALESFORCE_URL", "https://hp.lightning.force.com/")
-ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "Admin@Admin.com").strip().lower()
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "Admin1234")
-REALTIME_SECONDS = max(3, int(os.getenv("REALTIME_SECONDS", "5")))
-APP_TIMEZONE = os.getenv("APP_TIMEZONE", "Asia/Manila")
-MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
-
 DB_NAME = "TeamRoster"
-ROSTER_COLLECTION = "Team Roster Collection"
-CASES_COLLECTION = "cases"
-SCHEDULE_COLLECTION = "schedules"
-REQUESTS_COLLECTION = "requests"
-NOTIFICATIONS_COLLECTION = "notifications"
-SETTINGS_COLLECTION = "settings"
-PRESENCE_COLLECTION = "live_presence"
-AUDIT_COLLECTION = "audit_log"
+ROSTER_COLLECTION_NAME = os.getenv("ROSTER_COLLECTION_NAME", "roster_list")
+SALESFORCE_URL = os.getenv("SALESFORCE_URL", "https://hp.lightning.force.com/")
 
-DEFAULT_AUXES = [
-    "Available",
+# Bootstrap administrator requested by the owner.
+BOOTSTRAP_ADMIN = {
+    "first_name": "Arianne May",
+    "last_name": "Escabillas",
+    "employee_id": "60187999",
+    "email": "arianne-may.escabillas@hpe.com",
+    "birthday": "1993-06-17",
+    "home_address": "661 Betterlife, Tanzang Luma III, Imus City, Cavite",
+    "contact_number": "",
+    "role": "admin",
+    "password": "Escabillas1993",
+}
+
+AUX_OPTIONS = [
+    "Active",
     "Break",
-    "Unscheduled Break",
     "Lunch",
     "In a Meeting",
     "Coaching",
     "Busy - Away",
+    "Unscheduled Break",
     "Admin Task",
 ]
 
-ACTIVE_CASE_STATUSES = {
+REGULAR_DEFAULT_AUX = "Busy - Away"
+ADMIN_DEFAULT_AUX = "Admin Task"
+
+CASE_STATUSES = [
     "New",
     "Assigned",
     "In Progress",
     "Pending Vendor",
     "Pending Customer",
-    "Pending Internal",
     "On Hold",
+    "Completed",
+    "Closed",
     "Contract Breached",
+]
+
+PRIORITIES = ["Critical", "High", "Medium", "Low"]
+
+BREACH_REASONS = {
+    "Vendor missed committed delivery date":
+        "The vendor did not meet the committed delivery date for this case.",
+    "Vendor failed to provide an agreed update":
+        "The vendor failed to provide the agreed status update for this case.",
+    "Vendor failed to meet SLA":
+        "The vendor did not meet the applicable service-level commitment for this case.",
+    "Repeated vendor delivery failure":
+        "The vendor has failed to deliver after documented follow-up attempts.",
 }
-CLOSED_CASE_STATUSES = {"Completed", "Closed", "Cancelled"}
-URGENCY_ORDER = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}
 
 # -----------------------------------------------------------------------------
-# PAGE + CSS
+# Styling — modeled closely on the supplied reference images
 # -----------------------------------------------------------------------------
-st.set_page_config(
-    page_title=APP_NAME,
-    page_icon="▣",
-    layout="wide",
-    initial_sidebar_state="expanded",
+
+st.markdown(
+    """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --navy:#123B59;
+  --navy2:#0B2F4A;
+  --blue:#0B73C9;
+  --blue2:#168BD0;
+  --teal:#00A98F;
+  --ink:#18324A;
+  --muted:#60758A;
+  --line:#DCE5ED;
+  --bg:#F4F7FA;
+  --card:#FFFFFF;
+  --critical:#E53935;
+  --high:#F28C28;
+  --medium:#E4A61A;
+  --low:#43A5D8;
+  --good:#19A974;
+  --shadow:0 5px 18px rgba(20,54,82,.10);
+}
+
+html, body, [class*="css"] {
+  font-family: Inter, Arial, sans-serif;
+}
+.stApp { background: var(--bg); color: var(--ink); }
+header[data-testid="stHeader"] { background: transparent; }
+#MainMenu, footer, .stDeployButton { display:none !important; }
+[data-testid="stToolbar"] { display:none !important; }
+[data-testid="stDecoration"] { display:none !important; }
+.block-container {
+  max-width: 100%;
+  padding: .8rem 1rem 1.5rem 1rem;
+}
+section[data-testid="stSidebar"] {
+  background: linear-gradient(180deg, #0A304B 0%, #0B3C5E 100%);
+  min-width: 245px;
+  max-width: 245px;
+}
+section[data-testid="stSidebar"] > div { padding-top: .5rem; }
+section[data-testid="stSidebar"] .stButton button {
+  background: transparent;
+  color:#F5FAFF;
+  border:0;
+  text-align:left;
+  border-radius:8px;
+  padding:.55rem .8rem;
+  font-weight:600;
+}
+section[data-testid="stSidebar"] .stButton button:hover {
+  background:rgba(255,255,255,.10);
+  border:0;
+}
+section[data-testid="stSidebar"] .stButton button[kind="primary"] {
+  background:#0D82CE;
+  color:white;
+}
+div[data-testid="stMetric"] {
+  background:white;
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:.65rem .8rem;
+  box-shadow:var(--shadow);
+}
+.case-card {
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:.7rem .85rem;
+  margin:.35rem 0;
+  box-shadow:0 2px 8px rgba(18,59,89,.05);
+}
+.topbar {
+  background:#fff;
+  border-bottom:1px solid var(--line);
+  padding:.45rem .75rem;
+  margin:-.8rem -1rem .9rem -1rem;
+}
+.page-title {
+  color:var(--navy);
+  font-size:1.55rem;
+  font-weight:800;
+  margin:0;
+}
+.page-subtitle { color:var(--muted); margin-top:.1rem; }
+.section-title { color:var(--navy); font-size:1.05rem; font-weight:800; margin:.5rem 0; }
+.alert-box {
+  background:#FFF7E8;
+  border:1px solid #F2D99E;
+  border-radius:12px;
+  padding:.75rem 1rem;
+}
+.badge {
+  display:inline-block;
+  border-radius:999px;
+  padding:2px 9px;
+  font-size:.72rem;
+  font-weight:700;
+}
+.badge-critical { background:#FFE2E3; color:#C62828; }
+.badge-high { background:#FFE9D8; color:#B85C00; }
+.badge-medium { background:#FFF3C9; color:#8A6200; }
+.badge-low { background:#E0F1FB; color:#1476A6; }
+.badge-good { background:#DCF6E9; color:#087C4B; }
+.badge-blue { background:#DDEFFF; color:#1269A5; }
+.kpi-card {
+  border-radius:12px;
+  padding:1rem;
+  min-height:105px;
+  border:1px solid transparent;
+}
+.kpi-card .num { font-size:2rem; line-height:1; font-weight:800; }
+.kpi-card .label { font-size:.82rem; font-weight:600; margin-top:.4rem; }
+.kpi-active { background:#E5F2FC; color:#1170B6; border-color:#CFE7F8; }
+.kpi-critical { background:#FFE5E6; color:#C52B31; border-color:#FFD0D2; }
+.kpi-due { background:#FFF2CC; color:#8D6500; border-color:#F5E1A4; }
+.kpi-track { background:#DCF6E8; color:#0A8250; border-color:#C5EFD9; }
+.login-shell {
+  min-height:92vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:linear-gradient(135deg,#6EA3D0 0%,#4B7FAE 45%,#2B5E87 100%);
+  border-radius:18px;
+  padding:2.2rem;
+}
+.login-card {
+  width:min(1120px,96vw);
+  min-height:760px;
+  display:grid;
+  grid-template-columns: 39% 61%;
+  overflow:hidden;
+  border-radius:16px;
+  background:#fff;
+  box-shadow:0 20px 60px rgba(9,35,57,.25);
+}
+.login-brand {
+  color:white;
+  padding:2.3rem 2rem;
+  position:relative;
+  overflow:hidden;
+  background:linear-gradient(180deg,#063F68 0%,#0A3151 100%);
+}
+.login-brand:after {
+  content:"";
+  position:absolute; inset:0;
+  background-image:url("__LOGIN_PANEL__");
+  background-position:center bottom;
+  background-size:cover;
+  opacity:.55;
+  mix-blend-mode:screen;
+}
+.login-brand > * { position:relative; z-index:2; }
+.hpe-mark { color:#00A98F; font-size:2.2rem; font-weight:900; line-height:.7; }
+.hpe-name { font-size:1.35rem; font-weight:800; margin-top:.8rem; line-height:1.0; }
+.hpe-line { width:92px; height:3px; background:#00A98F; margin:1.6rem 0 1.1rem; }
+.login-brand h1 { font-size:2.1rem; margin:.1rem 0 .7rem; }
+.login-brand p { font-size:1.05rem; color:#EAF4FB; line-height:1.45; }
+.login-features { margin-top:2.3rem; display:grid; gap:1.3rem; }
+.login-feature b { display:block; font-size:.95rem; }
+.login-feature span { display:block; color:#C9DCEA; font-size:.78rem; margin-top:.15rem; }
+.login-panel { padding:3rem 3.1rem; background:#fff; }
+.login-panel h2 { color:var(--navy); font-size:2.05rem; margin:.5rem 0 .3rem; }
+.login-panel .lead { color:var(--muted); margin-bottom:1.8rem; }
+@media (max-width:900px) {
+  .login-card { grid-template-columns:1fr; }
+  .login-brand { min-height:360px; }
+  .login-panel { padding:2rem; }
+}
+div[data-testid="stPopover"] > div { z-index: 1000; }
+.profile-pill button {
+  border-radius:999px !important;
+}
+.small-muted { color:#71879A; font-size:.78rem; }
+.full-height-table { overflow-x:auto; }
+</style>
+""".replace("__LOGIN_PANEL__", "data:image/png;base64,PLACEHOLDER"),
+    unsafe_allow_html=True,
 )
 
+# -----------------------------------------------------------------------------
+# Helpers
+# -----------------------------------------------------------------------------
 
-def inject_css():
-    st.markdown(
-        """
-        <style>
-        :root {
-            --hpe-navy:#123A59;
-            --hpe-blue:#0878C9;
-            --hpe-deep:#0B2F4A;
-            --hpe-teal:#00A88F;
-            --hpe-bg:#F4F7FA;
-            --hpe-card:#FFFFFF;
-            --hpe-text:#142B3F;
-            --muted:#65798A;
-            --line:#D9E2EA;
-            --danger:#D92D3A;
-            --warning:#D99800;
-            --success:#12966F;
-        }
-        #MainMenu, footer { visibility:hidden; }
-        header { visibility:hidden; height:0; }
-        [data-testid="stToolbar"] { display:none !important; }
-        [data-testid="stDecoration"] { display:none !important; }
-        [data-testid="stStatusWidget"] { display:none !important; }
-        .stApp { background:var(--hpe-bg); color:var(--hpe-text); }
-        .block-container { padding:1rem 1.25rem 2rem 1.25rem; max-width:100%; }
-        [data-testid="stSidebar"] { background:linear-gradient(180deg,#08324E 0%,#0B496B 100%); }
-        [data-testid="stSidebar"] * { color:#fff !important; }
-        [data-testid="stSidebar"] .stButton > button {
-            width:100%; border:0; border-radius:10px; background:transparent;
-            text-align:left; padding:.72rem .85rem; color:#fff; font-weight:600;
-        }
-        [data-testid="stSidebar"] .stButton > button:hover,
-        [data-testid="stSidebar"] .nav-active > button {
-            background:#0878C9; color:#fff; 
-        }
-        .brand { padding:.35rem .35rem 1rem .35rem; }
-        .brand-logo { color:#00B39F; font-size:2rem; line-height:1; font-weight:800; }
-        .brand-title { font-size:1.1rem; font-weight:800; margin-top:.25rem; }
-        .brand-sub { color:#BBD0DD !important; font-size:.78rem; }
-        .topbar { background:#fff; border-bottom:1px solid var(--line); padding:.25rem .25rem .7rem .25rem; }
-        .eyebrow { color:var(--hpe-blue); font-weight:800; letter-spacing:.04em; text-transform:uppercase; font-size:.73rem; }
-        h1,h2,h3,h4 { color:var(--hpe-navy); }
-        .hero { display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-bottom:1rem; }
-        .hero h1 { margin:.1rem 0; font-size:2rem; }
-        .hero p { color:var(--muted); margin:.1rem 0; }
-        .profile-chip { background:#fff; border:1px solid var(--line); border-radius:999px; padding:.45rem .8rem; }
-        .metric-card { border:1px solid var(--line); background:#fff; border-radius:14px; padding:1rem; min-height:105px; box-shadow:0 2px 8px rgba(12,45,70,.05); }
-        .metric-number { font-size:2rem; font-weight:850; line-height:1; }
-        .metric-label { margin-top:.45rem; font-size:.82rem; color:#566B7C; font-weight:700; }
-        .metric-blue { border-top:4px solid #1B86D5; }
-        .metric-red { border-top:4px solid #D92D3A; }
-        .metric-yellow { border-top:4px solid #D99800; }
-        .metric-green { border-top:4px solid #12966F; }
-        .section-card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:1rem; box-shadow:0 2px 8px rgba(12,45,70,.04); margin-bottom:1rem; }
-        .alert-card { background:#FFF7E6; border:1px solid #F5D48B; border-radius:14px; padding:1rem; }
-        .case-critical { border-left:5px solid #D92D3A; }
-        .case-high { border-left:5px solid #F06A38; }
-        .case-medium { border-left:5px solid #D99800; }
-        .case-low { border-left:5px solid #12966F; }
-        .pill { display:inline-block; border-radius:999px; padding:.2rem .55rem; font-size:.72rem; font-weight:800; }
-        .pill-red { background:#FFE1E5; color:#A61725; }
-        .pill-yellow { background:#FFF0C2; color:#8A5A00; }
-        .pill-green { background:#D8F5E9; color:#08764F; }
-        .pill-blue { background:#DDEFFF; color:#075C9E; }
-        .small-muted { color:var(--muted); font-size:.78rem; }
-        .login-wrap { max-width:1180px; margin:2vh auto; background:#fff; border-radius:20px; overflow:hidden; box-shadow:0 18px 60px rgba(10,44,70,.18); }
-        .login-left { min-height:760px; padding:3rem; color:#fff; background:linear-gradient(145deg,#0A3E60,#0B2F4A); position:relative; overflow:hidden; }
-        .login-left:after { content:""; position:absolute; left:0; right:0; bottom:-40px; height:310px; background:radial-gradient(circle at 50% 0%, rgba(0,190,170,.22), transparent 55%); }
-        .login-logo-mark { width:70px; height:25px; border:5px solid #00B39F; margin-bottom:1.2rem; }
-        .login-left h1 { color:#fff; font-size:2.1rem; margin:0; }
-        .login-left h2 { color:#fff; font-size:1.9rem; margin:2rem 0 .35rem; }
-        .login-left p { color:#E0EEF5; font-size:1.05rem; max-width:420px; }
-        .feature { display:flex; gap:.9rem; margin:1.2rem 0; position:relative; z-index:1; }
-        .feature-icon { font-size:1.65rem; width:40px; }
-        .feature b { display:block; }
-        .feature small { color:#BFD2DF; }
-        .login-right { min-height:760px; padding:3.1rem 3rem; background:#fff; }
-        .login-right h1 { font-size:2rem; margin:.2rem 0; }
-        .login-right .sub { color:var(--muted); margin-bottom:1.8rem; }
-        .stButton > button { border-radius:9px; min-height:2.55rem; font-weight:750; }
-        .primary-action button { background:#0878C9 !important; color:#fff !important; border:0 !important; }
-        .danger-action button { background:#D92D3A !important; color:#fff !important; border:0 !important; }
-        .success-action button { background:#12966F !important; color:#fff !important; border:0 !important; }
-        .ghost-action button { background:#fff !important; color:#0878C9 !important; border:1px solid #0878C9 !important; }
-        .table-wrap { overflow-x:auto; }
-        .case-row { background:#fff; border:1px solid var(--line); border-radius:10px; padding:.65rem .75rem; margin:.35rem 0; }
-        .tv-mode .block-container { padding:.65rem .8rem; }
-        .tv-mode .metric-card { min-height:88px; padding:.7rem; }
-        .tv-mode .metric-number { font-size:1.65rem; }
-        .tv-mode .section-card { padding:.75rem; }
-        @media (max-width: 900px) {
-            .login-left,.login-right { min-height:auto; padding:2rem; }
-            .hero { align-items:flex-start; flex-direction:column; }
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+def now_utc() -> datetime:
+    return datetime.utcnow()
 
 
-inject_css()
+def today_utc_date() -> date:
+    return now_utc().date()
+
+
+def safe_str(v: Any) -> str:
+    return "" if v is None else str(v)
+
+
+def parse_date(v: Any) -> Optional[date]:
+    if isinstance(v, datetime):
+        return v.date()
+    if isinstance(v, date):
+        return v
+    if not v:
+        return None
+    try:
+        return datetime.strptime(str(v)[:10], "%Y-%m-%d").date()
+    except Exception:
+        return None
+
+
+def parse_dt(v: Any) -> Optional[datetime]:
+    if isinstance(v, datetime):
+        return v
+    if not v:
+        return None
+    try:
+        return datetime.fromisoformat(str(v).replace("Z", ""))
+    except Exception:
+        return None
+
+
+def iso_now() -> str:
+    return now_utc().isoformat(timespec="seconds")
+
+
+def password_hash(password: str, salt: Optional[bytes] = None) -> str:
+    salt = salt or secrets.token_bytes(16)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 180_000)
+    return f"pbkdf2_sha256$180000${salt.hex()}${dk.hex()}"
+
+
+def password_verify(password: str, encoded: str) -> bool:
+    try:
+        algo, rounds, salt_hex, digest_hex = encoded.split("$")
+        if algo != "pbkdf2_sha256":
+            return False
+        dk = hashlib.pbkdf2_hmac(
+            "sha256", password.encode(), bytes.fromhex(salt_hex), int(rounds)
+        )
+        return hmac.compare_digest(dk.hex(), digest_hex)
+    except Exception:
+        return False
+
+
+def html_badge(text: str, kind: str) -> str:
+    cls = {
+        "Critical": "badge-critical",
+        "High": "badge-high",
+        "Medium": "badge-medium",
+        "Low": "badge-low",
+        "Completed": "badge-good",
+        "Closed": "badge-good",
+        "In Progress": "badge-blue",
+        "Assigned": "badge-blue",
+        "Active": "badge-good",
+    }.get(kind, "badge-blue")
+    return f'<span class="badge {cls}">{html.escape(text)}</span>'
+
+
+def urgency_rank(case: Dict[str, Any]) -> Tuple[int, float]:
+    priority_rank = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}
+    due = parse_dt(case.get("due_date"))
+    due_ts = due.timestamp() if due else float("inf")
+    return priority_rank.get(case.get("priority"), 9), due_ts
+
+
+def is_active_case(case: Dict[str, Any]) -> bool:
+    return case.get("status") not in ("Completed", "Closed")
+
+
+def due_soon(case: Dict[str, Any], hours: int = 24) -> bool:
+    due = parse_dt(case.get("due_date"))
+    if not due or not is_active_case(case):
+        return False
+    delta = due - now_utc()
+    return timedelta(0) <= delta <= timedelta(hours=hours)
+
+
+def is_stale(case: Dict[str, Any], hours: int = 24) -> bool:
+    if not is_active_case(case):
+        return False
+    updated = parse_dt(case.get("last_update"))
+    return bool(updated and now_utc() - updated >= timedelta(hours=hours))
+
+
+def case_bucket(case: Dict[str, Any]) -> str:
+    if case.get("priority") == "Critical":
+        return "Critical"
+    if due_soon(case):
+        return "Due Soon"
+    return "On Track"
+
+
+def clean_doc(doc: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not doc:
+        return doc
+    out = dict(doc)
+    if "_id" in out:
+        out["_id"] = str(out["_id"])
+    return out
+
 
 # -----------------------------------------------------------------------------
-# MONGODB
+# Mongo connection and repositories
 # -----------------------------------------------------------------------------
 
 @st.cache_resource(show_spinner=False)
 def get_mongo_client() -> MongoClient:
-    return MongoClient(MONGODB_URI, serverSelectionTimeoutMS=3500, connectTimeoutMS=3500)
+    uri = None
+    try:
+        uri = st.secrets.get("MONGODB_URI")
+    except Exception:
+        uri = None
+    uri = uri or os.getenv("MONGODB_URI")
+    if not uri:
+        raise RuntimeError(
+            "MONGODB_URI is not configured. Add it to .streamlit/secrets.toml "
+            "or the MONGODB_URI environment variable."
+        )
+    return MongoClient(
+        uri,
+        serverSelectionTimeoutMS=4000,
+        connectTimeoutMS=4000,
+        socketTimeoutMS=8000,
+        retryWrites=True,
+    )
 
 
 @st.cache_resource(show_spinner=False)
 def get_db():
     client = get_mongo_client()
-    return client[DB_NAME]
-
-
-def mongo_ok() -> bool:
+    db = client[DB_NAME]
+    # Index creation is cached so it is not repeated on every interaction.
+    # Be defensive with existing collections: if an older deployment contains
+    # duplicate data, do not make the whole application fail during startup.
     try:
-        get_mongo_client().admin.command("ping")
+        db[ROSTER_COLLECTION_NAME].create_index([("email", ASCENDING)], unique=True)
+    except PyMongoError:
+        db[ROSTER_COLLECTION_NAME].create_index([("email", ASCENDING)])
+    try:
+        db["cases"].create_index([("case_id", ASCENDING)], unique=True)
+    except PyMongoError:
+        db["cases"].create_index([("case_id", ASCENDING)])
+    db["cases"].create_index([("assigned_to", ASCENDING), ("status", ASCENDING)])
+    db["cases"].create_index([("due_date", ASCENDING)])
+    try:
+        db["presence"].create_index([("email", ASCENDING)], unique=True)
+    except PyMongoError:
+        db["presence"].create_index([("email", ASCENDING)])
+    try:
+        db["presence"].create_index([("last_seen", ASCENDING)], expireAfterSeconds=90)
+    except PyMongoError:
+        pass
+    db["schedule"].create_index([("email", ASCENDING), ("date", ASCENDING)])
+    db["requests"].create_index([("email", ASCENDING), ("created_at", DESCENDING)])
+    db["notifications"].create_index([("email", ASCENDING), ("read", ASCENDING)])
+    db["audit_log"].create_index([("created_at", DESCENDING)])
+    try:
+        db["settings"].create_index([("key", ASCENDING)], unique=True)
+    except PyMongoError:
+        db["settings"].create_index([("key", ASCENDING)])
+    return db
+
+
+def db_ok(db) -> bool:
+    try:
+        db.command("ping")
         return True
     except Exception:
         return False
 
 
-def collection(name: str):
-    return get_db()[name]
-
-
-def ensure_indexes():
-    if not mongo_ok():
+def seed_admin(db):
+    roster = db[ROSTER_COLLECTION_NAME]
+    email = BOOTSTRAP_ADMIN["email"].lower()
+    existing = roster.find_one({"email": email})
+    if existing:
+        # Keep an existing password/profile untouched; only ensure admin role.
+        if existing.get("role") != "admin":
+            roster.update_one({"email": email}, {"$set": {"role": "admin"}})
         return
+    doc = {
+        "first_name": BOOTSTRAP_ADMIN["first_name"],
+        "last_name": BOOTSTRAP_ADMIN["last_name"],
+        "employee_id": BOOTSTRAP_ADMIN["employee_id"],
+        "email": email,
+        "birthday": BOOTSTRAP_ADMIN["birthday"],
+        "home_address": BOOTSTRAP_ADMIN["home_address"],
+        "contact_number": BOOTSTRAP_ADMIN["contact_number"],
+        "role": "admin",
+        "password_hash": password_hash(BOOTSTRAP_ADMIN["password"]),
+        "created_at": iso_now(),
+        "updated_at": iso_now(),
+        "status": "Active",
+    }
+    roster.insert_one(doc)
+
+
+def find_user(db, email: str) -> Optional[Dict[str, Any]]:
+    return clean_doc(db[ROSTER_COLLECTION_NAME].find_one({"email": email.lower()}))
+
+
+def create_user(db, data: Dict[str, Any]) -> Tuple[bool, str]:
+    data = dict(data)
+    data["email"] = data["email"].strip().lower()
+    data["password_hash"] = password_hash(data.pop("password"))
+    data["role"] = "regular"
+    data["status"] = "Active"
+    data["created_at"] = iso_now()
+    data["updated_at"] = iso_now()
     try:
-        collection(ROSTER_COLLECTION).create_index([("type", ASCENDING), ("email", ASCENDING)], unique=False)
-        collection(ROSTER_COLLECTION).create_index("email", unique=True)
-        collection(CASES_COLLECTION).create_index([("status", ASCENDING), ("priority", ASCENDING), ("due_date", ASCENDING)])
-        collection(CASES_COLLECTION).create_index("assigned_to")
-        collection(PRESENCE_COLLECTION).create_index("expires_at", expireAfterSeconds=0)
-        collection(PRESENCE_COLLECTION).create_index("email", unique=True)
-        collection(NOTIFICATIONS_COLLECTION).create_index([("email", ASCENDING), ("created_at", DESCENDING)])
-        collection(REQUESTS_COLLECTION).create_index([("status", ASCENDING), ("created_at", DESCENDING)])
+        db[ROSTER_COLLECTION_NAME].insert_one(data)
+        return True, "Account created successfully."
+    except DuplicateKeyError:
+        return False, "An account with that HPE email already exists."
+    except Exception as e:
+        return False, f"Unable to create account: {e}"
+
+
+def save_user_profile(db, email: str, updates: Dict[str, Any]):
+    updates["updated_at"] = iso_now()
+    db[ROSTER_COLLECTION_NAME].update_one({"email": email}, {"$set": updates})
+
+
+def list_agents(db) -> List[Dict[str, Any]]:
+    return [clean_doc(x) for x in db[ROSTER_COLLECTION_NAME].find(
+        {}, {"password_hash": 0}
+    ).sort([("last_name", ASCENDING), ("first_name", ASCENDING)])]
+
+
+def upsert_presence(db, user: Dict[str, Any], aux: str, kicked_until=None):
+    now = now_utc()
+    doc = {
+        "email": user["email"].lower(),
+        "employee_id": user.get("employee_id"),
+        "name": f'{user.get("first_name","")} {user.get("last_name","")}'.strip(),
+        "role": user.get("role", "regular"),
+        "aux": aux,
+        "last_seen": now,
+        "session_id": st.session_state.get("session_id"),
+    }
+    if kicked_until:
+        doc["kicked_until"] = kicked_until
+    db["presence"].update_one(
+        {"email": user["email"].lower()},
+        {"$set": doc},
+        upsert=True,
+    )
+
+
+def get_presence(db, email: str) -> Optional[Dict[str, Any]]:
+    return clean_doc(db["presence"].find_one({"email": email.lower()}))
+
+
+def list_presence(db) -> List[Dict[str, Any]]:
+    cutoff = now_utc() - timedelta(seconds=90)
+    return [clean_doc(x) for x in db["presence"].find({"last_seen": {"$gte": cutoff}})]
+
+
+def set_presence_aux(db, email: str, aux: str):
+    db["presence"].update_one(
+        {"email": email.lower()},
+        {"$set": {"aux": aux, "last_seen": now_utc()}},
+        upsert=True,
+    )
+
+
+def eligible_agent_rows(db) -> List[Dict[str, Any]]:
+    agents = list_agents(db)
+    pres = {x["email"]: x for x in list_presence(db)}
+    rows = []
+    for agent in agents:
+        if agent.get("role") != "regular":
+            continue
+        p = pres.get(agent["email"].lower())
+        if not p:
+            continue
+        if p.get("kicked_until") and p["kicked_until"] > now_utc():
+            continue
+        if p.get("aux") != "Active":
+            continue
+        active = db["cases"].count_documents({
+            "assigned_to": agent["email"].lower(),
+            "status": {"$nin": ["Completed", "Closed"]},
+        })
+        assigned_today = db["cases"].count_documents({
+            "assigned_to": agent["email"].lower(),
+            "assigned_date": {"$regex": f"^{today_utc_date().isoformat()}"},
+        })
+        rows.append({
+            "agent": agent,
+            "active": active,
+            "assigned_today": assigned_today,
+            "last_assigned_at": agent.get("last_assigned_at") or "",
+        })
+    return rows
+
+
+def choose_agent(db) -> Optional[Dict[str, Any]]:
+    rows = eligible_agent_rows(db)
+    if not rows:
+        return None
+    rows.sort(key=lambda r: (
+        r["assigned_today"],
+        r["active"],
+        r["last_assigned_at"] or "1970-01-01",
+        r["agent"].get("email", ""),
+    ))
+    return rows[0]["agent"]
+
+
+def auto_assign_case(db, case_id: str) -> Optional[str]:
+    case = db["cases"].find_one({"case_id": case_id})
+    if not case or case.get("assigned_to"):
+        return case.get("assigned_to")
+    agent = choose_agent(db)
+    if not agent:
+        db["cases"].update_one(
+            {"case_id": case_id},
+            {"$set": {"assignment_status": "Waiting for available agent",
+                      "updated_at": iso_now()}},
+        )
+        return None
+
+    email = agent["email"].lower()
+    assigned = db["cases"].find_one_and_update(
+        {"case_id": case_id, "assigned_to": {"$in": [None, ""]}},
+        {"$set": {
+            "assigned_to": email,
+            "assigned_name": f'{agent.get("first_name","")} {agent.get("last_name","")}'.strip(),
+            "assigned_at": iso_now(),
+            "assigned_date": iso_now(),
+            "assignment_status": "Auto Assigned",
+            "status": "Assigned",
+            "updated_at": iso_now(),
+        }},
+        return_document=ReturnDocument.AFTER,
+    )
+    if assigned:
+        db[ROSTER_COLLECTION_NAME].update_one(
+            {"email": email},
+            {"$set": {"last_assigned_at": iso_now()}},
+        )
+        db["notifications"].insert_one({
+            "email": email,
+            "type": "assignment",
+            "title": "New case auto-assigned",
+            "message": f'Case {case_id} has been assigned to you.',
+            "case_id": case_id,
+            "read": False,
+            "created_at": iso_now(),
+        })
+    return email
+
+
+def insert_case(db, case: Dict[str, Any]) -> Tuple[bool, str]:
+    case = dict(case)
+    case.setdefault("case_id", f"CF-{secrets.randbelow(900000)+100000}")
+    case.setdefault("created_at", iso_now())
+    case.setdefault("updated_at", iso_now())
+    case.setdefault("last_update", iso_now())
+    case.setdefault("status", "New")
+    case.setdefault("assignment_status", "Waiting for assignment")
+    case.setdefault("source", "CaseFlow")
+    try:
+        db["cases"].insert_one(case)
+        auto_assign_case(db, case["case_id"])
+        return True, case["case_id"]
+    except DuplicateKeyError:
+        return False, "That case ID already exists."
+    except Exception as e:
+        return False, str(e)
+
+
+def update_case(db, case_id: str, updates: Dict[str, Any], actor_email: str):
+    updates = dict(updates)
+    updates["updated_at"] = iso_now()
+    updates["last_update"] = iso_now()
+    db["cases"].update_one({"case_id": case_id}, {"$set": updates})
+    db["audit_log"].insert_one({
+        "actor": actor_email,
+        "action": "case_update",
+        "case_id": case_id,
+        "changes": {k: str(v) for k, v in updates.items()},
+        "created_at": iso_now(),
+    })
+
+
+def add_case_update(db, case_id: str, actor_email: str, note: str, status: str):
+    db["cases"].update_one(
+        {"case_id": case_id},
+        {
+            "$set": {
+                "status": status,
+                "last_update": iso_now(),
+                "updated_at": iso_now(),
+            },
+            "$push": {
+                "updates": {
+                    "author": actor_email,
+                    "note": note,
+                    "created_at": iso_now(),
+                }
+            },
+        },
+    )
+    db["audit_log"].insert_one({
+        "actor": actor_email,
+        "action": "case_update_note",
+        "case_id": case_id,
+        "note": note,
+        "status": status,
+        "created_at": iso_now(),
+    })
+
+
+def notify(db, email: str, title: str, message: str, ntype="system", case_id=None):
+    db["notifications"].insert_one({
+        "email": email.lower(),
+        "title": title,
+        "message": message,
+        "type": ntype,
+        "case_id": case_id,
+        "read": False,
+        "created_at": iso_now(),
+    })
+
+
+# -----------------------------------------------------------------------------
+# Realtime reads. These are cached briefly to keep the app smooth; the fragment
+# invalidates them on its polling cycle.
+# -----------------------------------------------------------------------------
+
+@st.cache_data(ttl=4, show_spinner=False)
+def get_cases_cached(scope: str, email: str, stamp: int) -> List[Dict[str, Any]]:
+    db = get_db()
+    q = {} if scope == "all" else {"assigned_to": email.lower()}
+    return [clean_doc(x) for x in db["cases"].find(q).sort([("priority", ASCENDING), ("due_date", ASCENDING)])]
+
+
+@st.cache_data(ttl=4, show_spinner=False)
+def get_agents_cached(stamp: int) -> List[Dict[str, Any]]:
+    db = get_db()
+    agents = list_agents(db)
+    presence = {x["email"]: x for x in list_presence(db)}
+    for a in agents:
+        p = presence.get(a["email"].lower(), {})
+        a["aux"] = p.get("aux", "Offline")
+        a["last_seen"] = p.get("last_seen")
+        a["kicked_until"] = p.get("kicked_until")
+        a["active_cases"] = db["cases"].count_documents({
+            "assigned_to": a["email"].lower(),
+            "status": {"$nin": ["Completed", "Closed"]},
+        })
+        a["assigned_today"] = db["cases"].count_documents({
+            "assigned_to": a["email"].lower(),
+            "assigned_date": {"$regex": f"^{today_utc_date().isoformat()}"},
+        })
+    return agents
+
+
+def clear_data_caches():
+    get_cases_cached.clear()
+    get_agents_cached.clear()
+
+
+# -----------------------------------------------------------------------------
+# Login
+# -----------------------------------------------------------------------------
+
+def inject_login_asset():
+    try:
+        asset_path = Path(__file__).resolve().parent / "hpe_login_panel.png"
+        with open(asset_path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode()
+        # Streamlit already emitted CSS. Add a tiny override with the actual asset.
+        st.markdown(
+            f"""<style>
+            .login-brand:after {{
+                background-image:url("data:image/png;base64,{b64}") !important;
+            }}
+            </style>""",
+            unsafe_allow_html=True,
+        )
     except Exception:
         pass
 
 
-ensure_indexes()
-
-
-# -----------------------------------------------------------------------------
-# LOCAL FALLBACK DATA
-# -----------------------------------------------------------------------------
-
-if "local_store" not in st.session_state:
-    st.session_state.local_store = {
-        "roster": {},
-        "cases": [],
-        "schedules": [],
-        "requests": [],
-        "notifications": [],
-        "presence": {},
-        "settings": {},
-        "audit": [],
-    }
-
-
-def now_local() -> datetime:
-    if ZoneInfo:
-        return datetime.now(ZoneInfo(APP_TIMEZONE)).replace(tzinfo=None)
-    return datetime.now()
-
-
-def iso_now() -> str:
-    return now_local().isoformat(timespec="seconds")
-
-
-def as_datetime(value: Any) -> Optional[datetime]:
-    if value is None:
-        return None
-    if isinstance(value, datetime):
-        return value.replace(tzinfo=None)
-    if isinstance(value, date):
-        return datetime.combine(value, datetime.min.time())
-    try:
-        return datetime.fromisoformat(str(value).replace("Z", ""))
-    except Exception:
-        return None
-
-
-def serialize(obj: Any):
-    if isinstance(obj, ObjectId):
-        return str(obj)
-    if isinstance(obj, (datetime, date)):
-        return obj.isoformat()
-    return obj
-
-
-# -----------------------------------------------------------------------------
-# SECURITY / AUTH
-# -----------------------------------------------------------------------------
-
-def hash_password(password: str) -> str:
-    if bcrypt:
-        return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-    salt = secrets.token_hex(16)
-    return "sha256$" + salt + "$" + hashlib.sha256((salt + password).encode()).hexdigest()
-
-
-def verify_password(password: str, stored: str) -> bool:
-    if not stored:
-        return False
-    if stored.startswith("sha256$"):
-        try:
-            _, salt, digest = stored.split("$", 2)
-            return secrets.compare_digest(
-                digest, hashlib.sha256((salt + password).encode()).hexdigest()
-            )
-        except Exception:
-            return False
-    if bcrypt:
-        try:
-            return bcrypt.checkpw(password.encode(), stored.encode())
-        except Exception:
-            return False
-    return False
-
-
-def normalize_email(email: str) -> str:
-    return (email or "").strip().lower()
-
-
-def valid_hpe_email(email: str) -> bool:
-    return normalize_email(email).endswith("@hpe.com")
-
-
-def roster_find(email: str) -> Optional[Dict[str, Any]]:
-    email = normalize_email(email)
-    if mongo_ok():
-        try:
-            doc = collection(ROSTER_COLLECTION).find_one({"email": email})
-            if doc:
-                doc["_id"] = str(doc.get("_id", ""))
-                return doc
-        except Exception:
-            pass
-    return st.session_state.local_store["roster"].get(email)
-
-
-def roster_upsert(doc: Dict[str, Any]):
-    email = normalize_email(doc["email"])
-    doc = dict(doc)
-    doc["email"] = email
-    doc.setdefault("type", "roster_list")
-    doc["updated_at"] = iso_now()
-    if mongo_ok():
-        try:
-            collection(ROSTER_COLLECTION).update_one({"email": email}, {"$set": doc}, upsert=True)
-            return
-        except Exception:
-            pass
-    st.session_state.local_store["roster"][email] = doc
-
-
-def roster_all() -> List[Dict[str, Any]]:
-    if mongo_ok():
-        try:
-            return list(collection(ROSTER_COLLECTION).find({"type": "roster_list"}).sort("last_name", ASCENDING))
-        except Exception:
-            pass
-    return list(st.session_state.local_store["roster"].values())
-
-
-def seed_admin():
-    admin = roster_find(ADMIN_EMAIL)
-    if admin:
-        # Keep an explicitly seeded admin as admin even if a prior demo record changed.
-        if admin.get("role") != "Admin" or admin.get("is_super_admin") is not True:
-            roster_upsert({**admin, "role": "Admin", "is_super_admin": True, "type": "roster_list"})
-        return
-    roster_upsert(
-        {
-            "type": "roster_list",
-            "first_name": "Admin",
-            "last_name": "",
-            "employee_id": "ADMIN-001",
-            "email": ADMIN_EMAIL,
-            "birthday": "",
-            "home_address": "",
-            "contact_number": "",
-            "password_hash": hash_password(ADMIN_PASSWORD),
-            "role": "Admin",
-            "is_super_admin": True,
-            "status": "Active",
-            "created_at": iso_now(),
-        }
-    )
-
-
-seed_admin()
-
-
-def audit(action: str, actor: str, details: Dict[str, Any] | None = None):
-    item = {"action": action, "actor": actor, "details": details or {}, "created_at": iso_now()}
-    if mongo_ok():
-        try:
-            collection(AUDIT_COLLECTION).insert_one(item)
-            return
-        except Exception:
-            pass
-    st.session_state.local_store["audit"].append(item)
-
-
-# -----------------------------------------------------------------------------
-# DATA ACCESS
-# -----------------------------------------------------------------------------
-
-def sample_cases() -> List[Dict[str, Any]]:
-    n = now_local()
-    return [
-        {
-            "case_number": "0000156", "subject": "Network equipment delay", "priority": "Critical",
-            "due_date": n + timedelta(hours=2), "status": "In Progress", "progress": 55,
-            "last_update": n - timedelta(hours=3), "assigned_to": "john.delacruz@hpe.com",
-            "vendor": "Acme Network Services", "vendor_email": "vendor@example.com", "vendor_phone": "+63 917 000 0156",
-            "description": "Customer is waiting for network equipment delivery.", "source": "Demo", "created_at": n - timedelta(days=1),
-        },
-        {
-            "case_number": "0000143", "subject": "Server replacement", "priority": "High",
-            "due_date": n + timedelta(hours=5), "status": "Pending Vendor", "progress": 40,
-            "last_update": n - timedelta(hours=1), "assigned_to": "maria.santos@hpe.com",
-            "vendor": "Global Server Repair", "vendor_email": "repair@example.com", "vendor_phone": "+63 917 000 0143",
-            "description": "Replacement unit is pending vendor confirmation.", "source": "Demo", "created_at": n - timedelta(days=2),
-        },
-        {
-            "case_number": "0000132", "subject": "Software license", "priority": "Medium",
-            "due_date": n + timedelta(days=2), "status": "Assigned", "progress": 15,
-            "last_update": n - timedelta(hours=5), "assigned_to": "mark.rivera@hpe.com",
-            "vendor": "HPE Software Licensing", "vendor_email": "software@example.com", "vendor_phone": "+63 917 000 0132",
-            "description": "Customer requires licensing assistance.", "source": "Demo", "created_at": n - timedelta(days=1),
-        },
-        {
-            "case_number": "0000128", "subject": "Site installation", "priority": "Medium",
-            "due_date": n + timedelta(days=3), "status": "In Progress", "progress": 70,
-            "last_update": n - timedelta(hours=2), "assigned_to": "ana.reyes@hpe.com",
-            "vendor": "Site Install Partners", "vendor_email": "site@example.com", "vendor_phone": "+63 917 000 0128",
-            "description": "Installation work is underway.", "source": "Demo", "created_at": n - timedelta(days=3),
-        },
-        {
-            "case_number": "0000120", "subject": "Access request", "priority": "Low",
-            "due_date": n + timedelta(days=4), "status": "New", "progress": 0,
-            "last_update": n - timedelta(hours=1), "assigned_to": None,
-            "vendor": "", "vendor_email": "", "vendor_phone": "",
-            "description": "Access request awaiting assignment.", "source": "Demo", "created_at": n - timedelta(hours=1),
-        },
-    ]
-
-
-def cases_all() -> List[Dict[str, Any]]:
-    if mongo_ok():
-        try:
-            return list(collection(CASES_COLLECTION).find({}).sort("due_date", ASCENDING))
-        except Exception:
-            pass
-    cases = st.session_state.local_store["cases"]
-    if not cases:
-        cases = sample_cases()
-        st.session_state.local_store["cases"] = cases
-    return cases
-
-
-def case_save(case: Dict[str, Any]):
-    case = dict(case)
-    case["updated_at"] = iso_now()
-    if mongo_ok():
-        try:
-            key = {"case_number": case["case_number"]}
-            collection(CASES_COLLECTION).update_one(key, {"$set": case}, upsert=True)
-            return
-        except Exception:
-            pass
-    items = st.session_state.local_store["cases"]
-    for i, c in enumerate(items):
-        if c.get("case_number") == case.get("case_number"):
-            items[i] = case
-            return
-    items.append(case)
-
-
-def schedules_for(email: Optional[str] = None, day: Optional[date] = None) -> List[Dict[str, Any]]:
-    query: Dict[str, Any] = {}
-    if email:
-        query["email"] = normalize_email(email)
-    if day:
-        query["date"] = day.isoformat()
-    if mongo_ok():
-        try:
-            return list(collection(SCHEDULE_COLLECTION).find(query).sort("start", ASCENDING))
-        except Exception:
-            pass
-    rows = st.session_state.local_store["schedules"]
-    return [r for r in rows if (not email or normalize_email(r.get("email")) == normalize_email(email)) and (not day or r.get("date") == day.isoformat())]
-
-
-def schedule_save(row: Dict[str, Any]):
-    if mongo_ok():
-        try:
-            collection(SCHEDULE_COLLECTION).update_one(
-                {"email": row["email"], "date": row["date"], "start": row["start"]},
-                {"$set": row},
-                upsert=True,
-            )
-            return
-        except Exception:
-            pass
-    rows = st.session_state.local_store["schedules"]
-    for i, r in enumerate(rows):
-        if all(r.get(k) == row.get(k) for k in ("email", "date", "start")):
-            rows[i] = row
-            return
-    rows.append(row)
-
-
-def request_save(row: Dict[str, Any]):
-    row = dict(row)
-    row.setdefault("created_at", iso_now())
-    if mongo_ok():
-        try:
-            collection(REQUESTS_COLLECTION).insert_one(row)
-            return
-        except Exception:
-            pass
-    st.session_state.local_store["requests"].append(row)
-
-
-def requests_all(query: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-    query = query or {}
-    if mongo_ok():
-        try:
-            return list(collection(REQUESTS_COLLECTION).find(query).sort("created_at", DESCENDING))
-        except Exception:
-            pass
-    rows = st.session_state.local_store["requests"]
-    return [r for r in rows if all(r.get(k) == v for k, v in query.items())]
-
-
-def notify(email: str, title: str, message: str, kind: str = "info"):
-    row = {"email": normalize_email(email), "title": title, "message": message, "kind": kind, "read": False, "created_at": iso_now()}
-    if mongo_ok():
-        try:
-            collection(NOTIFICATIONS_COLLECTION).insert_one(row)
-            return
-        except Exception:
-            pass
-    st.session_state.local_store["notifications"].append(row)
-
-
-def notifications(email: str) -> List[Dict[str, Any]]:
-    if mongo_ok():
-        try:
-            return list(collection(NOTIFICATIONS_COLLECTION).find({"email": normalize_email(email), "read": False}).sort("created_at", DESCENDING).limit(20))
-        except Exception:
-            pass
-    return [n for n in st.session_state.local_store["notifications"] if n["email"] == normalize_email(email) and not n["read"]][-20:]
-
-
-# -----------------------------------------------------------------------------
-# LIVE PRESENCE / AUX
-# -----------------------------------------------------------------------------
-
-@st.cache_resource(show_spinner=False)
-def local_presence_store():
-    return {}
-
-
-def presence_set(email: str, aux: str):
-    email = normalize_email(email)
-    expires = now_local() + timedelta(seconds=max(20, REALTIME_SECONDS * 4))
-    row = {"email": email, "aux": aux, "last_seen": iso_now(), "expires_at": expires}
-    if mongo_ok():
-        try:
-            collection(PRESENCE_COLLECTION).update_one({"email": email}, {"$set": row}, upsert=True)
-            return
-        except Exception:
-            pass
-    local_presence_store()[email] = row
-
-
-def presence_get(email: str) -> Dict[str, Any]:
-    email = normalize_email(email)
-    if mongo_ok():
-        try:
-            row = collection(PRESENCE_COLLECTION).find_one({"email": email})
-            if row:
-                return row
-        except Exception:
-            pass
-    return local_presence_store().get(email, {"aux": "Busy - Away", "last_seen": iso_now()})
-
-
-def presence_all() -> Dict[str, Dict[str, Any]]:
-    if mongo_ok():
-        try:
-            rows = collection(PRESENCE_COLLECTION).find({"expires_at": {"$gt": now_local()}})
-            return {r["email"]: r for r in rows}
-        except Exception:
-            pass
-    return local_presence_store()
-
-
-def agent_available(profile: Dict[str, Any]) -> bool:
-    if profile.get("role") != "Agent" or profile.get("status", "Active") != "Active":
-        return False
-    aux = presence_get(profile.get("email", "")).get("aux", "Busy - Away")
-    return aux == "Available"
-
-
-def active_cases_for(email: str) -> List[Dict[str, Any]]:
-    email = normalize_email(email)
-    return [c for c in cases_all() if normalize_email(c.get("assigned_to")) == email and c.get("status") not in CLOSED_CASE_STATUSES]
-
-
-def fair_assignment(c: Dict[str, Any], actor: str = "system") -> Optional[str]:
-    agents = [r for r in roster_all() if r.get("role") == "Agent" and r.get("status", "Active") == "Active"]
-    candidates = [a for a in agents if agent_available(a)]
-    if not candidates:
-        return None
-
-    pres = presence_all()
-    scored = []
-    for a in candidates:
-        email = normalize_email(a.get("email"))
-        active = active_cases_for(email)
-        total_assigned = sum(1 for x in cases_all() if normalize_email(x.get("assigned_to")) == email)
-        today_assigned = sum(
-            1 for x in cases_all()
-            if normalize_email(x.get("assigned_to")) == email
-            and (as_datetime(x.get("created_at")) or now_local()).date() == now_local().date()
-        )
-        aux_age = as_datetime(pres.get(email, {}).get("last_seen"))
-        freshness_penalty = 0 if aux_age is None else max(0, (now_local() - aux_age).total_seconds()) / 300
-        # active load is primary, then today's count, then total count; small freshness penalty
-        score = (len(active), today_assigned, total_assigned, freshness_penalty)
-        scored.append((score, email))
-    scored.sort(key=lambda x: x[0])
-    selected = scored[0][1]
-
-    c = dict(c)
-    c["assigned_to"] = selected
-    if c.get("status") in (None, "New"):
-        c["status"] = "Assigned"
-    c["assigned_at"] = iso_now()
-    case_save(c)
-    notify(selected, "New case assigned", f"Case #{c.get('case_number')} was assigned to you.", "case")
-    audit("auto_assign_case", actor, {"case": c.get("case_number"), "assigned_to": selected})
-    return selected
-
-
-def assign_unassigned_cases():
-    # Keep this small: only inspect new/unassigned records on each dashboard tick.
-    for c in cases_all():
-        if c.get("status") in CLOSED_CASE_STATUSES:
-            continue
-        if not c.get("assigned_to") and c.get("status") in (None, "New", "Assigned"):
-            fair_assignment(c)
-
-
-# -----------------------------------------------------------------------------
-# CASE / ALERT HELPERS
-# -----------------------------------------------------------------------------
-
-def case_due_category(c: Dict[str, Any]) -> str:
-    due = as_datetime(c.get("due_date"))
-    if not due:
-        return "On Track"
-    hours = (due - now_local()).total_seconds() / 3600
-    if c.get("priority") == "Critical" or hours <= 0:
-        return "Critical"
-    if hours <= 24:
-        return "Due Soon"
-    return "On Track"
-
-
-def case_sort_key(c: Dict[str, Any]):
-    due = as_datetime(c.get("due_date")) or datetime.max
-    return (URGENCY_ORDER.get(c.get("priority"), 9), due)
-
-
-def case_row_class(c: Dict[str, Any]) -> str:
-    return {
-        "Critical": "case-critical",
-        "High": "case-high",
-        "Medium": "case-medium",
-        "Low": "case-low",
-    }.get(c.get("priority"), "")
-
-
-def urgency_pill(priority: str) -> str:
-    cls = {"Critical":"pill-red","High":"pill-red","Medium":"pill-yellow","Low":"pill-green"}.get(priority,"pill-blue")
-    return f'<span class="pill {cls}">{priority}</span>'
-
-
-def status_pill(status: str) -> str:
-    cls = "pill-green" if status in {"Completed","Closed","In Progress"} else "pill-yellow" if "Pending" in status or status in {"On Hold","Assigned"} else "pill-red" if status == "Contract Breached" else "pill-blue"
-    return f'<span class="pill {cls}">{status}</span>'
-
-
-def alerts_for_agent(email: str) -> List[Dict[str, Any]]:
-    result = []
-    cases = active_cases_for(email)
-    for c in cases:
-        due = as_datetime(c.get("due_date"))
-        last = as_datetime(c.get("last_update"))
-        if c.get("priority") == "Critical":
-            result.append({"kind":"critical","text":f"Case #{c.get('case_number')} is Critical","time":c.get("last_update")})
-        if due and 0 <= (due - now_local()).total_seconds() <= 4 * 3600:
-            result.append({"kind":"due","text":f"Case #{c.get('case_number')} is due soon","time":c.get("due_date")})
-        if last and (now_local() - last).total_seconds() >= 24 * 3600:
-            result.append({"kind":"stale","text":f"Case #{c.get('case_number')} has not been updated for 24 hours","time":last})
-    result.extend({"kind":n.get("kind","info"),"text":n.get("message"),"time":n.get("created_at")} for n in notifications(email))
-    return result[:15]
-
-
-def generate_breach_message(c: Dict[str, Any], reason: str, agent_name: str) -> str:
-    templates = {
-        "Missed committed delivery date": f"Hello {c.get('vendor','Vendor Team')},\n\nCase #{c.get('case_number')} has exceeded the committed delivery date. Please provide an immediate recovery plan and updated ETA. This case is being tagged as a contract breach due to a missed committed delivery date.\n\nRegards,\n{agent_name} | HPE CaseFlow",
-        "Repeated missed follow-up": f"Hello {c.get('vendor','Vendor Team')},\n\nCase #{c.get('case_number')} has had repeated missed follow-ups. Please provide a confirmed recovery plan and owner today. This case is being tagged as a contract breach for repeated missed follow-up.\n\nRegards,\n{agent_name} | HPE CaseFlow",
-        "Vendor failed to deliver after escalation": f"Hello {c.get('vendor','Vendor Team')},\n\nCase #{c.get('case_number')} remains undelivered after escalation. Please provide an immediate resolution and confirmed ETA. This case is being tagged as a contract breach following the escalation.\n\nRegards,\n{agent_name} | HPE CaseFlow",
-        "Other": f"Hello {c.get('vendor','Vendor Team')},\n\nCase #{c.get('case_number')} is being tagged as a contract breach. Reason: Other. Please provide an immediate recovery plan and confirmed ETA.\n\nRegards,\n{agent_name} | HPE CaseFlow",
-    }
-    return templates.get(reason, templates["Other"])
-
-
-# -----------------------------------------------------------------------------
-# UI HELPERS
-# -----------------------------------------------------------------------------
-
-def logo_sidebar():
-    st.markdown(
-        '<div class="brand"><div class="brand-logo">▱</div><div class="brand-title">HPE CaseFlow</div><div class="brand-sub">Team Task &amp; Case Management</div></div>',
-        unsafe_allow_html=True,
-    )
-
-
-def topbar(profile: Dict[str, Any]):
-    c1, c2 = st.columns([8, 2])
-    with c1:
-        st.markdown(f'<div class="eyebrow">{profile.get("role", "Agent")} workspace</div>', unsafe_allow_html=True)
-    with c2:
-        with st.popover(f'👤 {profile.get("first_name", "User")} {profile.get("last_name", "")} ▾'):
-            st.markdown(f"**{profile.get('first_name','')} {profile.get('last_name','')}**")
-            st.caption(f"{profile.get('email','')} · {profile.get('role','Agent')}")
-            st.divider()
-            if profile.get("role") == "Agent":
-                current_aux = presence_get(profile.get("email", "")).get("aux", "Busy - Away")
-                st.caption("AUX / Presence")
-                aux = st.selectbox("Current status", DEFAULT_AUXES, index=DEFAULT_AUXES.index(current_aux) if current_aux in DEFAULT_AUXES else 0, key="profile_aux")
-                if aux != current_aux:
-                    presence_set(profile["email"], aux)
-                    st.toast(f"AUX changed to {aux}")
-                    st.rerun()
-            else:
-                presence_set(profile["email"], "Admin Task")
-                st.info("Admin AUX is locked to **Admin Task**.")
-            st.divider()
-            if st.button("Sign out", use_container_width=True):
-                audit("logout", profile["email"])
-                for k in ["authenticated", "profile", "selected_case", "page"]:
-                    st.session_state.pop(k, None)
-                st.rerun()
-
-
-def render_metric(label: str, number: int, style: str, key: str):
-    # A button is used as the click target, but CSS makes it look like a metric tile.
-    st.markdown(f'<div class="metric-card {style}"><div class="metric-number">{number}</div><div class="metric-label">{label}</div></div>', unsafe_allow_html=True)
-    if st.button(f"View {label}", key=key, use_container_width=True):
-        st.session_state["case_filter"] = key.replace("metric_", "").replace("_", " ").title()
-        st.session_state["page"] = "My Cases" if st.session_state.profile.get("role") == "Agent" else "Cases"
-        st.rerun()
-
-
-def sidebar(profile: Dict[str, Any]):
-    with st.sidebar:
-        logo_sidebar()
-        role = profile.get("role")
-        pages = ["Dashboard", "My Cases", "Schedule", "Requests"] if role == "Agent" else ["Dashboard", "Cases", "Agents", "Schedule", "Requests", "Reports", "Salesforce", "Settings"]
-        current = st.session_state.get("page", "Dashboard")
-        for p in pages:
-            cls = "nav-active" if current == p else ""
-            st.markdown(f'<div class="{cls}">', unsafe_allow_html=True)
-            if st.button(p, key=f"nav_{p}", use_container_width=True):
-                st.session_state["page"] = p
-                st.rerun()
-            st.markdown("</div>", unsafe_allow_html=True)
-        st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
-        st.caption("Realtime polling")
-        st.caption(f"Every {REALTIME_SECONDS}s · {APP_TIMEZONE}")
-        st.caption("Use the profile menu for AUX")
-
-
-def page_title(title: str, subtitle: str = ""):
-    st.markdown(f'<div class="hero"><div><div class="eyebrow">HPE CaseFlow</div><h1>{title}</h1><p>{subtitle}</p></div></div>', unsafe_allow_html=True)
-
-
-# -----------------------------------------------------------------------------
-# AUTH UI
-# -----------------------------------------------------------------------------
-
-def login_background():
+def login_brand():
     st.markdown(
         """
-        <div class="login-wrap">
-        <div class="login-left">
-            <div class="login-logo-mark"></div>
-            <h1>Hewlett Packard<br>Enterprise</h1>
-            <h2>HPE CaseFlow</h2>
-            <p>Team Task and Case Management</p>
-            <div class="feature"><div class="feature-icon">▣</div><div><b>Manage Cases</b><small>Track and resolve tasks efficiently</small></div></div>
-            <div class="feature"><div class="feature-icon">♧</div><div><b>Team Collaboration</b><small>Work together for better service delivery</small></div></div>
-            <div class="feature"><div class="feature-icon">▥</div><div><b>Real-Time Visibility</b><small>Stay informed and in control</small></div></div>
-            <div class="feature"><div class="feature-icon">♢</div><div><b>Secure Access</b><small>HPE employees only</small></div></div>
+        <div class="login-brand">
+          <div class="hpe-mark">▔▔</div>
+          <div class="hpe-name">Hewlett Packard<br>Enterprise</div>
+          <div class="hpe-line"></div>
+          <h1>HPE CaseFlow</h1>
+          <p>Team Task and Case<br>Management</p>
+          <div class="login-features">
+            <div class="login-feature"><b>▣ &nbsp; Manage Cases</b><span>Track and resolve tasks efficiently</span></div>
+            <div class="login-feature"><b>♧ &nbsp; Team Collaboration</b><span>Work together for better service delivery</span></div>
+            <div class="login-feature"><b>▥ &nbsp; Real-Time Visibility</b><span>Stay informed and in control</span></div>
+            <div class="login-feature"><b>♢ &nbsp; Secure Access</b><span>HPE employees only</span></div>
+          </div>
         </div>
-        <div class="login-right">
         """,
         unsafe_allow_html=True,
     )
 
 
-def auth_screen():
-    # Mirrors the supplied sign-in/sign-up reference: navy HPE panel on the left,
-    # white authentication panel on the right. The forms open as Streamlit dialogs.
-    asset = Path(__file__).parent / "hpe_caseflow_assets" / "hpe_building.png"
-    bg = ""
-    if asset.exists():
-        try:
-            encoded = base64.b64encode(asset.read_bytes()).decode()
-            bg = f"background-image:linear-gradient(to top,rgba(5,35,55,.86),rgba(5,35,55,.05)),url(data:image/png;base64,{encoded});"
-        except Exception:
-            bg = ""
-    st.markdown("<div style='height:3vh'></div>", unsafe_allow_html=True)
-    left, right = st.columns([1, 1.35], gap="small")
-    with left:
-        html = f"""
-        <div class="login-left" style="{bg}">
-            <div class="login-logo-mark"></div>
-            <h1>Hewlett Packard<br>Enterprise</h1>
-            <h2>HPE CaseFlow</h2>
-            <p>Team Task and Case Management</p>
-            <div class="feature"><div class="feature-icon">▣</div><div><b>Manage Cases</b><small>Track and resolve tasks efficiently</small></div></div>
-            <div class="feature"><div class="feature-icon">♧</div><div><b>Team Collaboration</b><small>Work together for better service delivery</small></div></div>
-            <div class="feature"><div class="feature-icon">▥</div><div><b>Real-Time Visibility</b><small>Stay informed and in control</small></div></div>
-            <div class="feature"><div class="feature-icon">♢</div><div><b>Secure Access</b><small>HPE employees only</small></div></div>
-        </div>
-        """
-        st.markdown(html, unsafe_allow_html=True)
-    with right:
-        st.markdown('<div class="login-right">', unsafe_allow_html=True)
-        st.markdown("# Welcome to HPE CaseFlow")
-        st.markdown("### Secure access for HPE employees")
-        st.caption("Choose an option below. The selected form opens in a popup so the landing screen stays clean.")
-        st.markdown("<div style='height:.8rem'></div>", unsafe_allow_html=True)
-        a, b = st.columns(2)
-        with a:
-            if st.button("Sign In", use_container_width=True, type="primary"):
-                sign_in_dialog()
-        with b:
-            if st.button("Sign Up", use_container_width=True):
-                sign_up_dialog()
-        st.markdown("<hr>", unsafe_allow_html=True)
-        st.markdown("**Secure account storage**")
-        st.caption("Registration data is written to the TeamRoster database with type = roster_list. Passwords are hashed before storage.")
-        st.markdown("**Default super admin**")
-        st.code(f"{ADMIN_EMAIL} / {ADMIN_PASSWORD}")
-        st.caption("Change ADMIN_EMAIL and ADMIN_PASSWORD before production use.")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-
-@st.dialog("Sign In")
+@st.dialog("Sign In", width="small")
 def sign_in_dialog():
-    st.write("Access your HPE CaseFlow account")
-    email = st.text_input("HPE Email Address", placeholder="name@hpe.com")
-    password = st.text_input("Password", type="password")
-    keep = st.checkbox("Keep me signed in", value=True)
-    if st.button("Sign In", type="primary", use_container_width=True):
-        email_n = normalize_email(email)
-        if not valid_hpe_email(email_n):
-            st.error("Use your HPE email address.")
+    st.caption("Access your HPE CaseFlow account")
+    email = st.text_input("HPE Email Address", placeholder="name@hpe.com", key="signin_email")
+    pw = st.text_input("Password", type="password", placeholder="Enter your password", key="signin_pw")
+    keep = st.checkbox("Keep me signed in", value=True, key="signin_keep")
+    c1, c2 = st.columns([1,1])
+    with c1:
+        if st.button("Sign In", type="primary", use_container_width=True):
+            try:
+                db = get_db()
+                user = find_user(db, email)
+                if user and password_verify(pw, user.get("password_hash", "")):
+                    st.session_state.user = user
+                    st.session_state.logged_in = True
+                    st.session_state.page = "Dashboard"
+                    st.session_state.session_id = uuid.uuid4().hex
+                    default_aux = ADMIN_DEFAULT_AUX if user.get("role") == "admin" else REGULAR_DEFAULT_AUX
+                    st.session_state.aux = default_aux
+                    upsert_presence(db, user, default_aux)
+                    st.rerun()
+                else:
+                    st.error("Invalid HPE email or password.")
+            except Exception as e:
+                st.error(f"Unable to sign in: {e}")
+    with c2:
+        if st.button("Create an Account", use_container_width=True):
+            st.session_state.auth_mode = "signup"
+            st.rerun()
+
+
+@st.dialog("Sign Up", width="medium")
+def sign_up_dialog():
+    st.caption("Create your HPE CaseFlow account")
+    c1, c2 = st.columns(2)
+    with c1:
+        first = st.text_input("First Name", key="su_first")
+        emp = st.text_input("Employee ID", key="su_emp")
+        email = st.text_input("HPE Email Address", placeholder="name@hpe.com", key="su_email")
+        birthday = st.date_input("Birthday", value=date(1995,1,1), min_value=date(1940,1,1), max_value=date.today(), key="su_bday")
+        contact = st.text_input("Contact Number", key="su_contact")
+    with c2:
+        last = st.text_input("Last Name", key="su_last")
+        address = st.text_area("Home Address", height=100, key="su_address")
+        pw = st.text_input("Password", type="password", key="su_pw")
+        cpw = st.text_input("Confirm Password", type="password", key="su_cpw")
+    if st.button("Create Account", type="primary", use_container_width=True):
+        if not all([first.strip(), last.strip(), emp.strip(), email.strip(), address.strip(), contact.strip(), pw]):
+            st.error("Please complete all required fields.")
             return
-        profile = roster_find(email_n)
-        if not profile or not verify_password(password, profile.get("password_hash", "")):
-            st.error("Invalid account or password.")
+        if not email.lower().endswith("@hpe.com"):
+            st.error("Please use an HPE email address.")
             return
-        if profile.get("status", "Active") != "Active":
-            st.error("This account is inactive. Contact an administrator.")
+        if pw != cpw:
+            st.error("Passwords do not match.")
             return
-        st.session_state.authenticated = True
-        st.session_state.profile = profile
-        st.session_state.page = "Dashboard"
-        if profile.get("role") == "Admin":
-            presence_set(email_n, "Admin Task")
+        db = get_db()
+        ok, msg = create_user(db, {
+            "first_name": first.strip(),
+            "last_name": last.strip(),
+            "employee_id": emp.strip(),
+            "email": email.strip().lower(),
+            "birthday": birthday.isoformat(),
+            "home_address": address.strip(),
+            "contact_number": contact.strip(),
+            "password": pw,
+        })
+        if ok:
+            st.success(msg)
+            st.session_state.auth_mode = "signin"
+            st.rerun()
         else:
-            presence_set(email_n, "Busy - Away")
-        audit("login", email_n, {"keep_signed_in": keep})
+            st.error(msg)
+
+
+def login_page():
+    inject_login_asset()
+    st.markdown('<div class="login-shell"><div class="login-card">', unsafe_allow_html=True)
+    left, right = st.columns([.39, .61], gap="small")
+    with left:
+        login_brand()
+    with right:
+        st.markdown(
+            '<div class="login-panel"><h2>Sign In</h2>'
+            '<div class="lead">Access your HPE CaseFlow account</div></div>',
+            unsafe_allow_html=True,
+        )
+        # Put Streamlit controls in the white panel area.
+        st.text_input("HPE Email Address", placeholder="name@hpe.com", disabled=True, label_visibility="collapsed")
+        b1, b2 = st.columns(2)
+        with b1:
+            if st.button("Sign In", type="primary", use_container_width=True, key="open_signin"):
+                sign_in_dialog()
+        with b2:
+            if st.button("Sign Up", use_container_width=True, key="open_signup"):
+                sign_up_dialog()
+        st.markdown(
+            '<div style="text-align:center;color:#6B7F91;margin-top:1rem">'
+            'Sign in to continue or create an HPE CaseFlow account.</div>',
+            unsafe_allow_html=True,
+        )
+    st.markdown("</div></div>", unsafe_allow_html=True)
+
+
+# -----------------------------------------------------------------------------
+# Layout/navigation
+# -----------------------------------------------------------------------------
+
+def init_state():
+    defaults = {
+        "logged_in": False,
+        "user": None,
+        "page": "Dashboard",
+        "selected_case": None,
+        "case_filter": "All",
+        "auth_mode": "signin",
+        "session_id": uuid.uuid4().hex,
+        "aux": None,
+        "live_stamp": 0,
+        "sidebar_open": True,
+    }
+    for k, v in defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
+
+
+def current_user() -> Dict[str, Any]:
+    return st.session_state.user
+
+
+def render_topbar(db):
+    user = current_user()
+    name = f'{user.get("first_name","")} {user.get("last_name","")}'.strip()
+    role = user.get("role", "regular").title()
+    notif_count = db["notifications"].count_documents({"email": user["email"], "read": False})
+    c1, c2 = st.columns([7, 2], vertical_alignment="center")
+    with c1:
+        st.markdown(
+            f'<div class="page-title">{html.escape(st.session_state.page)}</div>'
+            f'<div class="page-subtitle">HPE CaseFlow · Real-time case and workforce visibility</div>',
+            unsafe_allow_html=True,
+        )
+    with c2:
+        p1, p2 = st.columns([1,3], vertical_alignment="center")
+        with p1:
+            st.markdown(f"🔔 **{notif_count}**")
+        with p2:
+            with st.popover(f"👤 {name}  ·  {role}", use_container_width=True):
+                st.markdown(f"**{name}**")
+                st.caption(f'{user.get("employee_id","")} · {user.get("email","")}')
+                st.divider()
+                st.markdown("**AUX / Presence**")
+                aux = st.selectbox(
+                    "Current status",
+                    AUX_OPTIONS,
+                    index=AUX_OPTIONS.index(
+                        st.session_state.aux or
+                        (ADMIN_DEFAULT_AUX if user.get("role") == "admin" else REGULAR_DEFAULT_AUX)
+                    ),
+                    key="profile_aux",
+                    label_visibility="collapsed",
+                )
+                if aux != st.session_state.aux:
+                    st.session_state.aux = aux
+                    set_presence_aux(db, user["email"], aux)
+                    st.toast(f"AUX changed to {aux}")
+                    clear_data_caches()
+                st.caption("AUX syncs as live presence and is not stored in the roster profile.")
+                if st.button("My Profile", use_container_width=True):
+                    st.session_state.page = "Profile"
+                    st.rerun()
+                if st.button("Sign Out", use_container_width=True):
+                    st.session_state.logged_in = False
+                    st.session_state.user = None
+                    st.session_state.page = "Dashboard"
+                    st.rerun()
+
+
+def sidebar_nav():
+    user = current_user()
+    is_admin = user.get("role") == "admin"
+    if is_admin:
+        items = ["Dashboard", "Cases", "Agents", "Schedule", "Requests", "Reports", "Salesforce", "Settings"]
+    else:
+        items = ["Dashboard", "My Cases", "Schedule", "Requests", "Profile"]
+
+    with st.sidebar:
+        st.markdown(
+            '<div style="font-size:1.15rem;font-weight:800;color:white;padding:.7rem .7rem 1rem">'
+            'HPE CaseFlow</div>',
+            unsafe_allow_html=True,
+        )
+        for item in items:
+            active = st.session_state.page == item
+            if st.button(
+                f"{'●' if active else '○'}  {item}",
+                key=f"nav_{item}",
+                type="primary" if active else "secondary",
+                use_container_width=True,
+            ):
+                st.session_state.page = item
+                st.session_state.selected_case = None
+                st.rerun()
+        st.divider()
+        st.caption("Realtime polling: 4 seconds")
+        st.caption("Sidebar can be collapsed with the Streamlit control.")
+
+
+# -----------------------------------------------------------------------------
+# Live presence / alerts
+# -----------------------------------------------------------------------------
+
+@st.fragment(run_every="4s")
+def live_presence_fragment():
+    if not st.session_state.logged_in:
+        return
+    try:
+        db = get_db()
+        user = current_user()
+        aux = st.session_state.aux or (
+            ADMIN_DEFAULT_AUX if user.get("role") == "admin" else REGULAR_DEFAULT_AUX
+        )
+        upsert_presence(db, user, aux)
+        st.session_state.live_stamp = int(datetime.utcnow().timestamp())
+    except Exception:
+        pass
+
+
+def user_notifications(db, limit=8):
+    return [clean_doc(x) for x in db["notifications"].find(
+        {"email": current_user()["email"], "read": False}
+    ).sort("created_at", DESCENDING).limit(limit)]
+
+
+def generate_case_alerts(db, user, cases):
+    # Deduplicate by a simple hourly alert key.
+    for case in cases:
+        cid = case.get("case_id")
+        if not cid:
+            continue
+        if due_soon(case, 4):
+            key = f"due4:{cid}:{now_utc().strftime('%Y%m%d%H')}"
+            if not db["notifications"].find_one({"email": user["email"], "dedupe_key": key}):
+                notify(db, user["email"], "Case due soon",
+                       f"Case {cid} is due within 4 hours.", "due", cid)
+                db["notifications"].update_one(
+                    {"email": user["email"], "case_id": cid, "title": "Case due soon",
+                     "dedupe_key": {"$exists": False}},
+                    {"$set": {"dedupe_key": key}},
+                )
+        if case.get("priority") == "Critical":
+            key = f"critical:{cid}:{now_utc().strftime('%Y%m%d%H')}"
+            if not db["notifications"].find_one({"email": user["email"], "dedupe_key": key}):
+                notify(db, user["email"], "Critical case",
+                       f"Case {cid} is currently Critical.", "critical", cid)
+                db["notifications"].update_one(
+                    {"email": user["email"], "case_id": cid, "title": "Critical case",
+                     "dedupe_key": {"$exists": False}},
+                    {"$set": {"dedupe_key": key}},
+                )
+        if is_stale(case, 24):
+            key = f"stale:{cid}:{now_utc().strftime('%Y%m%d')}"
+            if not db["notifications"].find_one({"email": user["email"], "dedupe_key": key}):
+                notify(db, user["email"], "Case needs an update",
+                       f"Case {cid} has not been updated for 24 hours.", "stale", cid)
+                db["notifications"].update_one(
+                    {"email": user["email"], "case_id": cid,
+                     "title": "Case needs an update",
+                     "dedupe_key": {"$exists": False}},
+                    {"$set": {"dedupe_key": key}},
+                )
+
+
+# -----------------------------------------------------------------------------
+# Common dashboard widgets
+# -----------------------------------------------------------------------------
+
+def kpi_tiles(cases: List[Dict[str, Any]], key_prefix="kpi"):
+    active = [c for c in cases if is_active_case(c)]
+    critical = [c for c in active if c.get("priority") == "Critical"]
+    due = [c for c in active if due_soon(c)]
+    track = [c for c in active if c.get("priority") != "Critical" and not due_soon(c)]
+    cols = st.columns(4, gap="small")
+    data = [
+        ("Active Cases", len(active), "kpi-active", "All"),
+        ("Critical", len(critical), "kpi-critical", "Critical"),
+        ("Due Soon", len(due), "kpi-due", "Due Soon"),
+        ("On Track", len(track), "kpi-track", "On Track"),
+    ]
+    for col, (label, num, cls, filter_name) in zip(cols, data):
+        with col:
+            if st.button(
+                f"{num}\n{label}",
+                key=f"{key_prefix}_{filter_name}",
+                use_container_width=True,
+            ):
+                st.session_state.case_filter = filter_name
+                st.session_state.page = "My Cases" if current_user().get("role") != "admin" else "Cases"
+                st.rerun()
+
+
+def alerts_panel(db, cases):
+    st.markdown('<div class="section-title">Alerts for You</div>', unsafe_allow_html=True)
+    notes = user_notifications(db, limit=6)
+    if not notes:
+        st.info("No new alerts.")
+        return
+    for n in notes:
+        cols = st.columns([7, 1])
+        with cols[0]:
+            icon = "🔴" if n.get("type") in ("critical", "due", "stale") else "🔔"
+            st.markdown(f"{icon} **{html.escape(n.get('title',''))}** — {html.escape(n.get('message',''))}")
+        with cols[1]:
+            if st.button("✓", key=f"read_{n['_id']}"):
+                db["notifications"].update_one({"_id": ObjectId(n["_id"])}, {"$set": {"read": True}})
+                st.rerun()
+
+
+def cases_table(cases, key_prefix="cases", show_assignee=False):
+    active = [c for c in cases if is_active_case(c)]
+    selected_filter = st.session_state.get("case_filter", "All")
+    if selected_filter == "Critical":
+        active = [c for c in active if c.get("priority") == "Critical"]
+    elif selected_filter == "Due Soon":
+        active = [c for c in active if due_soon(c)]
+    elif selected_filter == "On Track":
+        active = [c for c in active if not due_soon(c) and c.get("priority") != "Critical"]
+
+    search = st.text_input("Search cases", placeholder="Search case, subject, vendor, technician…", key=f"{key_prefix}_search")
+    if search:
+        q = search.lower()
+        active = [
+            c for c in active if q in " ".join([
+                safe_str(c.get("case_id")), safe_str(c.get("subject")),
+                safe_str(c.get("vendor")), safe_str(c.get("technician")),
+                safe_str(c.get("description"))
+            ]).lower()
+        ]
+    active.sort(key=urgency_rank)
+
+    if not active:
+        st.info("No cases match the current view.")
+        return
+
+    rows = []
+    for c in active:
+        rows.append({
+            "Case #": c.get("case_id"),
+            "Subject": c.get("subject", ""),
+            "Priority": c.get("priority", ""),
+            "Due Date": safe_str(c.get("due_date", "")).replace("T", " ")[:16],
+            "Status": c.get("status", ""),
+            "Last Update": safe_str(c.get("last_update", "")).replace("T", " ")[:16],
+            "Assigned To": c.get("assigned_name", c.get("assigned_to", "")) if show_assignee else "",
+        })
+    df = pd.DataFrame(rows)
+    event = st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True,
+        selection_mode="single-row",
+        on_select="rerun",
+        key=f"{key_prefix}_table",
+        column_config={
+            "Priority": st.column_config.TextColumn("Priority"),
+            "Status": st.column_config.TextColumn("Status"),
+        },
+    )
+    if event.selection.rows:
+        idx = event.selection.rows[0]
+        st.session_state.selected_case = active[idx]["case_id"]
+
+
+def case_details(db, case_id: str, admin=False):
+    case = clean_doc(db["cases"].find_one({"case_id": case_id}))
+    if not case:
+        st.warning("Case no longer exists.")
+        st.session_state.selected_case = None
+        return
+    st.markdown(
+        f'<div class="section-title">Case {html.escape(case_id)} '
+        f'{html_badge(case.get("status",""), case.get("status",""))}</div>',
+        unsafe_allow_html=True,
+    )
+    c1, c2 = st.columns([1.35, 1], gap="large")
+    with c1:
+        st.markdown(f"### {html.escape(case.get('subject','Untitled case'))}")
+        st.write(case.get("description", "No description provided."))
+        st.caption(f"Created: {case.get('created_at','')} · Last update: {case.get('last_update','')}")
+        if case.get("updates"):
+            st.markdown("**Update history**")
+            for u in reversed(case["updates"][-8:]):
+                st.markdown(f"• **{u.get('author','')}** — {u.get('note','')}  \n<small>{u.get('created_at','')}</small>", unsafe_allow_html=True)
+    with c2:
+        st.markdown("**Case details**")
+        st.write(f"Priority: {case.get('priority','')}")
+        st.write(f"Due: {case.get('due_date','')}")
+        st.write(f"Assigned to: {case.get('assigned_name',case.get('assigned_to','Waiting'))}")
+        st.write(f"Vendor: {case.get('vendor','—')}")
+        st.write(f"Technician: {case.get('technician','—')}")
+        st.write(f"Source: {case.get('source','CaseFlow')}")
+        if case.get("salesforce_url"):
+            st.link_button("Open Salesforce Case", case["salesforce_url"], use_container_width=True)
+        elif case.get("salesforce_case_id"):
+            st.link_button("Open Salesforce", SALESFORCE_URL, use_container_width=True)
+
+    if not admin or case.get("assigned_to") == current_user().get("email"):
+        st.markdown("#### Update case")
+        s1, s2 = st.columns([1, 2])
+        with s1:
+            status = st.selectbox(
+                "Status",
+                CASE_STATUSES,
+                index=CASE_STATUSES.index(case.get("status")) if case.get("status") in CASE_STATUSES else 0,
+                key=f"status_{case_id}",
+            )
+        with s2:
+            note = st.text_input("Update note", key=f"note_{case_id}", placeholder="Add progress / follow-up note…")
+        if st.button("Save Update", type="primary", key=f"save_{case_id}"):
+            add_case_update(db, case_id, current_user()["email"], note or "Status updated.", status)
+            clear_data_caches()
+            st.toast("Case update saved.")
+            st.rerun()
+
+        st.markdown("#### Vendor / Technician")
+        vendor_email = case.get("vendor_email", "")
+        vendor_phone = case.get("vendor_phone", "")
+        a, b, c = st.columns(3)
+        with a:
+            if vendor_email:
+                st.link_button("✉ Email Vendor", f"mailto:{vendor_email}", use_container_width=True)
+        with b:
+            if vendor_phone:
+                # navigator.clipboard copies the number; tel: remains the call action.
+                st.markdown(
+                    f"""<a href="tel:{html.escape(vendor_phone)}"
+                    style="display:block;text-align:center;padding:.55rem;background:#0B73C9;
+                    color:#fff;border-radius:8px;text-decoration:none;font-weight:600"
+                    onclick="navigator.clipboard && navigator.clipboard.writeText('{html.escape(vendor_phone)}')">
+                    ☎ Call / Copy Number</a>""",
+                    unsafe_allow_html=True,
+                )
+        with c:
+            if case.get("salesforce_url"):
+                st.link_button("Vendor/Technician", case["salesforce_url"], use_container_width=True)
+            else:
+                st.link_button("Vendor/Technician", SALESFORCE_URL, use_container_width=True)
+
+        st.markdown("#### Contract breached")
+        breach = st.selectbox("Violation reason", ["Select…"] + list(BREACH_REASONS), key=f"breach_{case_id}")
+        if breach != "Select…":
+            generated = (
+                f"Hello, we are following up regarding case {case_id}. "
+                f"{BREACH_REASONS[breach]} Please provide an immediate update and the "
+                f"recovery plan / revised delivery commitment."
+            )
+            edited = st.text_area("Generated message", generated, key=f"breach_msg_{case_id}")
+            if st.button("Tag Contract Breached", key=f"breach_save_{case_id}"):
+                update_case(db, case_id, {
+                    "status": "Contract Breached",
+                    "contract_breached_reason": breach,
+                    "contract_breach_message": edited,
+                }, current_user()["email"])
+                st.success("Case tagged as Contract Breached.")
+                clear_data_caches()
+                st.rerun()
+            if vendor_email:
+                st.link_button("Email Breach Notice", f"mailto:{vendor_email}?subject={quote(f'Case {case_id} - Contract Breach')}&body={quote(edited)}")
+
+
+# -----------------------------------------------------------------------------
+# Regular dashboard
+# -----------------------------------------------------------------------------
+
+def regular_dashboard(db):
+    user = current_user()
+    cases = get_cases_cached("mine", user["email"], st.session_state.live_stamp)
+    generate_case_alerts(db, user, cases)
+    active = [c for c in cases if is_active_case(c)]
+    critical = [c for c in active if c.get("priority") == "Critical"]
+    due = [c for c in active if due_soon(c)]
+    track = [c for c in active if c.get("priority") != "Critical" and not due_soon(c)]
+
+    st.markdown(
+        f"### Good {('morning' if datetime.now().hour < 12 else 'afternoon' if datetime.now().hour < 18 else 'evening')}, "
+        f"{html.escape(user.get('first_name',''))}!",
+    )
+    st.caption(datetime.now().strftime("%A, %B %d, %Y · %I:%M %p"))
+
+    kpi_tiles(cases, "agent")
+    alerts_panel(db, cases)
+
+    st.markdown('<div class="section-title">My Cases (Sorted by Urgency)</div>', unsafe_allow_html=True)
+    cases_table(cases, "agent_cases")
+
+    if st.session_state.selected_case:
+        st.divider()
+        case_details(db, st.session_state.selected_case, admin=False)
+
+    st.divider()
+    st.markdown("### Today's Schedule")
+    render_agent_schedule(db, user["email"], date.today(), compact=True)
+
+    st.markdown("### Live Adherence & Attendance")
+    render_adherence_cards(db, [user])
+
+
+# -----------------------------------------------------------------------------
+# My cases / admin cases
+# -----------------------------------------------------------------------------
+
+def regular_cases(db):
+    cases = get_cases_cached("mine", current_user()["email"], st.session_state.live_stamp)
+    c1, c2 = st.columns([4, 1])
+    with c1:
+        st.markdown("### My Cases")
+        st.caption("Assigned cases are automatically sorted by urgency.")
+    with c2:
+        if st.button("Clear Filter", use_container_width=True):
+            st.session_state.case_filter = "All"
+            st.session_state.selected_case = None
+            st.rerun()
+    cases_table(cases, "my_cases")
+    if st.session_state.selected_case:
+        st.divider()
+        case_details(db, st.session_state.selected_case, admin=False)
+
+
+def admin_dashboard(db):
+    cases = get_cases_cached("all", "", st.session_state.live_stamp)
+    active = [c for c in cases if is_active_case(c)]
+    agents = get_agents_cached(st.session_state.live_stamp)
+    st.markdown("### Team Overview")
+    st.caption(datetime.now().strftime("%A, %B %d, %Y · %I:%M %p"))
+    kpi_tiles(cases, "admin")
+    c1, c2 = st.columns([1.1, 1.9])
+    with c1:
+        st.markdown("### Agent Status")
+        rows = []
+        for a in agents:
+            if a.get("role") == "regular":
+                rows.append({
+                    "Agent": f'{a.get("first_name","")} {a.get("last_name","")}',
+                    "AUX": a.get("aux","Offline"),
+                    "Active": a.get("active_cases",0),
+                    "Assigned Today": a.get("assigned_today",0),
+                    "Adherence": f'{a.get("adherence_today", 0)}%',
+                })
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    with c2:
+        st.markdown("### Case Distribution")
+        dist = pd.DataFrame([
+            {"Agent": f'{a.get("first_name","")} {a.get("last_name","")}', "Active": a.get("active_cases",0),
+             "Assigned Today": a.get("assigned_today",0)}
+            for a in agents if a.get("role") == "regular"
+        ])
+        if not dist.empty:
+            st.bar_chart(dist.set_index("Agent")[["Active","Assigned Today"]])
+        else:
+            st.info("No regular agents yet.")
+    alerts_panel(db, cases)
+    st.markdown("### All Active Cases")
+    cases_table(cases, "admin_dashboard_cases", show_assignee=True)
+    if st.session_state.selected_case:
+        st.divider()
+        case_details(db, st.session_state.selected_case, admin=True)
+
+
+def admin_cases(db):
+    st.markdown("### Cases")
+    st.caption("View, update, reassign and manage all active cases.")
+    cases = get_cases_cached("all", "", st.session_state.live_stamp)
+    cases_table(cases, "admin_cases", show_assignee=True)
+    if st.session_state.selected_case:
+        st.divider()
+        case_details(db, st.session_state.selected_case, admin=True)
+        st.markdown("#### Reassign case")
+        agents = [a for a in get_agents_cached(st.session_state.live_stamp) if a.get("role") == "regular"]
+        choices = {f'{a.get("first_name")} {a.get("last_name")} · {a.get("aux","Offline")}': a["email"] for a in agents}
+        if choices:
+            selected = st.selectbox("Agent", list(choices), key=f"reassign_{st.session_state.selected_case}")
+            if st.button("Reassign", type="primary"):
+                email = choices[selected]
+                agent = find_user(db, email)
+                update_case(db, st.session_state.selected_case, {
+                    "assigned_to": email,
+                    "assigned_name": f'{agent.get("first_name")} {agent.get("last_name")}',
+                    "assignment_status": "Admin Reassigned",
+                    "status": "Assigned",
+                }, current_user()["email"])
+                notify(db, email, "Case reassigned to you", f'Case {st.session_state.selected_case} was reassigned by admin.', "assignment", st.session_state.selected_case)
+                clear_data_caches()
+                st.rerun()
+
+
+# -----------------------------------------------------------------------------
+# Schedule / requests
+# -----------------------------------------------------------------------------
+
+def get_schedule(db, email: str, start: date, end: date):
+    return [clean_doc(x) for x in db["schedule"].find({
+        "email": email.lower(),
+        "date": {"$gte": start.isoformat(), "$lte": end.isoformat()},
+    }).sort([("date", ASCENDING), ("start", ASCENDING)])]
+
+
+def ensure_daily_schedule(db, email: str, work_date: date):
+    existing = list(db["schedule"].find({"email": email.lower(), "date": work_date.isoformat()}))
+    if existing:
+        return
+    # Default workday template. Admin's workforce scheduler can adjust later.
+    items = [
+        ("08:00", "10:00", "Work / Case Processing", "work"),
+        ("10:00", "10:15", "Break", "break"),
+        ("10:15", "12:00", "Work / Case Processing", "work"),
+        ("12:00", "13:00", "Lunch", "lunch"),
+        ("13:00", "15:00", "Work / Case Processing", "work"),
+        ("15:00", "15:15", "Break", "break"),
+        ("15:15", "17:00", "Work / Case Processing", "work"),
+    ]
+    for start, end, activity, kind in items:
+        db["schedule"].insert_one({
+            "email": email.lower(),
+            "date": work_date.isoformat(),
+            "start": start,
+            "end": end,
+            "activity": activity,
+            "kind": kind,
+            "created_at": iso_now(),
+            "source": "auto",
+        })
+
+
+def render_agent_schedule(db, email: str, selected_date: date, compact=False):
+    ensure_daily_schedule(db, email, selected_date)
+    schedule = get_schedule(db, email, selected_date, selected_date)
+    if not schedule:
+        st.info("No schedule plotted.")
+        return
+    rows = [{
+        "Time": f'{x.get("start")} – {x.get("end")}',
+        "Activity": x.get("activity"),
+        "Type": x.get("kind","").title(),
+    } for x in schedule]
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+
+def regular_schedule(db):
+    st.markdown("### My Schedule")
+    view = st.segmented_control("View", ["Day", "Week", "Month"], default="Day", key="schedule_view")
+    selected = st.date_input("Date", value=date.today(), key="agent_schedule_date")
+    if view == "Day":
+        render_agent_schedule(db, current_user()["email"], selected)
+    else:
+        if view == "Week":
+            start = selected - timedelta(days=selected.weekday())
+            end = start + timedelta(days=6)
+        else:
+            start = selected.replace(day=1)
+            next_month = (start.replace(day=28) + timedelta(days=4)).replace(day=1)
+            end = next_month - timedelta(days=1)
+        # Ensure a default schedule for each working day in range.
+        cur = start
+        while cur <= end:
+            if cur.weekday() < 5:
+                ensure_daily_schedule(db, current_user()["email"], cur)
+            cur += timedelta(days=1)
+        schedule = get_schedule(db, current_user()["email"], start, end)
+        st.dataframe(pd.DataFrame([{
+            "Date": x.get("date"), "Time": f'{x.get("start")} – {x.get("end")}',
+            "Activity": x.get("activity"), "Type": x.get("kind","").title()
+        } for x in schedule]), use_container_width=True, hide_index=True)
+
+
+def submit_request(db, req_type, start_date, end_date, reason):
+    user = current_user()
+    allocation = int(db["settings"].find_one({"key": "pto_allocation"}) or {"value": 5}).get("value", 5)
+    used = db["requests"].count_documents({
+        "email": user["email"], "type": "PTO", "status": {"$in": ["Approved", "Auto-Approved"]},
+        "start_date": {"$gte": f"{date.today().year}-01-01"},
+    })
+    days = (end_date - start_date).days + 1
+    if req_type == "PTO" and used + days > allocation:
+        return False, "No allocation for the selected date."
+    status = "Auto-Approved" if req_type in ("Sick Leave", "Emergency Leave", "PTO") else "Pending"
+    doc = {
+        "email": user["email"], "employee_name": f'{user.get("first_name")} {user.get("last_name")}',
+        "type": req_type, "start_date": start_date.isoformat(), "end_date": end_date.isoformat(),
+        "reason": reason, "status": status, "created_at": iso_now(),
+    }
+    db["requests"].insert_one(doc)
+    # Admin notification.
+    for a in list_agents(db):
+        if a.get("role") == "admin":
+            notify(db, a["email"], "New request", f'{doc["employee_name"]} submitted {req_type}.', "request")
+    return True, "Request submitted."
+
+
+def regular_requests(db):
+    st.markdown("### Requests")
+    tabs = st.tabs(["New Request", "My Requests", "Schedule Swap"])
+    with tabs[0]:
+        req_type = st.selectbox("Request Type", ["PTO", "Sick Leave", "Emergency Leave"])
+        start = st.date_input("Start Date", date.today(), key="req_start")
+        end = st.date_input("End Date", date.today(), key="req_end")
+        reason = st.text_area("Reason")
+        if st.button("Submit Request", type="primary"):
+            if end < start:
+                st.error("End date cannot be before start date.")
+            else:
+                ok, msg = submit_request(db, req_type, start, end, reason)
+                (st.success if ok else st.error)(msg)
+    with tabs[1]:
+        reqs = [clean_doc(x) for x in db["requests"].find({"email": current_user()["email"]}).sort("created_at", DESCENDING).limit(30)]
+        if reqs:
+            st.dataframe(pd.DataFrame([{
+                "Date": f'{r.get("start_date")} → {r.get("end_date")}',
+                "Type": r.get("type"), "Status": r.get("status"), "Reason": r.get("reason","")
+            } for r in reqs]), use_container_width=True, hide_index=True)
+        else:
+            st.info("No requests yet.")
+    with tabs[2]:
+        st.caption("A schedule swap is automatically approved when both agents agree.")
+        agents = [a for a in list_agents(db) if a.get("role") == "regular" and a["email"] != current_user()["email"]]
+        choices = {f'{a.get("first_name")} {a.get("last_name")}': a["email"] for a in agents}
+        if choices:
+            date_swap = st.date_input("Swap Date", date.today(), key="swap_date")
+            partner = st.selectbox("Swap with", list(choices), key="swap_partner")
+            if st.button("Request Swap", type="primary"):
+                db["requests"].insert_one({
+                    "email": current_user()["email"],
+                    "type": "Schedule Swap",
+                    "start_date": date_swap.isoformat(),
+                    "end_date": date_swap.isoformat(),
+                    "partner_email": choices[partner],
+                    "status": "Pending Partner Agreement",
+                    "created_at": iso_now(),
+                })
+                notify(db, choices[partner], "Schedule swap request",
+                       f'{current_user().get("first_name")} wants to swap {date_swap}.',
+                       "request")
+                st.success("Swap request sent to the other agent.")
+
+
+def admin_schedule(db):
+    st.markdown("### Schedule")
+    tabs = st.tabs(["Team Schedule", "Schedule Requests", "Schedule Builder"])
+    with tabs[0]:
+        selected = st.date_input("Date", date.today(), key="admin_schedule_date")
+        agents = [a for a in list_agents(db) if a.get("role") == "regular"]
+        for a in agents:
+            ensure_daily_schedule(db, a["email"], selected)
+        rows = []
+        for a in agents:
+            sched = get_schedule(db, a["email"], selected, selected)
+            for x in sched:
+                rows.append({
+                    "Agent": f'{a.get("first_name")} {a.get("last_name")}',
+                    "AUX": get_presence(db, a["email"]).get("aux","Offline") if get_presence(db, a["email"]) else "Offline",
+                    "Time": f'{x.get("start")}–{x.get("end")}',
+                    "Activity": x.get("activity"),
+                })
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    with tabs[1]:
+        reqs = [clean_doc(x) for x in db["requests"].find({"status": {"$in": ["Pending", "Pending Partner Agreement"]}}).sort("created_at", DESCENDING)]
+        for r in reqs:
+            with st.container(border=True):
+                st.markdown(f"**{r.get('employee_name','')} · {r.get('type','')}**")
+                st.caption(f'{r.get("start_date")} → {r.get("end_date")} · {r.get("reason","")}')
+                c1, c2 = st.columns(2)
+                if c1.button("Approve", key=f"approve_{r['_id']}"):
+                    db["requests"].update_one({"_id": ObjectId(r["_id"])}, {"$set": {"status": "Approved", "approved_at": iso_now(), "approved_by": current_user()["email"]}})
+                    notify(db, r["email"], "Request approved", f'Your {r.get("type")} request was approved.', "request")
+                    st.rerun()
+                if c2.button("Decline", key=f"decline_{r['_id']}"):
+                    db["requests"].update_one({"_id": ObjectId(r["_id"])}, {"$set": {"status": "Declined", "approved_by": current_user()["email"]}})
+                    notify(db, r["email"], "Request declined", f'Your {r.get("type")} request was declined.', "request")
+                    st.rerun()
+    with tabs[2]:
+        st.caption("The builder keeps a break/lunch/break pattern by default, then adjusts it by queue coverage.")
+        agents = [a for a in list_agents(db) if a.get("role") == "regular"]
+        if agents:
+            agent = st.selectbox("Agent", [f'{a.get("first_name")} {a.get("last_name")}' for a in agents])
+            selected_agent = agents[[f'{a.get("first_name")} {a.get("last_name")}' for a in agents].index(agent)]
+            selected_date = st.date_input("Date", date.today(), key="builder_date")
+            ensure_daily_schedule(db, selected_agent["email"], selected_date)
+            sched = get_schedule(db, selected_agent["email"], selected_date, selected_date)
+            for x in sched:
+                c1,c2,c3,c4,c5 = st.columns([1,1,2,1,1])
+                c1.write(x.get("start"))
+                c2.write(x.get("end"))
+                c3.write(x.get("activity"))
+                if c4.button("Edit", key=f"edit_sched_{x['_id']}"):
+                    st.session_state[f"editing_sched_{x['_id']}"] = True
+                if c5.button("Delete", key=f"del_sched_{x['_id']}"):
+                    db["schedule"].delete_one({"_id": ObjectId(x["_id"])})
+                    st.rerun()
+            with st.expander("Add activity / break / lunch"):
+                s = st.time_input("Start", time(10,0))
+                e = st.time_input("End", time(10,15))
+                activity = st.text_input("Activity", "Meeting")
+                kind = st.selectbox("Type", ["meeting","coaching","admin","break","lunch","work"])
+                if st.button("Add to Schedule", type="primary"):
+                    db["schedule"].insert_one({
+                        "email": selected_agent["email"], "date": selected_date.isoformat(),
+                        "start": s.strftime("%H:%M"), "end": e.strftime("%H:%M"),
+                        "activity": activity, "kind": kind, "source": "admin", "created_at": iso_now()
+                    })
+                    st.success("Schedule updated.")
+                    st.rerun()
+
+
+# -----------------------------------------------------------------------------
+# Admin agents / requests / reports / Salesforce / settings
+# -----------------------------------------------------------------------------
+
+def admin_agents(db):
+    st.markdown("### Agents")
+    agents = get_agents_cached(st.session_state.live_stamp)
+    rows = [{
+        "Name": f'{a.get("first_name","")} {a.get("last_name","")}',
+        "Email": a.get("email",""),
+        "AUX": a.get("aux","Offline"),
+        "Active Cases": a.get("active_cases",0),
+        "Assigned Today": a.get("assigned_today",0),
+        "Role": a.get("role",""),
+    } for a in agents]
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+    st.markdown("#### Agent controls")
+    regulars = [a for a in agents if a.get("role") == "regular"]
+    if not regulars:
+        st.info("No regular agents.")
+        return
+    labels = [f'{a.get("first_name")} {a.get("last_name")} · {a.get("email")}' for a in regulars]
+    selected = st.selectbox("Agent", labels)
+    agent = regulars[labels.index(selected)]
+    c1,c2,c3 = st.columns(3)
+    if c1.button("Kick / Pause Assignment"):
+        until = now_utc() + timedelta(minutes=30)
+        db["presence"].update_one({"email": agent["email"]}, {"$set": {"kicked_until": until, "aux": "Busy - Away", "last_seen": now_utc()}}, upsert=True)
+        notify(db, agent["email"], "Assignment paused", "An administrator paused auto-assignment for your session for 30 minutes.", "system")
+        clear_data_caches()
+        st.success("Agent paused for auto-assignment.")
+    if c2.button("Send Missed Case Alert"):
+        notify(db, agent["email"], "Missed / ageing case", "Please review your ageing bucket and update any overdue cases.", "stale")
+        st.success("Alert sent.")
+    if c3.button("Open Bucket"):
+        st.session_state.page = "Cases"
+        st.session_state.case_filter = "All"
+        st.rerun()
+
+    st.markdown("#### Role management")
+    new_role = st.selectbox("Set role", ["regular","admin"], key="set_role")
+    if st.button("Save Role"):
+        db[ROSTER_COLLECTION_NAME].update_one({"email": agent["email"]}, {"$set": {"role": new_role, "updated_at": iso_now()}})
+        st.success("Role updated.")
+        clear_data_caches()
         st.rerun()
 
 
-@st.dialog("Create an HPE CaseFlow Account")
-def sign_up_dialog():
-    st.write("All fields are required unless marked optional.")
-    c1, c2 = st.columns(2)
-    with c1:
-        first = st.text_input("First Name")
-        employee_id = st.text_input("Employee ID")
-        birthday = st.date_input("Birthday", value=date(1990, 1, 1), min_value=date(1900, 1, 1), max_value=date.today())
-        contact = st.text_input("Contact Number")
-        password = st.text_input("Password", type="password")
-    with c2:
-        last = st.text_input("Last Name")
-        email = st.text_input("HPE Email Address", placeholder="name@hpe.com")
-        address = st.text_area("Home Address")
-        confirm = st.text_input("Confirm Password", type="password")
-    if st.button("Create Account", type="primary", use_container_width=True):
-        email_n = normalize_email(email)
-        errors = []
-        if not first.strip() or not last.strip(): errors.append("First and last name are required.")
-        if not employee_id.strip(): errors.append("Employee ID is required.")
-        if not valid_hpe_email(email_n): errors.append("Use an @hpe.com email address.")
-        if not address.strip(): errors.append("Home address is required.")
-        if not contact.strip(): errors.append("Contact number is required.")
-        if len(password) < 8: errors.append("Password must be at least 8 characters.")
-        if password != confirm: errors.append("Passwords do not match.")
-        if roster_find(email_n): errors.append("An account already exists for this email.")
-        existing_ids = {str(x.get("employee_id", "")).lower() for x in roster_all()}
-        if employee_id.strip().lower() in existing_ids: errors.append("Employee ID is already registered.")
-        if errors:
-            for e in errors: st.error(e)
-            return
-        roster_upsert({
-            "type": "roster_list",
-            "first_name": first.strip(), "last_name": last.strip(),
-            "employee_id": employee_id.strip(), "email": email_n,
-            "birthday": birthday.isoformat(), "home_address": address.strip(),
-            "contact_number": contact.strip(), "password_hash": hash_password(password),
-            "role": "Agent", "status": "Active", "created_at": iso_now(),
+def admin_requests(db):
+    st.markdown("### Requests")
+    reqs = [clean_doc(x) for x in db["requests"].find().sort("created_at", DESCENDING).limit(100)]
+    if reqs:
+        st.dataframe(pd.DataFrame([{
+            "Date": r.get("created_at",""),
+            "Agent": r.get("employee_name",r.get("email","")),
+            "Type": r.get("type",""),
+            "Range": f'{r.get("start_date")} → {r.get("end_date")}',
+            "Status": r.get("status",""),
+        } for r in reqs]), use_container_width=True, hide_index=True)
+    else:
+        st.info("No requests.")
+
+
+def compute_adherence(db, email: str, start: date, end: date) -> float:
+    # A practical baseline: scheduled minutes that are represented by Active/Work
+    # presence. Replace with your WFM/attendance feed later without changing UI.
+    sched = get_schedule(db, email, start, end)
+    if not sched:
+        return 100.0
+    planned = 0
+    covered = 0
+    for x in sched:
+        try:
+            s = datetime.combine(start, datetime.strptime(x["start"], "%H:%M").time())
+            e = datetime.combine(start, datetime.strptime(x["end"], "%H:%M").time())
+            mins = max(0, int((e-s).total_seconds()/60))
+            planned += mins
+            if x.get("kind") in ("work", "meeting", "coaching", "admin"):
+                covered += mins
+        except Exception:
+            pass
+    return round((covered / planned) * 100, 1) if planned else 100.0
+
+
+def render_adherence_cards(db, agents):
+    rows = []
+    for a in agents:
+        if a.get("role") == "admin":
+            continue
+        adh = compute_adherence(db, a["email"], date.today(), date.today())
+        a["adherence_today"] = adh
+        rows.append({
+            "Agent": f'{a.get("first_name")} {a.get("last_name")}',
+            "Today Adherence": f"{adh}%",
+            "MTD Adherence": f"{adh}%",
+            "Attendance": "Present",
         })
-        presence_set(email_n, "Busy - Away")
-        audit("account_created", email_n, {"employee_id": employee_id.strip()})
-        st.success("Account created. You can now sign in.")
-
-
-# -----------------------------------------------------------------------------
-# DASHBOARD
-# -----------------------------------------------------------------------------
-
-def counts_for_cases(cases: List[Dict[str, Any]], email: Optional[str] = None):
-    if email:
-        cases = [c for c in cases if normalize_email(c.get("assigned_to")) == normalize_email(email)]
-    active = [c for c in cases if c.get("status") not in CLOSED_CASE_STATUSES]
-    critical = [c for c in active if c.get("priority") == "Critical"]
-    due = [c for c in active if case_due_category(c) == "Due Soon"]
-    ontrack = [c for c in active if case_due_category(c) == "On Track"]
-    return len(active), len(critical), len(due), len(ontrack)
-
-
-def render_alerts(profile: Dict[str, Any]):
-    alerts = alerts_for_agent(profile["email"]) if profile.get("role") == "Agent" else []
-    st.markdown('<div class="section-card"><h3>Alerts for You</h3>', unsafe_allow_html=True)
-    if not alerts:
-        st.success("No outstanding alerts.")
-    else:
-        for a in alerts[:8]:
-            icon = "🔴" if a["kind"] in {"critical","stale"} else "🟠" if a["kind"] == "due" else "🔔"
-            st.markdown(f"{icon} **{a['text']}** <span class='small-muted'>{a.get('time','')}</span>", unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-
-def render_case_table(cases: List[Dict[str, Any]], key_prefix: str = "cases", allow_open: bool = True):
-    if not cases:
-        st.info("No cases match the current filter.")
-        return
-    cases = sorted(cases, key=case_sort_key)
-    for idx, c in enumerate(cases):
-        with st.container(border=True):
-            cols = st.columns([1.0, 2.2, .9, 1.35, 1.2, .9])
-            with cols[0]:
-                if allow_open:
-                    if st.button(f"#{c.get('case_number')}", key=f"{key_prefix}_{idx}_open"):
-                        st.session_state.selected_case = c.get("case_number")
-                        st.session_state.page = "My Cases" if st.session_state.profile.get("role") == "Agent" else "Cases"
-                        st.rerun()
-                else:
-                    st.markdown(f"**#{c.get('case_number')}**")
-            with cols[1]:
-                st.markdown(f"**{c.get('subject','')}**")
-                st.caption(c.get("description", "")[:90])
-            with cols[2]:
-                st.markdown(urgency_pill(c.get("priority","Low")), unsafe_allow_html=True)
-            with cols[3]:
-                due = as_datetime(c.get("due_date"))
-                st.write(due.strftime("%b %d, %I:%M %p") if due else "—")
-            with cols[4]:
-                st.markdown(status_pill(c.get("status","New")), unsafe_allow_html=True)
-            with cols[5]:
-                st.progress(max(0, min(100, int(c.get("progress",0)))) / 100, text=f"{int(c.get('progress',0))}%")
-
-
-def dashboard_agent(profile: Dict[str, Any]):
-    # Only this fragment polls. Navigation changes do not poll the entire app.
-    @st.fragment(run_every=REALTIME_SECONDS)
-    def live_dashboard():
-        presence_set(profile["email"], presence_get(profile["email"]).get("aux", "Busy - Away"))
-        assign_unassigned_cases()
-        cases = active_cases_for(profile["email"])
-        a, b, c, d = counts_for_cases(cases)
-        page_title("Dashboard", f"Good morning, {profile.get('first_name','Agent')}! · {now_local().strftime('%A, %B %d, %Y')}")
-        m1, m2, m3, m4 = st.columns(4)
-        with m1: render_metric("My Active Cases", a, "metric-blue", "metric_active")
-        with m2: render_metric("Critical", b, "metric-red", "metric_critical")
-        with m3: render_metric("Due Soon", c, "metric-yellow", "metric_due_soon")
-        with m4: render_metric("On Track", d, "metric-green", "metric_on_track")
-        render_alerts(profile)
-        left, right = st.columns([1.55, .75])
-        with left:
-            st.markdown('<div class="section-card"><h3>My Cases (Sorted by Urgency)</h3>', unsafe_allow_html=True)
-            q = st.text_input("Search cases", placeholder="Search case number, subject, vendor, status...", key="agent_case_search")
-            filtered = [x for x in cases if q.lower() in json.dumps({k: x.get(k) for k in ["case_number","subject","vendor","status","priority"]}, default=str).lower()]
-            render_case_table(filtered, "agentdash")
-            st.markdown('</div>', unsafe_allow_html=True)
-        with right:
-            st.markdown('<div class="section-card"><h3>Today\'s Schedule</h3>', unsafe_allow_html=True)
-            rows = schedules_for(profile["email"], now_local().date())
-            if not rows:
-                st.info("No schedule plotted for today.")
-            for r in rows:
-                st.markdown(f"**{r.get('start','')} – {r.get('end','')}** · {r.get('activity','Work / Case Processing')}")
-            st.markdown('</div>', unsafe_allow_html=True)
-            p = presence_get(profile["email"])
-            st.markdown('<div class="section-card"><h3>My Live Status</h3>', unsafe_allow_html=True)
-            st.metric("AUX", p.get("aux", "Busy - Away"))
-            st.caption(f"Last sync: {p.get('last_seen', iso_now())}")
-            st.markdown('</div>', unsafe_allow_html=True)
-    live_dashboard()
-
-
-def dashboard_admin(profile: Dict[str, Any]):
-    @st.fragment(run_every=REALTIME_SECONDS)
-    def live_admin_dashboard():
-        presence_set(profile["email"], "Admin Task")
-        assign_unassigned_cases()
-        cases = cases_all()
-        a, b, c, d = counts_for_cases(cases)
-        page_title("Dashboard", f"Team Overview · {now_local().strftime('%A, %B %d, %Y')}")
-        m1, m2, m3, m4 = st.columns(4)
-        with m1: render_metric("Active Cases", a, "metric-blue", "metric_active")
-        with m2: render_metric("Critical", b, "metric-red", "metric_critical")
-        with m3: render_metric("Due Soon", c, "metric-yellow", "metric_due_soon")
-        with m4: render_metric("On Track", d, "metric-green", "metric_on_track")
-
-        agents = [x for x in roster_all() if x.get("role") == "Agent"]
-        pres = presence_all()
-        st.markdown('<div class="section-card"><h3>Agent Status & Case Distribution</h3>', unsafe_allow_html=True)
-        rows = []
-        for arow in agents:
-            email = normalize_email(arow.get("email"))
-            assigned = [x for x in cases if normalize_email(x.get("assigned_to")) == email and x.get("status") not in CLOSED_CASE_STATUSES]
-            total = [x for x in cases if normalize_email(x.get("assigned_to")) == email]
-            p = pres.get(email, presence_get(email))
-            rows.append({"Agent":f"{arow.get('first_name','')} {arow.get('last_name','')}", "Email":email, "AUX":p.get("aux","Busy - Away"), "Active":len(assigned), "Assigned Total":len(total), "Last Sync":p.get("last_seen","")})
+    if rows:
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        st.markdown('<div class="section-card"><h3>Active Queue</h3>', unsafe_allow_html=True)
-        q = st.text_input("Search queue", key="admin_dash_search")
-        filtered = [x for x in cases if q.lower() in json.dumps(x, default=str).lower()]
-        render_case_table(filtered, "admindash")
-        st.markdown('</div>', unsafe_allow_html=True)
-    live_admin_dashboard()
 
 
-# -----------------------------------------------------------------------------
-# CASE PAGES
-# -----------------------------------------------------------------------------
-
-def render_case_detail(profile: Dict[str, Any], c: Dict[str, Any]):
-    st.markdown(f"### Case #{c.get('case_number')} · {c.get('subject','')}")
-    top = st.columns(5)
-    top[0].markdown(f"**Priority**\n\n{urgency_pill(c.get('priority','Low'))}", unsafe_allow_html=True)
-    top[1].markdown(f"**Status**\n\n{status_pill(c.get('status','New'))}", unsafe_allow_html=True)
-    top[2].markdown(f"**Due**\n\n{as_datetime(c.get('due_date')).strftime('%b %d, %Y %I:%M %p') if as_datetime(c.get('due_date')) else '—'}")
-    top[3].markdown(f"**Progress**\n\n{int(c.get('progress',0))}%")
-    top[4].markdown(f"**Assigned To**\n\n{c.get('assigned_to') or 'Unassigned'}")
-    st.progress(max(0,min(100,int(c.get("progress",0))))/100)
-
-    left, right = st.columns([1.2,.8])
-    with left:
-        st.markdown('<div class="section-card">', unsafe_allow_html=True)
-        st.markdown("**Description**")
-        st.write(c.get("description", ""))
-        st.markdown("**Last Update**")
-        st.write(str(c.get("last_update", "—")))
-        st.markdown("**Vendor / Technician**")
-        st.write(c.get("vendor", "—"))
-        v1, v2, v3 = st.columns(3)
-        with v1:
-            email = c.get("vendor_email")
-            if email:
-                st.markdown(f"[✉ Email Vendor](mailto:{email})")
-        with v2:
-            phone = c.get("vendor_phone", "")
-            if phone:
-                st.link_button("☎ Call", f"tel:{phone}", use_container_width=True)
-        with v3:
-            st.link_button("↗ Salesforce", SALESFORCE_URL, use_container_width=True)
-        if phone and st.button("Copy vendor number", key=f"copy_{c.get('case_number')}"):
-            st.code(phone)
-            st.caption("Browser clipboard access is restricted by some Streamlit hosts; the number is shown for copy/paste.")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    with right:
-        st.markdown('<div class="section-card"><h3>Update Case</h3>', unsafe_allow_html=True)
-        statuses = ["New","Assigned","In Progress","Pending Vendor","Pending Customer","Pending Internal","On Hold","Completed","Closed","Contract Breached"]
-        current = c.get("status", "New")
-        new_status = st.selectbox("Status", statuses, index=statuses.index(current) if current in statuses else 0)
-        new_progress = st.slider("Progress", 0, 100, int(c.get("progress",0)))
-        update_text = st.text_area("Add update", placeholder="Describe what changed...")
-        if st.button("Save Update", type="primary", use_container_width=True):
-            c["status"] = new_status
-            c["progress"] = new_progress
-            c["last_update"] = iso_now()
-            c["last_updated_by"] = profile["email"]
-            c.setdefault("updates", []).append({"by":profile["email"],"at":iso_now(),"text":update_text})
-            case_save(c)
-            st.success("Case updated.")
-            st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    if profile.get("role") == "Agent":
-        st.markdown('<div class="section-card"><h3>Contract Breach</h3>', unsafe_allow_html=True)
-        reason = st.selectbox("Contract breached reason", ["Missed committed delivery date","Repeated missed follow-up","Vendor failed to deliver after escalation","Other"], key=f"breach_reason_{c.get('case_number')}")
-        msg = generate_breach_message(c, reason, f"{profile.get('first_name','')} {profile.get('last_name','')}")
-        msg = st.text_area("Generated message", value=msg, height=190, key=f"breach_msg_{c.get('case_number')}")
-        b1, b2 = st.columns(2)
-        with b1:
-            if st.button("Tag Contract Breached", use_container_width=True):
-                c["status"] = "Contract Breached"
-                c["contract_breached_reason"] = reason
-                c["contract_breached_message"] = msg
-                c["last_update"] = iso_now()
-                case_save(c)
-                st.success("Case tagged as Contract Breached.")
-                st.rerun()
-        with b2:
-            if c.get("vendor_email"):
-                subject = f"Contract breach - Case #{c.get('case_number')}"
-                import urllib.parse
-                mailto = f"mailto:{c.get('vendor_email')}?subject={urllib.parse.quote(subject)}&body={urllib.parse.quote(msg)}"
-                st.markdown(f"[✉ Email Vendor]({mailto})")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-
-def cases_page(profile: Dict[str, Any]):
-    admin = profile.get("role") == "Admin"
-    page_title("Cases" if admin else "My Cases", "View and update assigned cases" if not admin else "View, reassign and manage all cases")
-    cases = cases_all() if admin else active_cases_for(profile["email"])
-    filt = st.session_state.get("case_filter")
-    q = st.text_input("Search cases", key="cases_search")
-    if filt:
-        st.info(f"Tile filter: {filt}")
-        st.session_state["case_filter"] = None
-    if q:
-        cases = [x for x in cases if q.lower() in json.dumps(x, default=str).lower()]
-    if admin:
-        selected = st.selectbox("Filter status", ["All"] + sorted({x.get("status","New") for x in cases}))
-        if selected != "All": cases = [x for x in cases if x.get("status") == selected]
-    if st.session_state.get("selected_case"):
-        selected_case = next((x for x in cases_all() if x.get("case_number") == st.session_state.selected_case), None)
-        if selected_case:
-            if st.button("← Back to cases"):
-                st.session_state.selected_case = None
-                st.rerun()
-            render_case_detail(profile, selected_case)
-            return
-    render_case_table(cases, "casespage")
-
-
-# -----------------------------------------------------------------------------
-# AGENTS / SETTINGS
-# -----------------------------------------------------------------------------
-
-def agents_page(profile: Dict[str, Any]):
-    page_title("Agents", "View agent status, AUX, attendance and case distribution")
-    agents = [x for x in roster_all() if x.get("role") == "Agent"]
-    cases = cases_all()
-    pres = presence_all()
-    rows=[]
-    for a in agents:
-        email=normalize_email(a.get("email")); assigned=[c for c in cases if normalize_email(c.get("assigned_to"))==email and c.get("status") not in CLOSED_CASE_STATUSES]
-        p=pres.get(email, presence_get(email))
-        rows.append({"Name":f"{a.get('first_name','')} {a.get('last_name','')}","Email":email,"AUX":p.get("aux","Busy - Away"),"Active Cases":len(assigned),"Assigned Total":sum(1 for c in cases if normalize_email(c.get("assigned_to"))==email),"Last Sync":p.get("last_seen","")})
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-    st.divider()
-    selected = st.selectbox("Agent", [r["Email"] for r in rows] if rows else [])
-    if selected:
-        a = roster_find(selected)
-        st.markdown(f"### {a.get('first_name','')} {a.get('last_name','')}")
-        p = presence_get(selected)
-        st.write(f"**AUX:** {p.get('aux','Busy - Away')} · **Last sync:** {p.get('last_seen','—')}")
-        c1,c2,c3=st.columns(3)
-        with c1:
-            if st.button("Kick / Mark unavailable", type="secondary"):
-                presence_set(selected, "Busy - Away")
-                notify(selected,"Admin action","You were marked unavailable by an administrator to prevent new auto-assigned cases.","admin")
-                st.success("Agent removed from available assignment pool.")
-        with c2:
-            if st.button("Send ageing-case alert"):
-                ageing=[c for c in active_cases_for(selected) if (now_local()-(as_datetime(c.get("last_update")) or now_local())).total_seconds()>24*3600]
-                if ageing:
-                    notify(selected,"Ageing cases",f"You have {len(ageing)} case(s) with no update for more than 24 hours.","stale")
-                    st.success("Alert sent.")
-                else: st.info("No ageing cases found.")
-        with c3:
-            if st.button("Rebalance / auto-assign"):
-                for c in cases:
-                    if normalize_email(c.get("assigned_to")) == selected and c.get("status") not in CLOSED_CASE_STATUSES:
-                        fair_assignment({**c,"assigned_to":None}, profile["email"])
-                st.success("Eligible cases sent through the assignment engine.")
-
-
-def settings_page(profile: Dict[str, Any]):
-    page_title("Settings", "Manage users, roles, PTO allocation and system rules")
-    tab1, tab2, tab3 = st.tabs(["User Management", "PTO Allocation", "System Settings"])
-    with tab1:
-        rows=roster_all()
-        df=pd.DataFrame([{k:r.get(k,"") for k in ["first_name","last_name","employee_id","email","role","status"]} for r in rows])
-        st.dataframe(df, use_container_width=True, hide_index=True)
-        if rows:
-            email=st.selectbox("User", [r.get("email") for r in rows])
-            u=roster_find(email)
-            c1,c2,c3=st.columns(3)
-            with c1: role=st.selectbox("Role",["Agent","Admin"],index=0 if u.get("role")!="Admin" else 1)
-            with c2: status=st.selectbox("Account Status",["Active","Inactive"],index=0 if u.get("status","Active")=="Active" else 1)
-            with c3:
-                if st.button("Save User"):
-                    u["role"]=role; u["status"]=status; roster_upsert(u); audit("user_updated",profile["email"],{"user":email,"role":role,"status":status}); st.success("User updated.")
-    with tab2:
-        st.caption("PTO allocation is stored in settings. Sick leave and emergency leave auto-approve. PTO auto-approves only when allocation is available.")
-        if mongo_ok():
-            settings_doc=collection(SETTINGS_COLLECTION).find_one({"key":"pto"}) or {"key":"pto","allocation":5}
-        else: settings_doc=st.session_state.local_store["settings"].get("pto",{"key":"pto","allocation":5})
-        allocation=st.number_input("Default PTO allocation (days)",min_value=0,max_value=365,value=int(settings_doc.get("allocation",5)))
-        if st.button("Save PTO Allocation"):
-            row={"key":"pto","allocation":allocation,"updated_at":iso_now()}
-            if mongo_ok(): collection(SETTINGS_COLLECTION).update_one({"key":"pto"},{"$set":row},upsert=True)
-            else: st.session_state.local_store["settings"]["pto"]=row
-            st.success("PTO allocation saved.")
-    with tab3:
-        st.write(f"**MongoDB:** {'Connected' if mongo_ok() else 'Fallback local mode'}")
-        st.write(f"**Salesforce URL:** {SALESFORCE_URL}")
-        st.write(f"**Realtime interval:** {REALTIME_SECONDS} seconds")
-        st.write("**Default break/lunch policy:** break after 2h → lunch after 2h → last break after 2h, dynamically shifted to preserve queue coverage.")
-        tv=st.checkbox("TV / mirror-cast compact mode", value=False)
-        st.session_state["tv_mode"]=tv
-
-
-# -----------------------------------------------------------------------------
-# SCHEDULE ENGINE / PAGES
-# -----------------------------------------------------------------------------
-
-def build_default_schedule(agent: Dict[str, Any], target: date):
-    email=normalize_email(agent.get("email"));
-    # 8-hour example day. Admin can edit generated rows after creation.
-    base=[
-        ("08:00","10:00","Work / Case Processing"),
-        ("10:00","10:15","Break"),
-        ("10:15","12:00","Work / Case Processing"),
-        ("12:00","13:00","Lunch"),
-        ("13:00","15:00","Work / Case Processing"),
-        ("15:00","15:15","Break"),
-        ("15:15","17:00","Work / Case Processing"),
-    ]
-    for s,e,a in base:
-        schedule_save({"email":email,"date":target.isoformat(),"start":s,"end":e,"activity":a,"source":"auto"})
-
-
-def schedule_page(profile: Dict[str, Any]):
-    admin=profile.get("role")=="Admin"
-    page_title("Schedule", "Manage agent schedules and queue coverage" if admin else "My Schedule", "")
-    if admin:
-        a=st.selectbox("Agent", [r.get("email") for r in roster_all() if r.get("role")=="Agent"])
-        target=st.date_input("Schedule date", value=now_local().date())
-        c1,c2,c3=st.columns(3)
-        with c1:
-            if st.button("Generate coverage schedule"):
-                agent=roster_find(a); build_default_schedule(agent,target); st.success("Schedule generated.")
-        with c2:
-            if st.button("Add activity"):
-                st.session_state["add_activity"]=True
-        with c3:
-            st.caption("Default: break after 2h, lunch after 2h, last break after 2h. Adjustments should preserve hourly queue coverage.")
-        if st.session_state.get("add_activity"):
-            with st.form("activity_form"):
-                start=st.text_input("Start", "10:00"); end=st.text_input("End", "10:30"); activity=st.selectbox("Activity",["Meeting","Coaching","Admin Task","Work / Case Processing"])
-                if st.form_submit_button("Save activity"):
-                    schedule_save({"email":a,"date":target.isoformat(),"start":start,"end":end,"activity":activity,"source":"admin"}); st.session_state["add_activity"]=False; st.success("Activity added.")
-        rows=schedules_for(a,target)
-        if rows:
-            df=pd.DataFrame(rows)[["start","end","activity"]]
-            st.dataframe(df,use_container_width=True,hide_index=True)
-        st.markdown("### Schedule Requests")
-        reqs=requests_all({"type":{"$in":["Schedule Swap","PTO","Sick Leave","Emergency Leave"]}}) if mongo_ok() else requests_all()
-        st.dataframe(pd.DataFrame(reqs),use_container_width=True,hide_index=True)
-    else:
-        mode=st.segmented_control("View",["Day","Week","Month"],default="Day") if hasattr(st,"segmented_control") else st.radio("View",["Day","Week","Month"],horizontal=True)
-        target=st.date_input("Date", value=now_local().date())
-        rows=schedules_for(profile["email"],target)
-        if mode=="Day":
-            for r in rows: st.markdown(f"**{r.get('start')} – {r.get('end')}** · {r.get('activity')}")
-        else:
-            st.info(f"{mode} view is available from the same schedule records; select a date to inspect the plotted schedule.")
-        st.markdown("### Schedule Swap")
-        agents=[r for r in roster_all() if r.get("role")=="Agent" and r.get("email")!=profile.get("email")]
-        if agents:
-            other=st.selectbox("Swap with",[r.get("email") for r in agents])
-            if st.button("Submit agreed swap"):
-                request_save({"type":"Schedule Swap","requester":profile["email"],"other_agent":other,"date":target.isoformat(),"status":"Approved","created_at":iso_now(),"approved_at":iso_now(),"approval_note":"Auto-approved after both agents agreed."})
-                notify(ADMIN_EMAIL,"Schedule swap submitted",f"{profile['email']} submitted an agreed schedule swap with {other}.","request")
-                st.success("Swap recorded as approved.")
-
-
-def requests_page(profile: Dict[str, Any]):
-    admin=profile.get("role")=="Admin"
-    page_title("Requests", "View and process agent requests" if admin else "Requests", "")
-    if admin:
-        reqs=requests_all()
-        if reqs: st.dataframe(pd.DataFrame(reqs),use_container_width=True,hide_index=True)
-        else: st.info("No requests.")
-        return
-    tabs=st.tabs(["New Request","My Requests"])
-    with tabs[0]:
-        typ=st.selectbox("Request Type",["PTO","Sick Leave","Emergency Leave"])
-        d1=st.date_input("Start Date",now_local().date())
-        d2=st.date_input("End Date",now_local().date())
-        reason=st.text_area("Reason")
-        if st.button("Submit Request",type="primary"):
-            status="Approved" if typ in {"Sick Leave","Emergency Leave"} else "Approved" # allocation check below
-            allocation=5
-            try:
-                if mongo_ok(): allocation=int((collection(SETTINGS_COLLECTION).find_one({"key":"pto"}) or {}).get("allocation",5))
-            except Exception: pass
-            if typ=="PTO":
-                used=sum(1 for r in requests_all({"requester":profile["email"],"type":"PTO","status":"Approved"}))
-                requested=(d2-d1).days+1
-                if used+requested>allocation:
-                    st.error("No allocation for the selected date.")
-                    return
-            request_save({"type":typ,"requester":profile["email"],"start_date":d1.isoformat(),"end_date":d2.isoformat(),"reason":reason,"status":status,"created_at":iso_now()})
-            notify(ADMIN_EMAIL,"New request",f"{profile['email']} submitted {typ} for {d1} to {d2}.","request")
-            st.success(f"{typ} submitted and {status.lower()}.")
-    with tabs[1]:
-        rows=requests_all({"requester":profile["email"]})
-        if rows: st.dataframe(pd.DataFrame(rows),use_container_width=True,hide_index=True)
-        else: st.info("No requests submitted.")
-
-
-def reports_page(profile: Dict[str, Any]):
-    page_title("Reports", "Extract case, adherence and attendance reports")
-    cases=cases_all()
-    agents=[r for r in roster_all() if r.get("role")=="Agent"]
-    total=len(cases); active=sum(c.get("status") not in CLOSED_CASE_STATUSES for c in cases); critical=sum(c.get("priority")=="Critical" for c in cases); due=sum(case_due_category(c)=="Due Soon" for c in cases)
-    st.dataframe(pd.DataFrame([{"Metric":"Total Cases","Daily":total,"MTD":total},{"Metric":"Active","Daily":active,"MTD":active},{"Metric":"Critical","Daily":critical,"MTD":critical},{"Metric":"Due Soon","Daily":due,"MTD":due}]),use_container_width=True,hide_index=True)
-    agent_rows=[]
-    for a in agents:
-        email=a.get("email"); assigned=active_cases_for(email); agent_rows.append({"Agent":f"{a.get('first_name','')} {a.get('last_name','')}","Email":email,"Active Cases":len(assigned),"Adherence %":100,"Attendance %":100})
+def admin_reports(db):
+    st.markdown("### Reports")
+    start = st.date_input("Start Date", date.today() - timedelta(days=6), key="report_start")
+    end = st.date_input("End Date", date.today(), key="report_end")
+    cases = [clean_doc(x) for x in db["cases"].find()]
+    active = [c for c in cases if is_active_case(c)]
+    agents = [a for a in list_agents(db) if a.get("role") == "regular"]
+    summary = {
+        "Active Cases": len(active),
+        "Critical": len([c for c in active if c.get("priority") == "Critical"]),
+        "Due Soon": len([c for c in active if due_soon(c)]),
+        "Completed": len([c for c in cases if c.get("status") == "Completed"]),
+        "Contract Breached": len([c for c in cases if c.get("status") == "Contract Breached"]),
+    }
+    st.dataframe(pd.DataFrame([summary]), use_container_width=True, hide_index=True)
     st.markdown("### Daily / MTD Adherence & Attendance")
-    st.dataframe(pd.DataFrame(agent_rows),use_container_width=True,hide_index=True)
-    csv=pd.DataFrame(cases).to_csv(index=False).encode()
-    st.download_button("Export Case Report",csv,"hpe_caseflow_cases.csv","text/csv",use_container_width=True)
-    adf=pd.DataFrame(agent_rows).to_csv(index=False).encode()
-    st.download_button("Export Adherence & Attendance",adf,"hpe_caseflow_adherence_attendance.csv","text/csv",use_container_width=True)
+    render_adherence_cards(db, agents)
+
+    if cases:
+        export_df = pd.DataFrame([{
+            "Case": c.get("case_id"),
+            "Subject": c.get("subject"),
+            "Priority": c.get("priority"),
+            "Status": c.get("status"),
+            "Assigned To": c.get("assigned_name", c.get("assigned_to")),
+            "Created": c.get("created_at"),
+            "Last Update": c.get("last_update"),
+            "Due": c.get("due_date"),
+        } for c in cases])
+        st.download_button(
+            "Export Case Report (CSV)",
+            export_df.to_csv(index=False).encode("utf-8"),
+            file_name=f"hpe_caseflow_report_{date.today().isoformat()}.csv",
+            mime="text/csv",
+        )
 
 
-def salesforce_page(profile: Dict[str, Any]):
-    page_title("Salesforce", "Admin-only external case source")
-    st.info("Salesforce access is intentionally visible only to administrators.")
-    st.link_button("Open Salesforce", SALESFORCE_URL, type="primary")
-    st.markdown("### Integration hook")
-    st.code("""# Replace this stub with your Salesforce OAuth/REST connector later.\n# The rest of CaseFlow does not depend on the connector.\n# Recommended: write normalized cases into the `cases` collection and\n# preserve `source='Salesforce'` and the Salesforce Case ID.""")
-    st.caption("For production, use OAuth/token-based authentication rather than storing Salesforce credentials in this script.")
+def salesforce_fetch_cases():
+    """
+    Placeholder for Salesforce API integration.
+    Replace this function with OAuth + REST/SOQL logic when credentials are added.
+    Return a list of normalized CaseFlow dictionaries:
+      {
+        "case_id": "...",
+        "subject": "...",
+        "priority": "High",
+        "due_date": "...",
+        "description": "...",
+        "vendor": "...",
+        "technician": "...",
+        "vendor_email": "...",
+        "vendor_phone": "...",
+        "salesforce_case_id": "...",
+        "salesforce_url": "..."
+      }
+    """
+    return []
+
+
+def sync_salesforce(db):
+    incoming = salesforce_fetch_cases()
+    created = 0
+    for c in incoming:
+        if not db["cases"].find_one({"case_id": c.get("case_id")}):
+            ok, _ = insert_case(db, {**c, "source": "Salesforce"})
+            if ok:
+                created += 1
+    clear_data_caches()
+    return created
+
+
+def admin_salesforce(db):
+    st.markdown("### Salesforce Integration")
+    st.caption("Admin-only. The integration point is isolated so credentials/API details can be added later.")
+    st.link_button("Open Salesforce", SALESFORCE_URL, use_container_width=False)
+    st.code(
+        f'SALESFORCE_URL = "{SALESFORCE_URL}"\n'
+        'salesforce_fetch_cases() -> normalized CaseFlow records',
+        language="python",
+    )
+    st.info("No Salesforce credentials are hard-coded. Add OAuth/API configuration later.")
+    if st.button("Run Salesforce Sync"):
+        try:
+            n = sync_salesforce(db)
+            st.success(f"Sync complete. {n} new case(s) imported.")
+        except Exception as e:
+            st.error(f"Salesforce sync is not configured yet: {e}")
+
+
+def admin_settings(db):
+    st.markdown("### Settings")
+    tabs = st.tabs(["User Management", "PTO Allocation", "System Settings"])
+    with tabs[0]:
+        agents = list_agents(db)
+        st.dataframe(pd.DataFrame([{
+            "Name": f'{a.get("first_name")} {a.get("last_name")}',
+            "Employee ID": a.get("employee_id"),
+            "Email": a.get("email"),
+            "Role": a.get("role"),
+            "Status": a.get("status"),
+        } for a in agents]), use_container_width=True, hide_index=True)
+        st.caption("Role changes are saved immediately to the roster collection.")
+    with tabs[1]:
+        current = db["settings"].find_one({"key": "pto_allocation"})
+        allocation = int(current.get("value", 5)) if current else 5
+        value = st.number_input("Annual PTO allocation (days)", min_value=0, max_value=100, value=allocation)
+        if st.button("Save PTO Allocation"):
+            db["settings"].update_one({"key": "pto_allocation"}, {"$set": {"value": int(value), "updated_at": iso_now()}}, upsert=True)
+            st.success("PTO allocation saved.")
+    with tabs[2]:
+        sf = st.text_input("Salesforce URL", value=SALESFORCE_URL)
+        poll = st.number_input("Realtime polling interval (seconds)", min_value=4, max_value=60, value=4)
+        if st.button("Save System Settings"):
+            db["settings"].update_one({"key": "salesforce_url"}, {"$set": {"value": sf}}, upsert=True)
+            db["settings"].update_one({"key": "poll_seconds"}, {"$set": {"value": int(poll)}}, upsert=True)
+            st.success("Settings saved.")
+
+
+def profile_page(db):
+    u = current_user()
+    st.markdown("### My Profile")
+    c1,c2 = st.columns(2)
+    with c1:
+        first = st.text_input("First Name", value=u.get("first_name",""))
+        last = st.text_input("Last Name", value=u.get("last_name",""))
+        emp = st.text_input("Employee ID", value=u.get("employee_id",""), disabled=True)
+        email = st.text_input("HPE Email", value=u.get("email",""), disabled=True)
+    with c2:
+        bday = st.text_input("Birthday", value=u.get("birthday",""))
+        address = st.text_area("Home Address", value=u.get("home_address",""))
+        contact = st.text_input("Contact Number", value=u.get("contact_number",""))
+    if st.button("Save Profile", type="primary"):
+        db[ROSTER_COLLECTION_NAME].update_one(
+            {"email": u["email"]},
+            {"$set": {
+                "first_name": first.strip(), "last_name": last.strip(),
+                "birthday": bday, "home_address": address.strip(),
+                "contact_number": contact.strip(), "updated_at": iso_now()
+            }}
+        )
+        st.session_state.user = find_user(db, u["email"])
+        st.success("Profile saved.")
 
 
 # -----------------------------------------------------------------------------
-# MAIN
+# Auto-assignment watchdog
+# -----------------------------------------------------------------------------
+
+@st.fragment(run_every="8s")
+def assignment_watchdog():
+    if not st.session_state.logged_in:
+        return
+    if current_user().get("role") != "admin":
+        return
+    try:
+        db = get_db()
+        # Pick up any new/unassigned cases and assign immediately when a qualified
+        # Active agent is present.
+        pending = db["cases"].find({
+            "assigned_to": {"$in": [None, ""]},
+            "status": {"$nin": ["Completed", "Closed"]},
+        }).limit(20)
+        for c in pending:
+            auto_assign_case(db, c["case_id"])
+    except Exception:
+        pass
+
+
+# -----------------------------------------------------------------------------
+# Main
 # -----------------------------------------------------------------------------
 
 def main():
-    if not st.session_state.get("authenticated"):
-        auth_screen()
+    init_state()
+
+    try:
+        db = get_db()
+        seed_admin(db)
+        if not db_ok(db):
+            st.error("MongoDB is not reachable.")
+            return
+    except Exception as e:
+        # Login cannot function without the roster DB.
+        st.markdown(
+            """
+            <div style="max-width:850px;margin:10vh auto;padding:2rem;background:#fff;
+            border-radius:16px;border:1px solid #e1e7ed;box-shadow:0 10px 30px rgba(0,0,0,.08)">
+            <h2 style="color:#123B59">HPE CaseFlow</h2>
+            <p>MongoDB connection is not configured yet.</p>
+            <p>Add <b>MONGODB_URI</b> to <code>.streamlit/secrets.toml</code> or the environment,
+            then restart Streamlit.</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         return
 
-    profile=roster_find(st.session_state.profile.get("email")) or st.session_state.profile
-    st.session_state.profile=profile
-    if profile.get("role") == "Agent":
-        # heartbeat only; AUX itself is transient and should not be persisted in roster.
-        p=presence_get(profile["email"])
-        presence_set(profile["email"], p.get("aux","Busy - Away"))
-    else:
-        presence_set(profile["email"], "Admin Task")
+    if not st.session_state.logged_in:
+        login_page()
+        return
 
-    if st.session_state.get("tv_mode"):
-        st.markdown('<script>document.body.classList.add("tv-mode")</script>', unsafe_allow_html=True)
+    # Live presence and assignment watcher are isolated fragments.
+    live_presence_fragment()
+    assignment_watchdog()
 
-    sidebar(profile)
-    topbar(profile)
-    page=st.session_state.get("page","Dashboard")
-    if profile.get("role")=="Agent":
-        if page=="Dashboard": dashboard_agent(profile)
-        elif page=="My Cases": cases_page(profile)
-        elif page=="Schedule": schedule_page(profile)
-        elif page=="Requests": requests_page(profile)
-        else: dashboard_agent(profile)
+    sidebar_nav()
+    render_topbar(db)
+
+    page = st.session_state.page
+    role = current_user().get("role")
+
+    if role == "admin":
+        if page == "Dashboard":
+            admin_dashboard(db)
+        elif page == "Cases":
+            admin_cases(db)
+        elif page == "Agents":
+            admin_agents(db)
+        elif page == "Schedule":
+            admin_schedule(db)
+        elif page == "Requests":
+            admin_requests(db)
+        elif page == "Reports":
+            admin_reports(db)
+        elif page == "Salesforce":
+            admin_salesforce(db)
+        elif page == "Settings":
+            admin_settings(db)
+        elif page == "Profile":
+            profile_page(db)
+        else:
+            admin_dashboard(db)
     else:
-        if page=="Dashboard": dashboard_admin(profile)
-        elif page=="Cases": cases_page(profile)
-        elif page=="Agents": agents_page(profile)
-        elif page=="Schedule": schedule_page(profile)
-        elif page=="Requests": requests_page(profile)
-        elif page=="Reports": reports_page(profile)
-        elif page=="Salesforce": salesforce_page(profile)
-        elif page=="Settings": settings_page(profile)
-        else: dashboard_admin(profile)
+        if page == "Dashboard":
+            regular_dashboard(db)
+        elif page == "My Cases":
+            regular_cases(db)
+        elif page == "Schedule":
+            regular_schedule(db)
+        elif page == "Requests":
+            regular_requests(db)
+        elif page == "Profile":
+            profile_page(db)
+        else:
+            regular_dashboard(db)
 
 
 if __name__ == "__main__":
