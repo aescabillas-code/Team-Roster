@@ -1,4 +1,3 @@
-```python
 import datetime as dt
 from collections import Counter
 
