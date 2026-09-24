@@ -672,8 +672,13 @@ def create_alert(email, title, message, severity="info"):
 
 # ------------------------- Persistent session ----------------
 
-@st.cache_resource(show_spinner=False)
 def get_cookie_manager():
+    # CookieManager is a Streamlit custom component. It MUST NOT be wrapped
+    # in st.cache_data/st.cache_resource because Streamlit will treat its
+    # widget/component calls as cached widget commands.
+    #
+    # The stable component key preserves the browser-side cookie state across
+    # reruns without caching the component itself.
     return stx.CookieManager(key="hpe_caseflow_cookie_manager")
 
 def _session_token(email, expires_at):
