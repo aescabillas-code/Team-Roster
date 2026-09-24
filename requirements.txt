@@ -4,3 +4,5 @@ pymongo>=4.8
 dnspython>=2.6
 streamlit-autorefresh>=1.0.1
 simple-salesforce>=1.12
+bcrypt>=4.2
+openpyxl>=3.1
