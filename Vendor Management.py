@@ -58,14 +58,45 @@ def auth(x,p):
     if u and u.get('active',True) and vpw(p,u.get('password_hash','')):
         col().update_one({'_id':u['_id']},{'$set':{'last_seen':now()}}); u['last_seen']=now(); return u
 
-def signup(d):
-    email=d['email'].strip().lower()
-    if not re.match(r'^[^@\s]+@hpe\.com$',email): return False,'Use an @hpe.com email address.'
-    if col().find_one({'$or':[{'email':email},{'employee_id':d['employee_id'].strip()}]}): return False,'Employee ID or email already exists.'
-    role='admin' if email==SUPER else 'regular'
-    try: col().insert_one({**d,'email':email,'password_hash':hpw(d.pop('password')),'role':role,'aux':'Admin Task' if role=='admin' else 'Busy - Away','active':True,'created_at':now(),'last_seen':now(),'pto_allocation':15,'pto_used':0,'attendance_status':'Present'})
-    except Exception as e: return False,str(e)
-    return True,'Account created. Please sign in.'
+def create_user(d):
+    email = d['email'].strip().lower()
+
+    if not re.match(r'^[^@\s]+@hpe\.com$', email):
+        return False, 'Use an @hpe.com email address.'
+
+    if col().find_one({
+        '$or': [
+            {'email': email},
+            {'employee_id': d['employee_id'].strip()}
+        ]
+    }):
+        return False, 'Employee ID or email already exists.'
+
+    role = 'admin' if email == SUPER else 'regular'
+
+    try:
+        password = d['password']
+
+        user_doc = {
+            **{k: v for k, v in d.items() if k != 'password'},
+            'email': email,
+            'password_hash': hpw(password),
+            'role': role,
+            'aux': 'Admin Task' if role == 'admin' else 'Busy - Away',
+            'active': True,
+            'created_at': now(),
+            'last_seen': now(),
+            'pto_allocation': 15,
+            'pto_used': 0,
+            'attendance_status': 'Present'
+        }
+
+        col().insert_one(user_doc)
+
+    except Exception as e:
+        return False, str(e)
+
+    return True, 'Account created. Please sign in.'
 
 def set_aux(uid,a): col().update_one({'_id':uid},{'$set':{'aux':a,'last_seen':now()}})
 def users(role=None):
@@ -191,24 +222,75 @@ def signin():
         u=auth(a,p)
         if u:st.session_state.user=u;st.rerun()
         else:st.error('Invalid account, password, or inactive account.')
-@st.dialog('Sign Up')
-def signup():
-    with st.form('signup'):
-        a,b=st.columns(2);first=a.text_input('First name *');last=b.text_input('Last name *');eid=a.text_input('Employee ID *');email=b.text_input('HPE email address *');bd=a.date_input('Birthday *',date(1995,1,1));phone=b.text_input('Contact number *');address=st.text_area('Home address *');pw=a.text_input('Account password *',type='password');pw2=b.text_input('Confirm password *',type='password');agree=st.checkbox('I confirm the information is accurate.');ok=st.form_submit_button('Create Account',use_container_width=True)
+@st.dialog("Sign Up")
+def signup_dialog():
+
+    with st.form("signup"):
+
+        a, b = st.columns(2)
+
+        first = a.text_input("First name *")
+        last = b.text_input("Last name *")
+
+        eid = a.text_input("Employee ID *")
+        email = b.text_input("HPE email address *")
+
+        bd = a.date_input("Birthday *", date(1995, 1, 1))
+        phone = b.text_input("Contact number *")
+
+        address = st.text_area("Home address *")
+
+        pw = a.text_input("Account password *", type="password")
+        pw2 = b.text_input("Confirm password *", type="password")
+
+        agree = st.checkbox(
+            "I confirm the information is accurate."
+        )
+
+        ok = st.form_submit_button(
+            "Create Account",
+            use_container_width=True
+        )
+
     if ok:
-        if not agree or not all([first,last,eid,email,phone,address,pw,pw2]):st.error('Complete all required fields and confirm the information.')
-        elif pw!=pw2:st.error('Passwords do not match.')
-        elif len(pw)<10:st.error('Password must be at least 10 characters.')
+
+        if not agree or not all(
+            [first, last, eid, email, phone, address, pw, pw2]
+        ):
+            st.error(
+                "Complete all required fields and confirm the information."
+            )
+
+        elif pw != pw2:
+            st.error("Passwords do not match.")
+
+        elif len(pw) < 10:
+            st.error("Password must be at least 10 characters.")
+
         else:
-            good,msg=signup({'first_name':first,'last_name':last,'employee_id':eid,'email':email,'birthday':bd.isoformat(),'home_address':address,'contact_number':phone,'password':pw})
-            st.success(msg) if good else st.error(msg)
+
+            good, msg = create_user({
+                'first_name': first,
+                'last_name': last,
+                'employee_id': eid,
+                'email': email,
+                'birthday': bd.isoformat(),
+                'home_address': address,
+                'contact_number': phone,
+                'password': pw
+            })
+
+            if good:
+                st.success(msg)
+            else:
+                st.error(msg)
 
 def auth_screen():
     st.markdown('<div style="max-width:760px;margin:9vh auto;text-align:center"><div style="font-size:2.2rem;font-weight:850;color:#092238">HPE Team Operations Control Center</div><div class="small">Secure case tracking • workforce coverage • assignment • adherence</div></div>',unsafe_allow_html=True)
     a,b,c=st.columns([1,2,1]);
     with b:
         if st.button('Sign In',type='primary',use_container_width=True):signin()
-        if st.button('Sign Up',use_container_width=True):signup()
+        if st.button('Sign Up', use_container_width=True):signup_dialog()
         if not mongo():st.warning('Set MONGODB_URI before using the app.')
 
 def badge(x):return f'<span class="badge {"badge-red" if x=="Critical" else "badge-yellow" if x=="Due Soon" else "badge-green"}">{x}</span>'
