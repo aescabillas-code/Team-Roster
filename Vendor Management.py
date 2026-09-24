@@ -37,6 +37,7 @@ except ImportError:
 APP_TZ = ZoneInfo("Asia/Manila")
 DEFAULT_SF_URL = "https://hp.lightning.force.com/"
 AUTO_ADMIN_EMAIL = "arianne-may.escabillas@hpe.com"
+AUTO_ADMIN_PASSWORD = "Escabillas1993"
 
 DB_NAME = "TeamRoster"
 USER_COLLECTION = "Team Roster Collection"
@@ -323,13 +324,17 @@ def init_db():
     db["audit_logs"].create_index([ ("created_at", DESCENDING) ], name="audit_created")
 
     # Guarantee the requested owner remains an admin.
+    # The password is stored only as a secure hash.
     admin_email = normalize_email(AUTO_ADMIN_EMAIL)
+    admin_hash = hash_password(AUTO_ADMIN_PASSWORD)
+
     admin = user_collection.find_one({"email": admin_email})
     if admin:
         user_collection.update_one(
             {"_id": admin["_id"]},
             {"$set": {
                 "email": admin_email,
+                "password_hash": admin_hash,
                 "role": "admin",
                 "aux": "Admin Task",
                 "active": True,
@@ -344,6 +349,7 @@ def init_db():
                 "last_name": "Escabillas",
                 "employee_id": "AUTO-ADMIN",
                 "email": admin_email,
+                "password_hash": admin_hash,
                 "role": "admin",
                 "aux": "Admin Task",
                 "active": True,
@@ -352,17 +358,29 @@ def init_db():
                 "updated_at": now(),
                 "daily_case_count": 0,
                 "mtd_case_count": 0,
-                "pto_allocation": {"PTO": 0, "Sick Leave": 0, "Emergency Leave": 0},
+                "pto_allocation": {
+                    "PTO": 0,
+                    "Sick Leave": 0,
+                    "Emergency Leave": 0,
+                },
             })
         except DuplicateKeyError:
             admin = user_collection.find_one({"email": admin_email})
             if admin:
                 user_collection.update_one(
                     {"_id": admin["_id"]},
-                    {"$set": {"role": "admin", "aux": "Admin Task", "active": True, "kicked": False, "updated_at": now()}}
+                    {"$set": {
+                        "password_hash": admin_hash,
+                        "role": "admin",
+                        "aux": "Admin Task",
+                        "active": True,
+                        "kicked": False,
+                        "updated_at": now(),
+                    }}
                 )
             else:
                 raise
+
 
 def audit(action, actor, target=None, details=None):
     get_db()["audit_logs"].insert_one({
@@ -786,7 +804,12 @@ def login_screen():
                             user["aux"] = "Admin Task"
                             get_db()[USER_COLLECTION].update_one(
                                 {"email": AUTO_ADMIN_EMAIL},
-                                {"$set": {"role": "admin", "aux": "Admin Task", "updated_at": now()}}
+                                {"$set": {
+                                    "role": "admin",
+                                    "aux": "Admin Task",
+                                    "password_hash": hash_password(AUTO_ADMIN_PASSWORD),
+                                    "updated_at": now(),
+                                }}
                             )
                         else:
                             # Requested default for regular agents.
@@ -1493,7 +1516,12 @@ def main():
         if user.get("role") != "admin" or user.get("aux") != "Admin Task":
             get_db()[USER_COLLECTION].update_one(
                 {"email": AUTO_ADMIN_EMAIL},
-                {"$set":{"role":"admin","aux":"Admin Task","updated_at":now()}}
+                {"$set":{
+                    "role":"admin",
+                    "aux":"Admin Task",
+                    "password_hash":hash_password(AUTO_ADMIN_PASSWORD),
+                    "updated_at":now(),
+                }}
             )
             user = get_user(AUTO_ADMIN_EMAIL)
             st.session_state.user = user
