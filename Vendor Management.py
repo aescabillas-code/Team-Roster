@@ -1,497 +1,2145 @@
-import streamlit as st
-import datetime
+```python
+import datetime as dt
+from collections import Counter
+
 import pandas as pd
 import plotly.express as px
+import streamlit as st
 from pymongo import MongoClient
+from pymongo.errors import PyMongoError
 from streamlit_autorefresh import st_autorefresh
 
-# ==========================================
-# 1. PAGE CONFIGURATION & STYLING
-# ==========================================
+
+# ============================================================
+# 1. PAGE CONFIGURATION
+# ============================================================
+
 st.set_page_config(
     page_title="HPE CaseFlow",
     page_icon="💼",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
-# Custom CSS for Modern UI matching Hewlett Packard Enterprise branding
-st.markdown("""
-<style>
-    /* Hide Streamlit Header & Footer */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-    
-    /* Modern HPE Palette & Typography */
-    :root {
-        --hpe-green: #01A781;
-        --hpe-dark-blue: #002B49;
-        --hpe-light-bg: #F4F7F9;
-        --card-border: #E2E8F0;
-    }
-    
-    body {
-        background-color: var(--hpe-light-bg);
-        font-family: 'Metric', 'Segoe UI', Arial, sans-serif;
-    }
-    
-    /* Responsive TV Mirroring optimization */
-    .block-container {
-        padding-top: 1.5rem;
-        padding-bottom: 2rem;
-        max-width: 98% !important;
+
+# ============================================================
+# 2. CUSTOM STYLING
+# ============================================================
+
+st.markdown(
+    """
+    <style>
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
+
+        :root {
+            --hpe-green: #01A781;
+            --hpe-dark-blue: #002B49;
+            --hpe-light-bg: #F4F7F9;
+            --card-border: #E2E8F0;
+            --text-dark: #1E293B;
+            --muted: #64748B;
+        }
+
+        .stApp {
+            background-color: var(--hpe-light-bg);
+        }
+
+        .block-container {
+            padding-top: 1rem;
+            padding-bottom: 2rem;
+            max-width: 98% !important;
+        }
+
+        .metric-card {
+            background: white;
+            border: 1px solid var(--card-border);
+            border-radius: 10px;
+            padding: 16px;
+            min-height: 105px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.04);
+        }
+
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text-dark);
+        }
+
+        .metric-label {
+            color: var(--muted);
+            font-size: 0.82rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .critical {
+            color: #C53030;
+        }
+
+        .due {
+            color: #C05621;
+        }
+
+        .track {
+            color: var(--hpe-green);
+        }
+
+        .auth-panel {
+            background-color: #002B49;
+            color: white;
+            padding: 40px;
+            border-radius: 14px;
+            min-height: 560px;
+        }
+
+        .auth-panel h1 {
+            color: white;
+        }
+
+        .auth-panel h2 {
+            color: #01A781;
+        }
+
+        .auth-feature {
+            margin: 20px 0;
+        }
+
+        section[data-testid="stSidebar"] {
+            background-color: #002B49;
+        }
+
+        section[data-testid="stSidebar"] * {
+            color: white;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# ============================================================
+# 3. APPLICATION CONSTANTS
+# ============================================================
+
+DEFAULT_MONGO_URI = "mongodb://localhost:27017/"
+
+DB_NAME = "TeamRoster"
+ROSTER_COLLECTION = "Team Roster Collection"
+
+AUX_OPTIONS = [
+    "Available",
+    "Break",
+    "Lunch",
+    "In a Meeting",
+    "Coaching",
+    "Busy - Away",
+    "Unscheduled Break",
+]
+
+
+# ============================================================
+# 4. SESSION STATE
+# ============================================================
+
+def initialize_session():
+
+    defaults = {
+        "authenticated": False,
+        "user_data": None,
+        "mock_db": [],
+        "cases_db": [],
+        "requests_db": [],
     }
 
-    /* Tile Stat Cards */
-    .metric-card {
-        background-color: white;
-        border-radius: 8px;
-        padding: 15px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        border: 1px solid var(--card-border);
-        text-align: center;
-        cursor: pointer;
-        transition: transform 0.2s ease;
-    }
-    .metric-card:hover {
-        transform: translateY(-2px);
-    }
-    .metric-val {
-        font-size: 2.2rem;
-        font-weight: 700;
-        margin: 5px 0;
-    }
-    .metric-lbl {
-        color: #64748B;
-        font-size: 0.9rem;
-        font-weight: 600;
-        text-transform: uppercase;
-    }
-    
-    /* Alert Item Styling */
-    .alert-box {
-        background-color: #FFF5F5;
-        border-left: 4px solid #E53E3E;
-        padding: 10px 15px;
-        margin-bottom: 8px;
-        border-radius: 4px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    
-    /* Table Conditional Badges */
-    .badge-critical { background-color: #FED7D7; color: #9B2C2C; padding: 4px 8px; border-radius: 4px; font-weight: bold;}
-    .badge-high { background-color: #FEEBC8; color: #9C4221; padding: 4px 8px; border-radius: 4px; font-weight: bold;}
-    .badge-medium { background-color: #FEFCBF; color: #744210; padding: 4px 8px; border-radius: 4px; font-weight: bold;}
-    .badge-low { background-color: #E2E8F0; color: #2D3748; padding: 4px 8px; border-radius: 4px; font-weight: bold;}
-</style>
-""", unsafe_allow_html=True)
+    for key, value in defaults.items():
+
+        if key not in st.session_state:
+            st.session_state[key] = value
 
 
-# ==========================================
-# 2. DATABASE CONNECTIVITY & INITIALIZATION
-# ==========================================
-@st.cache_resource
+initialize_session()
+
+
+# ============================================================
+# 5. MONGODB CONNECTION
+# ============================================================
+
+@st.cache_resource(
+    ttl=60,
+    show_spinner=False,
+)
 def get_mongo_client():
-    # Replace string with your Mongo URI string when ready
-    # Example: return MongoClient("mongodb://localhost:27017/")
-    return MongoClient("mongodb://localhost:27017/")
 
-def init_db():
+    mongo_uri = st.secrets.get(
+        "MONGO_URI",
+        DEFAULT_MONGO_URI,
+    )
+
     try:
-        client = get_mongo_client()
-        db = client["TeamRoster"]
-        collection = db["Team Roster Collection"]
-        
-        # Seed auto admin account if missing
-        admin_email = "arianne-may.escabillas@hpe.com"
-        if not collection.find_one({"email": admin_email}):
-            collection.insert_one({
-                "first_name": "Arianne May",
-                "last_name": "Escabillas",
-                "employee_id": "60187999",
-                "email": admin_email,
-                "birthday": "1993-06-17",
-                "address": "661 Betterlife, Tanzang Luma III, Imus City, Cavite",
-                "contact": "09123456789",
-                "password": "Escabillas1993",
-                "role": "Admin",
-                "aux": "Admin Task",
-                "status": "Active"
-            })
-        return collection
-    except Exception as e:
-        # Fallback to Session State in-memory storage if DB connection fails
-        if "mock_db" not in st.session_state:
-            st.session_state.mock_db = [{
-                "first_name": "Arianne May",
-                "last_name": "Escabillas",
-                "employee_id": "60187999",
-                "email": "arianne-may.escabillas@hpe.com",
-                "birthday": "1993-06-17",
-                "address": "661 Betterlife, Tanzang Luma III, Imus City, Cavite",
-                "contact": "09123456789",
-                "password": "Escabillas1993",
-                "role": "Admin",
-                "aux": "Admin Task",
-                "status": "Active"
-            }]
+
+        client = MongoClient(
+            mongo_uri,
+            serverSelectionTimeoutMS=1500,
+            connectTimeoutMS=1500,
+            socketTimeoutMS=3000,
+            maxPoolSize=20,
+            minPoolSize=1,
+            retryWrites=True,
+        )
+
+        client.admin.command("ping")
+
+        return client
+
+    except Exception:
+
         return None
 
-roster_collection = init_db()
 
-# Initialize In-Memory Realtime Cases Data
-if "cases_db" not in st.session_state:
-    st.session_state.cases_db = [
-        {"case_id": "0000156", "subject": "Network equipment delay", "priority": "Critical", "due_date": "Today 2:00 PM", "status": "In Progress", "assigned_to": "john.delacruz@hpe.com", "last_update": datetime.datetime.now() - datetime.timedelta(hours=25)},
-        {"case_id": "0000143", "subject": "Server replacement", "priority": "High", "due_date": "Today 5:00 PM", "status": "Pending Vendor", "assigned_to": "john.delacruz@hpe.com", "last_update": datetime.datetime.now() - datetime.timedelta(hours=1)},
-        {"case_id": "0000132", "subject": "Software license", "priority": "Medium", "due_date": "Apr 30, 2025", "status": "Assigned", "assigned_to": "mark.rivera@hpe.com", "last_update": datetime.datetime.now() - datetime.timedelta(hours=5)},
-        {"case_id": "0000128", "subject": "Site installation", "priority": "Medium", "due_date": "May 1, 2025", "status": "In Progress", "assigned_to": "ana.reyes@hpe.com", "last_update": datetime.datetime.now() - datetime.timedelta(hours=2)},
-        {"case_id": "0000120", "subject": "Access request", "priority": "Low", "due_date": "May 2, 2025", "status": "New", "assigned_to": "Unassigned", "last_update": datetime.datetime.now()}
+@st.cache_resource(
+    ttl=60,
+    show_spinner=False,
+)
+def get_roster_collection():
+
+    client = get_mongo_client()
+
+    if client is None:
+        return None
+
+    try:
+
+        return client[
+            DB_NAME
+        ][ROSTER_COLLECTION]
+
+    except Exception:
+
+        return None
+
+
+roster_collection = get_roster_collection()
+
+
+# ============================================================
+# 6. INITIALIZE FALLBACK DATA
+# ============================================================
+
+def initialize_mock_data():
+
+    # --------------------------------------------------------
+    # IMPORTANT:
+    # No preconfigured personal/admin account is created here.
+    # --------------------------------------------------------
+
+    if not st.session_state.mock_db:
+
+        st.session_state.mock_db = []
+
+    if not st.session_state.cases_db:
+
+        now = dt.datetime.now()
+
+        st.session_state.cases_db = [
+
+            {
+                "case_id": "0000156",
+                "subject": "Network equipment delay",
+                "priority": "Critical",
+                "due_date": "Today 2:00 PM",
+                "status": "In Progress",
+                "assigned_to": "john.delacruz@hpe.com",
+                "last_update": (
+                    now - dt.timedelta(hours=25)
+                ),
+            },
+
+            {
+                "case_id": "0000143",
+                "subject": "Server replacement",
+                "priority": "High",
+                "due_date": "Today 5:00 PM",
+                "status": "Pending Vendor",
+                "assigned_to": "john.delacruz@hpe.com",
+                "last_update": (
+                    now - dt.timedelta(hours=1)
+                ),
+            },
+
+            {
+                "case_id": "0000132",
+                "subject": "Software license",
+                "priority": "Medium",
+                "due_date": "Apr 30, 2026",
+                "status": "Assigned",
+                "assigned_to": "mark.rivera@hpe.com",
+                "last_update": (
+                    now - dt.timedelta(hours=5)
+                ),
+            },
+
+            {
+                "case_id": "0000128",
+                "subject": "Site installation",
+                "priority": "Medium",
+                "due_date": "May 1, 2026",
+                "status": "In Progress",
+                "assigned_to": "ana.reyes@hpe.com",
+                "last_update": (
+                    now - dt.timedelta(hours=2)
+                ),
+            },
+
+            {
+                "case_id": "0000120",
+                "subject": "Access request",
+                "priority": "Low",
+                "due_date": "May 2, 2026",
+                "status": "New",
+                "assigned_to": "Unassigned",
+                "last_update": now,
+            },
+        ]
+
+    if not st.session_state.requests_db:
+
+        st.session_state.requests_db = []
+
+
+initialize_mock_data()
+
+
+# ============================================================
+# 7. AUTHENTICATION
+# ============================================================
+
+def find_user(email, password):
+
+    email = email.strip().lower()
+
+    # --------------------------------------------------------
+    # MongoDB
+    # --------------------------------------------------------
+
+    if roster_collection is not None:
+
+        try:
+
+            return roster_collection.find_one(
+                {
+                    "email": email,
+                    "password": password,
+                    "status": "Active",
+                }
+            )
+
+        except PyMongoError:
+
+            pass
+
+    # --------------------------------------------------------
+    # Fallback memory database
+    # --------------------------------------------------------
+
+    return next(
+        (
+            user
+            for user
+            in st.session_state.mock_db
+
+            if user.get(
+                "email",
+                "",
+            ).lower() == email
+
+            and user.get(
+                "password"
+            ) == password
+
+            and user.get(
+                "status"
+            ) == "Active"
+        ),
+        None,
+    )
+
+
+def create_user(user):
+
+    if roster_collection is not None:
+
+        try:
+
+            # Prevent duplicate emails
+            existing = roster_collection.find_one(
+                {
+                    "email": user["email"]
+                },
+                {
+                    "_id": 1
+                },
+            )
+
+            if existing:
+                return False
+
+            roster_collection.insert_one(
+                user
+            )
+
+            return True
+
+        except PyMongoError:
+
+            return False
+
+    # Fallback database
+
+    if any(
+        u.get("email", "").lower()
+        == user["email"].lower()
+        for u in st.session_state.mock_db
+    ):
+        return False
+
+    st.session_state.mock_db.append(
+        user
+    )
+
+    return True
+
+
+# ============================================================
+# 8. LOGIN / SIGN-UP PAGE
+# ============================================================
+
+def render_auth_page():
+
+    left, right = st.columns(
+        [1, 1.15],
+        gap="large",
+    )
+
+    with left:
+
+        st.markdown(
+            """
+            <div class="auth-panel">
+
+                <h2>
+                    Hewlett Packard Enterprise
+                </h2>
+
+                <h1>
+                    HPE CaseFlow
+                </h1>
+
+                <p style="
+                    color:#CBD5E1;
+                    font-size:1.05rem;
+                ">
+                    Team Task and Case Management System
+                </p>
+
+                <br>
+
+                <div class="auth-feature">
+                    <b>▤ Manage Cases</b><br>
+                    <small>
+                        Track and resolve tasks efficiently
+                    </small>
+                </div>
+
+                <div class="auth-feature">
+                    <b>◈ Team Collaboration</b><br>
+                    <small>
+                        Work together for better service delivery
+                    </small>
+                </div>
+
+                <div class="auth-feature">
+                    <b>◉ Real-Time Visibility</b><br>
+                    <small>
+                        Stay informed and in control
+                    </small>
+                </div>
+
+                <div class="auth-feature">
+                    <b>▣ Secure Access</b><br>
+                    <small>
+                        HPE employees only
+                    </small>
+                </div>
+
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with right:
+
+        st.markdown(
+            "## Welcome to HPE CaseFlow"
+        )
+
+        auth_mode = st.radio(
+            "Authentication",
+            [
+                "Sign In",
+                "Sign Up",
+            ],
+            horizontal=True,
+            label_visibility="collapsed",
+        )
+
+        # ====================================================
+        # SIGN IN
+        # ====================================================
+
+        if auth_mode == "Sign In":
+
+            st.subheader("Sign In")
+
+            st.caption(
+                "Access your HPE CaseFlow account."
+            )
+
+            email = st.text_input(
+                "HPE Email Address",
+                placeholder="name@hpe.com",
+            )
+
+            password = st.text_input(
+                "Password",
+                type="password",
+            )
+
+            if st.button(
+                "Sign In",
+                type="primary",
+                use_container_width=True,
+            ):
+
+                if not email or not password:
+
+                    st.warning(
+                        "Enter your email and password."
+                    )
+
+                else:
+
+                    user = find_user(
+                        email,
+                        password,
+                    )
+
+                    if user:
+
+                        st.session_state.authenticated = True
+
+                        st.session_state.user_data = user
+
+                        st.rerun()
+
+                    else:
+
+                        st.error(
+                            "Invalid email or password."
+                        )
+
+        # ====================================================
+        # SIGN UP
+        # ====================================================
+
+        else:
+
+            st.subheader(
+                "Create Account"
+            )
+
+            st.caption(
+                "Create your HPE CaseFlow account."
+            )
+
+            c1, c2 = st.columns(2)
+
+            with c1:
+
+                fn = st.text_input(
+                    "First Name"
+                )
+
+                emp_id = st.text_input(
+                    "Employee ID"
+                )
+
+            with c2:
+
+                ln = st.text_input(
+                    "Last Name"
+                )
+
+                email = st.text_input(
+                    "HPE Email Address",
+                    placeholder="name@hpe.com",
+                )
+
+            bday = st.date_input(
+                "Birthday",
+                min_value=dt.date(
+                    1950,
+                    1,
+                    1,
+                ),
+            )
+
+            addr = st.text_area(
+                "Home Address"
+            )
+
+            contact = st.text_input(
+                "Contact Number"
+            )
+
+            c1, c2 = st.columns(2)
+
+            with c1:
+
+                pwd = st.text_input(
+                    "Password",
+                    type="password",
+                )
+
+            with c2:
+
+                confirm_pwd = st.text_input(
+                    "Confirm Password",
+                    type="password",
+                )
+
+            if st.button(
+                "Create Account",
+                type="primary",
+                use_container_width=True,
+            ):
+
+                email = (
+                    email.strip().lower()
+                )
+
+                if not email.endswith(
+                    "@hpe.com"
+                ):
+
+                    st.error(
+                        "Please use a valid @hpe.com email address."
+                    )
+
+                elif not all(
+                    [
+                        fn,
+                        ln,
+                        emp_id,
+                        email,
+                        pwd,
+                    ]
+                ):
+
+                    st.error(
+                        "Please complete all required fields."
+                    )
+
+                elif pwd != confirm_pwd:
+
+                    st.error(
+                        "Passwords do not match."
+                    )
+
+                else:
+
+                    new_user = {
+
+                        "first_name":
+                            fn.strip(),
+
+                        "last_name":
+                            ln.strip(),
+
+                        "employee_id":
+                            emp_id.strip(),
+
+                        "email":
+                            email,
+
+                        "birthday":
+                            str(bday),
+
+                        "address":
+                            addr.strip(),
+
+                        "contact":
+                            contact.strip(),
+
+                        "password":
+                            pwd,
+
+                        "role":
+                            "Agent",
+
+                        "aux":
+                            "Busy - Away",
+
+                        "status":
+                            "Active",
+                    }
+
+                    if create_user(
+                        new_user
+                    ):
+
+                        st.success(
+                            "Account created successfully. "
+                            "You can now sign in."
+                        )
+
+                    else:
+
+                        st.error(
+                            "An account with this email "
+                            "already exists."
+                        )
+
+
+# ============================================================
+# 9. AUTH CHECK
+# ============================================================
+
+if not st.session_state.authenticated:
+
+    render_auth_page()
+
+    st.stop()
+
+
+# ============================================================
+# 10. REFRESH ONLY AFTER LOGIN
+# ============================================================
+
+st_autorefresh(
+    interval=30000,
+    key="caseflow_refresh",
+)
+
+
+# ============================================================
+# 11. CURRENT USER
+# ============================================================
+
+user = st.session_state.user_data
+
+is_admin = (
+    user.get("role") == "Admin"
+)
+
+
+# ============================================================
+# 12. AUTOMATIC CASE ASSIGNMENT
+# ============================================================
+
+def get_available_agents():
+
+    if roster_collection is not None:
+
+        try:
+
+            return list(
+                roster_collection.find(
+                    {
+                        "role": "Agent",
+                        "status": "Active",
+                        "aux": "Available",
+                    },
+                    {
+                        "_id": 0,
+                        "email": 1,
+                        "first_name": 1,
+                        "last_name": 1,
+                    },
+                )
+            )
+
+        except PyMongoError:
+
+            pass
+
+    return [
+        u
+        for u
+        in st.session_state.mock_db
+
+        if u.get("role") == "Agent"
+
+        and u.get("status") == "Active"
+
+        and u.get("aux") == "Available"
     ]
 
-if "requests_db" not in st.session_state:
-    st.session_state.requests_db = [
-        {"agent": "Maria Santos", "type": "PTO", "start": "2025-04-29", "end": "2025-04-30", "status": "Pending"},
-        {"agent": "Mark Rivera", "type": "Schedule Swap", "start": "2025-04-29", "end": "2025-04-29", "status": "Pending"}
-    ]
 
-# Realtime polling non-disruptive refresh (every 10 sec)
-st_autorefresh(interval=10000, key="datarefresh")
-
-# User Session Setup
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
-if "user_data" not in st.session_state:
-    st.session_state.user_data = None
-
-
-# ==========================================
-# 3. AUTOMATIC CASE ASSIGNMENT ENGINE
-# ==========================================
 def auto_assign_cases():
-    unassigned = [c for c in st.session_state.cases_db if c["assigned_to"] == "Unassigned"]
+
+    cases = (
+        st.session_state.cases_db
+    )
+
+    unassigned = [
+        case
+        for case in cases
+
+        if case.get(
+            "assigned_to"
+        ) == "Unassigned"
+    ]
+
     if not unassigned:
         return
-    
-    # Get available active agents (AUX == 'Available')
-    if roster_collection is not None:
-        agents = list(roster_collection.find({"aux": "Available", "role": "Agent"}))
-    else:
-        agents = [u for u in st.session_state.mock_db if u.get("aux") == "Available" and u.get("role") == "Agent"]
+
+    agents = get_available_agents()
 
     if not agents:
         return
 
+    load = Counter(
+        case.get("assigned_to")
+        for case in cases
+
+        if case.get(
+            "assigned_to"
+        ) != "Unassigned"
+    )
+
     for case in unassigned:
-        # Calculate case load per active agent
-        counts = {}
-        for ag in agents:
-            email = ag["email"]
-            counts[email] = sum(1 for c in st.session_state.cases_db if c["assigned_to"] == email)
-        
-        # Pick agent with lowest current case load
-        target_agent = min(counts, key=counts.get)
-        case["assigned_to"] = target_agent
+
+        target = min(
+            agents,
+            key=lambda agent:
+                load.get(
+                    agent["email"],
+                    0,
+                ),
+        )
+
+        case["assigned_to"] = (
+            target["email"]
+        )
+
         case["status"] = "Assigned"
+
+        load[
+            target["email"]
+        ] += 1
+
 
 auto_assign_cases()
 
 
-# ==========================================
-# 4. AUTHENTICATION MODULE (LOGIN / SIGN UP)
-# ==========================================
-def render_auth_page():
-    col1, col2 = st.columns([1, 1.2])
-    
-    with col1:
-        st.markdown("""
-        <div style="background-color: #002B49; padding: 40px; border-radius: 12px; color: white; height: 100%;">
-            <h2 style="color: #01A781; margin-bottom:0;">Hewlett Packard Enterprise</h2>
-            <h1 style="margin-top:0;">HPE CaseFlow</h1>
-            <p style="font-size: 1.1rem; color: #CBD5E1;">Team Task and Case Management System</p>
-            <br>
-            <ul>
-                <li><strong>Manage Cases:</strong> Track and resolve tasks efficiently</li>
-                <li><strong>Team Collaboration:</strong> Work together for better service delivery</li>
-                <li><strong>Real-Time Visibility:</strong> Stay informed and in control</li>
-                <li><strong>Secure Access:</strong> HPE employees only</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
-        
-    with col2:
-        auth_mode = st.radio("Choose Action", ["Sign In", "Sign Up"], horizontal=True, label_visibility="collapsed")
-        
-        if auth_mode == "Sign In":
-            st.subheader("Sign In")
-            st.caption("Access your HPE CaseFlow account")
-            email = st.text_input("HPE Email Address", placeholder="name@hpe.com")
-            password = st.text_input("Password", type="password", placeholder="Enter your password")
-            
-            if st.button("Sign In", type="primary", use_container_width=True):
-                user = None
-                if roster_collection is not None:
-                    user = roster_collection.find_one({"email": email, "password": password})
-                else:
-                    user = next((u for u in st.session_state.mock_db if u["email"] == email and u["password"] == password), None)
-                
-                if user:
-                    st.session_state.authenticated = True
-                    st.session_state.user_data = user
-                    st.rerun()
-                else:
-                    st.error("Invalid Email or Password.")
-                    
-        else:
-            st.subheader("Sign Up")
-            st.caption("Create your HPE CaseFlow account")
-            
-            fn = st.text_input("First Name")
-            ln = st.text_input("Last Name")
-            emp_id = st.text_input("Employee ID")
-            email = st.text_input("HPE Email Address", placeholder="name@hpe.com")
-            bday = st.date_input("Birthday", min_value=datetime.date(1950, 1, 1))
-            addr = st.text_area("Home Address")
-            contact = st.text_input("Contact Number")
-            pwd = st.text_input("Password", type="password")
-            confirm_pwd = st.text_input("Confirm Password", type="password")
-            
-            if st.button("Create Account", type="primary", use_container_width=True):
-                if not email.endswith("@hpe.com"):
-                    st.error("Must use a valid @hpe.com email address.")
-                elif pwd != confirm_pwd:
-                    st.error("Passwords do not match!")
-                elif not (fn and ln and emp_id and email and pwd):
-                    st.error("Please fill in all required fields.")
-                else:
-                    new_user = {
-                        "first_name": fn, "last_name": ln, "employee_id": emp_id,
-                        "email": email, "birthday": str(bday), "address": addr,
-                        "contact": contact, "password": pwd,
-                        "role": "Agent", "aux": "Busy - Away", "status": "Active"
+# ============================================================
+# 13. AUX UPDATE
+# ============================================================
+
+def update_aux(new_aux):
+
+    user["aux"] = new_aux
+
+    if roster_collection is not None:
+
+        try:
+
+            roster_collection.update_one(
+                {
+                    "email":
+                        user["email"]
+                },
+                {
+                    "$set":
+                    {
+                        "aux":
+                            new_aux
                     }
-                    if roster_collection is not None:
-                        roster_collection.insert_one(new_user)
-                    else:
-                        st.session_state.mock_db.append(new_user)
-                    st.success("Account created successfully! Please sign in.")
+                },
+            )
+
+        except PyMongoError:
+
+            pass
 
 
-# Check Auth State
-if not st.session_state.authenticated:
-    render_auth_page()
-    st.stop()
+# ============================================================
+# 14. HEADER
+# ============================================================
+
+header_left, header_middle, header_right = st.columns(
+    [3.5, 2.2, 2.2]
+)
 
 
-# ==========================================
-# 5. APP NAVIGATION & PROFILE / AUX HEADER
-# ==========================================
-user = st.session_state.user_data
-is_admin = user.get("role") == "Admin"
+with header_left:
 
-# Top Navigation Bar & Profile/AUX Header
-hdr_col1, hdr_col2, hdr_col3 = st.columns([3, 2, 2])
-with hdr_col1:
-    st.title("HPE CaseFlow")
-with hdr_col2:
-    # Realtime AUX Selector in Header
-    aux_options = ["Available", "Break", "Lunch", "In a Meeting", "Coaching", "Busy - Away", "Unscheduled Break"]
+    st.markdown(
+        """
+        <h1 style="
+            color:#002B49;
+            margin-bottom:0;
+            font-size:2rem;
+        ">
+            HPE CaseFlow
+        </h1>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+with header_middle:
+
+    current_aux = user.get(
+        "aux",
+        "Busy - Away",
+    )
+
+    aux_options = (
+        AUX_OPTIONS.copy()
+    )
+
     if is_admin:
-        aux_options.insert(0, "Admin Task")
-    
-    current_aux = user.get("aux", "Admin Task" if is_admin else "Busy - Away")
-    selected_aux = st.selectbox("Current AUX Status", aux_options, index=aux_options.index(current_aux) if current_aux in aux_options else 0)
-    
-    if selected_aux != current_aux:
-        user["aux"] = selected_aux
-        if roster_collection is not None:
-            roster_collection.update_one({"email": user["email"]}, {"$set": {"aux": selected_aux}})
-        st.toast(f"AUX updated to: {selected_aux}")
 
-with hdr_col3:
-    st.markdown(f"**User:** {user['first_name']} {user['last_name']} ({user['role']})")
-    if st.button("Sign Out", key="logout_btn"):
+        aux_options.insert(
+            0,
+            "Admin Task",
+        )
+
+    selected_aux = st.selectbox(
+        "AUX",
+        aux_options,
+        index=(
+            aux_options.index(
+                current_aux
+            )
+            if current_aux
+            in aux_options
+            else 0
+        ),
+        label_visibility="collapsed",
+    )
+
+    if selected_aux != current_aux:
+
+        update_aux(
+            selected_aux
+        )
+
+        st.toast(
+            f"AUX updated to {selected_aux}",
+            icon="✓",
+        )
+
+
+with header_right:
+
+    st.markdown(
+        f"""
+        <div style="
+            text-align:right;
+            padding-top:7px;
+        ">
+            <b>
+                {user.get('first_name', '')}
+                {user.get('last_name', '')}
+            </b><br>
+            <small>
+                {user.get('role', 'Agent')}
+            </small>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if st.button(
+        "Sign Out",
+        use_container_width=True,
+    ):
+
         st.session_state.authenticated = False
+
         st.session_state.user_data = None
+
         st.rerun()
 
-# Sidebar Setup
-st.sidebar.markdown(f"### Menu ({user['role']})")
+
+# ============================================================
+# 15. SIDEBAR
+# ============================================================
+
+st.sidebar.markdown(
+    f"""
+    <div style="
+        padding:10px 0 20px 0;
+        border-bottom:
+        1px solid rgba(255,255,255,0.2);
+    ">
+
+        <b>HPE CaseFlow</b><br>
+
+        <small>
+            {user.get('role', 'Agent')}
+        </small>
+
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+
 if is_admin:
-    menu = st.sidebar.radio("Navigation", ["Dashboard", "Cases", "Agents", "Schedule", "Requests", "Reports", "Salesforce", "Settings"])
+
+    menu_items = [
+        "Dashboard",
+        "Cases",
+        "Agents",
+        "Schedule",
+        "Requests",
+        "Reports",
+        "Salesforce",
+        "Settings",
+    ]
+
 else:
-    menu = st.sidebar.radio("Navigation", ["Dashboard", "My Cases", "Schedule", "Requests"])
+
+    menu_items = [
+        "Dashboard",
+        "My Cases",
+        "Schedule",
+        "Requests",
+    ]
 
 
-# ==========================================
-# 6. REGULAR AGENT DASHBOARD & VIEWS
-# ==========================================
+menu = st.sidebar.selectbox(
+    "Navigation",
+    menu_items,
+    label_visibility="collapsed",
+)
+
+
+# ============================================================
+# 16. CASE HELPERS
+# ============================================================
+
+PRIORITY_ORDER = {
+    "Critical": 0,
+    "High": 1,
+    "Medium": 2,
+    "Low": 3,
+}
+
+
+def sort_cases(cases):
+
+    return sorted(
+        cases,
+        key=lambda case: (
+            PRIORITY_ORDER.get(
+                case.get(
+                    "priority"
+                ),
+                99,
+            ),
+            case.get(
+                "due_date",
+                "",
+            ),
+        ),
+    )
+
+
+def cases_dataframe(cases):
+
+    rows = []
+
+    for case in sort_cases(
+        cases
+    ):
+
+        rows.append(
+            {
+                "Case ID":
+                    case.get(
+                        "case_id"
+                    ),
+
+                "Subject":
+                    case.get(
+                        "subject"
+                    ),
+
+                "Priority":
+                    case.get(
+                        "priority"
+                    ),
+
+                "Due Date":
+                    case.get(
+                        "due_date"
+                    ),
+
+                "Status":
+                    case.get(
+                        "status"
+                    ),
+
+                "Assigned To":
+                    case.get(
+                        "assigned_to"
+                    ),
+            }
+        )
+
+    return pd.DataFrame(rows)
+
+
+def show_metrics(
+    cases,
+    prefix="",
+):
+
+    active = len(cases)
+
+    critical = sum(
+        1
+        for case in cases
+        if case.get(
+            "priority"
+        ) == "Critical"
+    )
+
+    due_soon = sum(
+        1
+        for case in cases
+        if "Today"
+        in case.get(
+            "due_date",
+            "",
+        )
+    )
+
+    on_track = sum(
+        1
+        for case in cases
+        if case.get(
+            "priority"
+        )
+        in [
+            "Medium",
+            "Low",
+        ]
+    )
+
+    c1, c2, c3, c4 = st.columns(4)
+
+    c1.metric(
+        f"{prefix} Active Cases",
+        active,
+    )
+
+    c2.metric(
+        "Critical",
+        critical,
+    )
+
+    c3.metric(
+        "Due Soon",
+        due_soon,
+    )
+
+    c4.metric(
+        "On Track",
+        on_track,
+    )
+
+
+# ============================================================
+# 17. REGULAR AGENT VIEW
+# ============================================================
+
 if not is_admin:
-    my_cases = [c for c in st.session_state.cases_db if c["assigned_to"] == user["email"]]
-    
+
+    my_cases = [
+        case
+        for case
+        in st.session_state.cases_db
+
+        if case.get(
+            "assigned_to"
+        )
+        == user.get(
+            "email"
+        )
+    ]
+
+    # --------------------------------------------------------
+    # DASHBOARD
+    # --------------------------------------------------------
+
     if menu == "Dashboard":
-        st.subheader(f"Good Morning, {user['first_name']}!")
-        st.caption(datetime.datetime.now().strftime("%A, %B %d, %Y"))
-        
-        # Summary Tiles
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("My Active Cases", len(my_cases))
-        c2.metric("Critical", sum(1 for c in my_cases if c["priority"] == "Critical"))
-        c3.metric("Due Soon", sum(1 for c in my_cases if "Today" in c["due_date"]))
-        c4.metric("On Track", sum(1 for c in my_cases if c["priority"] in ["Medium", "Low"]))
-        
-        # Alerts Box
-        st.markdown("### Alerts for You")
-        now = datetime.datetime.now()
-        unupdated = [c for c in my_cases if (now - c["last_update"]).total_seconds() > 86400]
-        if unupdated:
-            st.warning(f"⚠️ You have {len(unupdated)} cases not updated for 24+ hours!")
-            
-        for c in my_cases:
-            if c["priority"] == "Critical":
-                st.error(f"🚨 Case #{c['case_id']} ({c['subject']}) is Critical!")
-        
-        # Cases Table (Sorted by urgency)
-        st.markdown("### My Cases (Sorted by Urgency)")
-        if my_cases:
-            df = pd.DataFrame(my_cases)[["case_id", "subject", "priority", "due_date", "status"]]
-            st.dataframe(df, use_container_width=True)
-        else:
-            st.info("No cases currently assigned to you.")
+
+        st.subheader(
+            f"Good Morning, "
+            f"{user.get('first_name', 'Agent')}!"
+        )
+
+        st.caption(
+            dt.datetime.now().strftime(
+                "%A, %B %d, %Y"
+            )
+        )
+
+        show_metrics(
+            my_cases,
+            prefix="My",
+        )
+
+        st.markdown(
+            "### Alerts"
+        )
+
+        now = dt.datetime.now()
+
+        stale = [
+            case
+            for case in my_cases
+
+            if (
+                now
+                - case.get(
+                    "last_update",
+                    now,
+                )
+            ).total_seconds()
+            > 86400
+        ]
+
+        critical = [
+            case
+            for case in my_cases
+
+            if case.get(
+                "priority"
+            )
+            == "Critical"
+        ]
+
+        if stale:
+
+            st.warning(
+                f"⚠️ {len(stale)} case(s) "
+                "have not been updated "
+                "for more than 24 hours."
+            )
+
+        for case in critical:
+
+            st.error(
+                f"🚨 Case #{case['case_id']} "
+                f"({case['subject']}) is Critical."
+            )
+
+        st.markdown(
+            "### My Cases"
+        )
+
+        search = st.text_input(
+            "Search",
+            placeholder=(
+                "Case number, subject, status..."
+            ),
+        )
+
+        filtered = my_cases
+
+        if search:
+
+            q = search.lower()
+
+            filtered = [
+                case
+                for case
+                in my_cases
+
+                if q
+                in str(
+                    case.get(
+                        "case_id",
+                        "",
+                    )
+                ).lower()
+
+                or q
+                in str(
+                    case.get(
+                        "subject",
+                        "",
+                    )
+                ).lower()
+
+                or q
+                in str(
+                    case.get(
+                        "status",
+                        "",
+                    )
+                ).lower()
+            ]
+
+        st.dataframe(
+            cases_dataframe(
+                filtered
+            ),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    # --------------------------------------------------------
+    # MY CASES
+    # --------------------------------------------------------
 
     elif menu == "My Cases":
-        st.subheader("My Cases Management")
-        if my_cases:
-            selected_id = st.selectbox("Select Case to View/Update", [c["case_id"] for c in my_cases])
-            case = next(c for c in my_cases if c["case_id"] == selected_id)
-            
-            col_a, col_b = st.columns(2)
-            with col_a:
-                st.markdown(f"**Case #:** {case['case_id']}")
-                st.markdown(f"**Subject:** {case['subject']}")
-                st.markdown(f"**Priority:** {case['priority']}")
-                st.markdown(f"**Due Date:** {case['due_date']}")
-                
-                # Link routing to Salesforce Case
-                sf_url = f"https://hp.lightning.force.com/lightning/r/Case/{case['case_id']}/view"
-                st.markdown(f"🔗 [Contact Vendor/Technician in Salesforce]({sf_url})")
-            
-            with col_b:
-                new_status = st.selectbox("Update Status", ["In Progress", "Pending Vendor", "Completed", "Contract Breached"], index=0)
-                if new_status == "Contract Breached":
-                    reason = st.selectbox("Breach Reason", ["SLA Missed", "Vendor Unresponsive", "Part Out of Stock"])
-                    auto_msg = st.text_area("Generated Automated Notification Email", f"Dear Team, Case #{case['case_id']} breached SLA due to: {reason}.")
-                    if st.button("Send Breach Notification"):
-                        st.success("Automated Breach email dispatched!")
-                        
-                if st.button("Save Case Update"):
-                    case["status"] = new_status
-                    case["last_update"] = datetime.datetime.now()
-                    st.success("Case status updated successfully!")
+
+        st.subheader(
+            "My Cases Management"
+        )
+
+        if not my_cases:
+
+            st.info(
+                "No cases are currently assigned to you."
+            )
+
+        else:
+
+            case_ids = [
+                case["case_id"]
+                for case in my_cases
+            ]
+
+            selected_id = st.selectbox(
+                "Select Case",
+                case_ids,
+            )
+
+            case = next(
+                case
+                for case
+                in my_cases
+
+                if case[
+                    "case_id"
+                ]
+                == selected_id
+            )
+
+            left, right = st.columns(2)
+
+            with left:
+
+                st.markdown(
+                    f"### Case #{case['case_id']}"
+                )
+
+                st.write(
+                    f"**Subject:** "
+                    f"{case['subject']}"
+                )
+
+                st.write(
+                    f"**Priority:** "
+                    f"{case['priority']}"
+                )
+
+                st.write(
+                    f"**Due Date:** "
+                    f"{case['due_date']}"
+                )
+
+                st.write(
+                    f"**Status:** "
+                    f"{case['status']}"
+                )
+
+                sf_url = (
+                    "https://hp.lightning.force.com/"
+                    f"lightning/r/Case/"
+                    f"{case['case_id']}/view"
+                )
+
+                st.markdown(
+                    f"[Open Salesforce Case ↗]"
+                    f"({sf_url})"
+                )
+
+            with right:
+
+                statuses = [
+                    "New",
+                    "Assigned",
+                    "In Progress",
+                    "Pending Vendor",
+                    "Completed",
+                    "Contract Breached",
+                ]
+
+                current = case.get(
+                    "status",
+                    "Assigned",
+                )
+
+                status_index = (
+                    statuses.index(
+                        current
+                    )
+                    if current
+                    in statuses
+                    else 0
+                )
+
+                new_status = st.selectbox(
+                    "Update Status",
+                    statuses,
+                    index=status_index,
+                )
+
+                if new_status == (
+                    "Contract Breached"
+                ):
+
+                    reason = st.selectbox(
+                        "Breach Reason",
+                        [
+                            "SLA Missed",
+                            "Vendor Unresponsive",
+                            "Part Out of Stock",
+                        ],
+                    )
+
+                    st.text_area(
+                        "Notification",
+                        value=(
+                            "Dear Team,\n\n"
+                            f"Case #{case['case_id']} "
+                            "breached SLA due to: "
+                            f"{reason}."
+                        ),
+                    )
+
+                if st.button(
+                    "Save Case Update",
+                    type="primary",
+                    use_container_width=True,
+                ):
+
+                    case["status"] = (
+                        new_status
+                    )
+
+                    case["last_update"] = (
+                        dt.datetime.now()
+                    )
+
+                    st.success(
+                        "Case updated successfully."
+                    )
+
+    # --------------------------------------------------------
+    # SCHEDULE
+    # --------------------------------------------------------
 
     elif menu == "Schedule":
-        st.subheader("My Schedule")
-        t1, t2, t3 = st.tabs(["Day", "Week", "Month"])
-        with t1:
-            st.table([
-                {"Time": "08:00 AM - 10:00 AM", "Activity": "Work / Case Processing"},
-                {"Time": "10:00 AM - 10:15 AM", "Activity": "Break"},
-                {"Time": "10:15 AM - 12:00 PM", "Activity": "Work / Case Processing"},
-                {"Time": "12:00 PM - 01:00 PM", "Activity": "Lunch"},
-                {"Time": "03:00 PM - 03:15 PM", "Activity": "Break"}
-            ])
+
+        st.subheader(
+            "My Schedule"
+        )
+
+        day, week, month = st.tabs(
+            [
+                "Day",
+                "Week",
+                "Month",
+            ]
+        )
+
+        with day:
+
+            st.table(
+                [
+                    {
+                        "Time":
+                            "08:00 AM - 10:00 AM",
+                        "Activity":
+                            "Work / Case Processing",
+                    },
+                    {
+                        "Time":
+                            "10:00 AM - 10:15 AM",
+                        "Activity":
+                            "Break",
+                    },
+                    {
+                        "Time":
+                            "10:15 AM - 12:00 PM",
+                        "Activity":
+                            "Work / Case Processing",
+                    },
+                    {
+                        "Time":
+                            "12:00 PM - 01:00 PM",
+                        "Activity":
+                            "Lunch",
+                    },
+                    {
+                        "Time":
+                            "03:00 PM - 03:15 PM",
+                        "Activity":
+                            "Break",
+                    },
+                ]
+            )
+
+        with week:
+
+            st.info(
+                "Weekly schedule."
+            )
+
+        with month:
+
+            st.info(
+                "Monthly schedule."
+            )
+
+    # --------------------------------------------------------
+    # REQUESTS
+    # --------------------------------------------------------
 
     elif menu == "Requests":
-        st.subheader("Submit Request (Leave / Swap)")
-        req_type = st.selectbox("Request Type", ["Sick Leave", "Emergency Leave", "PTO", "Schedule Swap"])
-        s_date = st.date_input("Start Date")
-        e_date = st.date_input("End Date")
-        reason = st.text_input("Reason")
-        
-        if st.button("Submit Request"):
-            st.session_state.requests_db.append({
-                "agent": f"{user['first_name']} {user['last_name']}",
-                "type": req_type, "start": str(s_date), "end": str(e_date),
-                "status": "Auto-Approved" if req_type in ["Sick Leave", "Emergency Leave"] else "Pending"
-            })
-            st.success("Request Submitted Successfully!")
+
+        st.subheader(
+            "Submit Request"
+        )
+
+        req_type = st.selectbox(
+            "Request Type",
+            [
+                "Sick Leave",
+                "Emergency Leave",
+                "PTO",
+                "Schedule Swap",
+            ],
+        )
+
+        c1, c2 = st.columns(2)
+
+        with c1:
+
+            start = st.date_input(
+                "Start Date"
+            )
+
+        with c2:
+
+            end = st.date_input(
+                "End Date"
+            )
+
+        reason = st.text_input(
+            "Reason"
+        )
+
+        if st.button(
+            "Submit Request",
+            type="primary",
+        ):
+
+            st.session_state.requests_db.append(
+                {
+                    "agent":
+                        (
+                            f"{user.get('first_name', '')} "
+                            f"{user.get('last_name', '')}"
+                        ),
+
+                    "type":
+                        req_type,
+
+                    "start":
+                        str(start),
+
+                    "end":
+                        str(end),
+
+                    "reason":
+                        reason,
+
+                    "status":
+                        (
+                            "Auto-Approved"
+                            if req_type
+                            in [
+                                "Sick Leave",
+                                "Emergency Leave",
+                            ]
+                            else "Pending"
+                        ),
+                }
+            )
+
+            st.success(
+                "Request submitted successfully."
+            )
 
 
-# ==========================================
-# 7. ADMIN DASHBOARD & ADVANCED CONTROL
-# ==========================================
-else: # Role == Admin
+# ============================================================
+# 18. ADMIN VIEW
+# ============================================================
+
+else:
+
+    all_cases = (
+        st.session_state.cases_db
+    )
+
+    # --------------------------------------------------------
+    # DASHBOARD
+    # --------------------------------------------------------
+
     if menu == "Dashboard":
-        st.subheader("Team Overview")
-        all_cases = st.session_state.cases_db
-        
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Active Cases", len(all_cases))
-        c2.metric("Critical", sum(1 for c in all_cases if c["priority"] == "Critical"))
-        c3.metric("Due Soon", sum(1 for c in all_cases if "Today" in c["due_date"]))
-        c4.metric("On Track", sum(1 for c in all_cases if c["priority"] in ["Medium", "Low"]))
-        
-        col_chart1, col_chart2 = st.columns(2)
-        with col_chart1:
-            st.markdown("#### Agent Status Distribution")
-            fig = px.pie(values=[25, 4, 2, 4], names=["Available", "Lunch", "Break", "Busy-Away"], hole=0.4)
-            st.plotly_chart(fig, use_container_width=True)
-            
-        with col_chart2:
-            st.markdown("#### Active Case Distribution")
-            df_cases = pd.DataFrame(all_cases)
-            fig2 = px.bar(df_cases, x="assigned_to", title="Cases per Agent")
-            st.plotly_chart(fig2, use_container_width=True)
+
+        st.subheader(
+            "Team Overview"
+        )
+
+        show_metrics(
+            all_cases
+        )
+
+        left, right = st.columns(2)
+
+        with left:
+
+            st.markdown(
+                "### Agent Status Distribution"
+            )
+
+            if roster_collection is not None:
+
+                try:
+
+                    agents = list(
+                        roster_collection.find(
+                            {
+                                "role":
+                                    "Agent",
+                                "status":
+                                    "Active",
+                            },
+                            {
+                                "_id": 0,
+                                "aux": 1,
+                            },
+                        )
+                    )
+
+                except PyMongoError:
+
+                    agents = []
+
+            else:
+
+                agents = [
+                    u
+                    for u
+                    in st.session_state.mock_db
+
+                    if u.get(
+                        "role"
+                    )
+                    == "Agent"
+                ]
+
+            status_counts = Counter(
+                agent.get(
+                    "aux",
+                    "Offline",
+                )
+                for agent
+                in agents
+            )
+
+            if status_counts:
+
+                fig = px.pie(
+                    values=list(
+                        status_counts.values()
+                    ),
+                    names=list(
+                        status_counts.keys()
+                    ),
+                    hole=0.45,
+                )
+
+                st.plotly_chart(
+                    fig,
+                    use_container_width=True,
+                )
+
+            else:
+
+                st.info(
+                    "No active agents found."
+                )
+
+        with right:
+
+            st.markdown(
+                "### Active Cases by Agent"
+            )
+
+            if all_cases:
+
+                counts = Counter(
+                    case.get(
+                        "assigned_to",
+                        "Unassigned",
+                    )
+                    for case
+                    in all_cases
+                )
+
+                chart_df = pd.DataFrame(
+                    {
+                        "Agent":
+                            list(
+                                counts.keys()
+                            ),
+
+                        "Cases":
+                            list(
+                                counts.values()
+                            ),
+                    }
+                )
+
+                fig = px.bar(
+                    chart_df,
+                    x="Agent",
+                    y="Cases",
+                )
+
+                st.plotly_chart(
+                    fig,
+                    use_container_width=True,
+                )
+
+    # --------------------------------------------------------
+    # CASES
+    # --------------------------------------------------------
 
     elif menu == "Cases":
-        st.subheader("All Cases Control")
-        st.dataframe(pd.DataFrame(st.session_state.cases_db), use_container_width=True)
-        
-        st.markdown("### Reassign Case")
-        cid = st.selectbox("Select Case ID", [c["case_id"] for c in st.session_state.cases_db])
-        new_ag = st.text_input("Reassign to Agent Email")
-        if st.button("Reassign Case"):
-            c = next(x for x in st.session_state.cases_db if x["case_id"] == cid)
-            c["assigned_to"] = new_ag
-            st.success(f"Case #{cid} reassigned to {new_ag}")
+
+        st.subheader(
+            "All Cases Control"
+        )
+
+        search = st.text_input(
+            "Search Cases",
+            placeholder=(
+                "Case ID, subject, "
+                "priority, status..."
+            ),
+        )
+
+        filtered = all_cases
+
+        if search:
+
+            q = search.lower()
+
+            filtered = [
+                case
+                for case
+                in all_cases
+
+                if q
+                in str(
+                    case.get(
+                        "case_id",
+                        "",
+                    )
+                ).lower()
+
+                or q
+                in str(
+                    case.get(
+                        "subject",
+                        "",
+                    )
+                ).lower()
+
+                or q
+                in str(
+                    case.get(
+                        "priority",
+                        "",
+                    )
+                ).lower()
+
+                or q
+                in str(
+                    case.get(
+                        "status",
+                        "",
+                    )
+                ).lower()
+
+                or q
+                in str(
+                    case.get(
+                        "assigned_to",
+                        "",
+                    )
+                ).lower()
+            ]
+
+        st.dataframe(
+            cases_dataframe(
+                filtered
+            ),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        st.markdown(
+            "### Reassign Case"
+        )
+
+        if all_cases:
+
+            cid = st.selectbox(
+                "Case ID",
+                [
+                    c["case_id"]
+                    for c
+                    in all_cases
+                ],
+            )
+
+            new_agent = st.text_input(
+                "Agent Email",
+                placeholder="agent@hpe.com",
+            )
+
+            if st.button(
+                "Reassign Case",
+                type="primary",
+            ):
+
+                target = next(
+                    c
+                    for c
+                    in all_cases
+
+                    if c[
+                        "case_id"
+                    ]
+                    == cid
+                )
+
+                target[
+                    "assigned_to"
+                ] = (
+                    new_agent
+                    .strip()
+                    .lower()
+                )
+
+                target[
+                    "last_update"
+                ] = (
+                    dt.datetime.now()
+                )
+
+                st.success(
+                    f"Case #{cid} reassigned."
+                )
+
+    # --------------------------------------------------------
+    # AGENTS
+    # --------------------------------------------------------
 
     elif menu == "Agents":
-        st.subheader("Agent AUX Monitoring & Kick Control")
-        # Display roster/AUX status
+
+        st.subheader(
+            "Agent AUX Monitoring"
+        )
+
         if roster_collection is not None:
-            roster = list(roster_collection.find())
+
+            try:
+
+                roster = list(
+                    roster_collection.find(
+                        {},
+                        {
+                            "_id": 0,
+                            "first_name": 1,
+                            "last_name": 1,
+                            "email": 1,
+                            "role": 1,
+                            "aux": 1,
+                            "status": 1,
+                        },
+                    )
+                )
+
+            except PyMongoError:
+
+                roster = []
+
         else:
-            roster = st.session_state.mock_db
-            
-        for r in roster:
-            col_a, col_b, col_c = st.columns([2, 2, 1])
-            col_a.write(f"**{r['first_name']} {r['last_name']}** ({r['email']})")
-            col_b.write(f"AUX: `{r.get('aux', 'Offline')}`")
-            if col_c.button("Kick Agent", key=f"kick_{r['email']}"):
-                r["aux"] = "Busy - Away"
-                st.warning(f"Agent {r['first_name']} kicked to prevent auto-assignment.")
+
+            roster = (
+                st.session_state.mock_db
+            )
+
+        if not roster:
+
+            st.info(
+                "No roster records found."
+            )
+
+        else:
+
+            for agent in roster:
+
+                c1, c2, c3 = st.columns(
+                    [3, 2, 1]
+                )
+
+                with c1:
+
+                    st.write(
+                        f"**{agent.get('first_name', '')} "
+                        f"{agent.get('last_name', '')}**"
+                    )
+
+                    st.caption(
+                        agent.get(
+                            "email",
+                            "",
+                        )
+                    )
+
+                with c2:
+
+                    st.write(
+                        "AUX: "
+                        f"`{agent.get('aux', 'Offline')}`"
+                    )
+
+                with c3:
+
+                    if agent.get(
+                        "role"
+                    ) == "Agent":
+
+                        if st.button(
+                            "Kick",
+                            key=(
+                                "kick_"
+                                + agent.get(
+                                    "email",
+                                    "",
+                                )
+                            ),
+                        ):
+
+                            if roster_collection is not None:
+
+                                try:
+
+                                    roster_collection.update_one(
+                                        {
+                                            "email":
+                                                agent.get(
+                                                    "email"
+                                                )
+                                        },
+                                        {
+                                            "$set":
+                                            {
+                                                "aux":
+                                                    "Busy - Away"
+                                            }
+                                        },
+                                    )
+
+                                except PyMongoError:
+
+                                    pass
+
+                            agent[
+                                "aux"
+                            ] = "Busy - Away"
+
+                            st.toast(
+                                "Agent moved to Busy - Away."
+                            )
+
+    # --------------------------------------------------------
+    # SCHEDULE
+    # --------------------------------------------------------
 
     elif menu == "Schedule":
-        st.subheader("Team Schedule Management")
-        st.info("Interval Optimizer: Auto-ensuring queue coverage across all operating hours.")
+
+        st.subheader(
+            "Team Schedule Management"
+        )
+
+        st.info(
+            "Interval Optimizer: "
+            "Auto-ensuring queue coverage "
+            "across operating hours."
+        )
+
+    # --------------------------------------------------------
+    # REQUESTS
+    # --------------------------------------------------------
 
     elif menu == "Requests":
-        st.subheader("Manage Requests")
+
+        st.subheader(
+            "Manage Requests"
+        )
+
         if st.session_state.requests_db:
-            st.table(pd.DataFrame(st.session_state.requests_db))
+
+            st.dataframe(
+                pd.DataFrame(
+                    st.session_state.requests_db
+                ),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+        else:
+
+            st.info(
+                "No requests available."
+            )
+
+    # --------------------------------------------------------
+    # REPORTS
+    # --------------------------------------------------------
 
     elif menu == "Reports":
-        st.subheader("Extract Operational Reports")
-        st.download_button("Export Cases to CSV", data=pd.DataFrame(st.session_state.cases_db).to_csv(), file_name="hpe_cases_report.csv")
+
+        st.subheader(
+            "Operational Reports"
+        )
+
+        csv = (
+            pd.DataFrame(
+                st.session_state.cases_db
+            )
+            .to_csv(index=False)
+            .encode("utf-8")
+        )
+
+        st.download_button(
+            "Export Cases to CSV",
+            data=csv,
+            file_name=(
+                "hpe_cases_report.csv"
+            ),
+            mime="text/csv",
+            type="primary",
+        )
+
+    # --------------------------------------------------------
+    # SALESFORCE
+    # --------------------------------------------------------
 
     elif menu == "Salesforce":
-        st.subheader("Salesforce Integration (Admin Only)")
-        st.markdown("🔗 Direct link: [https://hp.lightning.force.com/](https://hp.lightning.force.com/)")
-        st.components.v1.iframe("https://hp.lightning.force.com/", height=600, scrolling=True)
+
+        st.subheader(
+            "Salesforce Integration"
+        )
+
+        st.markdown(
+            "[Open Salesforce ↗]"
+            "(https://hp.lightning.force.com/)"
+        )
+
+        load_salesforce = st.toggle(
+            "Load Salesforce inside CaseFlow",
+            value=False,
+        )
+
+        if load_salesforce:
+
+            st.components.v1.iframe(
+                "https://hp.lightning.force.com/",
+                height=700,
+                scrolling=True,
+            )
+
+    # --------------------------------------------------------
+    # SETTINGS
+    # --------------------------------------------------------
 
     elif menu == "Settings":
-        st.subheader("System Settings & User Role Management")
-        st.write("Manage user roles across the platform.")
+
+        st.subheader(
+            "System Settings"
+        )
+
+        mongo_status = (
+            "🟢 Connected"
+            if roster_collection
+            is not None
+            else
+            "🟠 Offline / Local Session Mode"
+        )
+
+        st.write(
+            f"**Database:** `{DB_NAME}`"
+        )
+
+        st.write(
+            f"**Collection:** "
+            f"`{ROSTER_COLLECTION}`"
+        )
+
+        st.write(
+            f"**MongoDB Status:** "
+            f"{mongo_status}"
+        )
+
+        st.info(
+            "Administrator accounts are managed "
+            "through the Team Roster Collection. "
+            "No administrator account is hard-coded "
+            "in this application."
+        )
+```
+
+**Important:** if the account already exists in your MongoDB database, removing it from the Python code **does not delete the existing database record**. The uploaded code only showed the application creating that record automatically; it did not contain a database-deletion operation.
+
+So after deploying this version, `Team Roster Collection` will retain any existing records unless you explicitly remove them from MongoDB.
