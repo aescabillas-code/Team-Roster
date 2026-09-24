@@ -1,4 +1,6 @@
-streamlit>=1.36
-pandas>=2.0
+streamlit>=1.38
+pandas>=2.1
+pymongo>=4.8
+dnspython>=2.6
 streamlit-autorefresh>=1.0.1
 simple-salesforce>=1.12
