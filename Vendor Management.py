@@ -67,7 +67,13 @@ st.markdown(
     /* =========================================
        HIDE STREAMLIT BRANDING & UI ELEMENTS
        ========================================= */
+    /* Make header transparent so the sidebar toggle is still visible */
     header[data-testid="stHeader"] {{
+        background: transparent !important;
+    }}
+    
+    /* Hide the top-right action buttons (Deploy, Github, 3 dots) */
+    [data-testid="stToolbar"] {{
         display: none !important;
     }}
     
@@ -86,7 +92,6 @@ st.markdown(
     /* =========================================
        SIDEBAR STYLING
        ========================================= */
-    /* Removed rigid min-width/max-width so the native collapse toggle works properly */
     [data-testid="stSidebar"] {{
         background: #002B36 !important;
     }}
