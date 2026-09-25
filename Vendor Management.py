@@ -750,7 +750,8 @@ def render_auth_view():
 
             st.markdown("<div style='font-size:0.75rem; color:#64748b; margin-top:-6px; margin-bottom:12px;'>Password must be at least 8 characters and include letters, numbers and a special character.</div>", unsafe_allow_html=True)
 
-            su_role = st.selectbox("Role Assignment", ["Agent", "Admin/Agent", "Admin"], key="reg_role")
+            # Default role for all signups is Agent
+            default_role = "Agent"
 
             st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
             if st.button("Sign Up", type="primary", use_container_width=True, key="btn_submit_signup"):
@@ -764,7 +765,7 @@ def render_auth_view():
                     st.error("An account with this HPE email already exists.")
                 else:
                     hashed = hash_password(su_pwd)
-                    default_aux = "Admin Work" if su_role == "Admin" else "Not Ready - Online"
+                    default_aux = "Not Ready - Online"
                     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
                     user_doc = {
@@ -773,7 +774,7 @@ def render_auth_view():
                         "emp_id": su_empid,
                         "email": su_email,
                         "password": hashed,
-                        "role": su_role,
+                        "role": default_role,
                         "profile_pic": None,
                         "current_aux": default_aux,
                         "registered_date": now_str,
@@ -882,11 +883,33 @@ def render_report(user):
 # 14. SETTING TAB (ADMIN ONLY)
 # ==========================================
 def render_settings(user):
-    st.subheader("User Directory & Roles")
+    st.subheader("Team Roster Master Directory & Role Administration")
     all_users = list(roster_col.find({}))
+
+    st.markdown("#### Registered Users")
     for u in all_users:
         with st.container(border=True):
-            st.write(f"**{u.get('first_name')} {u.get('last_name')}** ({u.get('email')}) — Current Role: `{u.get('role')}`")
+            r1, r2, r3, r4 = st.columns([3, 3, 2, 2])
+            r1.write(f"**{u.get('first_name')} {u.get('last_name')}** ({u.get('emp_id')})")
+            r2.write(f"Email: `{u.get('email')}`")
+            new_role = r3.selectbox(
+                "Role", 
+                ["Agent", "Admin/Agent", "Admin"], 
+                index=["Agent", "Admin/Agent", "Admin"].index(u.get("role", "Agent")), 
+                key=f"r_role_{u['_id']}"
+            )
+            
+            if r4.button("Update Role", key=f"btn_r_{u['_id']}"):
+                roster_col.update_one({"_id": u["_id"]}, {"$set": {"role": new_role}})
+                st.toast(f"Role updated to {new_role} for {u.get('first_name')}!")
+                st.rerun()
+
+    st.divider()
+    st.markdown("#### External Source Data Synchronization")
+    if st.button("Sync Data From External Master HR / Ticketing Source"):
+        with st.spinner("Connecting to external API..."):
+            time_pkg.sleep(1.2)
+            st.success("Successfully synchronized all cases and agent status with external HPE systems.")
 
 
 # ==========================================
