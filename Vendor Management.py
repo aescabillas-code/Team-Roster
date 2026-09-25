@@ -64,11 +64,28 @@ st.markdown(
         padding: 1rem 1.5rem 2rem;
     }}
 
+    /* =========================================
+       HIDE STREAMLIT BRANDING & UI ELEMENTS
+       ========================================= */
     header[data-testid="stHeader"] {{
-        background: transparent;
+        display: none !important;
+    }}
+    
+    [data-testid="stAppDeployButton"] {{
+        display: none !important;
+    }}
+    
+    #MainMenu {{
+        display: none !important;
+    }}
+    
+    footer {{
+        display: none !important;
     }}
 
-    /* Sidebar Styling (Matches image_a0e6c1.png) */
+    /* =========================================
+       SIDEBAR STYLING
+       ========================================= */
     [data-testid="stSidebar"] {{
         background: #002B36 !important;
         min-width: 240px !important;
@@ -83,11 +100,12 @@ st.markdown(
         color: #fff !important;
     }}
 
+    /* Fix white-on-white by making inactive buttons transparent */
     [data-testid="stSidebar"] button {{
         width: 100%;
         min-height: 44px;
         border: 0 !important;
-        background: #ffffff !important;
+        background: transparent !important; 
         box-shadow: none !important;
         border-radius: 8px !important;
         text-align: left !important;
@@ -95,10 +113,12 @@ st.markdown(
         font-weight: 600 !important;
         padding: 10px 15px !important;
         margin: 0 0 12px 0 !important;
+        color: #ffffff !important;
+        transition: background 0.2s ease;
     }}
 
     [data-testid="stSidebar"] button:hover {{
-        background: #f0f0f0 !important;
+        background: rgba(255, 255, 255, 0.08) !important;
     }}
 
     /* Top Bar Styling */
@@ -1096,12 +1116,13 @@ initial = initials(user)
 
 
 # ============================================================
-# TOP HEADER — MATCH REFERENCE
+# TOP HEADER & PROFILE SECTION
 # ============================================================
 
 current_aux = "Admin Task" if is_admin else user.get("aux", "Available")
 
-top1, top2, top3, top4 = st.columns([1.5, 3.5, 4.5, 1])
+# Restructured layout to place the AUX selector inside a unified Profile box
+top1, top2, top_prof = st.columns([3, 4, 4.5])
 
 with top1:
     st.markdown(
@@ -1116,49 +1137,51 @@ with top1:
         unsafe_allow_html=True,
     )
 
-with top2:
-    st.markdown('<div style="height:2px"></div>', unsafe_allow_html=True)
-    c_a, c_b = st.columns([1.5, 3])
-    c_a.markdown("<div style='font-size:12px; font-weight:700; padding-top:10px;'>Current AUX Status</div>", unsafe_allow_html=True)
-    with c_b:
-        aux_options = ["Admin Task"] if is_admin else AUX_OPTIONS
-        selected_aux = st.selectbox(
-            "Current AUX Status",
-            aux_options,
-            index=(aux_options.index(current_aux) if current_aux in aux_options else 0),
-            label_visibility="collapsed",
-            key="header_aux",
-        )
-        if not is_admin and selected_aux != current_aux:
-            if update_agent_aux(user.get("email"), selected_aux):
-                st.session_state.user_data["aux"] = selected_aux
-                st.toast("AUX status updated.")
-
-with top3:
-    st.markdown(
-        f"""
-        <div style="height:47px;display:flex;align-items:center;justify-content:flex-end;">
-            <span class="avatar">{initial}</span>
-            <span class="user-chip">User: <b>{name}</b> ({role_name})</span>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-with top4:
-    st.markdown('<div style="height:4px"></div>', unsafe_allow_html=True)
-    if st.button("Sign Out", key="header_signout", use_container_width=True):
-        user_email = user.get("email")
-        collections = get_collections()
-        if collections and user_email:
-            collections[0].update_one(
-                {"type": "roster_list", "data.email": user_email}, 
-                {"$unset": {"data.session_token": ""}}
+with top_prof:
+    with st.container(border=True):
+        c_avatar, c_aux, c_btn = st.columns([2.5, 2, 1])
+        
+        with c_avatar:
+            st.markdown(
+                f"""
+                <div style="display:flex; align-items:center; height:36px;">
+                    <span class="avatar" style="margin-right:10px;">{initial}</span>
+                    <div style="line-height:1.2;">
+                        <strong style="font-size:12px; color:var(--text);">{name}</strong><br>
+                        <span style="font-size:10px; color:var(--muted);">{role_name}</span>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
             )
-        st.query_params.clear()
-        st.session_state.authenticated = False
-        st.session_state.user_data = None
-        st.rerun()
+            
+        with c_aux:
+            aux_options = ["Admin Task"] if is_admin else AUX_OPTIONS
+            selected_aux = st.selectbox(
+                "AUX",
+                aux_options,
+                index=(aux_options.index(current_aux) if current_aux in aux_options else 0),
+                label_visibility="collapsed",
+                key="profile_aux",
+            )
+            if not is_admin and selected_aux != current_aux:
+                if update_agent_aux(user.get("email"), selected_aux):
+                    st.session_state.user_data["aux"] = selected_aux
+                    st.toast("AUX status updated.")
+                    
+        with c_btn:
+            if st.button("Sign Out", key="header_signout", use_container_width=True):
+                user_email = user.get("email")
+                collections = get_collections()
+                if collections and user_email:
+                    collections[0].update_one(
+                        {"type": "roster_list", "data.email": user_email}, 
+                        {"$unset": {"data.session_token": ""}}
+                    )
+                st.query_params.clear()
+                st.session_state.authenticated = False
+                st.session_state.user_data = None
+                st.rerun()
 
 st.markdown("<hr style='margin-top:0; margin-bottom:20px; border-color:var(--border);'>", unsafe_allow_html=True)
 
@@ -1194,12 +1217,13 @@ st.sidebar.markdown(
 
 menu = st.session_state.menu
 
-# Dynamically inject styles for the active button vs inactive buttons based on the user's selection
+# Dynamically inject styles for the active button based on the user's selection
 st.sidebar.markdown(
     f"""
     <style>
     div[data-testid="stSidebar"] button:has(div:contains(" {menu} ")) {{
         background: #1B4B5A !important;
+        border-left: 3px solid var(--teal) !important;
     }}
     </style>
     """,
@@ -1221,7 +1245,6 @@ def page_header(title, subtitle=""):
     if subtitle: st.markdown(f'<div class="page-subtitle">{subtitle}</div>', unsafe_allow_html=True)
 
 def colored_metric_card(icon, label, value, color_class):
-    """Matches the 4 specific colored metric cards from the reference image."""
     st.markdown(
         f"""
         <div class="metric-card">
@@ -1573,9 +1596,6 @@ def admin_agents():
         st.markdown('<div class="empty">No agents found.</div>', unsafe_allow_html=True)
         return
 
-    # To match the image perfectly, we render custom HTML for the agents list with buttons inline, 
-    # but Streamlit dataframes don't support actionable buttons inside cells natively easily without hacky components.
-    # We will build a clean column layout list instead that matches the visual of a table.
     st.markdown(
         """
         <div style="display:grid; grid-template-columns: 2fr 2.5fr 1.5fr 1fr; padding: 10px 15px; border-bottom: 2px solid var(--border); font-weight: 700; font-size: 12px; color: var(--muted);">
