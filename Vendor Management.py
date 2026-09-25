@@ -86,10 +86,9 @@ st.markdown(
     /* =========================================
        SIDEBAR STYLING
        ========================================= */
+    /* Removed rigid min-width/max-width so the native collapse toggle works properly */
     [data-testid="stSidebar"] {{
         background: #002B36 !important;
-        min-width: 240px !important;
-        max-width: 240px !important;
     }}
 
     [data-testid="stSidebar"] > div:first-child {{
@@ -452,10 +451,13 @@ REQUESTS_COLLECTION = "Requests"
 
 AUX_OPTIONS = [
     "Available",
+    "Busy - Away",
     "Break",
+    "Unscheduled Break",
     "Lunch",
     "Meeting",
-    "Training",
+    "Coaching",
+    "Admin Task",
     "Offline",
 ]
 
@@ -1119,7 +1121,7 @@ initial = initials(user)
 # TOP HEADER & PROFILE SECTION
 # ============================================================
 
-current_aux = "Admin Task" if is_admin else user.get("aux", "Available")
+current_aux = user.get("aux", "Available")
 
 # Restructured layout to place the AUX selector inside a unified Profile box
 top1, top2, top_prof = st.columns([3, 4, 4.5])
@@ -1156,18 +1158,18 @@ with top_prof:
             )
             
         with c_aux:
-            aux_options = ["Admin Task"] if is_admin else AUX_OPTIONS
             selected_aux = st.selectbox(
                 "AUX",
-                aux_options,
-                index=(aux_options.index(current_aux) if current_aux in aux_options else 0),
+                AUX_OPTIONS,
+                index=(AUX_OPTIONS.index(current_aux) if current_aux in AUX_OPTIONS else 0),
                 label_visibility="collapsed",
                 key="profile_aux",
             )
-            if not is_admin and selected_aux != current_aux:
+            if selected_aux != current_aux:
                 if update_agent_aux(user.get("email"), selected_aux):
                     st.session_state.user_data["aux"] = selected_aux
                     st.toast("AUX status updated.")
+                    st.rerun()
                     
         with c_btn:
             if st.button("Sign Out", key="header_signout", use_container_width=True):
@@ -1209,9 +1211,8 @@ st.sidebar.markdown(
     unsafe_allow_html=True,
 )
 
-menu_title = "MENU (ADMIN)" if is_admin else "MENU (AGENT)"
 st.sidebar.markdown(
-    f'<div style="font-size:11px; color:#8baaa9 !important; font-weight:700; margin-bottom: 20px; letter-spacing: 0.5px;">{menu_title}</div>', 
+    '<div style="font-size:11px; color:#8baaa9 !important; font-weight:700; margin-bottom: 20px; letter-spacing: 0.5px;">MENU</div>', 
     unsafe_allow_html=True
 )
 
