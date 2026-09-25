@@ -511,136 +511,8 @@ PRIORITY_ORDER = {
     "Low": 3,
 }
 
-DEFAULT_CASES = [
-    {
-        "case_id": "0000156",
-        "subject": "Network equipment delay",
-        "customer": "Enterprise Client",
-        "priority": "Critical",
-        "status": "In Progress",
-        "progress": 70,
-        "last_update": dt.datetime.now(),
-        "due_date": dt.datetime.now() + dt.timedelta(hours=3),
-        "assigned_to": "Unassigned",
-        "salesforce_url": "https://example.salesforce.com/",
-        "breach_reason": "SLA Missed",
-    },
-    {
-        "case_id": "0000143",
-        "subject": "Server replacement",
-        "customer": "Enterprise Client",
-        "priority": "High",
-        "status": "Pending Vendor",
-        "progress": 55,
-        "last_update": dt.datetime.now() - dt.timedelta(hours=2),
-        "due_date": dt.datetime.now() + dt.timedelta(hours=8),
-        "assigned_to": "Unassigned",
-        "salesforce_url": "https://example.salesforce.com/",
-        "breach_reason": "",
-    },
-    {
-        "case_id": "0000132",
-        "subject": "Software license",
-        "customer": "Enterprise Client",
-        "priority": "Medium",
-        "status": "Assigned",
-        "progress": 40,
-        "last_update": dt.datetime.now() - dt.timedelta(hours=6),
-        "due_date": dt.datetime.now() + dt.timedelta(days=1),
-        "assigned_to": "Unassigned",
-        "salesforce_url": "https://example.salesforce.com/",
-        "breach_reason": "",
-    },
-    {
-        "case_id": "0000128",
-        "subject": "Site installation",
-        "customer": "Enterprise Client",
-        "priority": "Medium",
-        "status": "In Progress",
-        "progress": 25,
-        "last_update": dt.datetime.now() - dt.timedelta(hours=26),
-        "due_date": dt.datetime.now() + dt.timedelta(hours=5),
-        "assigned_to": "Unassigned",
-        "salesforce_url": "https://example.salesforce.com/",
-        "breach_reason": "",
-    },
-    {
-        "case_id": "0000120",
-        "subject": "Access request",
-        "customer": "Enterprise Client",
-        "priority": "Low",
-        "status": "Assigned",
-        "progress": 15,
-        "last_update": dt.datetime.now() - dt.timedelta(hours=4),
-        "due_date": dt.datetime.now() + dt.timedelta(days=3),
-        "assigned_to": "Unassigned",
-        "salesforce_url": "https://example.salesforce.com/",
-        "breach_reason": "",
-    },
-]
-
-
 # ============================================================
-# SESSION
-# ============================================================
-
-def init_session():
-    defaults = {
-        "authenticated": False,
-        "user_data": None,
-        "mock_db": [],
-        "cases_db": [],
-        "requests_db": [],
-        "menu": "Dashboard",
-        "auth_view": "Sign In",
-    }
-
-    for key, value in defaults.items():
-        if key not in st.session_state:
-            st.session_state[key] = value
-
-
-init_session()
-
-
-# ============================================================
-# PASSWORDS
-# ============================================================
-
-def hash_password(password: str) -> str:
-    salt = secrets.token_bytes(16)
-    iterations = 210_000
-    digest = hashlib.pbkdf2_hmac(
-        "sha256",
-        password.encode("utf-8"),
-        salt,
-        iterations,
-    )
-    return f"pbkdf2_sha256${iterations}${salt.hex()}${digest.hex()}"
-
-
-def verify_password(password: str, stored: str) -> bool:
-    if not stored:
-        return False
-
-    if not stored.startswith("pbkdf2_sha256$"):
-        return hmac.compare_digest(password, stored)
-
-    try:
-        _, iterations, salt_hex, digest_hex = stored.split("$")
-        candidate = hashlib.pbkdf2_hmac(
-            "sha256",
-            password.encode("utf-8"),
-            bytes.fromhex(salt_hex),
-            int(iterations),
-        )
-        return hmac.compare_digest(candidate.hex(), digest_hex)
-    except (ValueError, TypeError):
-        return False
-
-
-# ============================================================
-# MONGODB — FAST / NON-BLOCKING WHEN NOT CONFIGURED
+# MONGODB — SETUP & CONNECTION
 # ============================================================
 
 @st.cache_resource(show_spinner=False)
@@ -650,16 +522,15 @@ def get_mongo_client():
     except Exception:
         uri = ""
 
-    # Important: do not try localhost when no URI is configured.
     if not uri:
         return None
 
     try:
         client = MongoClient(
             uri,
-            serverSelectionTimeoutMS=1200,
-            connectTimeoutMS=1200,
-            socketTimeoutMS=2500,
+            serverSelectionTimeoutMS=2500,
+            connectTimeoutMS=2500,
+            socketTimeoutMS=5000,
             maxPoolSize=20,
             minPoolSize=1,
             retryWrites=True,
@@ -705,6 +576,10 @@ def ensure_indexes():
             name="roster_type_email_lookup",
         )
         roster.create_index(
+            [("session_token", 1)],
+            name="session_token_lookup",
+        )
+        roster.create_index(
             [("role", 1), ("status", 1), ("aux", 1)],
             name="agent_availability",
         )
@@ -744,18 +619,69 @@ def clear_data_caches():
 
 
 # ============================================================
-# FALLBACK MODE
+# SESSION & PERSISTENT LOGIN (VIA URL QUERY PARAMS)
 # ============================================================
 
-def initialize_mock_data():
-    if not st.session_state.cases_db:
-        st.session_state.cases_db = [
-            dict(x) for x in DEFAULT_CASES
-        ]
+def init_session():
+    defaults = {
+        "authenticated": False,
+        "user_data": None,
+        "menu": "Dashboard",
+        "auth_view": "Sign In",
+    }
+
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
+
+    # Check for persistent login via query parameter
+    if not st.session_state.authenticated:
+        token = st.query_params.get("session")
+        if token:
+            collections = get_collections()
+            if collections:
+                roster = collections[0]
+                user = roster.find_one({"session_token": token, "type": "roster_list", "status": "Active"}, {"_id": 0})
+                if user:
+                    st.session_state.authenticated = True
+                    st.session_state.user_data = user
+
+init_session()
+
+# ============================================================
+# PASSWORDS
+# ============================================================
+
+def hash_password(password: str) -> str:
+    salt = secrets.token_bytes(16)
+    iterations = 210_000
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt,
+        iterations,
+    )
+    return f"pbkdf2_sha256${iterations}${salt.hex()}${digest.hex()}"
 
 
-if not MONGO_ENABLED:
-    initialize_mock_data()
+def verify_password(password: str, stored: str) -> bool:
+    if not stored:
+        return False
+
+    if not stored.startswith("pbkdf2_sha256$"):
+        return hmac.compare_digest(password, stored)
+
+    try:
+        _, iterations, salt_hex, digest_hex = stored.split("$")
+        candidate = hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode("utf-8"),
+            bytes.fromhex(salt_hex),
+            int(iterations),
+        )
+        return hmac.compare_digest(candidate.hex(), digest_hex)
+    except (ValueError, TypeError):
+        return False
 
 
 # ============================================================
@@ -789,7 +715,7 @@ def load_roster():
         except PyMongoError:
             pass
 
-    return [dict(x) for x in st.session_state.mock_db]
+    return []
 
 
 @st.cache_data(ttl=5, show_spinner=False)
@@ -808,7 +734,7 @@ def load_cases():
         except PyMongoError:
             pass
 
-    return [dict(x) for x in st.session_state.cases_db]
+    return []
 
 
 @st.cache_data(ttl=5, show_spinner=False)
@@ -827,7 +753,7 @@ def load_requests():
         except PyMongoError:
             pass
 
-    return [dict(x) for x in st.session_state.requests_db]
+    return []
 
 
 # ============================================================
@@ -851,8 +777,7 @@ def create_user(data):
                 return False, "An account with this email already exists."
 
             record = dict(data)
-            # Every sign-up record belongs to the roster_list type.
-            # MongoDB automatically creates _id as an ObjectId.
+            # Ensuring type is saved strictly as "roster_list" string
             record["type"] = "roster_list"
             record["password_hash"] = hash_password(
                 record.pop("password")
@@ -869,23 +794,7 @@ def create_user(data):
         except PyMongoError as exc:
             return False, f"Database error: {exc}"
 
-    if any(
-        x.get("email", "").lower() == data["email"].lower()
-        for x in st.session_state.mock_db
-    ):
-        return False, "An account with this email already exists."
-
-    record = dict(data)
-    record["type"] = "roster_list"
-    record["password_hash"] = hash_password(
-        record.pop("password")
-    )
-    record.pop("confirm_password", None)
-    record["created_at"] = dt.datetime.now()
-    st.session_state.mock_db.append(record)
-    clear_data_caches()
-
-    return True, "Account created successfully."
+    return False, "MongoDB connection failed. Ensure secrets are configured."
 
 
 def find_user(email, password):
@@ -934,20 +843,6 @@ def find_user(email, password):
         except PyMongoError:
             return None
 
-    for user in st.session_state.mock_db:
-        if (
-            user.get("email", "").lower() == email
-            and user.get("status", "Active") == "Active"
-            and verify_password(
-                password,
-                user.get(
-                    "password_hash",
-                    user.get("password", ""),
-                ),
-            )
-        ):
-            return dict(user)
-
     return None
 
 
@@ -965,13 +860,6 @@ def update_case(case_id, updates):
             return result.modified_count > 0
         except PyMongoError:
             return False
-
-    for case in st.session_state.cases_db:
-        if case.get("case_id") == case_id:
-            case.update(updates)
-            clear_data_caches()
-            return True
-
     return False
 
 
@@ -989,13 +877,6 @@ def update_agent_aux(email, aux):
             return True
         except PyMongoError:
             return False
-
-    for agent in st.session_state.mock_db:
-        if agent.get("email") == email:
-            agent["aux"] = aux
-            clear_data_caches()
-            return True
-
     return False
 
 
@@ -1010,10 +891,7 @@ def create_request(data):
             return True
         except PyMongoError:
             return False
-
-    st.session_state.requests_db.append(dict(data))
-    clear_data_caches()
-    return True
+    return False
 
 
 # ============================================================
@@ -1219,13 +1097,6 @@ def assign_unassigned_cases():
                     changed += 1
             except PyMongoError:
                 pass
-        else:
-            for local_case in st.session_state.cases_db:
-                if local_case.get("case_id") == case.get("case_id"):
-                    local_case.update(updates)
-                    loads[email] += 1
-                    changed += 1
-                    break
 
     if changed:
         clear_data_caches()
@@ -1238,8 +1109,6 @@ def assign_unassigned_cases():
 # ============================================================
 
 def auth_brand_panel():
-    # This entire block is HTML rendered by one st.markdown call.
-    # Streamlit widgets are NOT placed inside this HTML block.
     st.markdown(
         """
         <section class="auth-brand">
@@ -1293,8 +1162,6 @@ def auth_screen():
         auth_brand_panel()
 
     with right:
-        # Streamlit's native container keeps all widgets in the same
-        # component tree, avoiding malformed HTML and the large blank area.
         with st.container(border=True):
             st.markdown(
                 '<div class="auth-panel-marker"></div>',
@@ -1334,6 +1201,17 @@ def auth_screen():
                     user = find_user(email, password)
 
                     if user:
+                        # Setup Persistent Login stored in MongoDB
+                        session_token = secrets.token_hex(16)
+                        collections = get_collections()
+                        if collections:
+                            collections[0].update_one(
+                                {"email": user["email"]},
+                                {"$set": {"session_token": session_token}}
+                            )
+                            user["session_token"] = session_token
+                            
+                        st.query_params["session"] = session_token
                         st.session_state.authenticated = True
                         st.session_state.user_data = user
                         st.session_state.menu = "Dashboard"
@@ -1423,11 +1301,7 @@ def auth_screen():
 
                         if success:
                             st.success(message)
-                            st.caption(
-                                'Saved to MongoDB roster collection with type = "roster_list".'
-                                if MONGO_ENABLED
-                                else 'Saved to local fallback roster because MongoDB is not configured.'
-                            )
+                            st.caption('Saved to MongoDB roster collection with type = "roster_list".')
                         else:
                             st.error(message)
 
@@ -1521,6 +1395,15 @@ with top4:
         key="header_signout",
         use_container_width=True,
     ):
+        # Unset session on logout
+        user_email = user.get("email")
+        collections = get_collections()
+        if collections and user_email:
+            collections[0].update_one({"email": user_email}, {"$unset": {"session_token": ""}})
+        
+        if "session" in st.query_params:
+            del st.query_params["session"]
+
         st.session_state.authenticated = False
         st.session_state.user_data = None
         st.rerun()
@@ -1574,7 +1457,6 @@ for icon, label in NAV:
 
 menu = st.session_state.menu
 
-# A small visual marker under the active page.
 st.sidebar.markdown(
     f"""
     <div style="font-size:9px;color:#8be7da;
@@ -2592,7 +2474,7 @@ def admin_settings():
 
     c1.metric(
         "MongoDB",
-        "Connected" if MONGO_ENABLED else "Fallback",
+        "Connected" if MONGO_ENABLED else "Disconnected",
     )
     c2.metric("Database", DB_NAME)
     c3.metric("Roster Collection", ROSTER_COLLECTION)
@@ -2641,200 +2523,3 @@ else:
         schedule_page(admin=False)
     elif menu == "Requests":
         requests_page(admin=False)
-
-
-
-# ============================================================
-# AUTHENTICATION UI OVERRIDES
-# ============================================================
-
-st.markdown(
-    """
-    <style>
-
-    /* Remove Streamlit's default top whitespace on authentication. */
-    [data-testid="stAppViewContainer"] > .main {
-        padding-top: 0 !important;
-    }
-
-    [data-testid="stMainBlockContainer"] {
-        padding-top: 0.75rem !important;
-    }
-
-    /* Authentication left panel */
-    .auth-brand {
-        background: linear-gradient(
-            145deg,
-            #003b49 0%,
-            #002f3b 100%
-        );
-        min-height: 600px;
-        height: 100%;
-        box-sizing: border-box;
-        padding: 34px 30px;
-        color: #ffffff;
-        border-radius: 10px 0 0 10px;
-        overflow: hidden;
-    }
-
-    .auth-brand-logo {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 25px;
-    }
-
-    .auth-logo-mark {
-        width: 38px;
-        height: 13px;
-        border: 3px solid #00b894;
-        border-radius: 1px;
-        box-sizing: border-box;
-    }
-
-    .auth-logo-text {
-        color: #ffffff;
-        font-size: 13px;
-        font-weight: 700;
-        line-height: 1.05;
-    }
-
-    .auth-brand h1 {
-        color: #ffffff !important;
-        font-size: 30px !important;
-        font-weight: 700 !important;
-        line-height: 1.1 !important;
-        margin: 0 0 6px 0 !important;
-        padding: 0 !important;
-    }
-
-    .auth-brand-subtitle {
-        color: #d6e7ea !important;
-        font-size: 11px !important;
-        line-height: 1.45 !important;
-        margin: 0 0 30px 0 !important;
-        padding: 0 !important;
-        max-width: 250px;
-    }
-
-    .auth-feature {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin: 19px 0;
-    }
-
-    .auth-feature-icon {
-        width: 28px;
-        height: 28px;
-        flex: 0 0 28px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #00d4b4;
-        background: rgba(0, 212, 180, 0.12);
-        border-radius: 5px;
-        font-size: 14px;
-    }
-
-    .auth-feature-copy {
-        display: flex;
-        flex-direction: column;
-        min-width: 0;
-    }
-
-    .auth-feature-copy b {
-        color: #ffffff !important;
-        font-size: 11px !important;
-        font-weight: 700 !important;
-        line-height: 1.2 !important;
-        margin-bottom: 3px !important;
-    }
-
-    .auth-feature-copy small {
-        color: #c7dadd !important;
-        font-size: 9px !important;
-        line-height: 1.3 !important;
-    }
-
-    /* Right authentication panel: remove the large white top gap. */
-    .auth-form-marker {
-        display: none;
-    }
-
-    /* Tabs should start close to the top of the right column. */
-    [data-testid="stTabs"] {
-        margin-top: 0 !important;
-        padding-top: 0 !important;
-    }
-
-    [data-testid="stTabs"] [role="tablist"] {
-        margin-top: 0 !important;
-        padding-top: 0 !important;
-    }
-
-    /* Prevent blank markdown/container blocks from creating vertical space. */
-    .auth-empty-spacer {
-        display: none !important;
-        height: 0 !important;
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-
-    /* Authentication inputs/buttons */
-    .auth-submit button {
-        width: 100%;
-    }
-
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-def render_auth_brand():
-    st.markdown(
-        """
-        <div class="auth-brand">
-            <div class="auth-brand-logo">
-                <div class="auth-logo-mark"></div>
-                <div class="auth-logo-text">
-                    Hewlett Packard<br>
-                    Enterprise
-                </div>
-            </div>
-            <h1>HPE CaseFlow</h1>
-            <p class="auth-brand-subtitle">
-                Team Task and Case Management System
-            </p>
-            <div class="auth-feature">
-                <div class="auth-feature-icon">▣</div>
-                <div class="auth-feature-copy">
-                    <b>Manage Cases</b>
-                    <small>Track and resolve tasks efficiently</small>
-                </div>
-            </div>
-            <div class="auth-feature">
-                <div class="auth-feature-icon">▰</div>
-                <div class="auth-feature-copy">
-                    <b>Team Collaboration</b>
-                    <small>Work together for better service delivery</small>
-                </div>
-            </div>
-            <div class="auth-feature">
-                <div class="auth-feature-icon">◷</div>
-                <div class="auth-feature-copy">
-                    <b>Real-Time Visibility</b>
-                    <small>Stay informed and in control</small>
-                </div>
-            </div>
-            <div class="auth-feature">
-                <div class="auth-feature-icon">●</div>
-                <div class="auth-feature-copy">
-                    <b>Secure Access</b>
-                    <small>HPE employees only</small>
-                </div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
