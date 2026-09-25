@@ -20,10 +20,10 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom Styling: Replaces standard headers and matches the HPE CaseFlow visual design
-st.markdown(r"""
+# Custom Styling: Replicates the exact visual identity of the design
+st.markdown("""
     <style>
-    /* Hide Streamlit default chrome & deploy button */
+    /* Hide Streamlit default headers & toolbars */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
@@ -31,163 +31,142 @@ st.markdown(r"""
     [data-testid="stDecoration"] {visibility: hidden !important;}
     [data-testid="stStatusWidget"] {visibility: hidden !important;}
 
-    /* Background and Container Spacing */
-    .stApp {
-        background: linear-gradient(135deg, #dcf0ea 0%, #b8e2d8 50%, #9dd5c7 100%);
-    }
-
+    /* Page container spacing */
     .block-container {
-        padding-top: 2rem !important;
-        padding-bottom: 2rem !important;
-        max-width: 1180px !important;
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+        max-width: 1200px;
     }
     
-    /* HPE Brand Colors */
     :root {
         --hpe-green: #01a982;
         --hpe-green-dark: #007a5e;
-        --hpe-green-light: #00d69f;
         --hpe-teal: #00c9a7;
     }
 
-    /* Card Wrapper: Holds Left Hero and Right Form */
-    .auth-card-wrapper {
-        background-color: #ffffff;
-        border-radius: 20px;
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12);
-        overflow: hidden;
-        border: 1px solid rgba(0,0,0,0.06);
-    }
-
-    /* Left Hero Card Styling */
-    .hero-container {
-        background: linear-gradient(180deg, rgba(7, 28, 38, 0.90) 0%, rgba(5, 20, 28, 0.94) 100%), 
+    /* Left Hero Card */
+    .hero-card {
+        background: linear-gradient(180deg, rgba(7, 24, 32, 0.94) 0%, rgba(5, 17, 22, 0.98) 100%), 
                     url('https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1200&auto=format&fit=crop');
         background-size: cover;
         background-position: center;
-        border-radius: 20px 0 0 20px;
+        border-radius: 24px;
         padding: 44px 38px;
-        color: white;
-        height: 100%;
+        color: #ffffff;
         min-height: 670px;
         display: flex;
         flex-direction: column;
         justify-content: space-between;
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
     }
 
-    .hpe-brand-bar {
-        width: 48px;
+    .hpe-bar {
+        width: 46px;
         height: 6px;
         background-color: var(--hpe-green);
+        border-radius: 3px;
         margin-bottom: 12px;
-        border-radius: 2px;
     }
 
-    .hpe-corp-title {
-        font-size: 1.15rem;
+    .hpe-corp {
+        font-size: 1.12rem;
         font-weight: 700;
+        line-height: 1.2;
         letter-spacing: -0.2px;
-        line-height: 1.18;
-        margin-bottom: 34px;
-        color: #f9fafb;
+        margin-bottom: 36px;
     }
 
-    .hero-heading {
-        font-size: 2.65rem;
+    .hero-title-main {
+        font-size: 2.8rem;
+        font-weight: 800;
+        line-height: 1.0;
+        letter-spacing: -0.6px;
+        margin-bottom: 0px;
+    }
+
+    .hero-title-highlight {
+        font-size: 2.8rem;
         font-weight: 800;
         line-height: 1.05;
-        margin-bottom: 0px;
-        letter-spacing: -0.5px;
-        color: #ffffff;
+        color: #00e6a8;
+        letter-spacing: -0.6px;
+        margin-bottom: 8px;
     }
 
-    .hero-heading-highlight {
-        color: #00d69f;
-        margin-bottom: 4px;
-    }
-
-    .hero-subheading {
-        font-size: 1rem;
-        color: #e5e7eb;
-        margin-bottom: 42px;
-        font-weight: 400;
+    .hero-tagline {
+        font-size: 1.05rem;
+        color: #cbd5e1;
         line-height: 1.35;
+        margin-bottom: 40px;
     }
 
-    .feature-item {
+    .feature-row {
         display: flex;
         align-items: center;
-        margin-bottom: 22px;
+        margin-bottom: 24px;
     }
 
-    .feature-icon-circle {
-        width: 46px;
-        height: 46px;
+    .feature-icon-wrapper {
+        width: 48px;
+        height: 48px;
         border-radius: 50%;
-        border: 2px solid #00c9a7;
+        border: 2px solid var(--hpe-teal);
+        background: rgba(0, 201, 167, 0.08);
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.25rem;
+        font-size: 1.35rem;
         margin-right: 18px;
-        background: rgba(0, 201, 167, 0.12);
         flex-shrink: 0;
     }
 
-    .feature-text-title {
-        font-size: 0.98rem;
+    .feature-title {
+        font-size: 1.02rem;
         font-weight: 700;
         color: #ffffff;
         margin-bottom: 2px;
     }
 
-    .feature-text-desc {
-        font-size: 0.83rem;
-        color: #cbd5e1;
+    .feature-desc {
+        font-size: 0.86rem;
+        color: #94a3b8;
     }
 
-    /* Right Auth Form Styling */
-    .form-container {
-        padding: 40px 44px;
-        background: #ffffff;
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-    }
-
-    .auth-card-title {
-        font-size: 2.15rem;
+    /* Right Auth Form Titles */
+    .auth-main-title {
+        font-size: 2.25rem;
         font-weight: 800;
         color: #0f172a;
         margin-bottom: 4px;
         letter-spacing: -0.5px;
     }
 
-    .auth-card-subtitle {
-        font-size: 0.94rem;
-        color: #64748b;
+    .auth-sub-title {
+        font-size: 0.98rem;
+        color: #475569;
         margin-bottom: 24px;
     }
 
-    /* Primary Green HPE Buttons */
+    /* Primary Button Styling */
     div.stButton > button[kind="primary"] {
-        background-color: #007a5e !important;
-        border-color: #007a5e !important;
+        background-color: var(--hpe-green-dark) !important;
+        border: none !important;
         color: #ffffff !important;
         border-radius: 8px !important;
         font-weight: 600 !important;
-        padding: 0.62rem 1rem !important;
+        padding: 0.65rem 1rem !important;
         font-size: 1rem !important;
+        box-shadow: 0 4px 12px rgba(0, 122, 94, 0.2);
     }
     div.stButton > button[kind="primary"]:hover {
-        background-color: #01a982 !important;
-        border-color: #01a982 !important;
+        background-color: var(--hpe-green) !important;
     }
 
-    /* Secondary / Ghost button for Forgot password and Back */
+    /* Secondary / Outline Button */
     div.stButton > button[kind="secondary"] {
         border-radius: 8px !important;
+        font-weight: 600 !important;
+        border: 1px solid #cbd5e1 !important;
     }
 
     /* Borderless table */
@@ -421,7 +400,7 @@ def update_agent_aux(email, new_aux):
 @st.dialog("Forgot Password", width="medium")
 def show_forgot_password_dialog():
     st.markdown("### Password Reset Assistance")
-    st.markdown("Enter your registered HPE email address below. We will send you an instant reset link.")
+    st.markdown("Enter your registered HPE email address below. We'll send you an instant reset link.")
     fp_email = st.text_input("HPE Email Address", placeholder="yourname@hpe.com", key="dlg_fp_email").strip().lower()
     if st.button("Send Reset Link", type="primary", use_container_width=True):
         if not fp_email:
@@ -613,237 +592,208 @@ def render_custom_top_bar(user):
 
 
 # ==========================================
-# 9. SIGN IN / SIGN UP (EXACT DESIGN MATCH)
+# 9. SIGN IN / SIGN UP (EXACT IMAGE REPLICA)
 # ==========================================
-def render_hero_left():
-    """Renders the left hero card using safe raw HTML strings"""
-    hero_html = r"""
-    <div class="hero-container">
-        <div>
-            <div class="hpe-brand-bar"></div>
-            <div class="hpe-corp-title">Hewlett Packard<br/>Enterprise</div>
-            
-            <div class="hero-heading">HPE</div>
-            <div class="hero-heading hero-heading-highlight">CaseFlow</div>
-            <div class="hero-subheading">Team Task and<br/>Case Management System</div>
-            
-            <div class="feature-item">
-                <div class="feature-icon-circle">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#00c9a7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"></path>
-                    </svg>
-                </div>
-                <div>
-                    <div class="feature-text-title">Manage Cases</div>
-                    <div class="feature-text-desc">Track and resolve tasks efficiently</div>
-                </div>
-            </div>
-            
-            <div class="feature-item">
-                <div class="feature-icon-circle">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#00c9a7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
-                        <circle cx="9" cy="7" r="4"></circle>
-                        <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
-                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                    </svg>
-                </div>
-                <div>
-                    <div class="feature-text-title">Work Together</div>
-                    <div class="feature-text-desc">Stay aligned with your team</div>
-                </div>
-            </div>
-            
-            <div class="feature-item">
-                <div class="feature-icon-circle">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#00c9a7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="18" y1="20" x2="18" y2="10"></line>
-                        <line x1="12" y1="20" x2="12" y2="4"></line>
-                        <line x1="6" y1="20" x2="6" y2="14"></line>
-                    </svg>
-                </div>
-                <div>
-                    <div class="feature-text-title">Drive Results</div>
-                    <div class="feature-text-desc">Real-time insights and reporting</div>
-                </div>
-            </div>
-        </div>
-        <div style="font-size:0.75rem; color:#94a3b8; padding-top:20px;">
-            Hewlett Packard Enterprise Development LP
-        </div>
-    </div>
-    """
-    st.markdown(hero_html, unsafe_allow_html=True)
-
-
 def render_auth_view():
     if "auth_page" not in st.session_state:
         st.session_state["auth_page"] = "signin"
 
-    # Layout: Split-screen Card
-    col_left, col_right = st.columns([1, 1], gap="small")
+    # Outer split layout
+    col_left, col_mid, col_right = st.columns([4.4, 0.4, 4.4])
 
+    # ------------------ LEFT HERO BANNER ------------------
     with col_left:
-        render_hero_left()
-
-    with col_right:
-        with st.container():
-            # ----------------------------------------------------
-            # VIEW: SIGN IN
-            # ----------------------------------------------------
-            if st.session_state["auth_page"] == "signin":
-                st.markdown(r"""
-                    <div style="padding: 10px 10px 0 10px;">
-                        <div class="auth-card-title">Welcome Back!</div>
-                        <div class="auth-card-subtitle">Sign in to your HPE CaseFlow account</div>
+        st.markdown("""
+        <div class="hero-card">
+            <div>
+                <div class="hpe-bar"></div>
+                <div class="hpe-corp">Hewlett Packard<br/>Enterprise</div>
+                <div class="hero-title-main">HPE</div>
+                <div class="hero-title-highlight">CaseFlow</div>
+                <div class="hero-tagline">Team Task and<br/>Case Management System</div>
+                <div class="feature-row">
+                    <div class="feature-icon-wrapper">📁</div>
+                    <div>
+                        <div class="feature-title">Manage Cases</div>
+                        <div class="feature-desc">Track and resolve tasks efficiently</div>
                     </div>
-                """, unsafe_allow_html=True)
-
-                login_email = st.text_input(
-                    "HPE Email Address",
-                    placeholder="yourname@hpe.com",
-                    key="in_email"
-                ).strip().lower()
-
-                login_pwd = st.text_input(
-                    "Password",
-                    type="password",
-                    placeholder="Enter your password",
-                    key="in_pwd"
-                )
-
-                rem_col, fp_col = st.columns([1.1, 1.2])
-                with rem_col:
-                    remember_me = st.checkbox("Remember me", value=True, key="in_remember")
-                with fp_col:
-                    st.markdown("<div style='text-align: right;'>", unsafe_allow_html=True)
-                    if st.button("Forgot password?", key="btn_to_fp", help="Click to request a password reset link"):
-                        show_forgot_password_dialog()
-                    st.markdown("</div>", unsafe_allow_html=True)
-
-                if st.button("Sign In", type="primary", use_container_width=True, key="btn_signin"):
-                    if not login_email or not login_pwd:
-                        st.error("Please provide both your HPE email address and password.")
-                    else:
-                        user = roster_col.find_one({"email": login_email})
-                        if user and verify_password(login_pwd, user.get("password")):
-                            default_aux = "Admin Work" if user.get("role") == "Admin" else "Not Ready - Online"
-                            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-                            roster_col.update_one(
-                                {"_id": user["_id"]},
-                                {"$set": {"current_aux": default_aux, "last_login": now_str}}
-                            )
-                            user["current_aux"] = default_aux
-                            st.session_state["user"] = user
-
-                            if remember_me:
-                                cookie_manager.set("hpe_auth_token", login_email, expires_at=datetime.now() + timedelta(days=14))
-
-                            st.success("Signed in successfully!")
-                            st.rerun()
-                        else:
-                            st.error("Invalid HPE email address or password.")
-
-                # Styled "or" divider
-                st.markdown(r"""
-                <div style="display: flex; align-items: center; text-align: center; margin: 18px 0; color: #94a3b8; font-size: 0.85rem;">
-                    <div style="flex: 1; border-bottom: 1px solid #e2e8f0;"></div>
-                    <span style="padding: 0 12px; font-weight: 500;">or</span>
-                    <div style="flex: 1; border-bottom: 1px solid #e2e8f0;"></div>
                 </div>
-                """, unsafe_allow_html=True)
+                <div class="feature-row">
+                    <div class="feature-icon-wrapper">👥</div>
+                    <div>
+                        <div class="feature-title">Work Together</div>
+                        <div class="feature-desc">Stay aligned with your team</div>
+                    </div>
+                </div>
+                <div class="feature-row">
+                    <div class="feature-icon-wrapper">📊</div>
+                    <div>
+                        <div class="feature-title">Drive Results</div>
+                        <div class="feature-desc">Real-time insights and reporting</div>
+                    </div>
+                </div>
+            </div>
+            <div style="font-size:0.75rem; color:#64748b; padding-top:20px;">
+                Hewlett Packard Enterprise Development LP
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-                # Microsoft SSO simulation button matching image
-                ms_clicked = st.button(
-                    "🪟  Sign in with Microsoft (HPE)",
-                    use_container_width=True,
-                    key="btn_ms_sso"
-                )
-                if ms_clicked:
-                    st.info("Directing to HPE Enterprise Single Sign-On (Ping / Azure AD)...")
+    # ------------------ RIGHT FORM PANEL ------------------
+    with col_right:
+        # 1. SIGN IN VIEW
+        if st.session_state["auth_page"] == "signin":
+            st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+            st.markdown("<div class='auth-main-title'>Welcome Back!</div>", unsafe_allow_html=True)
+            st.markdown("<div class='auth-sub-title'>Sign in to your HPE CaseFlow account</div>", unsafe_allow_html=True)
 
-                st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
-                
-                # Bottom prompt to switch to Sign Up
-                c_lbl, c_lnk = st.columns([1.6, 1.2])
-                with c_lbl:
-                    st.markdown("<div style='text-align:right; font-size:0.92rem; color:#475569; padding-top:6px;'>Don't have an account?</div>", unsafe_allow_html=True)
-                with c_lnk:
-                    if st.button("Sign up", key="btn_goto_signup"):
-                        st.session_state["auth_page"] = "signup"
+            login_email = st.text_input(
+                "HPE Email Address",
+                placeholder="yourname@hpe.com",
+                key="in_email"
+            ).strip().lower()
+
+            login_pwd = st.text_input(
+                "Password",
+                type="password",
+                placeholder="Enter your password",
+                key="in_pwd"
+            )
+
+            col_rem, col_fp = st.columns([1, 1])
+            with col_rem:
+                remember_me = st.checkbox("Remember me", value=True, key="in_remember")
+            with col_fp:
+                if st.button("Forgot password?", key="btn_to_fp", help="Reset password"):
+                    show_forgot_password_dialog()
+
+            st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
+            if st.button("Sign In", type="primary", use_container_width=True, key="btn_signin"):
+                if not login_email or not login_pwd:
+                    st.error("Please enter both email and password.")
+                else:
+                    user = roster_col.find_one({"email": login_email})
+                    if user and verify_password(login_pwd, user.get("password")):
+                        default_aux = "Admin Work" if user.get("role") == "Admin" else "Not Ready - Online"
+                        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+                        roster_col.update_one(
+                            {"_id": user["_id"]},
+                            {"$set": {"current_aux": default_aux, "last_login": now_str}}
+                        )
+                        user["current_aux"] = default_aux
+                        st.session_state["user"] = user
+
+                        if remember_me:
+                            cookie_manager.set("hpe_auth_token", login_email, expires_at=datetime.now() + timedelta(days=14))
+
+                        st.success("Signed in successfully!")
                         st.rerun()
+                    else:
+                        st.error("Invalid HPE email address or password.")
 
-            # ----------------------------------------------------
-            # VIEW: SIGN UP
-            # ----------------------------------------------------
-            elif st.session_state["auth_page"] == "signup":
-                if st.button("← Back to Sign In", key="btn_back_to_signin", type="secondary"):
+            # OR divider
+            st.markdown("""
+            <div style="display: flex; align-items: center; text-align: center; margin: 18px 0; color: #94a3b8; font-size: 0.85rem;">
+                <div style="flex: 1; border-bottom: 1px solid #e2e8f0;"></div>
+                <span style="padding: 0 10px;">or</span>
+                <div style="flex: 1; border-bottom: 1px solid #e2e8f0;"></div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Microsoft SSO Button matching screenshot
+            st.markdown("""
+            <style>
+            .ms-btn-wrap button {
+                background-color: #ffffff !important;
+                color: #1e293b !important;
+                border: 1px solid #cbd5e1 !important;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
+                font-weight: 600 !important;
+            }
+            .ms-btn-wrap button:hover {
+                background-color: #f8fafc !important;
+                border-color: #94a3b8 !important;
+            }
+            </style>
+            <div class="ms-btn-wrap">
+            """, unsafe_allow_html=True)
+            if st.button("🪟  Sign in with Microsoft (HPE)", use_container_width=True, key="btn_ms_sso"):
+                st.info("Directing to HPE Single Sign-On (Azure AD)...")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+            st.markdown("<div style='height: 24px;'></div>", unsafe_allow_html=True)
+            
+            # Switch to Sign Up
+            c_lbl, c_lnk = st.columns([2.2, 1.8])
+            with c_lbl:
+                st.markdown("<div style='text-align:right; font-size:0.92rem; color:#475569; padding-top:6px;'>Don't have an account?</div>", unsafe_allow_html=True)
+            with c_lnk:
+                if st.button("Sign up", key="btn_goto_signup"):
+                    st.session_state["auth_page"] = "signup"
+                    st.rerun()
+
+        # 2. SIGN UP VIEW
+        elif st.session_state["auth_page"] == "signup":
+            if st.button("← Back to Sign In", key="btn_back_to_signin"):
+                st.session_state["auth_page"] = "signin"
+                st.rerun()
+
+            st.markdown("<div class='auth-main-title'>Create Your Account</div>", unsafe_allow_html=True)
+            st.markdown("<div class='auth-sub-title'>Sign up to access HPE CaseFlow</div>", unsafe_allow_html=True)
+
+            su_fname = st.text_input("First Name", placeholder="Enter your first name", key="reg_fname")
+            su_lname = st.text_input("Last Name", placeholder="Enter your last name", key="reg_lname")
+            su_empid = st.text_input("Employee ID", placeholder="Enter your employee ID", key="reg_empid")
+            su_email = st.text_input("HPE Email Address", placeholder="yourname@hpe.com", key="reg_email").strip().lower()
+            su_pwd = st.text_input("Password", type="password", placeholder="Create a password", key="reg_pwd")
+
+            st.markdown("<div style='font-size:0.75rem; color:#64748b; margin-top:-6px; margin-bottom:12px;'>Password must be at least 8 characters and include letters, numbers and a special character.</div>", unsafe_allow_html=True)
+
+            su_role = st.selectbox("Role Assignment", ["Agent", "Admin/Agent", "Admin"], key="reg_role")
+
+            st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+            if st.button("Sign Up", type="primary", use_container_width=True, key="btn_submit_signup"):
+                if not (su_fname and su_lname and su_empid and su_email and su_pwd):
+                    st.error("Please fill in all registration fields.")
+                elif not su_email.endswith("@hpe.com"):
+                    st.warning("Please ensure you are registering with an authorized HPE corporate email address.")
+                elif len(su_pwd) < 8:
+                    st.error("Password must be at least 8 characters long.")
+                elif roster_col.find_one({"email": su_email}):
+                    st.error("An account with this HPE email already exists.")
+                else:
+                    hashed = hash_password(su_pwd)
+                    default_aux = "Admin Work" if su_role == "Admin" else "Not Ready - Online"
+                    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+                    user_doc = {
+                        "first_name": su_fname,
+                        "last_name": su_lname,
+                        "emp_id": su_empid,
+                        "email": su_email,
+                        "password": hashed,
+                        "role": su_role,
+                        "profile_pic": None,
+                        "current_aux": default_aux,
+                        "registered_date": now_str,
+                        "aux_history": [{"aux": default_aux, "timestamp": now_str}],
+                        "assignment_history": []
+                    }
+                    roster_col.insert_one(user_doc)
+                    st.success("Account created successfully! Redirecting to Sign In...")
+                    time_pkg.sleep(1.2)
                     st.session_state["auth_page"] = "signin"
                     st.rerun()
 
-                st.markdown(r"""
-                    <div style="padding: 4px 10px 0 10px;">
-                        <div class="auth-card-title">Create Your Account</div>
-                        <div class="auth-card-subtitle">Sign up to access HPE CaseFlow</div>
-                    </div>
-                """, unsafe_allow_html=True)
-
-                su_fname = st.text_input("First Name", placeholder="Enter your first name", key="reg_fname")
-                su_lname = st.text_input("Last Name", placeholder="Enter your last name", key="reg_lname")
-                su_empid = st.text_input("Employee ID", placeholder="Enter your employee ID", key="reg_empid")
-                su_email = st.text_input("HPE Email Address", placeholder="yourname@hpe.com", key="reg_email").strip().lower()
-                su_pwd = st.text_input("Password", type="password", placeholder="Create a password", key="reg_pwd")
-
-                st.markdown(r"""
-                    <div style="font-size:0.75rem; color:#64748b; margin-top:-8px; margin-bottom:12px; line-height: 1.3;">
-                        Password must be at least 8 characters and include letters, numbers and a special character.
-                    </div>
-                """, unsafe_allow_html=True)
-
-                su_role = st.selectbox("Role Assignment", ["Agent", "Admin/Agent", "Admin"], key="reg_role")
-
-                if st.button("Sign Up", type="primary", use_container_width=True, key="btn_submit_signup"):
-                    if not (su_fname and su_lname and su_empid and su_email and su_pwd):
-                        st.error("Please fill in all registration fields.")
-                    elif not su_email.endswith("@hpe.com"):
-                        st.warning("Please ensure you are registering with an authorized HPE email address.")
-                    elif len(su_pwd) < 8:
-                        st.error("Password must be at least 8 characters long.")
-                    elif roster_col.find_one({"email": su_email}):
-                        st.error("An account with this HPE email already exists.")
-                    else:
-                        hashed = hash_password(su_pwd)
-                        default_aux = "Admin Work" if su_role == "Admin" else "Not Ready - Online"
-                        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-                        user_doc = {
-                            "first_name": su_fname,
-                            "last_name": su_lname,
-                            "emp_id": su_empid,
-                            "email": su_email,
-                            "password": hashed,
-                            "role": su_role,
-                            "profile_pic": None,
-                            "current_aux": default_aux,
-                            "registered_date": now_str,
-                            "aux_history": [{"aux": default_aux, "timestamp": now_str}],
-                            "assignment_history": []
-                        }
-                        roster_col.insert_one(user_doc)
-                        st.success("Account created successfully! Redirecting to Sign In...")
-                        time_pkg.sleep(1.2)
-                        st.session_state["auth_page"] = "signin"
-                        st.rerun()
-
-                st.markdown("<div style='height: 16px;'></div>", unsafe_allow_html=True)
-                c_lbl2, c_lnk2 = st.columns([1.6, 1.2])
-                with c_lbl2:
-                    st.markdown("<div style='text-align:right; font-size:0.92rem; color:#475569; padding-top:6px;'>Already have an account?</div>", unsafe_allow_html=True)
-                with c_lnk2:
-                    if st.button("Sign in", key="btn_goto_signin_bottom"):
-                        st.session_state["auth_page"] = "signin"
-                        st.rerun()
+            st.markdown("<div style='height: 14px;'></div>", unsafe_allow_html=True)
+            c_lbl2, c_lnk2 = st.columns([2.4, 1.6])
+            with c_lbl2:
+                st.markdown("<div style='text-align:right; font-size:0.92rem; color:#475569; padding-top:6px;'>Already have an account?</div>", unsafe_allow_html=True)
+            with c_lnk2:
+                if st.button("Sign in", key="btn_goto_signin_bottom"):
+                    st.session_state["auth_page"] = "signin"
+                    st.rerun()
 
 
 # ==========================================
