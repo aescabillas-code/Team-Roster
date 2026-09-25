@@ -228,56 +228,76 @@ alerts_col = db["Alerts_Collection"]
 messages_col = db["Messages_Collection"]
 swaps_col = db["Schedule_Swaps"]
 
-# Database accessor helpers for `roster_list` object structure
-def find_roster_user(email: str):
-    """Finds user doc where roster_list.email == email (with fallback to root email)"""
-    doc = roster_col.find_one({"$or": [{"roster_list.email": email}, {"email": email}]})
+# ------------------------------------------------------------
+# Helpers to handle type: "roster_list" with string values
+# ------------------------------------------------------------
+def _deserialize_user(doc):
     if not doc:
         return None
-    if "roster_list" in doc and isinstance(doc["roster_list"], dict):
-        user_data = dict(doc["roster_list"])
-        user_data["_id"] = doc["_id"]
-        return user_data
-    return doc
+    data = doc.get("roster_list", {})
+    if not isinstance(data, dict):
+        data = {}
+    
+    user = {str(k): str(v) if v is not None else "" for k, v in data.items()}
+    user["_id"] = doc["_id"]
+
+    # Safely unpack serialized history strings back to lists for app logic
+    for list_field in ["aux_history", "assignment_history"]:
+        raw_val = user.get(list_field, "[]")
+        try:
+            user[list_field] = json.loads(raw_val) if isinstance(raw_val, str) and raw_val else []
+        except Exception:
+            user[list_field] = []
+
+    return user
+
+def find_roster_user(email: str):
+    """Finds user doc where type == 'roster_list' and email matches"""
+    doc = roster_col.find_one({
+        "type": "roster_list",
+        "roster_list.email": str(email).strip().lower()
+    })
+    return _deserialize_user(doc)
 
 def find_all_roster_users(filter_dict=None):
-    """Returns normalized user dicts stored under roster_list object"""
-    query = {}
+    """Returns all users stored under type: 'roster_list'"""
+    query = {"type": "roster_list"}
     if filter_dict:
         for k, v in filter_dict.items():
             if k == "_id":
                 query["_id"] = v
-            else:
+            elif isinstance(v, dict):
                 query[f"roster_list.{k}"] = v
+            else:
+                query[f"roster_list.{k}"] = str(v)
     cursor = roster_col.find(query)
-    users = []
-    for doc in cursor:
-        if "roster_list" in doc and isinstance(doc["roster_list"], dict):
-            u = dict(doc["roster_list"])
-            u["_id"] = doc["_id"]
-            users.append(u)
-        else:
-            users.append(doc)
-    return users
+    return [_deserialize_user(doc) for doc in cursor if doc]
 
-def update_roster_user(email: str, update_dict: dict, push_dict: dict = None):
-    """Updates fields inside the roster_list object in MongoDB"""
-    update_payload = {}
+def update_roster_user(email: str, update_dict: dict, append_history: dict = None):
+    """Updates fields inside roster_list, ensuring all values are stored as strings"""
+    set_payload = {}
     if update_dict:
-        set_payload = {}
         for k, v in update_dict.items():
-            set_payload[f"roster_list.{k}"] = v
-        update_payload["$set"] = set_payload
-    if push_dict:
-        p_payload = {}
-        for k, v in push_dict.items():
-            p_payload[f"roster_list.{k}"] = v
-        update_payload["$push"] = p_payload
+            set_payload[f"roster_list.{k}"] = str(v) if v is not None else ""
 
-    roster_col.update_one(
-        {"$or": [{"roster_list.email": email}, {"email": email}]},
-        update_payload
-    )
+    if append_history:
+        user_doc = roster_col.find_one({"type": "roster_list", "roster_list.email": str(email).strip().lower()})
+        if user_doc:
+            current_roster = user_doc.get("roster_list", {})
+            for hist_key, new_item in append_history.items():
+                existing_str = current_roster.get(hist_key, "[]")
+                try:
+                    parsed_list = json.loads(existing_str) if isinstance(existing_str, str) and existing_str else []
+                except Exception:
+                    parsed_list = []
+                parsed_list.append(new_item)
+                set_payload[f"roster_list.{hist_key}"] = json.dumps(parsed_list)
+
+    if set_payload:
+        roster_col.update_one(
+            {"type": "roster_list", "roster_list.email": str(email).strip().lower()},
+            {"$set": set_payload}
+        )
 
 def seed_validation_data():
     try:
@@ -322,7 +342,10 @@ def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 def verify_password(password: str, hashed: str) -> bool:
-    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+    try:
+        return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+    except Exception:
+        return False
 
 AUX_LIST = [
     "Available", 
@@ -400,10 +423,10 @@ def auto_assign_case(case_id):
         update_roster_user(
             chosen_agent["email"],
             update_dict={},
-            push_dict={"assignment_history": {
+            append_history={"assignment_history": {
                 "case_id": str(case_id),
-                "case_number": case.get("case_number"),
-                "priority": case.get("priority"),
+                "case_number": str(case.get("case_number")),
+                "priority": str(case.get("priority")),
                 "timestamp": now_iso
             }}
         )
@@ -428,11 +451,11 @@ def update_agent_aux(email, new_aux):
         now_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         update_roster_user(
             email,
-            update_dict={"current_aux": new_aux, "aux_last_updated": now_iso},
-            push_dict={"aux_history": {"aux": new_aux, "timestamp": now_iso}}
+            update_dict={"current_aux": str(new_aux), "aux_last_updated": now_iso},
+            append_history={"aux_history": {"aux": str(new_aux), "timestamp": now_iso}}
         )
         if "user" in st.session_state and st.session_state["user"].get("email") == email:
-            st.session_state["user"]["current_aux"] = new_aux
+            st.session_state["user"]["current_aux"] = str(new_aux)
 
         if new_aux == "Available":
             unassigned_cases = cases_col.find({"assigned_to": None}).sort("urgency_weight", pymongo.DESCENDING)
@@ -641,13 +664,12 @@ def render_custom_top_bar(user):
 
 
 # ==========================================
-# 9. SIGN IN / SIGN UP (EXACT IMAGE REPLICA)
+# 9. SIGN IN / SIGN UP (FETCH/SAVE UNDER type: 'roster_list')
 # ==========================================
 def render_auth_view():
     if "auth_page" not in st.session_state:
         st.session_state["auth_page"] = "signin"
 
-    # Outer split layout
     col_left, col_mid, col_right = st.columns([4.4, 0.4, 4.4])
 
     # ------------------ LEFT HERO BANNER ------------------
@@ -721,11 +743,13 @@ def render_auth_view():
                 if not login_email or not login_pwd:
                     st.error("Please enter both email and password.")
                 else:
+                    # Fetch user record from MongoDB under type: 'roster_list'
                     user = find_roster_user(login_email)
-                    if user and verify_password(login_pwd, user.get("password")):
+                    if user and verify_password(login_pwd, user.get("password", "")):
                         default_aux = "Admin Work" if user.get("role") == "Admin" else "Not Ready - Online"
                         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+                        # Update status inside roster_list
                         update_roster_user(
                             login_email,
                             update_dict={"current_aux": default_aux, "last_login": now_str}
@@ -750,7 +774,7 @@ def render_auth_view():
             </div>
             """, unsafe_allow_html=True)
 
-            # Microsoft SSO Button matching screenshot
+            # Microsoft SSO Button
             st.markdown("""
             <style>
             .ms-btn-wrap button {
@@ -773,6 +797,7 @@ def render_auth_view():
 
             st.markdown("<div style='height: 24px;'></div>", unsafe_allow_html=True)
             
+            # Switch to Sign Up
             c_lbl, c_lnk = st.columns([2.2, 1.8])
             with c_lbl:
                 st.markdown("<div style='text-align:right; font-size:0.92rem; color:#475569; padding-top:6px;'>Don't have an account?</div>", unsafe_allow_html=True)
@@ -798,8 +823,6 @@ def render_auth_view():
 
             st.markdown("<div style='font-size:0.75rem; color:#64748b; margin-top:-6px; margin-bottom:12px;'>Password must be at least 8 characters and include letters, numbers and a special character.</div>", unsafe_allow_html=True)
 
-            default_role = "Agent"
-
             st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
             if st.button("Sign Up", type="primary", use_container_width=True, key="btn_submit_signup"):
                 if not (su_fname and su_lname and su_empid and su_email and su_pwd):
@@ -815,20 +838,22 @@ def render_auth_view():
                     default_aux = "Not Ready - Online"
                     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-                    # Saved collected data inside Team Roster Collection under roster_list as an object
+                    # Explicitly saved under type: "roster_list" as an object with string values
                     user_doc = {
+                        "type": "roster_list",
                         "roster_list": {
-                            "first_name": su_fname,
-                            "last_name": su_lname,
-                            "emp_id": su_empid,
-                            "email": su_email,
-                            "password": hashed,
-                            "role": default_role,
-                            "profile_pic": None,
-                            "current_aux": default_aux,
-                            "registered_date": now_str,
-                            "aux_history": [{"aux": default_aux, "timestamp": now_str}],
-                            "assignment_history": []
+                            "first_name": str(su_fname).strip(),
+                            "last_name": str(su_lname).strip(),
+                            "emp_id": str(su_empid).strip(),
+                            "email": str(su_email).strip().lower(),
+                            "password": str(hashed),
+                            "role": "Agent",
+                            "profile_pic": "",
+                            "current_aux": str(default_aux),
+                            "registered_date": str(now_str),
+                            "last_login": "",
+                            "aux_history": json.dumps([{"aux": default_aux, "timestamp": now_str}]),
+                            "assignment_history": json.dumps([])
                         }
                     }
                     roster_col.insert_one(user_doc)
@@ -950,7 +975,7 @@ def render_settings(user):
             )
             
             if r4.button("Update Role", key=f"btn_r_{u['_id']}"):
-                update_roster_user(u["email"], update_dict={"role": new_role})
+                update_roster_user(u["email"], update_dict={"role": str(new_role)})
                 st.toast(f"Role updated to {new_role} for {u.get('first_name')}!")
                 st.rerun()
 
@@ -989,7 +1014,7 @@ def main():
         if uploaded_pic:
             import base64
             pic_b64 = f"data:image/png;base64,{base64.b64encode(uploaded_pic.read()).decode()}"
-            update_roster_user(user["email"], update_dict={"profile_pic": pic_b64})
+            update_roster_user(user["email"], update_dict={"profile_pic": str(pic_b64)})
             st.session_state["user"]["profile_pic"] = pic_b64
             st.success("Profile photo updated!")
             st.rerun()
@@ -997,7 +1022,7 @@ def main():
         new_password = st.text_input("New Password", type="password", key="new_prof_pwd")
         if st.button("Change Password"):
             if new_password:
-                update_roster_user(user["email"], update_dict={"password": hash_password(new_password)})
+                update_roster_user(user["email"], update_dict={"password": str(hash_password(new_password))})
                 st.success("Password changed successfully!")
 
     if st.sidebar.button("Sign Out", type="primary", use_container_width=True):
