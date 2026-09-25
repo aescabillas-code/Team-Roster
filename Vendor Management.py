@@ -31,23 +31,27 @@ st.markdown("""
     [data-testid="stDecoration"] {visibility: hidden !important;}
     [data-testid="stStatusWidget"] {visibility: hidden !important;}
 
-    /* Disable/Hide the collapse button to make sidebar NON-RETRACTABLE */
-    [data-testid="stSidebarCollapseButton"] {
-        display: none !important;
-    }
-    button[kind="header"] {
-        display: none !important;
-    }
-
-    /* Fixed Dark Sidebar Styling Matching Image */
+    /* Keep the sidebar permanently open and visible */
     [data-testid="stSidebar"] {
+        display: block !important;
+        visibility: visible !important;
+        transform: none !important;
         background-color: #0b1a20 !important;
         min-width: 250px !important;
         max-width: 250px !important;
+        width: 250px !important;
         border-right: 1px solid #162a33 !important;
+        position: relative !important;
     }
     [data-testid="stSidebar"] * {
         color: #94a3b8;
+    }
+
+    /* Hide the collapse/close icon so the sidebar is non-retractable */
+    [data-testid="stSidebarCollapseButton"],
+    [data-testid="collapsedControl"] {
+        display: none !important;
+        visibility: hidden !important;
     }
 
     /* Active Tab Highlight in Sidebar */
@@ -443,7 +447,7 @@ def update_roster_user(email: str, update_dict: dict, append_history: dict = Non
             {"$set": set_payload}
         )
 
-# Seed initial cases
+# Seed realistic demo cases
 def seed_demo_cases():
     try:
         if cases_col.count_documents({}) == 0:
@@ -1028,13 +1032,6 @@ def show_case_modal(case_id, user):
                     {"_id": ObjectId(case_id)},
                     {"$set": {"assigned_to": ag_map[new_assign], "assigned_agent_name": new_assign.split(" (")[0], "last_update": now_str}}
                 )
-                alerts_col.insert_one({
-                    "target_email": ag_map[new_assign],
-                    "type": "Case Assigned",
-                    "message": f"Case #{case.get('case_number')} reassigned to you by Admin.",
-                    "read": False,
-                    "created_at": now_str
-                })
                 st.success("Case reassigned!")
                 st.rerun()
         elif user["role"] == "Agent":
@@ -1254,6 +1251,7 @@ def render_dashboard(user):
     with col_main:
         st.markdown("<h3 style='font-size: 1.25rem; font-weight: 800; color: #0f172a; margin-bottom: 12px;'>Active Cases</h3>", unsafe_allow_html=True)
 
+        # Filters: For Admin/Agent offer both My Cases and All Cases
         if user_role == "Admin/Agent":
             scope_col1, scope_col2, _ = st.columns([1.5, 1.5, 4])
             with scope_col1:
@@ -1390,6 +1388,7 @@ def render_dashboard(user):
 
             st.markdown("</div>", unsafe_allow_html=True)
 
+            # Vendor Contact Excel Upload Sync
             st.markdown("<div style='height: 14px;'></div>", unsafe_allow_html=True)
             with st.expander("📁 Sync Vendor Excel Directory"):
                 v_file = st.file_uploader("Upload Vendor Master (.xlsx)", type=["xlsx", "xls"], key="dash_vendor_excel")
@@ -1410,7 +1409,7 @@ def show_agent_aux_modal(agent_email):
     if not ag:
         st.error("Agent not found.")
         return
-    st.subheader(f"{ag.get('first_name')} {ag.get('last_name')} — Activity Track")
+    st.subheader(f"{ag.get('first_name')} {ag.get('last_name')} — Aux & Assignment Log")
     t1, t2 = st.tabs(["Aux History (Today)", "Case Assignments"])
     with t1:
         st.write(ag.get("aux_history", []))
