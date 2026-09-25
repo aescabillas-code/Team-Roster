@@ -1244,15 +1244,9 @@ def auth_brand_panel():
         """
         <section class="auth-brand">
             <div class="brand-mark"></div>
-            <div class="brand-name">
-                Hewlett Packard<br>Enterprise
-            </div>
-
+            <div class="brand-name">Hewlett Packard<br>Enterprise</div>
             <h1>HPE CaseFlow</h1>
-            <p class="auth-brand-subtitle">
-                Team Task and Case Management System
-            </p>
-
+            <p class="auth-brand-subtitle">Team Task and Case Management System</p>
             <div class="auth-feature">
                 <div class="auth-feature-icon">▣</div>
                 <div class="auth-feature-copy">
@@ -1260,7 +1254,6 @@ def auth_brand_panel():
                     <small>Track and resolve tasks efficiently</small>
                 </div>
             </div>
-
             <div class="auth-feature">
                 <div class="auth-feature-icon">▰</div>
                 <div class="auth-feature-copy">
@@ -1268,7 +1261,6 @@ def auth_brand_panel():
                     <small>Work together for better service delivery</small>
                 </div>
             </div>
-
             <div class="auth-feature">
                 <div class="auth-feature-icon">◷</div>
                 <div class="auth-feature-copy">
@@ -1276,7 +1268,6 @@ def auth_brand_panel():
                     <small>Stay informed and in control</small>
                 </div>
             </div>
-
             <div class="auth-feature">
                 <div class="auth-feature-icon">●</div>
                 <div class="auth-feature-copy">
@@ -2804,7 +2795,6 @@ def render_auth_brand():
     st.markdown(
         """
         <div class="auth-brand">
-
             <div class="auth-brand-logo">
                 <div class="auth-logo-mark"></div>
                 <div class="auth-logo-text">
@@ -2812,13 +2802,10 @@ def render_auth_brand():
                     Enterprise
                 </div>
             </div>
-
             <h1>HPE CaseFlow</h1>
-
             <p class="auth-brand-subtitle">
                 Team Task and Case Management System
             </p>
-
             <div class="auth-feature">
                 <div class="auth-feature-icon">▣</div>
                 <div class="auth-feature-copy">
@@ -2826,7 +2813,6 @@ def render_auth_brand():
                     <small>Track and resolve tasks efficiently</small>
                 </div>
             </div>
-
             <div class="auth-feature">
                 <div class="auth-feature-icon">▰</div>
                 <div class="auth-feature-copy">
@@ -2834,7 +2820,6 @@ def render_auth_brand():
                     <small>Work together for better service delivery</small>
                 </div>
             </div>
-
             <div class="auth-feature">
                 <div class="auth-feature-icon">◷</div>
                 <div class="auth-feature-copy">
@@ -2842,7 +2827,6 @@ def render_auth_brand():
                     <small>Stay informed and in control</small>
                 </div>
             </div>
-
             <div class="auth-feature">
                 <div class="auth-feature-icon">●</div>
                 <div class="auth-feature-copy">
@@ -2850,10 +2834,7 @@ def render_auth_brand():
                     <small>HPE employees only</small>
                 </div>
             </div>
-
         </div>
         """,
         unsafe_allow_html=True,
     )
-
-
