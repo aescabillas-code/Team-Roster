@@ -2650,3 +2650,210 @@ else:
         schedule_page(admin=False)
     elif menu == "Requests":
         requests_page(admin=False)
+
+
+
+# ============================================================
+# AUTHENTICATION UI OVERRIDES
+# ============================================================
+
+st.markdown(
+    """
+    <style>
+
+    /* Remove Streamlit's default top whitespace on authentication. */
+    [data-testid="stAppViewContainer"] > .main {
+        padding-top: 0 !important;
+    }
+
+    [data-testid="stMainBlockContainer"] {
+        padding-top: 0.75rem !important;
+    }
+
+    /* Authentication left panel */
+    .auth-brand {
+        background: linear-gradient(
+            145deg,
+            #003b49 0%,
+            #002f3b 100%
+        );
+        min-height: 600px;
+        height: 100%;
+        box-sizing: border-box;
+        padding: 34px 30px;
+        color: #ffffff;
+        border-radius: 10px 0 0 10px;
+        overflow: hidden;
+    }
+
+    .auth-brand-logo {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 25px;
+    }
+
+    .auth-logo-mark {
+        width: 38px;
+        height: 13px;
+        border: 3px solid #00b894;
+        border-radius: 1px;
+        box-sizing: border-box;
+    }
+
+    .auth-logo-text {
+        color: #ffffff;
+        font-size: 13px;
+        font-weight: 700;
+        line-height: 1.05;
+    }
+
+    .auth-brand h1 {
+        color: #ffffff !important;
+        font-size: 30px !important;
+        font-weight: 700 !important;
+        line-height: 1.1 !important;
+        margin: 0 0 6px 0 !important;
+        padding: 0 !important;
+    }
+
+    .auth-brand-subtitle {
+        color: #d6e7ea !important;
+        font-size: 11px !important;
+        line-height: 1.45 !important;
+        margin: 0 0 30px 0 !important;
+        padding: 0 !important;
+        max-width: 250px;
+    }
+
+    .auth-feature {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin: 19px 0;
+    }
+
+    .auth-feature-icon {
+        width: 28px;
+        height: 28px;
+        flex: 0 0 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #00d4b4;
+        background: rgba(0, 212, 180, 0.12);
+        border-radius: 5px;
+        font-size: 14px;
+    }
+
+    .auth-feature-copy {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+    }
+
+    .auth-feature-copy b {
+        color: #ffffff !important;
+        font-size: 11px !important;
+        font-weight: 700 !important;
+        line-height: 1.2 !important;
+        margin-bottom: 3px !important;
+    }
+
+    .auth-feature-copy small {
+        color: #c7dadd !important;
+        font-size: 9px !important;
+        line-height: 1.3 !important;
+    }
+
+    /* Right authentication panel: remove the large white top gap. */
+    .auth-form-marker {
+        display: none;
+    }
+
+    /* Tabs should start close to the top of the right column. */
+    [data-testid="stTabs"] {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+    }
+
+    [data-testid="stTabs"] [role="tablist"] {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+    }
+
+    /* Prevent blank markdown/container blocks from creating vertical space. */
+    .auth-empty-spacer {
+        display: none !important;
+        height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    /* Authentication inputs/buttons */
+    .auth-submit button {
+        width: 100%;
+    }
+
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+def render_auth_brand():
+    st.markdown(
+        """
+        <div class="auth-brand">
+
+            <div class="auth-brand-logo">
+                <div class="auth-logo-mark"></div>
+                <div class="auth-logo-text">
+                    Hewlett Packard<br>
+                    Enterprise
+                </div>
+            </div>
+
+            <h1>HPE CaseFlow</h1>
+
+            <p class="auth-brand-subtitle">
+                Team Task and Case Management System
+            </p>
+
+            <div class="auth-feature">
+                <div class="auth-feature-icon">▣</div>
+                <div class="auth-feature-copy">
+                    <b>Manage Cases</b>
+                    <small>Track and resolve tasks efficiently</small>
+                </div>
+            </div>
+
+            <div class="auth-feature">
+                <div class="auth-feature-icon">▰</div>
+                <div class="auth-feature-copy">
+                    <b>Team Collaboration</b>
+                    <small>Work together for better service delivery</small>
+                </div>
+            </div>
+
+            <div class="auth-feature">
+                <div class="auth-feature-icon">◷</div>
+                <div class="auth-feature-copy">
+                    <b>Real-Time Visibility</b>
+                    <small>Stay informed and in control</small>
+                </div>
+            </div>
+
+            <div class="auth-feature">
+                <div class="auth-feature-icon">●</div>
+                <div class="auth-feature-copy">
+                    <b>Secure Access</b>
+                    <small>HPE employees only</small>
+                </div>
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
