@@ -23,7 +23,7 @@ st.set_page_config(
 
 st.markdown("""
     <style>
-    /* Hide default Streamlit chrome */
+    /* Hide Streamlit default chrome & deploy header */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
@@ -31,73 +31,77 @@ st.markdown("""
     [data-testid="stDecoration"] {visibility: hidden !important;}
     [data-testid="stStatusWidget"] {visibility: hidden !important;}
 
-    /* Adjust page margins */
+    /* Disable/Hide the collapse button to make sidebar NON-RETRACTABLE */
+    [data-testid="stSidebarCollapseButton"] {
+        display: none !important;
+    }
+    button[kind="header"] {
+        display: none !important;
+    }
+
+    /* Fixed Dark Sidebar Styling Matching Image */
+    [data-testid="stSidebar"] {
+        background-color: #0b1a20 !important;
+        min-width: 250px !important;
+        max-width: 250px !important;
+        border-right: 1px solid #162a33 !important;
+    }
+    [data-testid="stSidebar"] * {
+        color: #94a3b8;
+    }
+
+    /* Active Tab Highlight in Sidebar */
+    [data-testid="stSidebar"] div[role="radiogroup"] > label {
+        padding: 10px 16px !important;
+        border-radius: 8px !important;
+        margin-bottom: 4px !important;
+        transition: background 0.15s ease !important;
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:hover {
+        background-color: rgba(255, 255, 255, 0.05) !important;
+        color: #ffffff !important;
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label[data-checked="true"] {
+        background-color: #01a982 !important;
+        color: #ffffff !important;
+        font-weight: 700 !important;
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label[data-checked="true"] * {
+        color: #ffffff !important;
+    }
+
+    /* Full-screen dashboard container */
     .block-container {
         padding-top: 1rem !important;
-        padding-bottom: 1.5rem !important;
-        padding-left: 1.5rem !important;
-        padding-right: 1.5rem !important;
+        padding-bottom: 2rem !important;
+        padding-left: 2rem !important;
+        padding-right: 2rem !important;
         max-width: 100% !important;
+        width: 100% !important;
     }
 
     :root {
         --hpe-green: #01a982;
         --hpe-green-dark: #007a5e;
         --hpe-teal: #00c9a7;
-        --sidebar-bg: #0b1a20;
+        --bg-slate: #f8fafc;
     }
 
-    /* Retractable Sidebar Floating Arrow */
-    [data-testid="stSidebarCollapseButton"] {
-        position: fixed !important;
-        top: 50% !important;
-        left: 0 !important;
-        transform: translateY(-50%) !important;
-        z-index: 999999 !important;
-        background-color: rgba(1, 169, 130, 0.55) !important;
+    /* Brand Container */
+    .brand-container {
+        padding: 10px 0 20px 0;
+    }
+    .brand-title {
+        font-size: 1.35rem;
+        font-weight: 800;
         color: #ffffff !important;
-        border-radius: 0 10px 10px 0 !important;
-        padding: 8px 4px !important;
-        border: none !important;
-        box-shadow: 2px 0 10px rgba(0,0,0,0.2) !important;
+        letter-spacing: -0.3px;
+        margin: 0;
     }
-    [data-testid="stSidebarCollapseButton"]:hover {
-        background-color: var(--hpe-green) !important;
-    }
-
-    /* Dark Sidebar Theme */
-    [data-testid="stSidebar"] {
-        background-color: var(--sidebar-bg) !important;
-        color: #ffffff !important;
-        border-right: 1px solid #162a33 !important;
-    }
-    [data-testid="stSidebar"] hr {
-        border-color: #1a333e !important;
-    }
-
-    /* Sidebar Navigation Tiles */
-    div[data-testid="stRadio"] > div[role="radiogroup"] > label {
-        background-color: #10262f !important;
-        color: #cbd5e1 !important;
-        padding: 10px 16px !important;
-        border-radius: 10px !important;
-        margin-bottom: 8px !important;
-        border: 1px solid #1a3946 !important;
-        cursor: pointer !important;
-        transition: all 0.2s ease !important;
-        display: flex !important;
-        align-items: center !important;
-    }
-    div[data-testid="stRadio"] > div[role="radiogroup"] > label:hover {
-        background-color: #163643 !important;
-        color: #ffffff !important;
-        border-color: var(--hpe-green) !important;
-    }
-    div[data-testid="stRadio"] > div[role="radiogroup"] > label[data-checked="true"] {
-        background-color: var(--hpe-green-dark) !important;
-        color: #ffffff !important;
-        border-color: var(--hpe-green) !important;
-        font-weight: 700 !important;
+    .brand-sub {
+        font-size: 0.8rem;
+        color: #94a3b8 !important;
+        margin-top: 2px;
     }
 
     /* Metric Cards */
@@ -105,39 +109,40 @@ st.markdown("""
         background: #ffffff;
         border: 1px solid #e2e8f0;
         border-radius: 14px;
-        padding: 14px 16px;
+        padding: 16px 20px;
         display: flex;
         align-items: center;
-        gap: 14px;
+        gap: 16px;
         box-shadow: 0 1px 3px rgba(0,0,0,0.02);
     }
     .metric-icon-circle {
-        width: 42px;
-        height: 42px;
-        border-radius: 10px;
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.25rem;
+        font-size: 1.3rem;
         flex-shrink: 0;
     }
     .metric-val {
-        font-size: 1.75rem;
+        font-size: 1.85rem;
         font-weight: 800;
         color: #0f172a;
         line-height: 1.1;
     }
     .metric-lbl {
-        font-size: 0.8rem;
+        font-size: 0.82rem;
         font-weight: 600;
         color: #64748b;
+        margin-bottom: 2px;
     }
     .metric-sub {
-        font-size: 0.7rem;
+        font-size: 0.72rem;
         color: #94a3b8;
     }
 
-    /* Borderless table */
+    /* Table styling - Borderless clean rows */
     .case-table {
         width: 100%;
         border-collapse: separate;
@@ -146,22 +151,23 @@ st.markdown("""
     }
     .case-table th {
         color: #64748b;
-        font-size: 0.76rem;
+        font-size: 0.78rem;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        padding: 6px 12px;
+        padding: 8px 14px;
         border: none;
         background: transparent;
     }
     .case-table tr.case-row {
         background: #ffffff;
         box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+        border: none !important;
         border-radius: 10px;
     }
     .case-table tr.case-row td {
-        padding: 11px 12px;
-        font-size: 0.84rem;
+        padding: 13px 14px;
+        font-size: 0.86rem;
         color: #1e293b;
         vertical-align: middle;
         border: none !important;
@@ -173,9 +179,9 @@ st.markdown("""
 
     /* Badges */
     .badge {
-        padding: 3px 8px;
+        padding: 4px 10px;
         border-radius: 20px;
-        font-size: 0.72rem;
+        font-size: 0.75rem;
         font-weight: 700;
         display: inline-block;
         text-align: center;
@@ -197,13 +203,13 @@ st.markdown("""
     .badge-aux-coach { background: #fef3c7; color: #b45309; }
     .badge-aux-notready { background: #f1f5f9; color: #64748b; }
 
-    /* Side Panels */
+    /* Side Detail & Online Cards */
     .detail-card {
         background: #ffffff;
         border: 1px solid #e2e8f0;
-        border-radius: 14px;
-        padding: 16px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+        border-radius: 16px;
+        padding: 18px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.03);
     }
     .agent-row {
         display: flex;
@@ -215,10 +221,10 @@ st.markdown("""
     .agent-info {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 10px;
     }
     .agent-name {
-        font-size: 0.84rem;
+        font-size: 0.86rem;
         font-weight: 600;
         color: #1e293b;
     }
@@ -347,7 +353,7 @@ st.markdown("""
 
 
 # ==========================================
-# 2. DATABASE INITIALIZATION & ACCESSORS
+# 2. DATABASE INITIALIZATION & HELPER METHODS
 # ==========================================
 @st.cache_resource
 def get_mongo_client():
@@ -437,6 +443,7 @@ def update_roster_user(email: str, update_dict: dict, append_history: dict = Non
             {"$set": set_payload}
         )
 
+# Seed realistic initial cases
 def seed_demo_cases():
     try:
         if cases_col.count_documents({}) == 0:
@@ -657,6 +664,7 @@ def auto_assign_case(case_id):
 
         is_critical = (case.get("priority") == "Critical")
         if is_critical:
+            # Rule: Critical cases must not be assigned to an agent who already has an active critical case
             crit_free = [c for c in candidate_metrics if c["active_critical"] == 0]
             pool = crit_free if crit_free else candidate_metrics
         else:
@@ -944,7 +952,7 @@ def render_auth_view():
 
 
 # ==========================================
-# 7. DASHBOARD (EXACT 3-COLUMN LAYOUT AS IN SCREENSHOT)
+# 7. DASHBOARD (EXACT VISUAL MATCH TO IMAGE)
 # ==========================================
 def render_dashboard(user):
     search_q = render_dashboard_topbar(user)
@@ -967,7 +975,7 @@ def render_dashboard(user):
 
     all_raw_cases = list(cases_col.find({"status": {"$nin": ["Resolved", "Closed"]}}))
 
-    # Metric counts
+    # Metric calculations
     if user_role == "Agent":
         display_cases = [c for c in all_raw_cases if c.get('assigned_to') == user['email']]
     else:
@@ -978,7 +986,7 @@ def render_dashboard(user):
     due_soon_count = sum(1 for c in display_cases if c.get("priority") in ["High", "Critical"])
     on_track_count = max(0, total_active - crit_count - due_soon_count + 1)
 
-    # 4 Metric Tiles
+    # 4 Metric Tiles exactly like screenshot
     m1, m2, m3, m4 = st.columns(4)
     with m1:
         st.markdown(f"""
@@ -1025,16 +1033,16 @@ def render_dashboard(user):
         </div>
         """, unsafe_allow_html=True)
 
-    st.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
 
-    # 3-Column Layout from screenshot: Main Queue | Case Details | Agents Online
+    # Layout: Admin & Admin/Agent get the right side panels, Agent gets full-width table
     if user_role in ["Admin", "Admin/Agent"]:
-        col_main, col_detail, col_online = st.columns([6.2, 3.5, 2.3])
+        col_main, col_detail, col_online = st.columns([6.4, 3.4, 2.2])
     else:
         col_main = st.container()
 
-    # ---------------- 1. MAIN CASE QUEUE ----------------
-    with col_main:
+    # ---------------- MAIN CASE QUEUE TABLE ----------------
+    with col_main if user_role in ["Admin", "Admin/Agent"] else col_main:
         st.markdown("<h3 style='font-size: 1.25rem; font-weight: 800; color: #0f172a; margin-bottom: 12px;'>Active Cases</h3>", unsafe_allow_html=True)
 
         if user_role == "Admin/Agent":
@@ -1058,6 +1066,7 @@ def render_dashboard(user):
         with f_track:
             if st.button(f"On Track ({on_track_count})", key="btn_f_track"): filter_status = "On Track"
 
+        # Urgency Sort: Critical > High > Medium > Low
         urgency_weight = {"Critical": 4, "High": 3, "Medium": 2, "Low": 1}
         target_cases.sort(key=lambda x: urgency_weight.get(x.get("priority", "Low"), 0), reverse=True)
 
@@ -1075,7 +1084,7 @@ def render_dashboard(user):
             filtered_cases.append(c)
 
         if not filtered_cases:
-            st.info("No cases matching criteria.")
+            st.info("No active cases matching criteria.")
         else:
             table_html = """
             <table class="case-table">
@@ -1121,21 +1130,23 @@ def render_dashboard(user):
                 if user_role != "Agent":
                     table_html += f"""<td><span style="margin-right:6px;">👤</span>{c.get('assigned_agent_name', 'Unassigned')}</td>"""
                 table_html += f"""
-                    <td><span style="color:{due_color}; font-weight:600;">{c.get('due_date')}</span><br/><span style="color:#ef4444; font-size:0.72rem;">• {c.get('due_remaining', '22h 15m')}</span></td>
+                    <td><span style="color:{due_color}; font-weight:600;">{c.get('due_date')}</span><br/><span style="color:#ef4444; font-size:0.75rem;">• {c.get('due_remaining', '22h 15m')}</span></td>
                     <td><span class="badge {s_cls}">{st_val}</span></td>
-                    <td>{c.get('last_update')}<br/><span style="color:#ea580c; font-size:0.72rem;">• {c.get('last_elapsed', '22h 15m ago')}</span></td>
-                    <td style="color:#94a3b8; font-weight:800;">❯</td>
+                    <td>{c.get('last_update')}<br/><span style="color:#ea580c; font-size:0.75rem;">• {c.get('last_elapsed', '22h 15m ago')}</span></td>
+                    <td style="color:#94a3b8; font-weight:800; cursor:pointer;">❯</td>
                 </tr>
                 """
             table_html += "</tbody></table>"
             st.markdown(table_html, unsafe_allow_html=True)
 
-            st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
-            case_map = {f"#{c.get('case_number')} — {c.get('subject')}": str(c["_id"]) for c in filtered_cases}
-            sel_label = st.selectbox("Select case to inspect:", list(case_map.keys()), key="dash_select_case_inspector")
-            st.session_state["inspected_case_id"] = case_map[sel_label]
+            # Interactive Inspector Selectbox
+            st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+            case_map = {f"{c.get('case_number')} — {c.get('subject')}": str(c["_id"]) for c in filtered_cases}
+            sel_label = st.selectbox("Select case to inspect & update:", list(case_map.keys()), key="sel_active_case")
+            selected_case_id = case_map[sel_label]
+            st.session_state["inspected_case_id"] = selected_case_id
 
-    # ---------------- 2. CASE DETAILS PANEL (EXACT LIKE SCREENSHOT) ----------------
+    # ---------------- RIGHT PANEL 1: CASE DETAILS ----------------
     if user_role in ["Admin", "Admin/Agent"]:
         with col_detail:
             active_cid = st.session_state.get("inspected_case_id", str(filtered_cases[0]["_id"]) if filtered_cases else None)
@@ -1144,79 +1155,64 @@ def render_dashboard(user):
             if insp_case:
                 st.markdown(f"""
                 <div class="detail-card">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                        <h4 style="margin:0; font-weight:800; font-size:1.1rem; color:#0f172a;">Case Details</h4>
-                        <span style="color:#94a3b8; font-weight:700; cursor:pointer;">✕</span>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <h4 style="margin:0; font-weight:800; font-size:1.15rem; color:#0f172a;">Case Details</h4>
+                        <span style="color:#94a3b8; cursor:pointer; font-weight:700;">✕</span>
                     </div>
-                    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
-                        <div style="width:38px; height:38px; border-radius:10px; background:#ffe4e6; color:#ef4444; display:flex; align-items:center; justify-content:center; font-size:1.15rem;">🔒</div>
+                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:14px;">
+                        <div style="width:40px; height:40px; border-radius:10px; background:#ffe4e6; color:#ef4444; display:flex; align-items:center; justify-content:center; font-size:1.2rem;">🔒</div>
                         <div>
                             <div style="display:flex; align-items:center; gap:8px;">
-                                <strong style="font-size:1.02rem; color:#0f172a;">{insp_case.get('case_number')}</strong>
+                                <strong style="font-size:1.05rem; color:#0f172a;">{insp_case.get('case_number')}</strong>
                                 <span class="badge badge-critical" style="font-size:0.65rem;">Critical</span>
                             </div>
-                            <div style="font-size:0.82rem; color:#475569;">{insp_case.get('subject')}</div>
+                            <div style="font-size:0.86rem; color:#475569;">{insp_case.get('subject')}</div>
                         </div>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
 
-                tab_det, tab_vend, tab_upd, tab_hist = st.tabs(["Details", "Vendor Info", "Updates", "History"])
-
+                tab_det, tab_vend, tab_upd = st.tabs(["Details", "Vendor Info", "Updates"])
+                
                 with tab_det:
-                    st.caption(f"Priority: **{insp_case.get('priority')}** | Assignee: **{insp_case.get('assigned_agent_name')}**")
+                    st.caption(f"Priority: **{insp_case.get('priority')}** | Assigned: **{insp_case.get('assigned_agent_name')}**")
                     st.markdown("**Description**")
                     st.caption(insp_case.get("description", "Customer requires renewal of HPE software license for multi-year contract."))
                     st.markdown(f"**Due Date:** <span style='color:#ef4444; font-weight:700;'>{insp_case.get('due_date')}</span>", unsafe_allow_html=True)
 
                 with tab_vend:
                     st.markdown(f"**{insp_case.get('vendor_name', 'HPE Global Solutions')}**")
-                    c_v1, c_v2 = st.columns([3.5, 1.5])
-                    c_v1.text_input("Email", insp_case.get("vendor_email", "support@hpevendor.com"), disabled=True, key="p_vend_email")
-                    c_v2.button("Copy", key="btn_p_cp_email")
-                    c_v3, c_v4 = st.columns([3.5, 1.5])
-                    c_v3.text_input("Phone", insp_case.get("vendor_phone", "+1 888 123 4567"), disabled=True, key="p_vend_phone")
-                    c_v4.button("Copy", key="btn_p_cp_phone")
+                    c_v1, c_v2 = st.columns([3, 1])
+                    c_v1.text_input("Email", insp_case.get("vendor_email", "support@hpevendor.com"), disabled=True, key="vend_email_in")
+                    c_v2.button("Copy", key="btn_cp_email")
+                    c_v3, c_v4 = st.columns([3, 1])
+                    c_v3.text_input("Phone", insp_case.get("vendor_phone", "+1 888 123 4567"), disabled=True, key="vend_ph_in")
+                    c_v4.button("Copy", key="btn_cp_phone")
 
                 with tab_upd:
-                    st.markdown("##### Update Case")
+                    st.markdown("##### Update Case Status")
                     dropdowns = get_dropdown_data()
-                    new_st = st.selectbox("Case Status", dropdowns.get("Case_Status", []), index=1, key="p_case_st")
-                    new_rs = st.selectbox("Status Reason", dropdowns.get("Case_Reason", []), key="p_case_rs")
-                    new_cl = st.selectbox("Closure Type", ["-- Select --"] + dropdowns.get("Closure_Type", []), key="p_case_cl")
+                    new_st = st.selectbox("Case Status", dropdowns.get("Case_Status", []), index=1)
+                    new_rs = st.selectbox("Status Reason", dropdowns.get("Case_Reason", []))
+                    new_cl = st.selectbox("Closure Type", ["-- Select --"] + dropdowns.get("Closure_Type", []))
                     
-                    breach_rs = None
-                    if new_cl == "Contract Breach":
-                        breach_rs = st.selectbox("Breach Reason", dropdowns.get("Contract_Breach", []), key="p_case_br")
-                        default_email = f"Official Notice: Case #{insp_case.get('case_number')} has breached SLA due to: {breach_rs}. Immediate escalation required."
-                        st.text_area("Breach Email Notice (Editable)", value=default_email, height=100)
-                        if st.button("Send Breach Email to Vendor", type="secondary"):
-                            st.success("Automated notice sent to vendor and Admins alerted!")
-
-                    b1, b2 = st.columns(2)
-                    with b1:
-                        if st.button("Reassign", use_container_width=True, key="btn_p_reassign"):
+                    b_btn1, b_btn2 = st.columns(2)
+                    with b_btn1:
+                        if st.button("Reassign", use_container_width=True):
                             st.toast("Reassignment drawer opened.")
-                    with b2:
-                        if st.button("Save Update", type="primary", use_container_width=True, key="btn_p_save"):
-                            update_payload = {"status": new_st, "status_reason": new_rs, "last_update": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-                            if new_cl != "-- Select --": update_payload["closure_type"] = new_cl
-                            if breach_rs: update_payload["breach_reason"] = breach_rs
-                            cases_col.update_one({"_id": insp_case["_id"]}, {"$set": update_payload})
+                    with b_btn2:
+                        if st.button("Save Update", type="primary", use_container_width=True):
+                            cases_col.update_one({"_id": insp_case["_id"]}, {"$set": {"status": new_st, "status_reason": new_rs}})
                             st.success("Case updated successfully!")
                             st.rerun()
 
-                with tab_hist:
-                    st.caption("Last update: " + insp_case.get("last_update", "N/A"))
-                    st.write(f"Assigned on: {insp_case.get('assigned_date', 'N/A')}")
-
-    # ---------------- 3. AGENTS ONLINE (8) PANEL ----------------
+    # ---------------- RIGHT PANEL 2: AGENTS ONLINE ----------------
     if user_role in ["Admin", "Admin/Agent"]:
         with col_online:
             st.markdown("""
             <div class="detail-card">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                    <h4 style="margin:0; font-weight:800; font-size:1.02rem; color:#0f172a;">Agents Online (8)</h4>
+                    <h4 style="margin:0; font-weight:800; font-size:1.05rem; color:#0f172a;">Agents Online (8)</h4>
                     <span style="color:#94a3b8; font-weight:700;">✕</span>
                 </div>
             """, unsafe_allow_html=True)
@@ -1244,16 +1240,6 @@ def render_dashboard(user):
                 """, unsafe_allow_html=True)
 
             st.markdown("</div>", unsafe_allow_html=True)
-
-            st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
-            with st.expander("📁 Sync Vendor Excel Data"):
-                v_file = st.file_uploader("Upload Vendor Directory", type=["xlsx", "xls"], key="dash_vendor_excel_sync")
-                if v_file:
-                    try:
-                        df_v = pd.read_excel(v_file)
-                        st.success(f"Synced {len(df_v)} contacts!")
-                    except Exception as e:
-                        st.error(f"Error parsing file: {e}")
 
 
 # ==========================================
@@ -1324,7 +1310,7 @@ def render_settings(user):
 
 
 # ==========================================
-# 12. MAIN RUNNER & SIDEBAR (TILES WORKING)
+# 12. MAIN RUNNER & SIDEBAR ROUTING (PERSISTENCE)
 # ==========================================
 def main():
     if "user" not in st.session_state or not st.session_state["user"]:
@@ -1345,7 +1331,7 @@ def main():
 
     user = st.session_state["user"]
 
-    # Left Dark Retractable Sidebar Menu matching Screenshot
+    # Fixed Non-Retractable Sidebar
     with st.sidebar:
         st.markdown("""
         <div class="brand-container">
@@ -1355,31 +1341,12 @@ def main():
         </div>
         """, unsafe_allow_html=True)
 
-        # Tiles per Role
         if user["role"] in ["Admin", "Admin/Agent"]:
-            nav_options = [
-                "📊  Dashboard", 
-                "👥  Monitoring", 
-                "📅  Schedule", 
-                "📈  Report", 
-                "⚙️  Setting"
-            ]
+            nav_options = ["Dashboard", "Monitoring", "Schedule", "Report", "Setting"]
         else:
-            nav_options = [
-                "📊  Dashboard", 
-                "📅  Schedule", 
-                "📈  Report"
-            ]
+            nav_options = ["Dashboard", "Schedule", "Report"]
 
-        # Use index selection for robust tile navigation
-        selected_nav = st.radio(
-            "Navigation", 
-            nav_options, 
-            index=0, 
-            label_visibility="collapsed"
-        )
-        # Strip emoji for routing
-        active_page = selected_nav.split()[-1]
+        active_page = st.radio("Navigation", nav_options, index=0, label_visibility="collapsed")
 
         st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
 
