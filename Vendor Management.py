@@ -7,6 +7,7 @@ import pymongo
 from bson.objectid import ObjectId
 import bcrypt
 import json
+import uuid
 import time as time_pkg
 import extra_streamlit_components as stx
 
@@ -222,6 +223,69 @@ st.markdown("""
         justify-content: space-between;
         box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
     }
+    .hpe-bar {
+        width: 46px;
+        height: 6px;
+        background-color: var(--hpe-green);
+        border-radius: 3px;
+        margin-bottom: 12px;
+    }
+    .hpe-corp {
+        font-size: 1.12rem;
+        font-weight: 700;
+        line-height: 1.2;
+        letter-spacing: -0.2px;
+        margin-bottom: 36px;
+    }
+    .hero-title-main {
+        font-size: 2.8rem;
+        font-weight: 800;
+        line-height: 1.0;
+        letter-spacing: -0.6px;
+        margin-bottom: 0px;
+    }
+    .hero-title-highlight {
+        font-size: 2.8rem;
+        font-weight: 800;
+        line-height: 1.05;
+        color: #00e6a8;
+        letter-spacing: -0.6px;
+        margin-bottom: 8px;
+    }
+    .hero-tagline {
+        font-size: 1.05rem;
+        color: #cbd5e1;
+        line-height: 1.35;
+        margin-bottom: 40px;
+    }
+    .feature-row {
+        display: flex;
+        align-items: center;
+        margin-bottom: 24px;
+    }
+    .feature-icon-wrapper {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        border: 2px solid var(--hpe-teal);
+        background: rgba(0, 201, 167, 0.08);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.35rem;
+        margin-right: 18px;
+        flex-shrink: 0;
+    }
+    .feature-title {
+        font-size: 1.02rem;
+        font-weight: 700;
+        color: #ffffff;
+        margin-bottom: 2px;
+    }
+    .feature-desc {
+        font-size: 0.86rem;
+        color: #94a3b8;
+    }
     .auth-main-title {
         font-size: 2.25rem;
         font-weight: 800;
@@ -247,12 +311,28 @@ st.markdown("""
     div.stButton > button[kind="primary"]:hover {
         background-color: var(--hpe-green) !important;
     }
+    div.stButton > button[kind="secondary"] {
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        border: 1px solid #cbd5e1 !important;
+    }
+    .ms-btn-wrap button {
+        background-color: #ffffff !important;
+        color: #1e293b !important;
+        border: 1px solid #cbd5e1 !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
+        font-weight: 600 !important;
+    }
+    .ms-btn-wrap button:hover {
+        background-color: #f8fafc !important;
+        border-color: #94a3b8 !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
 
 # ==========================================
-# 2. DATABASE INITIALIZATION & SEEDING
+# 2. DATABASE INITIALIZATION & HELPER METHODS
 # ==========================================
 @st.cache_resource
 def get_mongo_client():
@@ -292,6 +372,15 @@ def find_roster_user(email: str):
     doc = roster_col.find_one({
         "type": "roster_list",
         "roster_list.email": str(email).strip().lower()
+    })
+    return _deserialize_user(doc)
+
+def find_roster_user_by_token(session_token: str):
+    if not session_token:
+        return None
+    doc = roster_col.find_one({
+        "type": "roster_list",
+        "roster_list.session_token": str(session_token).strip()
     })
     return _deserialize_user(doc)
 
@@ -657,7 +746,7 @@ def render_dashboard_topbar(user):
 
 
 # ==========================================
-# 6. SIGN IN / SIGN UP (AUTH VIEW)
+# 6. SIGN IN / SIGN UP (EXACT STYLING + PERSISTENCE)
 # ==========================================
 def render_auth_view():
     if "auth_page" not in st.session_state:
@@ -732,17 +821,23 @@ def render_auth_view():
                             default_aux = "Not Ready - Online"
 
                         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        token = str(uuid.uuid4())
 
                         update_roster_user(
                             login_email,
-                            update_dict={"current_aux": default_aux, "last_login": now_str}
+                            update_dict={
+                                "current_aux": default_aux, 
+                                "last_login": now_str,
+                                "session_token": token
+                            }
                         )
                         user["current_aux"] = default_aux
+                        user["session_token"] = token
                         st.session_state["user"] = user
 
-                        # Persist session in browser URL query parameters and cookies to survive refresh and idle
-                        st.query_params["session_user"] = login_email
-                        cookie_manager.set("hpe_auth_token", login_email, expires_at=datetime.now() + timedelta(days=30))
+                        # Store session across page reloads & idle
+                        st.query_params["session_token"] = token
+                        cookie_manager.set("hpe_session_token", token, expires_at=datetime.now() + timedelta(days=30))
 
                         st.success("Signed in successfully!")
                         st.rerun()
@@ -757,8 +852,12 @@ def render_auth_view():
             </div>
             """, unsafe_allow_html=True)
 
+            st.markdown("""
+            <div class="ms-btn-wrap">
+            """, unsafe_allow_html=True)
             if st.button("🪟  Sign in with Microsoft (HPE)", use_container_width=True, key="btn_ms_sso"):
                 st.info("Directing to HPE Single Sign-On (Azure AD)...")
+            st.markdown("</div>", unsafe_allow_html=True)
 
             st.markdown("<div style='height: 24px;'></div>", unsafe_allow_html=True)
             c_lbl, c_lnk = st.columns([2.2, 1.8])
@@ -812,6 +911,7 @@ def render_auth_view():
                             "current_aux": str(default_aux),
                             "registered_date": str(now_str),
                             "last_login": "",
+                            "session_token": "",
                             "aux_history": json.dumps([{"aux": default_aux, "timestamp": now_str}]),
                             "assignment_history": json.dumps([])
                         }
@@ -837,10 +937,8 @@ def render_auth_view():
 def render_dashboard(user):
     search_q = render_dashboard_topbar(user)
 
-    # Base Query
     user_role = user.get("role", "Agent")
     
-    # Header Subtitle
     if user_role == "Admin":
         sub_text = "Overview of all active cases and team status"
     elif user_role == "Admin/Agent":
@@ -855,16 +953,13 @@ def render_dashboard(user):
     </div>
     """, unsafe_allow_html=True)
 
-    # Fetch Cases
     all_raw_cases = list(cases_col.find({"status": {"$nin": ["Resolved", "Closed"]}}))
 
-    # Metric counts
     total_active = len(all_raw_cases)
     crit_count = sum(1 for c in all_raw_cases if c.get("priority") == "Critical")
     due_soon_count = sum(1 for c in all_raw_cases if c.get("priority") in ["High", "Critical"])
     on_track_count = max(0, total_active - crit_count - due_soon_count + 1)
 
-    # 4 Metric Tiles exactly like screenshot
     m1, m2, m3, m4 = st.columns(4)
     with m1:
         st.markdown(f"""
@@ -913,7 +1008,6 @@ def render_dashboard(user):
 
     st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
 
-    # Layout: Admin & Admin/Agent get the right sidebar panels, Agent gets full-width table
     if user_role in ["Admin", "Admin/Agent"]:
         col_main, col_detail, col_online = st.columns([6.8, 3.2, 2.2])
     else:
@@ -923,8 +1017,6 @@ def render_dashboard(user):
     with col_main if user_role in ["Admin", "Admin/Agent"] else col_main:
         st.markdown("<h3 style='font-size: 1.25rem; font-weight: 800; color: #0f172a; margin-bottom: 12px;'>Active Cases</h3>", unsafe_allow_html=True)
 
-        # Filters matching screenshot: All, Critical, Due Soon, On Track
-        # For Admin/Agent, offer "My Cases" vs "All Cases"
         if user_role == "Admin/Agent":
             scope_col1, scope_col2, _ = st.columns([1.5, 1.5, 4])
             with scope_col1:
@@ -935,7 +1027,6 @@ def render_dashboard(user):
         else:
             target_cases = all_raw_cases
 
-        # Pill filters
         f_all, f_crit, f_due, f_track, _ = st.columns([1.1, 1.2, 1.4, 1.3, 3])
         filter_status = "All"
         with f_all:
@@ -947,7 +1038,6 @@ def render_dashboard(user):
         with f_track:
             if st.button(f"On Track ({on_track_count})", key="btn_f_track"): filter_status = "On Track"
 
-        # Apply search and pill filtering
         filtered_cases = []
         for c in target_cases:
             combined = f"{c.get('case_number','')} {c.get('subject','')} {c.get('assigned_agent_name','')} {c.get('vendor_name','')}".lower()
@@ -961,7 +1051,6 @@ def render_dashboard(user):
                 continue
             filtered_cases.append(c)
 
-        # Render Table
         if not filtered_cases:
             st.info("No cases matching criteria.")
         else:
@@ -986,14 +1075,12 @@ def render_dashboard(user):
             """
 
             for c in filtered_cases:
-                # Priority badge class
                 prio = c.get("priority", "Low")
                 p_cls = "badge-low"
                 if prio == "Critical": p_cls = "badge-critical"
                 elif prio == "High": p_cls = "badge-high"
                 elif prio == "Medium": p_cls = "badge-medium"
 
-                # Status badge class
                 st_val = c.get("status", "Open")
                 s_cls = "badge-status-open"
                 if st_val == "In Progress": s_cls = "badge-status-prog"
@@ -1020,7 +1107,6 @@ def render_dashboard(user):
             table_html += "</tbody></table>"
             st.markdown(table_html, unsafe_allow_html=True)
 
-            # Interactive Inspector Selectbox below
             st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
             case_map = {f"{c.get('case_number')} — {c.get('subject')}": str(c["_id"]) for c in filtered_cases}
             sel_label = st.selectbox("Select case to inspect & update:", list(case_map.keys()), key="sel_active_case")
@@ -1098,7 +1184,6 @@ def render_dashboard(user):
                 </div>
             """, unsafe_allow_html=True)
 
-            # Online workforce mockup matching screenshot
             sample_agents = [
                 {"name": "Maria Santos", "status": "Available", "badge": "badge-aux-avail"},
                 {"name": "John Rivera", "status": "In a Call", "badge": "badge-aux-call"},
@@ -1192,39 +1277,31 @@ def render_settings(user):
 
 
 # ==========================================
-# 12. MAIN RUNNER & SIDEBAR ROUTING
+# 12. MAIN RUNNER & SIDEBAR ROUTING (PERSISTENCE)
 # ==========================================
 def main():
-    # 1. Check Streamlit session_state first
+    # 1. Recover session on refresh or idle from query params or browser cookie
     if "user" not in st.session_state or not st.session_state["user"]:
-        # 2. Check query params in the browser URL (persists across refresh & idle reconnects)
-        persisted_email = st.query_params.get("session_user")
-        if persisted_email:
-            existing = find_roster_user(persisted_email)
-            if existing:
-                st.session_state["user"] = existing
+        active_token = st.query_params.get("session_token")
+        
+        # Fallback to cookie if query param was cleared
+        if not active_token:
+            active_token = cookie_manager.get("hpe_session_token")
 
-        # 3. Check persistent cookie if not found in query params
-        if "user" not in st.session_state or not st.session_state["user"]:
-            saved_email = cookie_manager.get("hpe_auth_token")
-            if saved_email:
-                existing = find_roster_user(saved_email)
-                if existing:
-                    st.session_state["user"] = existing
-                    st.query_params["session_user"] = saved_email
+        if active_token:
+            existing_user = find_roster_user_by_token(active_token)
+            if existing_user:
+                st.session_state["user"] = existing_user
+                st.query_params["session_token"] = active_token
 
-    # Keep URL parameter synchronized to keep session alive during idle/refresh
-    if "user" in st.session_state and st.session_state["user"]:
-        if st.query_params.get("session_user") != st.session_state["user"]["email"]:
-            st.query_params["session_user"] = st.session_state["user"]["email"]
-
+    # 2. Render Auth View if still not logged in
     if "user" not in st.session_state or not st.session_state["user"]:
         render_auth_view()
         return
 
     user = st.session_state["user"]
 
-    # Sidebar Navigation matching screenshot
+    # 3. Sidebar Navigation
     with st.sidebar:
         st.markdown("""
         <div class="brand-container">
@@ -1242,12 +1319,16 @@ def main():
         active_page = st.radio("Navigation", nav_options, index=0, label_visibility="collapsed")
 
         st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
+
+        # 4. Explicit Sign Out button: ONLY path to return to Sign In
         if st.button("Sign Out", type="secondary", use_container_width=True):
-            # Only cleared when Sign Out is explicitly clicked
-            if "session_user" in st.query_params:
-                del st.query_params["session_user"]
-            cookie_manager.delete("hpe_auth_token")
-            update_agent_aux(user["email"], "Not Ready - Online")
+            update_roster_user(
+                user["email"],
+                update_dict={"session_token": "", "current_aux": "Not Ready - Online"}
+            )
+            cookie_manager.delete("hpe_session_token")
+            if "session_token" in st.query_params:
+                del st.query_params["session_token"]
             del st.session_state["user"]
             st.rerun()
 
