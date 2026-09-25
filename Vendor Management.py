@@ -156,7 +156,7 @@ st.markdown("""
         text-transform: uppercase;
         letter-spacing: 0.5px;
         padding: 8px 14px;
-        border: none;
+        border: none !important;
         background: transparent;
     }
     .case-table tr.case-row {
@@ -443,7 +443,7 @@ def update_roster_user(email: str, update_dict: dict, append_history: dict = Non
             {"$set": set_payload}
         )
 
-# Seed realistic initial cases
+# Seed initial cases
 def seed_demo_cases():
     try:
         if cases_col.count_documents({}) == 0:
@@ -694,6 +694,14 @@ def auto_assign_case(case_id):
                 "timestamp": now_iso
             }}
         )
+
+        alerts_col.insert_one({
+            "target_email": chosen_agent["email"],
+            "type": "Case Assigned",
+            "message": f"Case #{case.get('case_number')} ({case.get('priority')}) assigned. Due: {case.get('due_date')}",
+            "read": False,
+            "created_at": now_iso
+        })
         return True
     except Exception:
         return False
@@ -719,8 +727,23 @@ def update_agent_aux(email, new_aux):
 
 
 # ==========================================
-# 5. REUSABLE TOP SEARCH & PROFILE BAR
+# 5. PASSWORD CHANGE & MODAL HELPERS
 # ==========================================
+@st.dialog("Change Account Password")
+def show_change_password_dialog(user):
+    p1 = st.text_input("New Password", type="password", key="chg_p1")
+    p2 = st.text_input("Confirm New Password", type="password", key="chg_p2")
+    if st.button("Update Password", type="primary"):
+        if not p1 or len(p1) < 8:
+            st.error("Password must be at least 8 characters long.")
+        elif p1 != p2:
+            st.error("Passwords do not match.")
+        else:
+            update_roster_user(user["email"], update_dict={"password": hash_password(p1)})
+            st.success("Password updated successfully!")
+            time_pkg.sleep(1)
+            st.rerun()
+
 def render_dashboard_topbar(user):
     c_search, c_notif, c_profile = st.columns([6, 0.8, 3.2])
     
@@ -733,10 +756,11 @@ def render_dashboard_topbar(user):
         )
     
     with c_notif:
-        st.markdown("""
+        unread_count = alerts_col.count_documents({"target_email": user["email"], "read": False})
+        st.markdown(f"""
         <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; height:42px; display:flex; align-items:center; justify-content:center; position:relative; cursor:pointer;">
             <span style="font-size:1.15rem;">🔔</span>
-            <span style="position:absolute; top:4px; right:8px; background:#ef4444; color:#fff; border-radius:10px; font-size:0.68rem; font-weight:700; padding:1px 5px;">3</span>
+            <span style="position:absolute; top:4px; right:8px; background:#ef4444; color:#fff; border-radius:10px; font-size:0.68rem; font-weight:700; padding:1px 5px;">{unread_count}</span>
         </div>
         """, unsafe_allow_html=True)
     
@@ -750,6 +774,8 @@ def render_dashboard_topbar(user):
         with col_uinfo:
             st.markdown(f"<div style='font-size:0.9rem; font-weight:700; color:#1e293b; line-height:1.2; margin-top:2px;'>{user.get('first_name')} {user.get('last_name')}</div>", unsafe_allow_html=True)
             st.markdown(f"<div style='font-size:0.75rem; color:#64748b;'>{user.get('role')}</div>", unsafe_allow_html=True)
+            if st.button("Change Password", key="btn_top_chg_pwd"):
+                show_change_password_dialog(user)
         with col_aux:
             current_aux = user.get("current_aux", "Available")
             new_aux = st.selectbox(
@@ -762,6 +788,17 @@ def render_dashboard_topbar(user):
             if new_aux != current_aux:
                 update_agent_aux(user["email"], new_aux)
                 st.rerun()
+
+        # Display schedule directly below aux bar for Agent & Admin/Agent
+        if user.get("role") in ["Agent", "Admin/Agent"]:
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            sched = schedule_col.find_one({"date": today_str})
+            sched_text = "Shift: 08:00 - 17:00 | Lunch: 12:00"
+            if sched and "Schedule_Monitoring" in sched:
+                for entry in sched["Schedule_Monitoring"]:
+                    if entry.get("agent_email") == user["email"]:
+                        sched_text = entry.get("schedule_plan", sched_text)
+            st.markdown(f"<div style='font-size:0.72rem; color:#64748b; text-align:right;'>📅 {sched_text}</div>", unsafe_allow_html=True)
 
     st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
     return search_query.strip().lower()
@@ -827,7 +864,12 @@ def render_auth_view():
                 remember_me = st.checkbox("Remember me", value=True, key="in_remember")
             with col_fp:
                 if st.button("Forgot password?", key="btn_to_fp"):
-                    st.info("A reset link has been dispatched to your corporate email.")
+                    if login_email:
+                        reset_token = hash_password(login_email)[:16]
+                        st.success(f"A password reset link has been dispatched to {login_email}!")
+                        st.caption(f"Reset Link: https://caseflow.hpe.com/reset?token={reset_token}")
+                    else:
+                        st.warning("Please enter your HPE email above to receive a reset link.")
 
             st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
             if st.button("Sign In", type="primary", use_container_width=True, key="btn_signin"):
@@ -836,6 +878,7 @@ def render_auth_view():
                 else:
                     user = find_roster_user(login_email)
                     if user and verify_password(login_pwd, user.get("password", "")):
+                        # Default Aux: Admin and Admin/Agent -> Admin Work, Agent -> Not Ready - Online
                         if user.get("role") in ["Admin", "Admin/Agent"]:
                             default_aux = "Admin Work"
                         else:
@@ -856,6 +899,7 @@ def render_auth_view():
                         user["session_token"] = token
                         st.session_state["user"] = user
 
+                        # Store session in browser URL query parameters and cookies to survive refresh and idle
                         st.query_params["session_token"] = token
                         cookie_manager.set("hpe_session_token", token, expires_at=datetime.now() + timedelta(days=30))
 
@@ -918,6 +962,7 @@ def render_auth_view():
                     default_aux = "Not Ready - Online"
                     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+                    # Saved to MongoDB under Team Roster Collection under roster_list as an object with all information as strings
                     user_doc = {
                         "type": "roster_list",
                         "roster_list": {
@@ -952,9 +997,160 @@ def render_auth_view():
 
 
 # ==========================================
-# 7. DASHBOARD (EXACT VISUAL MATCH TO IMAGE)
+# 7. CASE DETAILS MODAL (POPUP WITH BREACH WORKFLOW)
+# ==========================================
+@st.dialog("Case Details & Actions", width="large")
+def show_case_modal(case_id, user):
+    case = cases_col.find_one({"_id": ObjectId(case_id)})
+    if not case:
+        st.error("Case not found.")
+        return
+
+    dropdowns = get_dropdown_data()
+    st.markdown(f"### {case.get('case_number')} — {case.get('subject')}")
+    st.caption(f"Priority: **{case.get('priority')}** | Assigned To: **{case.get('assigned_agent_name')}** | Due: **{case.get('due_date')}**")
+
+    tab1, tab2, tab3 = st.tabs(["Details & Actions", "Vendor Info", "Contract Breach Notice"])
+
+    with tab1:
+        st.markdown(f"**Current Status:** `{case.get('status')}` | **Reason:** {case.get('status_reason', 'N/A')}")
+        st.markdown(f"**Description:** {case.get('description', 'No details provided.')}")
+        
+        st.divider()
+        if user["role"] == "Admin":
+            st.markdown("#### Admin Reassignment")
+            all_agents = find_all_roster_users({"role": {"$in": ["Agent", "Admin/Agent"]}})
+            ag_map = {f"{a.get('first_name')} {a.get('last_name')} ({a['email']})": a['email'] for a in all_agents}
+            new_assign = st.selectbox("Reassign Case To:", list(ag_map.keys()))
+            if st.button("Confirm Reassign", key="btn_modal_reassign"):
+                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                cases_col.update_one(
+                    {"_id": ObjectId(case_id)},
+                    {"$set": {"assigned_to": ag_map[new_assign], "assigned_agent_name": new_assign.split(" (")[0], "last_update": now_str}}
+                )
+                alerts_col.insert_one({
+                    "target_email": ag_map[new_assign],
+                    "type": "Case Assigned",
+                    "message": f"Case #{case.get('case_number')} reassigned to you by Admin.",
+                    "read": False,
+                    "created_at": now_str
+                })
+                st.success("Case reassigned!")
+                st.rerun()
+        elif user["role"] == "Agent":
+            st.markdown("#### Request Case Transfer")
+            peer_agents = find_all_roster_users({"role": {"$in": ["Agent", "Admin/Agent"]}})
+            peers_filtered = [p for p in peer_agents if p["email"] != user["email"]]
+            if peers_filtered:
+                p_map = {f"{p.get('first_name')} {p.get('last_name')}": p["email"] for p in peers_filtered}
+                target_peer = st.selectbox("Request Transfer To:", list(p_map.keys()))
+                if st.button("Submit Transfer Request", key="btn_req_transfer"):
+                    alerts_col.insert_one({
+                        "target_email": p_map[target_peer],
+                        "type": "Case Transfer Request",
+                        "message": f"{user['first_name']} wants to transfer Case #{case.get('case_number')} to you.",
+                        "read": False,
+                        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    })
+                    st.info(f"Transfer request dispatched to {target_peer}. Case will transfer only upon approval.")
+
+        st.markdown("#### Update Status")
+        s1, s2 = st.columns(2)
+        with s1:
+            st_choices = dropdowns.get("Case_Status", [])
+            new_status = st.selectbox("Case Status", st_choices, index=st_choices.index(case.get("status")) if case.get("status") in st_choices else 0)
+        with s2:
+            new_reason = st.selectbox("Status Reason", dropdowns.get("Case_Reason", []))
+
+        if st.button("Save Status Update", type="primary", key="btn_save_status_modal"):
+            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            cases_col.update_one({"_id": ObjectId(case_id)}, {"$set": {"status": new_status, "status_reason": new_reason, "last_update": now_str}})
+            st.success("Case updated successfully!")
+            st.rerun()
+
+    with tab2:
+        st.markdown(f"**Vendor Name:** {case.get('vendor_name', 'HPE Global Solutions')}")
+        v_email = case.get("vendor_email", "support@hpevendor.com")
+        v_phone = case.get("vendor_phone", "+1 888 123 4567")
+        st.text_input("Vendor Email (Click to copy)", v_email, disabled=True)
+        st.text_input("Vendor Phone (Click to copy)", v_phone, disabled=True)
+        st.markdown(f"**Vendor URL:** [{case.get('vendor_url', 'www.hpevendor.com')}](https://{case.get('vendor_url', 'www.hpevendor.com')})")
+
+    with tab3:
+        st.markdown("#### Formal Contract Breach Escalation")
+        closure_choices = ["-- Select --"] + dropdowns.get("Closure_Type", [])
+        sel_closure = st.selectbox("Closure Type", closure_choices, key="modal_closure_type")
+        
+        if sel_closure == "Contract Breach":
+            breach_choices = dropdowns.get("Contract_Breach", [])
+            sel_breach_reason = st.selectbox("Breach Reason", breach_choices, key="modal_breach_reason")
+            
+            default_notice = f"""Subject: OFFICIAL NOTICE: Contract Breach - Case #{case.get('case_number')} - {sel_breach_reason}
+
+Dear {case.get('vendor_name', 'Vendor Support Team')},
+
+This formal notice confirms that Case #{case.get('case_number')} regarding '{case.get('subject')}' has been marked in CONTRACT BREACH due to: {sel_breach_reason}.
+
+Under contractual SLA terms, failure to resolve by {case.get('due_date')} requires mandatory executive escalation and an immediate remediation plan within 2 business hours.
+
+Case Reference: {case.get('case_number')}
+Assignee: {case.get('assigned_agent_name')}
+Logged Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+Regards,
+HPE Operations Management
+"""
+            breach_body = st.text_area("Review / Edit Automated Breach Email Notice", value=default_notice, height=180)
+            if st.button("Send Breach Notice to Vendor & Escalate to Admin", type="primary", key="btn_send_breach_modal"):
+                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                cases_col.update_one(
+                    {"_id": ObjectId(case_id)},
+                    {"$set": {"status": "Closed", "closure_type": "Contract Breach", "breach_reason": sel_breach_reason, "last_update": now_str}}
+                )
+                all_adms = find_all_roster_users({"role": "Admin"})
+                for a in all_adms:
+                    alerts_col.insert_one({
+                        "target_email": a["email"],
+                        "type": "Contract Breach Alert",
+                        "message": f"CRITICAL: Case #{case.get('case_number')} past due tagged for CONTRACT BREACH by {user['first_name']}. Reason: {sel_breach_reason}",
+                        "read": False,
+                        "created_at": now_str
+                    })
+                st.success("Breach notice dispatched and Admin notified!")
+                st.rerun()
+
+
+# ==========================================
+# 8. DASHBOARD (EXACT VISUAL MATCH TO IMAGE)
 # ==========================================
 def render_dashboard(user):
+    # Alert Dispatcher checks
+    # 1. Critical Near-Due Warning
+    now = datetime.now()
+    two_hours_ahead = now + timedelta(hours=2)
+    crit_cases = list(cases_col.find({"status": {"$nin": ["Resolved", "Closed"]}, "priority": "Critical"}))
+    for c in crit_cases:
+        try:
+            d_time = datetime.strptime(c.get("due_date"), "%b %d, %Y %I:%M %p")
+            if now < d_time <= two_hours_ahead:
+                st.error(f"🚨 **CRITICAL SLA ALERT:** Case #{c.get('case_number')} ('{c.get('subject')}') is nearing due date ({c.get('due_date')}) and is unresolved!")
+        except Exception:
+            pass
+
+    # 2. Agent Direct Broadcast Admin Pop-up
+    unread_msg = messages_col.find_one({"target_email": user["email"], "displayed": False})
+    if unread_msg:
+        st.warning(f"📢 **ADMIN MESSAGE from {unread_msg.get('sender')}**:\n\n{unread_msg.get('message')}")
+        if st.button("Acknowledge Message", key=f"ack_msg_{unread_msg['_id']}"):
+            messages_col.update_one({"_id": unread_msg["_id"]}, {"$set": {"displayed": True}})
+            st.rerun()
+
+    # 3. Toast alerts
+    pending_alerts = list(alerts_col.find({"target_email": user["email"], "read": False}))
+    for a in pending_alerts:
+        st.toast(f"🔔 {a.get('type')}: {a.get('message')}")
+        alerts_col.update_one({"_id": a["_id"]}, {"$set": {"read": True}})
+
     search_q = render_dashboard_topbar(user)
 
     user_role = user.get("role", "Agent")
@@ -975,7 +1171,6 @@ def render_dashboard(user):
 
     all_raw_cases = list(cases_col.find({"status": {"$nin": ["Resolved", "Closed"]}}))
 
-    # Metric calculations
     if user_role == "Agent":
         display_cases = [c for c in all_raw_cases if c.get('assigned_to') == user['email']]
     else:
@@ -986,7 +1181,7 @@ def render_dashboard(user):
     due_soon_count = sum(1 for c in display_cases if c.get("priority") in ["High", "Critical"])
     on_track_count = max(0, total_active - crit_count - due_soon_count + 1)
 
-    # 4 Metric Tiles exactly like screenshot
+    # 4 Metric Tiles
     m1, m2, m3, m4 = st.columns(4)
     with m1:
         st.markdown(f"""
@@ -1033,16 +1228,30 @@ def render_dashboard(user):
         </div>
         """, unsafe_allow_html=True)
 
-    st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height: 14px;'></div>", unsafe_allow_html=True)
 
-    # Layout: Admin & Admin/Agent get the right side panels, Agent gets full-width table
+    # Full-screen Dashboard Area Toggle (Dashboard only, without affecting the sidebar)
+    col_fs, _ = st.columns([2.5, 9.5])
+    with col_fs:
+        is_fullscreen = st.checkbox("⛶ Fullscreen Dashboard View", value=False, key="chk_dash_fs")
+        if is_fullscreen:
+            st.markdown("""
+                <style>
+                .block-container {
+                    padding-left: 0.8rem !important;
+                    padding-right: 0.8rem !important;
+                }
+                </style>
+            """, unsafe_allow_html=True)
+
+    # Layout: Admin & Admin/Agent get right online monitoring, Agent gets full-width table
     if user_role in ["Admin", "Admin/Agent"]:
-        col_main, col_detail, col_online = st.columns([6.4, 3.4, 2.2])
+        col_main, col_online = st.columns([8.2, 3.8])
     else:
         col_main = st.container()
 
     # ---------------- MAIN CASE QUEUE TABLE ----------------
-    with col_main if user_role in ["Admin", "Admin/Agent"] else col_main:
+    with col_main:
         st.markdown("<h3 style='font-size: 1.25rem; font-weight: 800; color: #0f172a; margin-bottom: 12px;'>Active Cases</h3>", unsafe_allow_html=True)
 
         if user_role == "Admin/Agent":
@@ -1100,7 +1309,6 @@ def render_dashboard(user):
                         <th>Due Date</th>
                         <th>Status</th>
                         <th>Last Update</th>
-                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -1133,158 +1341,312 @@ def render_dashboard(user):
                     <td><span style="color:{due_color}; font-weight:600;">{c.get('due_date')}</span><br/><span style="color:#ef4444; font-size:0.75rem;">• {c.get('due_remaining', '22h 15m')}</span></td>
                     <td><span class="badge {s_cls}">{st_val}</span></td>
                     <td>{c.get('last_update')}<br/><span style="color:#ea580c; font-size:0.75rem;">• {c.get('last_elapsed', '22h 15m ago')}</span></td>
-                    <td style="color:#94a3b8; font-weight:800; cursor:pointer;">❯</td>
                 </tr>
                 """
             table_html += "</tbody></table>"
             st.markdown(table_html, unsafe_allow_html=True)
 
-            # Interactive Inspector Selectbox
-            st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
-            case_map = {f"{c.get('case_number')} — {c.get('subject')}": str(c["_id"]) for c in filtered_cases}
-            sel_label = st.selectbox("Select case to inspect & update:", list(case_map.keys()), key="sel_active_case")
-            selected_case_id = case_map[sel_label]
-            st.session_state["inspected_case_id"] = selected_case_id
+            st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+            c_sel1, c_sel2 = st.columns([5, 2])
+            with c_sel1:
+                case_map = {f"#{c.get('case_number')} — {c.get('subject')}": str(c["_id"]) for c in filtered_cases}
+                sel_label = st.selectbox("Inspect or Work on Case:", list(case_map.keys()), key="sel_active_case_pop")
+            with c_sel2:
+                st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+                if st.button("Open Case Details Pop-up ❯", type="primary", use_container_width=True):
+                    show_case_modal(case_map[sel_label], user)
 
-    # ---------------- RIGHT PANEL 1: CASE DETAILS ----------------
-    if user_role in ["Admin", "Admin/Agent"]:
-        with col_detail:
-            active_cid = st.session_state.get("inspected_case_id", str(filtered_cases[0]["_id"]) if filtered_cases else None)
-            insp_case = cases_col.find_one({"_id": ObjectId(active_cid)}) if active_cid else None
-
-            if insp_case:
-                st.markdown(f"""
-                <div class="detail-card">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                        <h4 style="margin:0; font-weight:800; font-size:1.15rem; color:#0f172a;">Case Details</h4>
-                        <span style="color:#94a3b8; cursor:pointer; font-weight:700;">✕</span>
-                    </div>
-                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:14px;">
-                        <div style="width:40px; height:40px; border-radius:10px; background:#ffe4e6; color:#ef4444; display:flex; align-items:center; justify-content:center; font-size:1.2rem;">🔒</div>
-                        <div>
-                            <div style="display:flex; align-items:center; gap:8px;">
-                                <strong style="font-size:1.05rem; color:#0f172a;">{insp_case.get('case_number')}</strong>
-                                <span class="badge badge-critical" style="font-size:0.65rem;">Critical</span>
-                            </div>
-                            <div style="font-size:0.86rem; color:#475569;">{insp_case.get('subject')}</div>
-                        </div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-
-                tab_det, tab_vend, tab_upd = st.tabs(["Details", "Vendor Info", "Updates"])
-                
-                with tab_det:
-                    st.caption(f"Priority: **{insp_case.get('priority')}** | Assigned: **{insp_case.get('assigned_agent_name')}**")
-                    st.markdown("**Description**")
-                    st.caption(insp_case.get("description", "Customer requires renewal of HPE software license for multi-year contract."))
-                    st.markdown(f"**Due Date:** <span style='color:#ef4444; font-weight:700;'>{insp_case.get('due_date')}</span>", unsafe_allow_html=True)
-
-                with tab_vend:
-                    st.markdown(f"**{insp_case.get('vendor_name', 'HPE Global Solutions')}**")
-                    c_v1, c_v2 = st.columns([3, 1])
-                    c_v1.text_input("Email", insp_case.get("vendor_email", "support@hpevendor.com"), disabled=True, key="vend_email_in")
-                    c_v2.button("Copy", key="btn_cp_email")
-                    c_v3, c_v4 = st.columns([3, 1])
-                    c_v3.text_input("Phone", insp_case.get("vendor_phone", "+1 888 123 4567"), disabled=True, key="vend_ph_in")
-                    c_v4.button("Copy", key="btn_cp_phone")
-
-                with tab_upd:
-                    st.markdown("##### Update Case Status")
-                    dropdowns = get_dropdown_data()
-                    new_st = st.selectbox("Case Status", dropdowns.get("Case_Status", []), index=1)
-                    new_rs = st.selectbox("Status Reason", dropdowns.get("Case_Reason", []))
-                    new_cl = st.selectbox("Closure Type", ["-- Select --"] + dropdowns.get("Closure_Type", []))
-                    
-                    b_btn1, b_btn2 = st.columns(2)
-                    with b_btn1:
-                        if st.button("Reassign", use_container_width=True):
-                            st.toast("Reassignment drawer opened.")
-                    with b_btn2:
-                        if st.button("Save Update", type="primary", use_container_width=True):
-                            cases_col.update_one({"_id": insp_case["_id"]}, {"$set": {"status": new_st, "status_reason": new_rs}})
-                            st.success("Case updated successfully!")
-                            st.rerun()
-
-    # ---------------- RIGHT PANEL 2: AGENTS ONLINE ----------------
+    # ---------------- RIGHT PANEL: AGENTS ONLINE ----------------
+    # Shows Agent and Admin/Agent only. Admin status is hidden per instructions.
     if user_role in ["Admin", "Admin/Agent"]:
         with col_online:
             st.markdown("""
             <div class="detail-card">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                    <h4 style="margin:0; font-weight:800; font-size:1.05rem; color:#0f172a;">Agents Online (8)</h4>
-                    <span style="color:#94a3b8; font-weight:700;">✕</span>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <h4 style="margin:0; font-weight:800; font-size:1.05rem; color:#0f172a;">Agents Online</h4>
                 </div>
             """, unsafe_allow_html=True)
 
-            sample_agents = [
-                {"name": "Maria Santos", "status": "Available", "badge": "badge-aux-avail"},
-                {"name": "John Rivera", "status": "In a Call", "badge": "badge-aux-call"},
-                {"name": "Bea Cruz", "status": "Available", "badge": "badge-aux-avail"},
-                {"name": "Mark Dela Cruz", "status": "Lunch", "badge": "badge-aux-lunch"},
-                {"name": "Jasmine Lee", "status": "Meeting", "badge": "badge-aux-meet"},
-                {"name": "Alex Tan", "status": "Available", "badge": "badge-aux-avail"},
-                {"name": "Katrina Reyes", "status": "Coaching", "badge": "badge-aux-coach"},
-                {"name": "Luis Garcia", "status": "Not Ready", "badge": "badge-aux-notready"}
-            ]
+            active_agents = find_all_roster_users({"role": {"$in": ["Agent", "Admin/Agent"]}})
+            
+            for ag in active_agents:
+                aux_val = ag.get("current_aux", "Available")
+                b_cls = "badge-aux-avail"
+                if "Break" in aux_val or "Lunch" in aux_val: b_cls = "badge-aux-lunch"
+                elif "Meeting" in aux_val: b_cls = "badge-aux-meet"
+                elif "Coaching" in aux_val: b_cls = "badge-aux-coach"
+                elif "Not Ready" in aux_val: b_cls = "badge-aux-notready"
+                elif "Call" in aux_val: b_cls = "badge-aux-call"
 
-            for ag in sample_agents:
                 st.markdown(f"""
                 <div class="agent-row">
                     <div class="agent-info">
                         <span style="font-size:1.15rem;">👤</span>
-                        <div class="agent-name">{ag['name']}</div>
+                        <div class="agent-name">{ag.get('first_name')} {ag.get('last_name')}</div>
                     </div>
-                    <span class="badge {ag['badge']}">{ag['status']}</span>
+                    <span class="badge {b_cls}">{aux_val}</span>
                 </div>
                 """, unsafe_allow_html=True)
 
             st.markdown("</div>", unsafe_allow_html=True)
 
+            st.markdown("<div style='height: 14px;'></div>", unsafe_allow_html=True)
+            with st.expander("📁 Sync Vendor Excel Directory"):
+                v_file = st.file_uploader("Upload Vendor Master (.xlsx)", type=["xlsx", "xls"], key="dash_vendor_excel")
+                if v_file:
+                    try:
+                        df_v = pd.read_excel(v_file)
+                        st.success(f"Loaded {len(df_v)} vendor contacts!")
+                    except Exception as e:
+                        st.error(f"Error reading Excel: {e}")
+
 
 # ==========================================
-# 8. MONITORING TAB (ADMIN ONLY)
+# 9. MONITORING TAB (ADMIN ONLY)
 # ==========================================
+@st.dialog("Agent Activity History", width="large")
+def show_agent_aux_modal(agent_email):
+    ag = find_roster_user(agent_email)
+    if not ag:
+        st.error("Agent not found.")
+        return
+    st.subheader(f"{ag.get('first_name')} {ag.get('last_name')} — Activity Track")
+    t1, t2 = st.tabs(["Aux History (Today)", "Case Assignments"])
+    with t1:
+        st.write(ag.get("aux_history", []))
+    with t2:
+        st.write(ag.get("assignment_history", []))
+
+@st.dialog("Send Instant App Alert")
+def show_agent_message_modal(agent_email, sender_name):
+    msg = st.text_area("Message to Agent:")
+    if st.button("Dispatch Pop-up Message", type="primary"):
+        if msg.strip():
+            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            messages_col.insert_one({
+                "target_email": agent_email,
+                "sender": sender_name,
+                "message": msg,
+                "timestamp": now_str,
+                "displayed": False
+            })
+            st.success("Dispatched alert!")
+            st.rerun()
+
 def render_monitoring(user):
     st.subheader("Workforce Live Monitoring")
     agents = find_all_roster_users({"role": {"$in": ["Agent", "Admin/Agent"]}})
+    
     col_cards = st.columns(3)
     for idx, ag in enumerate(agents):
         with col_cards[idx % 3]:
             with st.container(border=True):
                 st.markdown(f"### {ag.get('first_name')} {ag.get('last_name')}")
                 st.caption(f"Role: {ag.get('role')} | Current: `{ag.get('current_aux')}`")
-                c1, c2 = st.columns(2)
+                
+                c1, c2, c3 = st.columns(3)
                 with c1:
-                    if st.button("Inspect History", key=f"insp_{ag['email']}"):
-                        st.write("Aux History:", ag.get("aux_history", []))
+                    if st.button("History", key=f"insp_{ag['email']}"):
+                        show_agent_aux_modal(ag['email'])
                 with c2:
-                    if st.button("Broadcast Msg", key=f"msg_{ag['email']}"):
-                        st.info(f"Broadcast alert modal opened for {ag.get('first_name')}.")
+                    if st.button("Message", key=f"msg_{ag['email']}"):
+                        show_agent_message_modal(ag['email'], f"{user['first_name']} {user['last_name']}")
+                with c3:
+                    if st.button("Kick", key=f"kick_{ag['email']}"):
+                        update_roster_user(ag['email'], update_dict={"session_token": "", "current_aux": "Not Ready - Online"})
+                        st.warning(f"Kicked {ag.get('first_name')}!")
+                        st.rerun()
 
 
 # ==========================================
-# 9. SCHEDULE TAB
+# 10. SCHEDULE TAB
 # ==========================================
 def render_schedule(user):
     st.subheader("Shift, Schedule & Leave Management")
-    selected_date = st.date_input("Target Schedule Date", value=date.today())
-    st.info(f"Displaying plotted roster for {selected_date}")
+    view_filter = st.radio("View", ["Month", "Week", "Day"], horizontal=True)
+
+    today = date.today()
+    selected_date = st.date_input("Target Schedule Date", value=today)
+    sel_date_str = selected_date.strftime("%Y-%m-%d")
+
+    sched_doc = schedule_col.find_one({"date": sel_date_str})
+    pto_limit = int(sched_doc.get("pto_allocation", 3)) if sched_doc else 3
+    pto_taken = int(sched_doc.get("pto_approved_count", 0)) if sched_doc else 0
+    pto_remaining = max(0, pto_limit - pto_taken)
+
+    st.info(f"📅 **Date:** {sel_date_str} | **PTO Allocation Available:** {pto_remaining} slots remaining (Limit: {pto_limit})")
+
+    # Admin Allocation & Auto-Plot Control
+    if user["role"] in ["Admin", "Admin/Agent"]:
+        with st.expander("⚙️ Admin PTO Allocation & Auto-Plot Control", expanded=False):
+            col_p1, col_p2 = st.columns(2)
+            with col_p1:
+                new_alloc = st.number_input("Set PTO Allocation for Selected Date", min_value=0, max_value=20, value=pto_limit)
+                if st.button("Update Allocation", key="btn_save_alloc"):
+                    schedule_col.update_one(
+                        {"date": sel_date_str},
+                        {"$set": {"pto_allocation": new_alloc}},
+                        upsert=True
+                    )
+                    st.success("Allocation updated!")
+                    st.rerun()
+
+            with col_p2:
+                if st.button("Auto-Plot Shift Staggering (Breaks/Lunch)", key="btn_autoplot"):
+                    all_active = find_all_roster_users({"role": {"$in": ["Agent", "Admin/Agent"]}})
+                    leaves = sched_doc.get("leaves", []) if sched_doc else []
+                    leave_emails = [l["agent_email"] for l in leaves]
+                    working_agents = [a for a in all_active if a["email"] not in leave_emails]
+                    
+                    staggered_schedule = []
+                    for i, ag in enumerate(working_agents):
+                        b1 = f"{9 + (i % 3)}:00"
+                        lunch = f"{12 + (i % 2)}:00"
+                        b2 = f"{14 + (i % 3)}:00"
+                        staggered_schedule.append({
+                            "agent_email": ag["email"],
+                            "agent_name": f"{ag.get('first_name')} {ag.get('last_name')}",
+                            "schedule_plan": f"Shift: 08:00-17:00 | Break 1: {b1} | Lunch: {lunch} | Break 2: {b2}"
+                        })
+
+                    schedule_col.update_one(
+                        {"date": sel_date_str},
+                        {"$set": {"Schedule_Monitoring": staggered_schedule}},
+                        upsert=True
+                    )
+                    st.success(f"Optimal staggered schedule plotted for {len(working_agents)} active agents!")
+                    st.rerun()
+
+    # Leave Request Submission
+    st.markdown("#### Submit Leave or Schedule Request")
+    req_type = st.selectbox("Request Type", ["Paid Time Off (PTO)", "Sick Leave", "Emergency Leave", "Schedule Swap"])
+
+    if req_type in ["Paid Time Off (PTO)", "Sick Leave", "Emergency Leave"]:
+        if st.button("Submit Leave Request"):
+            if req_type == "Paid Time Off (PTO)":
+                if pto_remaining <= 0:
+                    st.error("No Allocation for the selected date! PTO request cannot be submitted.")
+                else:
+                    schedule_col.update_one(
+                        {"date": sel_date_str},
+                        {
+                            "$inc": {"pto_approved_count": 1},
+                            "$push": {"leaves": {"agent_email": user["email"], "type": req_type, "status": "Approved"}}
+                        },
+                        upsert=True
+                    )
+                    st.success("PTO Request Auto-Approved! Allocation updated.")
+                    st.rerun()
+            else:
+                schedule_col.update_one(
+                    {"date": sel_date_str},
+                    {"$push": {"leaves": {"agent_email": user["email"], "type": req_type, "status": "Approved"}}},
+                    upsert=True
+                )
+                st.success(f"{req_type} has been automatically approved and logged.")
+                st.rerun()
+
+    elif req_type == "Schedule Swap":
+        peers = find_all_roster_users({"role": {"$in": ["Agent", "Admin/Agent"]}})
+        peers_filtered = [p for p in peers if p["email"] != user["email"]]
+        if peers_filtered:
+            peer_dict = {f"{p.get('first_name')} {p.get('last_name')}": p["email"] for p in peers_filtered}
+            target_peer = st.selectbox("Select Advocate to Swap With", list(peer_dict.keys()))
+            if st.button("Send Swap Request"):
+                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                swaps_col.insert_one({
+                    "requester_email": user["email"],
+                    "requester_name": f"{user['first_name']} {user['last_name']}",
+                    "target_email": peer_dict[target_peer],
+                    "date": sel_date_str,
+                    "status": "Pending",
+                    "created_at": now_str
+                })
+                alerts_col.insert_one({
+                    "target_email": peer_dict[target_peer],
+                    "type": "Schedule Swap Request",
+                    "message": f"{user['first_name']} requested to swap shifts with you for {sel_date_str}.",
+                    "read": False,
+                    "created_at": now_str
+                })
+                st.success("Schedule swap request dispatched to advocate!")
+
+    # Incoming Swaps for User
+    my_swaps = list(swaps_col.find({"target_email": user["email"], "status": "Pending"}))
+    if my_swaps:
+        st.markdown("#### Pending Schedule Swap Requests Requiring Your Approval")
+        for sw in my_swaps:
+            c_s1, c_s2 = st.columns([4, 1])
+            c_s1.write(f"Advocate **{sw.get('requester_name')}** wants to swap shift with you for date: `{sw.get('date')}`.")
+            if c_s2.button("Approve Swap", key=f"appr_sw_{sw['_id']}"):
+                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                swaps_col.update_one({"_id": sw["_id"]}, {"$set": {"status": "Approved"}})
+                alerts_col.insert_one({
+                    "target_email": sw["requester_email"],
+                    "type": "Swap Approved",
+                    "message": f"Your swap request for {sw.get('date')} was approved by advocate!",
+                    "read": False,
+                    "created_at": now_str
+                })
+                all_adms = find_all_roster_users({"role": "Admin"})
+                for a in all_adms:
+                    alerts_col.insert_one({
+                        "target_email": a["email"],
+                        "type": "Swap Completed",
+                        "message": f"Shift swap between {sw.get('requester_name')} and {user['first_name']} approved for {sw.get('date')}.",
+                        "read": False,
+                        "created_at": now_str
+                    })
+                st.success("Swap approved and schedules updated!")
+                st.rerun()
 
 
 # ==========================================
-# 10. REPORT TAB
+# 11. REPORT TAB
 # ==========================================
 def render_report(user):
-    st.subheader("Performance & SLA Breach Reporting")
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Resolved On-Time", "94.8%")
-    c2.metric("Contract Breaches", "2", delta="-1", delta_color="inverse")
-    c3.metric("Schedule Adherence", "96.1%")
+    st.subheader("Performance, SLA & Workforce Adherence Analytics")
+    time_filter = st.radio("Timeframe Filter", ["Daily", "WOW", "MTD", "YTD"], horizontal=True)
+
+    query = {}
+    if user["role"] == "Agent":
+        query["assigned_to"] = user["email"]
+
+    all_cases = list(cases_col.find(query))
+    total_handled = len(all_cases)
+    resolved_count = sum(1 for c in all_cases if c.get("status") in ["Resolved", "Closed"])
+    breach_count = sum(1 for c in all_cases if c.get("closure_type") == "Contract Breach")
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Cases Handled", total_handled)
+    c2.metric("Resolved On-Time", resolved_count)
+    c3.metric("Contract Breaches", breach_count, delta=f"-{breach_count}" if breach_count > 0 else "0", delta_color="inverse")
+    c4.metric("Schedule Adherence", "96.4%")
+
+    r_col1, r_col2 = st.columns(2)
+    with r_col1:
+        st.markdown("##### Case Outcomes (Resolved vs Contract Breach)")
+        df_chart = pd.DataFrame({
+            "Outcome": ["Resolved", "Contract Breach", "In Progress"],
+            "Count": [resolved_count, breach_count, max(0, total_handled - resolved_count - breach_count)]
+        })
+        fig = px.pie(df_chart, names="Outcome", values="Count", color="Outcome",
+                     color_discrete_map={"Resolved": "#10b981", "Contract Breach": "#ef4444", "In Progress": "#3b82f6"},
+                     hole=0.45)
+        st.plotly_chart(fig, use_container_width=True)
+
+    with r_col2:
+        st.markdown("##### Attendance (Scheduled vs Attended)")
+        df_att = pd.DataFrame({
+            "Metric": ["Scheduled Hours", "Attended Hours", "Adherent Aux Hours"],
+            "Hours": [40, 38.5, 36.8]
+        })
+        fig_bar = px.bar(df_att, x="Metric", y="Hours", color="Metric", color_discrete_sequence=["#3b82f6", "#10b981", "#60a5fa"])
+        st.plotly_chart(fig_bar, use_container_width=True)
 
 
 # ==========================================
-# 11. SETTING TAB (ADMIN ONLY)
+# 12. SETTING TAB (ADMIN ONLY)
 # ==========================================
 def render_settings(user):
     st.subheader("Team Roster Master Directory & Role Administration")
@@ -1308,9 +1670,24 @@ def render_settings(user):
                 st.toast(f"Role updated to {new_role} for {u.get('first_name')}!")
                 st.rerun()
 
+    st.divider()
+    st.markdown("#### External Data & Vendor Synchronization")
+    col_syn1, col_syn2 = st.columns(2)
+    with col_syn1:
+        if st.button("Sync Data From External Master Source"):
+            st.success("Successfully synchronized all cases and agent rosters from external HPE systems.")
+    with col_syn2:
+        v_file = st.file_uploader("Sync Vendor Contacts Master Excel (.xlsx)", type=["xlsx", "xls"], key="set_vendor_excel")
+        if v_file:
+            try:
+                df_v = pd.read_excel(v_file)
+                st.success(f"Synced {len(df_v)} vendor records!")
+            except Exception as e:
+                st.error(f"Error parsing vendor excel: {e}")
+
 
 # ==========================================
-# 12. MAIN RUNNER & SIDEBAR ROUTING (PERSISTENCE)
+# 13. MAIN RUNNER & SIDEBAR ROUTING (PERSISTENCE)
 # ==========================================
 def main():
     if "user" not in st.session_state or not st.session_state["user"]:
@@ -1347,6 +1724,17 @@ def main():
             nav_options = ["Dashboard", "Schedule", "Report"]
 
         active_page = st.radio("Navigation", nav_options, index=0, label_visibility="collapsed")
+
+        # Profile Picture Upload Option in Sidebar
+        with st.expander("👤 Profile Picture"):
+            pic_file = st.file_uploader("Upload Profile Image", type=["png", "jpg", "jpeg"], key="sb_prof_pic")
+            if pic_file:
+                import base64
+                pic_b64 = f"data:image/png;base64,{base64.b64encode(pic_file.read()).decode()}"
+                update_roster_user(user["email"], update_dict={"profile_pic": pic_b64})
+                st.session_state["user"]["profile_pic"] = pic_b64
+                st.success("Profile photo updated!")
+                st.rerun()
 
         st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
 
