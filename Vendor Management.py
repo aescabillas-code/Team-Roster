@@ -264,15 +264,19 @@ st.markdown(
         box-shadow: 0 1px 3px rgba(0,0,0,.035);
     }}
 
+    /* Authentication layout: keep both panels pinned to the top. */
+    [data-testid="stHorizontalBlock"] {{
+        align-items: flex-start !important;
+    }}
+
     .auth-shell {{
-        min-height: 86vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        min-height: 0;
+        display: block;
     }}
 
     .auth-brand {{
         min-height: 560px;
+        height: 100%;
         background: linear-gradient(150deg, #003B49 0%, #002C38 100%);
         color: #fff;
         border-radius: 9px 0 0 9px;
@@ -321,14 +325,21 @@ st.markdown(
         font-size: 9px;
     }}
 
-    .auth-card {{
+    /* The card is applied to the actual Streamlit column.
+       Do not open an HTML <div> and then place Streamlit widgets inside it;
+       Streamlit renders each element as a separate DOM block. */
+    div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.auth-card-marker) {{
         min-height: 560px;
         background: #fff;
         border: 1px solid var(--border);
-        border-left: 0;
         border-radius: 0 9px 9px 0;
-        padding: 25px 28px;
+        padding: 25px 28px !important;
+        box-sizing: border-box;
         box-shadow: 0 5px 20px rgba(0,0,0,.06);
+    }}
+
+    .auth-card-marker {{
+        display: none;
     }}
 
     .auth-card h2 {{
@@ -426,9 +437,13 @@ st.markdown(
             min-width: 150px;
             max-width: 150px;
         }}
-        .auth-brand, .auth-card {{
+        .auth-brand {{
+            border-radius: 7px;
+        }}
+        div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.auth-card-marker) {{
             border-radius: 7px;
             border-left: 1px solid var(--border);
+            min-height: 0;
         }}
     }}
     </style>
@@ -1231,13 +1246,8 @@ def auth_brand_panel():
 
 
 def auth_screen():
-    st.markdown(
-        """
-        <div style="height:4vh"></div>
-        """,
-        unsafe_allow_html=True,
-    )
-
+    # No spacer above the authentication card. The original 4vh spacer plus
+    # an HTML wrapper around Streamlit widgets created the large white area.
     left, right = st.columns(
         [1, 1.25],
         gap="small",
@@ -1247,7 +1257,9 @@ def auth_screen():
         auth_brand_panel()
 
     with right:
-        st.markdown('<div class="auth-card">', unsafe_allow_html=True)
+        # Marker lets CSS style the real Streamlit column as the card.
+        # This avoids invalid cross-element HTML nesting.
+        st.markdown('<div class="auth-card-marker"></div>', unsafe_allow_html=True)
 
         t1, t2 = st.tabs(["Sign In", "Sign Up"])
 
