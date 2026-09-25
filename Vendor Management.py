@@ -289,6 +289,25 @@ st.markdown(
         color: #fff;
     }}
 
+    .brand-name {{
+        color: #fff;
+        font-size: 14px;
+        font-weight: 800;
+        line-height: 1.05;
+    }}
+
+    .auth-brand-subtitle {{
+        color: #e5f1f3 !important;
+        font-size: 11px !important;
+        line-height: 1.45;
+        max-width: 250px;
+        margin: 0 0 24px;
+    }}
+
+    .auth-feature-copy {{
+        min-width: 0;
+    }}
+
     .auth-brand p {{
         color: #e5f1f3;
         font-size: 11px;
@@ -682,8 +701,8 @@ def ensure_indexes():
 
     try:
         roster.create_index(
-            [("email", 1)],
-            name="email_lookup",
+            [("type", 1), ("email", 1)],
+            name="roster_type_email_lookup",
         )
         roster.create_index(
             [("role", 1), ("status", 1), ("aux", 1)],
@@ -752,9 +771,10 @@ def load_roster():
         try:
             return list(
                 roster.find(
-                    {},
+                    {"type": "roster_list"},
                     {
                         "_id": 0,
+                        "type": 1,
                         "first_name": 1,
                         "last_name": 1,
                         "name": 1,
@@ -822,12 +842,18 @@ def create_user(data):
 
         try:
             if roster.find_one(
-                {"email": data["email"]},
+                {
+                    "type": "roster_list",
+                    "email": data["email"],
+                },
                 {"_id": 1},
             ):
                 return False, "An account with this email already exists."
 
             record = dict(data)
+            # Every sign-up record belongs to the roster_list type.
+            # MongoDB automatically creates _id as an ObjectId.
+            record["type"] = "roster_list"
             record["password_hash"] = hash_password(
                 record.pop("password")
             )
@@ -850,6 +876,7 @@ def create_user(data):
         return False, "An account with this email already exists."
 
     record = dict(data)
+    record["type"] = "roster_list"
     record["password_hash"] = hash_password(
         record.pop("password")
     )
@@ -871,6 +898,7 @@ def find_user(email, password):
         try:
             user = roster.find_one(
                 {
+                    "type": "roster_list",
                     "email": email,
                     "status": "Active",
                 },
@@ -1210,22 +1238,24 @@ def assign_unassigned_cases():
 # ============================================================
 
 def auth_brand_panel():
+    # This entire block is HTML rendered by one st.markdown call.
+    # Streamlit widgets are NOT placed inside this HTML block.
     st.markdown(
         """
-        <div class="auth-brand">
+        <section class="auth-brand">
             <div class="brand-mark"></div>
-            <div style="font-size:14px;font-weight:800;line-height:1.05">
+            <div class="brand-name">
                 Hewlett Packard<br>Enterprise
             </div>
 
             <h1>HPE CaseFlow</h1>
-            <p>
+            <p class="auth-brand-subtitle">
                 Team Task and Case Management System
             </p>
 
             <div class="auth-feature">
                 <div class="auth-feature-icon">▣</div>
-                <div>
+                <div class="auth-feature-copy">
                     <b>Manage Cases</b>
                     <small>Track and resolve tasks efficiently</small>
                 </div>
@@ -1233,7 +1263,7 @@ def auth_brand_panel():
 
             <div class="auth-feature">
                 <div class="auth-feature-icon">▰</div>
-                <div>
+                <div class="auth-feature-copy">
                     <b>Team Collaboration</b>
                     <small>Work together for better service delivery</small>
                 </div>
@@ -1241,7 +1271,7 @@ def auth_brand_panel():
 
             <div class="auth-feature">
                 <div class="auth-feature-icon">◷</div>
-                <div>
+                <div class="auth-feature-copy">
                     <b>Real-Time Visibility</b>
                     <small>Stay informed and in control</small>
                 </div>
@@ -1249,12 +1279,12 @@ def auth_brand_panel():
 
             <div class="auth-feature">
                 <div class="auth-feature-icon">●</div>
-                <div>
+                <div class="auth-feature-copy">
                     <b>Secure Access</b>
                     <small>HPE employees only</small>
                 </div>
             </div>
-        </div>
+        </section>
         """,
         unsafe_allow_html=True,
     )
@@ -1402,6 +1432,11 @@ def auth_screen():
 
                         if success:
                             st.success(message)
+                            st.caption(
+                                'Saved to MongoDB roster collection with type = "roster_list".'
+                                if MONGO_ENABLED
+                                else 'Saved to local fallback roster because MongoDB is not configured.'
+                            )
                         else:
                             st.error(message)
 
