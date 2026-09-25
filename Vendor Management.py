@@ -20,7 +20,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom Styling: Replaces standard headers and matches the HPE CaseFlow visual design
+# Custom Styling: Matches the HPE CaseFlow visual design and clears chrome
 st.markdown("""
     <style>
     /* Hide Streamlit default chrome & deploy button */
@@ -159,26 +159,6 @@ st.markdown("""
         border-color: var(--hpe-green) !important;
     }
 
-    /* Microsoft Button Styling */
-    .ms-sso-btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 100%;
-        padding: 10px;
-        border-radius: 8px;
-        border: 1px solid #d1d5db;
-        background-color: #ffffff;
-        color: #1f2937;
-        font-weight: 600;
-        font-size: 0.95rem;
-        cursor: pointer;
-        text-decoration: none;
-    }
-    .ms-sso-btn:hover {
-        background-color: #f9fafb;
-    }
-
     /* Borderless table */
     .borderless-table {
         width: 100%;
@@ -226,8 +206,8 @@ st.markdown("""
 # ==========================================
 @st.cache_resource
 def get_mongo_client():
-    MONGO_URI = st.secrets.get("MONGO_URI", "mongodb://localhost:27017")
-    return pymongo.MongoClient(MONGO_URI)
+    mongo_uri = st.secrets.get("MONGO_URI", "mongodb://localhost:27017")
+    return pymongo.MongoClient(mongo_uri, serverSelectionTimeoutMS=3000)
 
 client = get_mongo_client()
 db = client["TeamRoster"]
@@ -240,21 +220,28 @@ messages_col = db["Messages_Collection"]
 swaps_col = db["Schedule_Swaps"]
 
 def seed_validation_data():
-    if validation_col.count_documents({}) == 0:
-        validation_col.insert_one({
-            "Validation_Dropdown": {
-                "Case_Status": ["Open", "In Progress", "Pending Vendor Response", "Escalated", "Resolved", "Closed"],
-                "Case_Reason": ["First Contact", "Awaiting Part Delivery", "Technical Troubleshooting", "Customer Callback Needed", "Engineer Dispatched"],
-                "Closure_Type": ["Completed Successfully", "Customer Withdrawn", "Contract Breach", "Cancelled"],
-                "Contract_Breach": ["SLA Exceeded", "Vendor Missed Commitment", "Wrong Part Shipped", "No Initial Response in 4h", "Repeated Outage Unresolved"]
-            }
-        })
+    try:
+        if validation_col.count_documents({}) == 0:
+            validation_col.insert_one({
+                "Validation_Dropdown": {
+                    "Case_Status": ["Open", "In Progress", "Pending Vendor Response", "Escalated", "Resolved", "Closed"],
+                    "Case_Reason": ["First Contact", "Awaiting Part Delivery", "Technical Troubleshooting", "Customer Callback Needed", "Engineer Dispatched"],
+                    "Closure_Type": ["Completed Successfully", "Customer Withdrawn", "Contract Breach", "Cancelled"],
+                    "Contract_Breach": ["SLA Exceeded", "Vendor Missed Commitment", "Wrong Part Shipped", "No Initial Response in 4h", "Repeated Outage Unresolved"]
+                }
+            })
+    except Exception:
+        pass
+
 seed_validation_data()
 
 def get_dropdown_data():
-    doc = validation_col.find_one({}, sort=[('_id', pymongo.DESCENDING)])
-    if doc and "Validation_Dropdown" in doc:
-        return doc["Validation_Dropdown"]
+    try:
+        doc = validation_col.find_one({}, sort=[('_id', pymongo.DESCENDING)])
+        if doc and "Validation_Dropdown" in doc:
+            return doc["Validation_Dropdown"]
+    except Exception:
+        pass
     return {
         "Case_Status": ["Open", "In Progress", "Resolved", "Closed"],
         "Case_Reason": ["Initial Work", "Vendor Contact"],
@@ -781,13 +768,11 @@ def render_auth_view():
                 </div>
                 """, unsafe_allow_html=True)
 
-                # Microsoft SSO Simulation
                 if st.button("🪟  Sign in with Microsoft (HPE)", use_container_width=True, key="btn_ms_sso"):
                     st.info("Directing to HPE Enterprise Single Sign-On (Ping/Microsoft Azure AD)...")
 
                 st.markdown("<div style='height: 24px;'></div>", unsafe_allow_html=True)
                 
-                # Switch to Sign Up
                 c_lbl, c_lnk = st.columns([2.2, 1.8])
                 with c_lbl:
                     st.markdown("<div style='text-align:right; font-size:0.92rem; color:#4b5563; padding-top:6px;'>Don't have an account?</div>", unsafe_allow_html=True)
