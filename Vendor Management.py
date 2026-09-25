@@ -325,20 +325,36 @@ st.markdown(
         font-size: 9px;
     }}
 
-    /* The card is applied to the actual Streamlit column.
-       Do not open an HTML <div> and then place Streamlit widgets inside it;
-       Streamlit renders each element as a separate DOM block. */
-    div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.auth-card-marker) {{
+    /* Authentication card: style the real Streamlit container.
+       No HTML wrapper is placed around Streamlit widgets. */
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.auth-panel-marker) {{
         min-height: 560px;
         background: #fff;
         border: 1px solid var(--border);
         border-radius: 0 9px 9px 0;
-        padding: 25px 28px !important;
+        padding: 0 !important;
         box-sizing: border-box;
         box-shadow: 0 5px 20px rgba(0,0,0,.06);
     }}
 
-    .auth-card-marker {{
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.auth-panel-marker) > div {{
+        padding: 24px 28px 22px !important;
+    }}
+
+    .auth-panel-title {{
+        margin: 6px 0 2px;
+        font-size: 19px;
+        font-weight: 800;
+        color: var(--text);
+    }}
+
+    .auth-panel-subtitle {{
+        margin: 0 0 14px;
+        color: var(--muted);
+        font-size: 10px;
+    }}
+
+    .auth-panel-marker {{
         display: none;
     }}
 
@@ -440,9 +456,8 @@ st.markdown(
         .auth-brand {{
             border-radius: 7px;
         }}
-        div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.auth-card-marker) {{
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.auth-panel-marker) {{
             border-radius: 7px;
-            border-left: 1px solid var(--border);
             min-height: 0;
         }}
     }}
@@ -1246,132 +1261,149 @@ def auth_brand_panel():
 
 
 def auth_screen():
-    # No spacer above the authentication card. The original 4vh spacer plus
-    # an HTML wrapper around Streamlit widgets created the large white area.
+    """Two-panel sign-in/sign-up screen matching the supplied reference."""
     left, right = st.columns(
         [1, 1.25],
         gap="small",
+        vertical_alignment="top",
     )
 
     with left:
         auth_brand_panel()
 
     with right:
-        # Marker lets CSS style the real Streamlit column as the card.
-        # This avoids invalid cross-element HTML nesting.
-        st.markdown('<div class="auth-card-marker"></div>', unsafe_allow_html=True)
+        # Streamlit's native container keeps all widgets in the same
+        # component tree, avoiding malformed HTML and the large blank area.
+        with st.container(border=True):
+            st.markdown(
+                '<div class="auth-panel-marker"></div>',
+                unsafe_allow_html=True,
+            )
 
-        t1, t2 = st.tabs(["Sign In", "Sign Up"])
+            t1, t2 = st.tabs(["Sign In", "Sign Up"])
 
-        with t1:
-            st.markdown("### Sign In")
-            st.caption("Access your HPE CaseFlow account")
-
-            with st.form("signin_form"):
-                email = st.text_input(
-                    "HPE Email Address",
-                    placeholder="name@hpe.com",
+            with t1:
+                st.markdown(
+                    '<div class="auth-panel-title">Sign In</div>',
+                    unsafe_allow_html=True,
                 )
-                password = st.text_input(
-                    "Password",
-                    type="password",
-                    placeholder="••••••••",
-                )
-
-                submitted = st.form_submit_button(
-                    "Sign In",
-                    type="primary",
-                    use_container_width=True,
+                st.markdown(
+                    '<div class="auth-panel-subtitle">Access your HPE CaseFlow account</div>',
+                    unsafe_allow_html=True,
                 )
 
-            if submitted:
-                user = find_user(email, password)
-
-                if user:
-                    st.session_state.authenticated = True
-                    st.session_state.user_data = user
-                    st.session_state.menu = "Dashboard"
-                    st.rerun()
-                else:
-                    st.error(
-                        "Invalid email, password, or inactive account."
+                with st.form("signin_form", clear_on_submit=False):
+                    email = st.text_input(
+                        "HPE Email Address",
+                        placeholder="name@hpe.com",
                     )
-
-        with t2:
-            st.markdown("### Sign Up")
-            st.caption("Create your HPE CaseFlow account")
-
-            with st.form("signup_form"):
-                c1, c2 = st.columns(2)
-
-                with c1:
-                    first = st.text_input("First Name")
-                    employee_id = st.text_input("Employee ID")
-                    birthday = st.date_input(
-                        "Birthday",
-                        value=dt.date(1990, 1, 1),
-                    )
-                    home = st.text_input("Home Address")
                     password = st.text_input(
                         "Password",
                         type="password",
+                        placeholder="••••••••",
                     )
 
-                with c2:
-                    last = st.text_input("Last Name")
-                    email = st.text_input("HPE Email Address")
-                    contact = st.text_input("Contact Number")
-                    confirm = st.text_input(
-                        "Confirm Password",
-                        type="password",
+                    submitted = st.form_submit_button(
+                        "Sign In",
+                        type="primary",
+                        use_container_width=True,
                     )
 
-                submitted = st.form_submit_button(
-                    "Create Account",
-                    type="primary",
-                    use_container_width=True,
+                if submitted:
+                    user = find_user(email, password)
+
+                    if user:
+                        st.session_state.authenticated = True
+                        st.session_state.user_data = user
+                        st.session_state.menu = "Dashboard"
+                        st.rerun()
+                    else:
+                        st.error(
+                            "Invalid email, password, or inactive account."
+                        )
+
+            with t2:
+                st.markdown(
+                    '<div class="auth-panel-title">Sign Up</div>',
+                    unsafe_allow_html=True,
+                )
+                st.markdown(
+                    '<div class="auth-panel-subtitle">Create your HPE CaseFlow account</div>',
+                    unsafe_allow_html=True,
                 )
 
-            if submitted:
-                if not all(
-                    [
-                        first.strip(),
-                        last.strip(),
-                        employee_id.strip(),
-                        email.strip(),
-                        password,
-                        confirm,
-                    ]
-                ):
-                    st.error("Complete all required fields.")
-                elif "@" not in email:
-                    st.error("Enter a valid email address.")
-                elif password != confirm:
-                    st.error("Passwords do not match.")
-                else:
-                    success, message = create_user(
-                        {
-                            "first_name": first.strip(),
-                            "last_name": last.strip(),
-                            "employee_id": employee_id.strip(),
-                            "birthday": str(birthday),
-                            "email": email.strip().lower(),
-                            "contact_number": contact.strip(),
-                            "home_address": home.strip(),
-                            "password": password,
-                            "confirm_password": confirm,
-                            "role": "Agent",
-                            "status": "Active",
-                            "aux": "Available",
-                        }
+                with st.form("signup_form", clear_on_submit=True):
+                    c1, c2 = st.columns(2, gap="small")
+
+                    with c1:
+                        first = st.text_input("First Name")
+                        employee_id = st.text_input("Employee ID")
+                        birthday = st.date_input(
+                            "Birthday",
+                            value=dt.date(1990, 1, 1),
+                        )
+                        home = st.text_input("Home Address")
+                        password = st.text_input(
+                            "Password",
+                            type="password",
+                        )
+
+                    with c2:
+                        last = st.text_input("Last Name")
+                        email = st.text_input("HPE Email Address")
+                        contact = st.text_input("Contact Number")
+                        confirm = st.text_input(
+                            "Confirm Password",
+                            type="password",
+                        )
+
+                    submitted = st.form_submit_button(
+                        "Create Account",
+                        type="primary",
+                        use_container_width=True,
                     )
 
-                    if success:
-                        st.success(message)
-                    else:
-                        st.error(message)
+                if submitted:
+                    email_clean = email.strip().lower()
 
-        st.markdown("</div>", unsafe_allow_html=True)
+                    if not all(
+                        [
+                            first.strip(),
+                            last.strip(),
+                            employee_id.strip(),
+                            email_clean,
+                            password,
+                            confirm,
+                        ]
+                    ):
+                        st.error("Complete all required fields.")
+                    elif not email_clean.endswith("@hpe.com"):
+                        st.error("Use your HPE email address.")
+                    elif password != confirm:
+                        st.error("Passwords do not match.")
+                    elif len(password) < 8:
+                        st.error("Password must contain at least 8 characters.")
+                    else:
+                        success, message = create_user(
+                            {
+                                "first_name": first.strip(),
+                                "last_name": last.strip(),
+                                "employee_id": employee_id.strip(),
+                                "birthday": str(birthday),
+                                "email": email_clean,
+                                "contact_number": contact.strip(),
+                                "home_address": home.strip(),
+                                "password": password,
+                                "role": "Agent",
+                                "status": "Active",
+                                "aux": "Available",
+                            }
+                        )
+
+                        if success:
+                            st.success(message)
+                        else:
+                            st.error(message)
 
 
 # ============================================================
