@@ -20,7 +20,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom Styling: Replicates the exact visual identity of the design
 st.markdown("""
     <style>
     /* Hide Streamlit default headers & toolbars */
@@ -212,7 +211,7 @@ st.markdown("""
 
 
 # ==========================================
-# 2. DATABASE INITIALIZATION & SEEDING
+# 2. DATABASE INITIALIZATION & HELPER METHODS
 # ==========================================
 @st.cache_resource
 def get_mongo_client():
@@ -228,6 +227,57 @@ cases_col = db["Cases_Collection"]
 alerts_col = db["Alerts_Collection"]
 messages_col = db["Messages_Collection"]
 swaps_col = db["Schedule_Swaps"]
+
+# Database accessor helpers for `roster_list` object structure
+def find_roster_user(email: str):
+    """Finds user doc where roster_list.email == email (with fallback to root email)"""
+    doc = roster_col.find_one({"$or": [{"roster_list.email": email}, {"email": email}]})
+    if not doc:
+        return None
+    if "roster_list" in doc and isinstance(doc["roster_list"], dict):
+        user_data = dict(doc["roster_list"])
+        user_data["_id"] = doc["_id"]
+        return user_data
+    return doc
+
+def find_all_roster_users(filter_dict=None):
+    """Returns normalized user dicts stored under roster_list object"""
+    query = {}
+    if filter_dict:
+        for k, v in filter_dict.items():
+            if k == "_id":
+                query["_id"] = v
+            else:
+                query[f"roster_list.{k}"] = v
+    cursor = roster_col.find(query)
+    users = []
+    for doc in cursor:
+        if "roster_list" in doc and isinstance(doc["roster_list"], dict):
+            u = dict(doc["roster_list"])
+            u["_id"] = doc["_id"]
+            users.append(u)
+        else:
+            users.append(doc)
+    return users
+
+def update_roster_user(email: str, update_dict: dict, push_dict: dict = None):
+    """Updates fields inside the roster_list object in MongoDB"""
+    update_payload = {}
+    if update_dict:
+        set_payload = {}
+        for k, v in update_dict.items():
+            set_payload[f"roster_list.{k}"] = v
+        update_payload["$set"] = set_payload
+    if push_dict:
+        p_payload = {}
+        for k, v in push_dict.items():
+            p_payload[f"roster_list.{k}"] = v
+        update_payload["$push"] = p_payload
+
+    roster_col.update_one(
+        {"$or": [{"roster_list.email": email}, {"email": email}]},
+        update_payload
+    )
 
 def seed_validation_data():
     try:
@@ -295,10 +345,10 @@ def auto_assign_case(case_id):
         if not case or case.get("assigned_to"):
             return False
 
-        available_agents = list(roster_col.find({
+        available_agents = find_all_roster_users({
             "current_aux": "Available",
             "role": {"$in": ["Agent", "Admin/Agent"]}
-        }))
+        })
 
         if not available_agents:
             return False
@@ -347,14 +397,15 @@ def auto_assign_case(case_id):
             }}
         )
 
-        roster_col.update_one(
-            {"email": chosen_agent["email"]},
-            {"$push": {"assignment_history": {
+        update_roster_user(
+            chosen_agent["email"],
+            update_dict={},
+            push_dict={"assignment_history": {
                 "case_id": str(case_id),
                 "case_number": case.get("case_number"),
                 "priority": case.get("priority"),
                 "timestamp": now_iso
-            }}}
+            }}
         )
 
         alerts_col.insert_one({
@@ -375,14 +426,13 @@ def auto_assign_case(case_id):
 def update_agent_aux(email, new_aux):
     try:
         now_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        roster_col.update_one(
-            {"email": email},
-            {
-                "$set": {"current_aux": new_aux, "aux_last_updated": now_iso},
-                "$push": {"aux_history": {"aux": new_aux, "timestamp": now_iso}}
-            }
+        update_roster_user(
+            email,
+            update_dict={"current_aux": new_aux, "aux_last_updated": now_iso},
+            push_dict={"aux_history": {"aux": new_aux, "timestamp": now_iso}}
         )
-        st.session_state["user"]["current_aux"] = new_aux
+        if "user" in st.session_state and st.session_state["user"].get("email") == email:
+            st.session_state["user"]["current_aux"] = new_aux
 
         if new_aux == "Available":
             unassigned_cases = cases_col.find({"assigned_to": None}).sort("urgency_weight", pymongo.DESCENDING)
@@ -406,7 +456,7 @@ def show_forgot_password_dialog():
         if not fp_email:
             st.error("Please enter your HPE email.")
             return
-        user = roster_col.find_one({"email": fp_email})
+        user = find_roster_user(fp_email)
         if user:
             token = hash_password(fp_email)[:16]
             st.success(f"A password reset link has been dispatched to {fp_email}!")
@@ -440,7 +490,7 @@ def show_case_modal(case_id, user):
     st.divider()
 
     if user["role"] == "Admin":
-        all_agents = list(roster_col.find({"role": {"$in": ["Agent", "Admin/Agent"]}}))
+        all_agents = find_all_roster_users({"role": {"$in": ["Agent", "Admin/Agent"]}})
         ag_map = {f"{a.get('first_name')} {a.get('last_name')} ({a['email']})": a['email'] for a in all_agents}
         new_assigned_display = st.selectbox("Reassign to:", options=list(ag_map.keys()))
         if st.button("Confirm Reassign", key="btn_reassign_admin"):
@@ -489,7 +539,7 @@ def show_case_modal(case_id, user):
 
 @st.dialog("Agent History & Monitoring", width="large")
 def show_agent_monitoring_modal(agent_email):
-    agent = roster_col.find_one({"email": agent_email})
+    agent = find_roster_user(agent_email)
     if not agent:
         st.error("Agent not found.")
         return
@@ -584,7 +634,6 @@ def render_custom_top_bar(user):
                     st.rerun()
 
         if user["role"] in ["Agent", "Admin/Agent"]:
-            today_str = datetime.now().strftime("%Y-%m-%d")
             sched_text = "Shift: 08:00 - 17:00 | Break: 10:00, 15:00 | Lunch: 12:00"
             st.markdown(f"<div style='font-size:0.75rem; color:#868e96; text-align:right;'>📅 {sched_text}</div>", unsafe_allow_html=True)
 
@@ -672,14 +721,14 @@ def render_auth_view():
                 if not login_email or not login_pwd:
                     st.error("Please enter both email and password.")
                 else:
-                    user = roster_col.find_one({"email": login_email})
+                    user = find_roster_user(login_email)
                     if user and verify_password(login_pwd, user.get("password")):
                         default_aux = "Admin Work" if user.get("role") == "Admin" else "Not Ready - Online"
                         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-                        roster_col.update_one(
-                            {"_id": user["_id"]},
-                            {"$set": {"current_aux": default_aux, "last_login": now_str}}
+                        update_roster_user(
+                            login_email,
+                            update_dict={"current_aux": default_aux, "last_login": now_str}
                         )
                         user["current_aux"] = default_aux
                         st.session_state["user"] = user
@@ -724,7 +773,6 @@ def render_auth_view():
 
             st.markdown("<div style='height: 24px;'></div>", unsafe_allow_html=True)
             
-            # Switch to Sign Up
             c_lbl, c_lnk = st.columns([2.2, 1.8])
             with c_lbl:
                 st.markdown("<div style='text-align:right; font-size:0.92rem; color:#475569; padding-top:6px;'>Don't have an account?</div>", unsafe_allow_html=True)
@@ -750,7 +798,6 @@ def render_auth_view():
 
             st.markdown("<div style='font-size:0.75rem; color:#64748b; margin-top:-6px; margin-bottom:12px;'>Password must be at least 8 characters and include letters, numbers and a special character.</div>", unsafe_allow_html=True)
 
-            # Default role for all signups is Agent
             default_role = "Agent"
 
             st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
@@ -761,25 +808,28 @@ def render_auth_view():
                     st.warning("Please ensure you are registering with an authorized HPE corporate email address.")
                 elif len(su_pwd) < 8:
                     st.error("Password must be at least 8 characters long.")
-                elif roster_col.find_one({"email": su_email}):
+                elif find_roster_user(su_email):
                     st.error("An account with this HPE email already exists.")
                 else:
                     hashed = hash_password(su_pwd)
                     default_aux = "Not Ready - Online"
                     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+                    # Saved collected data inside Team Roster Collection under roster_list as an object
                     user_doc = {
-                        "first_name": su_fname,
-                        "last_name": su_lname,
-                        "emp_id": su_empid,
-                        "email": su_email,
-                        "password": hashed,
-                        "role": default_role,
-                        "profile_pic": None,
-                        "current_aux": default_aux,
-                        "registered_date": now_str,
-                        "aux_history": [{"aux": default_aux, "timestamp": now_str}],
-                        "assignment_history": []
+                        "roster_list": {
+                            "first_name": su_fname,
+                            "last_name": su_lname,
+                            "emp_id": su_empid,
+                            "email": su_email,
+                            "password": hashed,
+                            "role": default_role,
+                            "profile_pic": None,
+                            "current_aux": default_aux,
+                            "registered_date": now_str,
+                            "aux_history": [{"aux": default_aux, "timestamp": now_str}],
+                            "assignment_history": []
+                        }
                     }
                     roster_col.insert_one(user_doc)
                     st.success("Account created successfully! Redirecting to Sign In...")
@@ -836,7 +886,7 @@ def render_dashboard(user):
 
     with dash_col_side:
         st.markdown("#### Live Workforce Aux")
-        active_agents = list(roster_col.find({"role": {"$in": ["Agent", "Admin/Agent"]}}))
+        active_agents = find_all_roster_users({"role": {"$in": ["Agent", "Admin/Agent"]}})
         for ag in active_agents:
             st.write(f"**{ag.get('first_name')} {ag.get('last_name')}**: `{ag.get('current_aux')}`")
 
@@ -846,7 +896,7 @@ def render_dashboard(user):
 # ==========================================
 def render_monitoring(user):
     st.subheader("Workforce Live Monitoring")
-    agents = list(roster_col.find({"role": {"$in": ["Agent", "Admin/Agent"]}}))
+    agents = find_all_roster_users({"role": {"$in": ["Agent", "Admin/Agent"]}})
     col_cards = st.columns(3)
     for idx, ag in enumerate(agents):
         with col_cards[idx % 3]:
@@ -884,7 +934,7 @@ def render_report(user):
 # ==========================================
 def render_settings(user):
     st.subheader("Team Roster Master Directory & Role Administration")
-    all_users = list(roster_col.find({}))
+    all_users = find_all_roster_users()
 
     st.markdown("#### Registered Users")
     for u in all_users:
@@ -900,7 +950,7 @@ def render_settings(user):
             )
             
             if r4.button("Update Role", key=f"btn_r_{u['_id']}"):
-                roster_col.update_one({"_id": u["_id"]}, {"$set": {"role": new_role}})
+                update_roster_user(u["email"], update_dict={"role": new_role})
                 st.toast(f"Role updated to {new_role} for {u.get('first_name')}!")
                 st.rerun()
 
@@ -919,7 +969,7 @@ def main():
     if "user" not in st.session_state:
         saved_email = cookie_manager.get("hpe_auth_token")
         if saved_email:
-            existing = roster_col.find_one({"email": saved_email})
+            existing = find_roster_user(saved_email)
             if existing:
                 st.session_state["user"] = existing
 
@@ -933,6 +983,22 @@ def main():
     st.sidebar.markdown("### 📍 Navigation")
     nav_options = ["Dashboard", "Monitoring", "Schedule", "Report", "Setting"] if user["role"] in ["Admin", "Admin/Agent"] else ["Dashboard", "Schedule", "Report"]
     active_page = st.sidebar.radio("Go to:", nav_options, index=0)
+
+    with st.sidebar.expander("👤 My Profile Settings"):
+        uploaded_pic = st.file_uploader("Upload Profile Picture", type=["png", "jpg", "jpeg"])
+        if uploaded_pic:
+            import base64
+            pic_b64 = f"data:image/png;base64,{base64.b64encode(uploaded_pic.read()).decode()}"
+            update_roster_user(user["email"], update_dict={"profile_pic": pic_b64})
+            st.session_state["user"]["profile_pic"] = pic_b64
+            st.success("Profile photo updated!")
+            st.rerun()
+
+        new_password = st.text_input("New Password", type="password", key="new_prof_pwd")
+        if st.button("Change Password"):
+            if new_password:
+                update_roster_user(user["email"], update_dict={"password": hash_password(new_password)})
+                st.success("Password changed successfully!")
 
     if st.sidebar.button("Sign Out", type="primary", use_container_width=True):
         cookie_manager.delete("hpe_auth_token")
