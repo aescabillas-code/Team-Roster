@@ -68,49 +68,37 @@ st.markdown(
         background: transparent;
     }}
 
-    /* Sidebar Styling */
+    /* Sidebar Styling (Matches image_a0e6c1.png) */
     [data-testid="stSidebar"] {{
-        background: linear-gradient(180deg, #003B49 0%, #002F3A 100%);
-        min-width: 220px !important;
-        max-width: 220px !important;
+        background: #002B36 !important;
+        min-width: 240px !important;
+        max-width: 240px !important;
     }}
 
     [data-testid="stSidebar"] > div:first-child {{
-        padding: 1rem 0.5rem;
+        padding: 2rem 1.5rem;
     }}
 
     [data-testid="stSidebar"] * {{
         color: #fff !important;
     }}
 
-    .side-brand {{
-        padding: 10px 15px 20px;
-        border-bottom: 1px solid rgba(255,255,255,.10);
-        margin-bottom: 15px;
+    [data-testid="stSidebar"] button {{
+        width: 100%;
+        min-height: 44px;
+        border: 0 !important;
+        background: #ffffff !important;
+        box-shadow: none !important;
+        border-radius: 8px !important;
+        text-align: left !important;
+        font-size: 14px !important;
+        font-weight: 600 !important;
+        padding: 10px 15px !important;
+        margin: 0 0 12px 0 !important;
     }}
 
-    .brand-mark {{
-        width: 24px;
-        height: 14px;
-        border: 2px solid var(--teal);
-        border-radius: 2px;
-        display: inline-block;
-        margin-bottom: 8px;
-    }}
-
-    .brand-name {{
-        color: #fff;
-        font-size: 14px;
-        font-weight: 800;
-        line-height: 1.1;
-    }}
-
-    .side-section {{
-        font-size: 11px;
-        opacity: .7;
-        padding: 10px 15px 5px;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
+    [data-testid="stSidebar"] button:hover {{
+        background: #f0f0f0 !important;
     }}
 
     /* Top Bar Styling */
@@ -1189,33 +1177,36 @@ else:
 
 st.sidebar.markdown(
     """
-    <div class="side-brand">
-        <span class="brand-mark"></span>
-        <div class="brand-name">HPE CaseFlow</div>
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom: 25px;">
+        <span style="width:24px; height:14px; border: 2px solid #00A88F; border-radius:1px; display:inline-block;"></span>
+        <span style="color:#fff; font-size:16px; font-weight:800; letter-spacing: 0.2px;">HPE CaseFlow</span>
     </div>
+    <hr style="border-color: rgba(255,255,255,0.1); margin-bottom: 25px; margin-top: 0;">
     """,
     unsafe_allow_html=True,
 )
 
-st.sidebar.markdown(f'<div class="side-section">Menu ({role_name})</div>', unsafe_allow_html=True)
+menu_title = "MENU (ADMIN)" if is_admin else "MENU (AGENT)"
+st.sidebar.markdown(
+    f'<div style="font-size:11px; color:#8baaa9 !important; font-weight:700; margin-bottom: 20px; letter-spacing: 0.5px;">{menu_title}</div>', 
+    unsafe_allow_html=True
+)
 
 menu = st.session_state.menu
 
+# Dynamically inject styles for the active button vs inactive buttons based on the user's selection
+st.sidebar.markdown(
+    f"""
+    <style>
+    div[data-testid="stSidebar"] button:has(div:contains(" {menu} ")) {{
+        background: #1B4B5A !important;
+    }}
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 for icon, label in NAV:
-    # Adding a visual highlight trick using markdown right before the button for active state
-    if menu == label:
-        st.sidebar.markdown(
-            """
-            <style>
-            div[data-testid="stSidebar"] button:has(div:contains(" """ + label + """ ")) {
-                background: rgba(0,168,143,.24) !important;
-                border-left: 3px solid var(--teal) !important;
-                border-radius: 4px !important;
-            }
-            </style>
-            """, unsafe_allow_html=True
-        )
-        
     if st.sidebar.button(f"{icon}  {label}", key=f"nav_{label}"):
         st.session_state.menu = label
         st.rerun()
