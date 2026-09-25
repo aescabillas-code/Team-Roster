@@ -31,47 +31,66 @@ st.markdown("""
     [data-testid="stDecoration"] {visibility: hidden !important;}
     [data-testid="stStatusWidget"] {visibility: hidden !important;}
 
-    /* Keep the sidebar permanently open and visible */
+    /* Disable/Hide the collapse button to make sidebar NON-RETRACTABLE */
+    [data-testid="stSidebarCollapseButton"] {
+        display: none !important;
+    }
+    button[kind="header"] {
+        display: none !important;
+    }
+
+    /* Fixed Dark Sidebar Styling Matching Image */
     [data-testid="stSidebar"] {
-        display: block !important;
-        visibility: visible !important;
-        transform: none !important;
         background-color: #0b1a20 !important;
         min-width: 250px !important;
         max-width: 250px !important;
-        width: 250px !important;
         border-right: 1px solid #162a33 !important;
-        position: relative !important;
     }
     [data-testid="stSidebar"] * {
         color: #94a3b8;
     }
 
-    /* Hide the collapse/close icon so the sidebar is non-retractable */
-    [data-testid="stSidebarCollapseButton"],
-    [data-testid="collapsedControl"] {
-        display: none !important;
-        visibility: hidden !important;
-    }
-
-    /* Active Tab Highlight in Sidebar */
-    [data-testid="stSidebar"] div[role="radiogroup"] > label {
-        padding: 10px 16px !important;
+    /* Clickable Tile Navigation Buttons in Sidebar */
+    .stSidebar [data-testid="stVerticalBlock"] div.stButton > button {
+        width: 100% !important;
+        text-align: left !important;
+        justify-content: flex-start !important;
+        background-color: transparent !important;
+        border: none !important;
         border-radius: 8px !important;
+        padding: 10px 14px !important;
+        font-size: 0.95rem !important;
+        font-weight: 600 !important;
+        color: #94a3b8 !important;
+        box-shadow: none !important;
         margin-bottom: 4px !important;
-        transition: background 0.15s ease !important;
+        transition: all 0.15s ease-in-out !important;
     }
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:hover {
-        background-color: rgba(255, 255, 255, 0.05) !important;
+    .stSidebar [data-testid="stVerticalBlock"] div.stButton > button:hover {
+        background-color: rgba(255, 255, 255, 0.06) !important;
         color: #ffffff !important;
     }
-    [data-testid="stSidebar"] div[role="radiogroup"] > label[data-checked="true"] {
+    .stSidebar [data-testid="stVerticalBlock"] div.stButton > button[kind="primary"] {
         background-color: #01a982 !important;
         color: #ffffff !important;
         font-weight: 700 !important;
     }
-    [data-testid="stSidebar"] div[role="radiogroup"] > label[data-checked="true"] * {
+
+    /* Sign Out Button in Sidebar */
+    .stSidebar div.stButton > button[key="btn_sidebar_signout"],
+    .stSidebar div.stButton > button:has(div:contains("Sign Out")) {
+        background-color: #1e293b !important;
+        color: #ef4444 !important;
+        border: 1px solid #334155 !important;
+        text-align: center !important;
+        justify-content: center !important;
+        font-weight: 700 !important;
+        margin-top: 20px !important;
+    }
+    .stSidebar div.stButton > button:has(div:contains("Sign Out")):hover {
+        background-color: #ef4444 !important;
         color: #ffffff !important;
+        border-color: #ef4444 !important;
     }
 
     /* Full-screen dashboard container */
@@ -668,7 +687,6 @@ def auto_assign_case(case_id):
 
         is_critical = (case.get("priority") == "Critical")
         if is_critical:
-            # Rule: Critical cases must not be assigned to an agent who already has an active critical case
             crit_free = [c for c in candidate_metrics if c["active_critical"] == 0]
             pool = crit_free if crit_free else candidate_metrics
         else:
@@ -731,7 +749,7 @@ def update_agent_aux(email, new_aux):
 
 
 # ==========================================
-# 5. PASSWORD CHANGE & MODAL HELPERS
+# 5. PASSWORD CHANGE & TOPBAR HELPERS
 # ==========================================
 @st.dialog("Change Account Password")
 def show_change_password_dialog(user):
@@ -793,7 +811,6 @@ def render_dashboard_topbar(user):
                 update_agent_aux(user["email"], new_aux)
                 st.rerun()
 
-        # Display schedule directly below aux bar for Agent & Admin/Agent
         if user.get("role") in ["Agent", "Admin/Agent"]:
             today_str = datetime.now().strftime("%Y-%m-%d")
             sched = schedule_col.find_one({"date": today_str})
@@ -882,7 +899,6 @@ def render_auth_view():
                 else:
                     user = find_roster_user(login_email)
                     if user and verify_password(login_pwd, user.get("password", "")):
-                        # Default Aux: Admin and Admin/Agent -> Admin Work, Agent -> Not Ready - Online
                         if user.get("role") in ["Admin", "Admin/Agent"]:
                             default_aux = "Admin Work"
                         else:
@@ -903,7 +919,6 @@ def render_auth_view():
                         user["session_token"] = token
                         st.session_state["user"] = user
 
-                        # Store session in browser URL query parameters and cookies to survive refresh and idle
                         st.query_params["session_token"] = token
                         cookie_manager.set("hpe_session_token", token, expires_at=datetime.now() + timedelta(days=30))
 
@@ -966,7 +981,6 @@ def render_auth_view():
                     default_aux = "Not Ready - Online"
                     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-                    # Saved to MongoDB under Team Roster Collection under roster_list as an object with all information as strings
                     user_doc = {
                         "type": "roster_list",
                         "roster_list": {
@@ -1122,7 +1136,6 @@ HPE Operations Management
 # ==========================================
 def render_dashboard(user):
     # Alert Dispatcher checks
-    # 1. Critical Near-Due Warning
     now = datetime.now()
     two_hours_ahead = now + timedelta(hours=2)
     crit_cases = list(cases_col.find({"status": {"$nin": ["Resolved", "Closed"]}, "priority": "Critical"}))
@@ -1134,7 +1147,6 @@ def render_dashboard(user):
         except Exception:
             pass
 
-    # 2. Agent Direct Broadcast Admin Pop-up
     unread_msg = messages_col.find_one({"target_email": user["email"], "displayed": False})
     if unread_msg:
         st.warning(f"📢 **ADMIN MESSAGE from {unread_msg.get('sender')}**:\n\n{unread_msg.get('message')}")
@@ -1142,7 +1154,6 @@ def render_dashboard(user):
             messages_col.update_one({"_id": unread_msg["_id"]}, {"$set": {"displayed": True}})
             st.rerun()
 
-    # 3. Toast alerts
     pending_alerts = list(alerts_col.find({"target_email": user["email"], "read": False}))
     for a in pending_alerts:
         st.toast(f"🔔 {a.get('type')}: {a.get('message')}")
@@ -1251,7 +1262,6 @@ def render_dashboard(user):
     with col_main:
         st.markdown("<h3 style='font-size: 1.25rem; font-weight: 800; color: #0f172a; margin-bottom: 12px;'>Active Cases</h3>", unsafe_allow_html=True)
 
-        # Filters: For Admin/Agent offer both My Cases and All Cases
         if user_role == "Admin/Agent":
             scope_col1, scope_col2, _ = st.columns([1.5, 1.5, 4])
             with scope_col1:
@@ -1355,7 +1365,6 @@ def render_dashboard(user):
                     show_case_modal(case_map[sel_label], user)
 
     # ---------------- RIGHT PANEL: AGENTS ONLINE ----------------
-    # Shows Agent and Admin/Agent only. Admin status is hidden per instructions.
     if user_role in ["Admin", "Admin/Agent"]:
         with col_online:
             st.markdown("""
@@ -1388,7 +1397,6 @@ def render_dashboard(user):
 
             st.markdown("</div>", unsafe_allow_html=True)
 
-            # Vendor Contact Excel Upload Sync
             st.markdown("<div style='height: 14px;'></div>", unsafe_allow_html=True)
             with st.expander("📁 Sync Vendor Excel Directory"):
                 v_file = st.file_uploader("Upload Vendor Master (.xlsx)", type=["xlsx", "xls"], key="dash_vendor_excel")
@@ -1689,6 +1697,23 @@ def render_settings(user):
 # 13. MAIN RUNNER & SIDEBAR ROUTING (PERSISTENCE)
 # ==========================================
 def main():
+    # Handle explicit logout signal cleanly before verifying session
+    if st.session_state.get("logout_requested"):
+        st.session_state["logout_requested"] = False
+        user_to_logout = st.session_state.get("user")
+        if user_to_logout:
+            update_roster_user(
+                user_to_logout["email"],
+                update_dict={"session_token": "", "current_aux": "Not Ready - Online"}
+            )
+        cookie_manager.delete("hpe_session_token")
+        if "session_token" in st.query_params:
+            del st.query_params["session_token"]
+        if "user" in st.session_state:
+            del st.session_state["user"]
+        st.rerun()
+
+    # 1. Recover session on refresh or idle from query params or browser cookie
     if "user" not in st.session_state or not st.session_state["user"]:
         active_token = st.query_params.get("session_token")
         
@@ -1701,13 +1726,18 @@ def main():
                 st.session_state["user"] = existing_user
                 st.query_params["session_token"] = active_token
 
+    # 2. Render Auth View if still not logged in
     if "user" not in st.session_state or not st.session_state["user"]:
         render_auth_view()
         return
 
     user = st.session_state["user"]
 
-    # Fixed Non-Retractable Sidebar
+    # Initialize active page state
+    if "active_page" not in st.session_state:
+        st.session_state["active_page"] = "Dashboard"
+
+    # Fixed Non-Retractable Sidebar with Clickable Tiles
     with st.sidebar:
         st.markdown("""
         <div class="brand-container">
@@ -1718,11 +1748,27 @@ def main():
         """, unsafe_allow_html=True)
 
         if user["role"] in ["Admin", "Admin/Agent"]:
-            nav_options = ["Dashboard", "Monitoring", "Schedule", "Report", "Setting"]
+            nav_tabs = [
+                ("📊 Dashboard", "Dashboard"),
+                ("👁️ Monitoring", "Monitoring"),
+                ("📅 Schedule", "Schedule"),
+                ("📈 Report", "Report"),
+                ("⚙️ Setting", "Setting")
+            ]
         else:
-            nav_options = ["Dashboard", "Schedule", "Report"]
+            nav_tabs = [
+                ("📊 Dashboard", "Dashboard"),
+                ("📅 Schedule", "Schedule"),
+                ("📈 Report", "Report")
+            ]
 
-        active_page = st.radio("Navigation", nav_options, index=0, label_visibility="collapsed")
+        # Render each tab as a clean clickable tile button
+        for label, page_key in nav_tabs:
+            is_active = (st.session_state["active_page"] == page_key)
+            btn_kind = "primary" if is_active else "secondary"
+            if st.button(label, key=f"nav_tile_{page_key}", type=btn_kind, use_container_width=True):
+                st.session_state["active_page"] = page_key
+                st.rerun()
 
         # Profile Picture Upload Option in Sidebar
         with st.expander("👤 Profile Picture"):
@@ -1735,29 +1781,24 @@ def main():
                 st.success("Profile photo updated!")
                 st.rerun()
 
-        st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='height: 30px;'></div>", unsafe_allow_html=True)
 
-        if st.button("Sign Out", type="secondary", use_container_width=True):
-            update_roster_user(
-                user["email"],
-                update_dict={"session_token": "", "current_aux": "Not Ready - Online"}
-            )
-            cookie_manager.delete("hpe_session_token")
-            if "session_token" in st.query_params:
-                del st.query_params["session_token"]
-            del st.session_state["user"]
+        # Explicit Sign Out button: reliably logs out user and returns to Sign In
+        if st.button("🚪 Sign Out", key="btn_sidebar_signout", use_container_width=True):
+            st.session_state["logout_requested"] = True
             st.rerun()
 
     # Route Page
-    if active_page == "Dashboard":
+    current_page = st.session_state.get("active_page", "Dashboard")
+    if current_page == "Dashboard":
         render_dashboard(user)
-    elif active_page == "Monitoring":
+    elif current_page == "Monitoring":
         render_monitoring(user)
-    elif active_page == "Schedule":
+    elif current_page == "Schedule":
         render_schedule(user)
-    elif active_page == "Report":
+    elif current_page == "Report":
         render_report(user)
-    elif active_page == "Setting":
+    elif current_page == "Setting":
         render_settings(user)
 
 
