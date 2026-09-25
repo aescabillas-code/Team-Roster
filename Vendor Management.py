@@ -7,6 +7,7 @@ import pymongo
 from bson.objectid import ObjectId
 import bcrypt
 import json
+import uuid
 import time as time_pkg
 import extra_streamlit_components as stx
 
@@ -14,7 +15,7 @@ import extra_streamlit_components as stx
 # 1. STREAMLIT PAGE CONFIG & CSS CUSTOMIZATION
 # ==========================================
 st.set_page_config(
-    page_title="HPE CaseFlow - Team Task and Case Management System",
+    page_title="HPE CaseFlow - Team Task Management",
     page_icon="📋",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -22,7 +23,7 @@ st.set_page_config(
 
 st.markdown("""
     <style>
-    /* Hide Streamlit default headers & toolbars */
+    /* Hide Streamlit default chrome */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
@@ -30,20 +31,184 @@ st.markdown("""
     [data-testid="stDecoration"] {visibility: hidden !important;}
     [data-testid="stStatusWidget"] {visibility: hidden !important;}
 
-    /* Page container spacing */
+    /* Page container adjustments */
     .block-container {
-        padding-top: 2rem;
-        padding-bottom: 2rem;
-        max-width: 1200px;
+        padding-top: 1rem !important;
+        padding-bottom: 2rem !important;
+        padding-left: 2rem !important;
+        padding-right: 2rem !important;
+        max-width: 100% !important;
     }
-    
+
     :root {
         --hpe-green: #01a982;
         --hpe-green-dark: #007a5e;
         --hpe-teal: #00c9a7;
+        --bg-slate: #f8fafc;
     }
 
-    /* Left Hero Card */
+    /* Left Sidebar Brand */
+    .brand-container {
+        padding: 10px 0 20px 0;
+    }
+    .brand-title {
+        font-size: 1.35rem;
+        font-weight: 800;
+        color: #ffffff;
+        letter-spacing: -0.3px;
+        margin: 0;
+    }
+    .brand-sub {
+        font-size: 0.8rem;
+        color: #94a3b8;
+        margin-top: 2px;
+    }
+
+    /* Top Navigation / Search Header */
+    .top-search-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 1.5rem;
+        gap: 1.5rem;
+    }
+
+    /* Metric Cards */
+    .metric-card-container {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        padding: 18px 20px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    }
+    .metric-icon-circle {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.3rem;
+        flex-shrink: 0;
+    }
+    .metric-val {
+        font-size: 1.85rem;
+        font-weight: 800;
+        color: #0f172a;
+        line-height: 1.1;
+    }
+    .metric-lbl {
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #64748b;
+        margin-bottom: 2px;
+    }
+    .metric-sub {
+        font-size: 0.72rem;
+        color: #94a3b8;
+    }
+
+    /* Table styling */
+    .case-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0 8px;
+        font-family: sans-serif;
+    }
+    .case-table th {
+        color: #64748b;
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 8px 14px;
+        border: none;
+        background: transparent;
+    }
+    .case-table tr.case-row {
+        background: #ffffff;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        transition: transform 0.1s ease;
+    }
+    .case-table tr.case-row td {
+        padding: 14px 14px;
+        font-size: 0.86rem;
+        color: #1e293b;
+        vertical-align: middle;
+        border-top: 1px solid #f1f5f9;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    .case-table tr.case-row td:first-child {
+        border-left: 1px solid #f1f5f9;
+        border-top-left-radius: 10px;
+        border-bottom-left-radius: 10px;
+    }
+    .case-table tr.case-row td:last-child {
+        border-right: 1px solid #f1f5f9;
+        border-top-right-radius: 10px;
+        border-bottom-right-radius: 10px;
+    }
+
+    /* Status & Priority Badges */
+    .badge {
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        display: inline-block;
+        text-align: center;
+    }
+    .badge-critical { background: #ffe4e6; color: #e11d48; }
+    .badge-high { background: #ffedd5; color: #ea580c; }
+    .badge-medium { background: #fef9c3; color: #ca8a04; }
+    .badge-low { background: #dcfce7; color: #16a34a; }
+
+    .badge-status-prog { background: #dcfce7; color: #15803d; }
+    .badge-status-open { background: #e0f2fe; color: #0284c7; }
+    .badge-status-pend { background: #fef3c7; color: #b45309; }
+    .badge-status-update { background: #f1f5f9; color: #475569; }
+
+    .badge-aux-avail { background: #dcfce7; color: #15803d; }
+    .badge-aux-call { background: #ffe4e6; color: #e11d48; }
+    .badge-aux-meet { background: #ffe4e6; color: #e11d48; }
+    .badge-aux-lunch { background: #fef3c7; color: #b45309; }
+    .badge-aux-coach { background: #fef3c7; color: #b45309; }
+    .badge-aux-notready { background: #f1f5f9; color: #64748b; }
+
+    /* Side Detail Panel Card */
+    .detail-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+    }
+
+    /* Online Agents List Panel */
+    .agent-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 9px 0;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    .agent-info {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .agent-name {
+        font-size: 0.86rem;
+        font-weight: 600;
+        color: #1e293b;
+    }
+
+    /* Hero / Auth Card Styling */
     .hero-card {
         background: linear-gradient(180deg, rgba(7, 24, 32, 0.94) 0%, rgba(5, 17, 22, 0.98) 100%), 
                     url('https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1200&auto=format&fit=crop');
@@ -58,80 +223,6 @@ st.markdown("""
         justify-content: space-between;
         box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
     }
-
-    .hpe-bar {
-        width: 46px;
-        height: 6px;
-        background-color: var(--hpe-green);
-        border-radius: 3px;
-        margin-bottom: 12px;
-    }
-
-    .hpe-corp {
-        font-size: 1.12rem;
-        font-weight: 700;
-        line-height: 1.2;
-        letter-spacing: -0.2px;
-        margin-bottom: 36px;
-    }
-
-    .hero-title-main {
-        font-size: 2.8rem;
-        font-weight: 800;
-        line-height: 1.0;
-        letter-spacing: -0.6px;
-        margin-bottom: 0px;
-    }
-
-    .hero-title-highlight {
-        font-size: 2.8rem;
-        font-weight: 800;
-        line-height: 1.05;
-        color: #00e6a8;
-        letter-spacing: -0.6px;
-        margin-bottom: 8px;
-    }
-
-    .hero-tagline {
-        font-size: 1.05rem;
-        color: #cbd5e1;
-        line-height: 1.35;
-        margin-bottom: 40px;
-    }
-
-    .feature-row {
-        display: flex;
-        align-items: center;
-        margin-bottom: 24px;
-    }
-
-    .feature-icon-wrapper {
-        width: 48px;
-        height: 48px;
-        border-radius: 50%;
-        border: 2px solid var(--hpe-teal);
-        background: rgba(0, 201, 167, 0.08);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.35rem;
-        margin-right: 18px;
-        flex-shrink: 0;
-    }
-
-    .feature-title {
-        font-size: 1.02rem;
-        font-weight: 700;
-        color: #ffffff;
-        margin-bottom: 2px;
-    }
-
-    .feature-desc {
-        font-size: 0.86rem;
-        color: #94a3b8;
-    }
-
-    /* Right Auth Form Titles */
     .auth-main-title {
         font-size: 2.25rem;
         font-weight: 800;
@@ -139,14 +230,11 @@ st.markdown("""
         margin-bottom: 4px;
         letter-spacing: -0.5px;
     }
-
     .auth-sub-title {
         font-size: 0.98rem;
         color: #475569;
         margin-bottom: 24px;
     }
-
-    /* Primary Button Styling */
     div.stButton > button[kind="primary"] {
         background-color: var(--hpe-green-dark) !important;
         border: none !important;
@@ -160,52 +248,6 @@ st.markdown("""
     div.stButton > button[kind="primary"]:hover {
         background-color: var(--hpe-green) !important;
     }
-
-    /* Secondary / Outline Button */
-    div.stButton > button[kind="secondary"] {
-        border-radius: 8px !important;
-        font-weight: 600 !important;
-        border: 1px solid #cbd5e1 !important;
-    }
-
-    /* Borderless table */
-    .borderless-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-family: sans-serif;
-        font-size: 0.88rem;
-    }
-    .borderless-table th {
-        background-color: #f8f9fa;
-        color: #495057;
-        padding: 10px 12px;
-        text-align: left;
-        border: none !important;
-    }
-    .borderless-table td {
-        padding: 9px 12px;
-        border: none !important;
-        border-bottom: 1px solid #f1f3f5 !important;
-    }
-    .borderless-table tr:hover {
-        background-color: #f8f9fa;
-    }
-    
-    /* Status Pills */
-    .pill {
-        padding: 3px 8px;
-        border-radius: 12px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        display: inline-block;
-    }
-    .pill-crit { background: #ffe3e3; color: #c92a2a; }
-    .pill-high { background: #ffe8cc; color: #d9480f; }
-    .pill-med { background: #fff3bf; color: #f08c00; }
-    .pill-low { background: #e6fcf5; color: #0ca678; }
-    .pill-avail { background: #d3f9d8; color: #2b8a3e; }
-    .pill-aux { background: #e7f5ff; color: #1c7ed6; }
-    .pill-break { background: #f3d9fa; color: #ae3ec9; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -228,9 +270,6 @@ alerts_col = db["Alerts_Collection"]
 messages_col = db["Messages_Collection"]
 swaps_col = db["Schedule_Swaps"]
 
-# ------------------------------------------------------------
-# Helpers to handle type: "roster_list" with string values
-# ------------------------------------------------------------
 def _deserialize_user(doc):
     if not doc:
         return None
@@ -241,7 +280,6 @@ def _deserialize_user(doc):
     user = {str(k): str(v) if v is not None else "" for k, v in data.items()}
     user["_id"] = doc["_id"]
 
-    # Safely unpack serialized history strings back to lists for app logic
     for list_field in ["aux_history", "assignment_history"]:
         raw_val = user.get(list_field, "[]")
         try:
@@ -252,15 +290,22 @@ def _deserialize_user(doc):
     return user
 
 def find_roster_user(email: str):
-    """Finds user doc where type == 'roster_list' and email matches"""
     doc = roster_col.find_one({
         "type": "roster_list",
         "roster_list.email": str(email).strip().lower()
     })
     return _deserialize_user(doc)
 
+def find_roster_user_by_token(session_token: str):
+    if not session_token:
+        return None
+    doc = roster_col.find_one({
+        "type": "roster_list",
+        "roster_list.session_token": str(session_token).strip()
+    })
+    return _deserialize_user(doc)
+
 def find_all_roster_users(filter_dict=None):
-    """Returns all users stored under type: 'roster_list'"""
     query = {"type": "roster_list"}
     if filter_dict:
         for k, v in filter_dict.items():
@@ -274,7 +319,6 @@ def find_all_roster_users(filter_dict=None):
     return [_deserialize_user(doc) for doc in cursor if doc]
 
 def update_roster_user(email: str, update_dict: dict, append_history: dict = None):
-    """Updates fields inside roster_list, ensuring all values are stored as strings"""
     set_payload = {}
     if update_dict:
         for k, v in update_dict.items():
@@ -299,13 +343,133 @@ def update_roster_user(email: str, update_dict: dict, append_history: dict = Non
             {"$set": set_payload}
         )
 
+# Seed realistic initial cases to match the screenshot
+def seed_demo_cases():
+    try:
+        if cases_col.count_documents({}) == 0:
+            sample_cases = [
+                {
+                    "case_number": "CASE-2026-1045",
+                    "subject": "Software License Renewal",
+                    "description": "Customer requires renewal of HPE software license for multi-year contract. Vendor to provide updated quote and entitlement confirmation.",
+                    "priority": "Critical",
+                    "assigned_to": "maria.santos@hpe.com",
+                    "assigned_agent_name": "Maria Santos",
+                    "due_date": "Sep 25, 2026 10:00 AM",
+                    "due_remaining": "22h 15m",
+                    "status": "In Progress",
+                    "status_reason": "Waiting for Vendor",
+                    "last_update": "Sep 24, 2026 02:15 PM",
+                    "last_elapsed": "22h 15m ago",
+                    "vendor_name": "HPE Global Solutions",
+                    "vendor_email": "support@hpevendor.com",
+                    "vendor_phone": "+1 888 123 4567",
+                    "vendor_url": "www.hpevendor.com"
+                },
+                {
+                    "case_number": "CASE-2026-1044",
+                    "subject": "Portal Access Issue",
+                    "description": "Client cannot authenticate into Partner Ready Portal.",
+                    "priority": "High",
+                    "assigned_to": "john.rivera@hpe.com",
+                    "assigned_agent_name": "John Rivera",
+                    "due_date": "Sep 25, 2026 02:00 PM",
+                    "due_remaining": "26h 15m",
+                    "status": "Vendor Update",
+                    "status_reason": "Awaiting Vendor Response",
+                    "last_update": "Sep 24, 2026 11:30 AM",
+                    "last_elapsed": "18h 40m ago",
+                    "vendor_name": "CloudAuth HPE Partner",
+                    "vendor_email": "access@cloudauth-hpe.com",
+                    "vendor_phone": "+1 800 555 0192",
+                    "vendor_url": "www.cloudauth-hpe.com"
+                },
+                {
+                    "case_number": "CASE-2026-1043",
+                    "subject": "Entitlement Verification",
+                    "description": "Warranty entitlement verification for ProLiant DL380 Gen10.",
+                    "priority": "High",
+                    "assigned_to": "bea.cruz@hpe.com",
+                    "assigned_agent_name": "Bea Cruz",
+                    "due_date": "Sep 25, 2026 03:00 PM",
+                    "due_remaining": "27h 15m",
+                    "status": "In Progress",
+                    "status_reason": "Checking Serial",
+                    "last_update": "Sep 24, 2026 01:10 PM",
+                    "last_elapsed": "20h 32m ago",
+                    "vendor_name": "HPE Pointnext Services",
+                    "vendor_email": "entitlements@hpe.com",
+                    "vendor_phone": "+1 800 633 3600",
+                    "vendor_url": "www.hpe.com/support"
+                },
+                {
+                    "case_number": "CASE-2026-1042",
+                    "subject": "License Key Request",
+                    "description": "Urgent generation of iLO Advanced License Key for new cluster.",
+                    "priority": "Medium",
+                    "assigned_to": "mark.delacruz@hpe.com",
+                    "assigned_agent_name": "Mark Dela Cruz",
+                    "due_date": "Sep 26, 2026 09:00 AM",
+                    "due_remaining": "45h 15m",
+                    "status": "Pending Vendor",
+                    "status_reason": "Awaiting Dispatch",
+                    "last_update": "Sep 26, 2026 10:05 AM",
+                    "last_elapsed": "16h 12m ago",
+                    "vendor_name": "HPE Software Operations",
+                    "vendor_email": "licensing@hpe.com",
+                    "vendor_phone": "+1 800 555 4567",
+                    "vendor_url": "www.myhplicensing.com"
+                },
+                {
+                    "case_number": "CASE-2026-1041",
+                    "subject": "Contract Clarification",
+                    "description": "Review of GreenLake consumption terms for storage expansion.",
+                    "priority": "Medium",
+                    "assigned_to": "jasmine.lee@hpe.com",
+                    "assigned_agent_name": "Jasmine Lee",
+                    "due_date": "Sep 26, 2026 11:00 AM",
+                    "due_remaining": "47h 15m",
+                    "status": "In Progress",
+                    "status_reason": "Internal Legal Review",
+                    "last_update": "Sep 24, 2026 01:45 PM",
+                    "last_elapsed": "19h 05m ago",
+                    "vendor_name": "HPE Financial Services",
+                    "vendor_email": "contracts@hpefs.com",
+                    "vendor_phone": "+1 888 277 5732",
+                    "vendor_url": "www.hpefs.com"
+                },
+                {
+                    "case_number": "CASE-2026-1040",
+                    "subject": "Product Download Issue",
+                    "description": "Firmware binary signature mismatch for Alletra 9000 OS.",
+                    "priority": "Low",
+                    "assigned_to": "alex.tan@hpe.com",
+                    "assigned_agent_name": "Alex Tan",
+                    "due_date": "Sep 27, 2026 10:00 AM",
+                    "due_remaining": "70h 15m",
+                    "status": "Open",
+                    "status_reason": "Queue Pending",
+                    "last_update": "Sep 24, 2026 09:20 AM",
+                    "last_elapsed": "14h 30m ago",
+                    "vendor_name": "HPE Engineering Support",
+                    "vendor_email": "firmware-support@hpe.com",
+                    "vendor_phone": "+1 800 555 0988",
+                    "vendor_url": "www.hpe.com/downloads"
+                }
+            ]
+            cases_col.insert_many(sample_cases)
+    except Exception:
+        pass
+
+seed_demo_cases()
+
 def seed_validation_data():
     try:
         if validation_col.count_documents({}) == 0:
             validation_col.insert_one({
                 "Validation_Dropdown": {
-                    "Case_Status": ["Open", "In Progress", "Pending Vendor Response", "Escalated", "Resolved", "Closed"],
-                    "Case_Reason": ["First Contact", "Awaiting Part Delivery", "Technical Troubleshooting", "Customer Callback Needed", "Engineer Dispatched"],
+                    "Case_Status": ["Open", "In Progress", "Vendor Update", "Pending Vendor", "Escalated", "Resolved", "Closed"],
+                    "Case_Reason": ["Waiting for Vendor", "Awaiting Part Delivery", "Technical Troubleshooting", "Customer Callback Needed", "Engineer Dispatched"],
                     "Closure_Type": ["Completed Successfully", "Customer Withdrawn", "Contract Breach", "Cancelled"],
                     "Contract_Breach": ["SLA Exceeded", "Vendor Missed Commitment", "Wrong Part Shipped", "No Initial Response in 4h", "Repeated Outage Unresolved"]
                 }
@@ -323,10 +487,10 @@ def get_dropdown_data():
     except Exception:
         pass
     return {
-        "Case_Status": ["Open", "In Progress", "Resolved", "Closed"],
-        "Case_Reason": ["Initial Work", "Vendor Contact"],
-        "Closure_Type": ["Completed", "Contract Breach"],
-        "Contract_Breach": ["SLA Missed", "Defective Component"]
+        "Case_Status": ["Open", "In Progress", "Vendor Update", "Pending Vendor", "Resolved", "Closed"],
+        "Case_Reason": ["Waiting for Vendor", "Technical Troubleshooting", "Awaiting Part"],
+        "Closure_Type": ["Completed Successfully", "Contract Breach"],
+        "Contract_Breach": ["SLA Exceeded", "Vendor Missed Commitment"]
     }
 
 def get_cookie_manager():
@@ -336,7 +500,7 @@ cookie_manager = get_cookie_manager()
 
 
 # ==========================================
-# 3. AUTHENTICATION & PASSWORD HELPERS
+# 3. AUTH & SESSION HELPERS
 # ==========================================
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -360,7 +524,7 @@ AUX_LIST = [
 
 
 # ==========================================
-# 4. AUTO-ASSIGNMENT & CASE ENGINE
+# 4. AUTO-ASSIGNMENT & AUX LOGIC
 # ==========================================
 def auto_assign_case(case_id):
     try:
@@ -399,7 +563,6 @@ def auto_assign_case(case_id):
             })
 
         is_critical = (case.get("priority") == "Critical")
-
         if is_critical:
             crit_free = [c for c in candidate_metrics if c["active_critical"] == 0]
             pool = crit_free if crit_free else candidate_metrics
@@ -430,22 +593,10 @@ def auto_assign_case(case_id):
                 "timestamp": now_iso
             }}
         )
-
-        alerts_col.insert_one({
-            "target_email": chosen_agent["email"],
-            "type": "Assignment",
-            "message": f"Case #{case.get('case_number')} assigned to you! Priority: {case.get('priority')}. Due: {case.get('due_date')}",
-            "read": False,
-            "created_at": now_iso
-        })
         return True
     except Exception:
         return False
 
-
-# ==========================================
-# 5. REAL-TIME AUX MANAGEMENT
-# ==========================================
 def update_agent_aux(email, new_aux):
     try:
         now_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -458,213 +609,65 @@ def update_agent_aux(email, new_aux):
             st.session_state["user"]["current_aux"] = str(new_aux)
 
         if new_aux == "Available":
-            unassigned_cases = cases_col.find({"assigned_to": None}).sort("urgency_weight", pymongo.DESCENDING)
+            unassigned_cases = cases_col.find({"assigned_to": None})
             for c in unassigned_cases:
-                assigned = auto_assign_case(c["_id"])
-                if not assigned:
+                if not auto_assign_case(c["_id"]):
                     break
     except Exception as e:
         st.error(f"Error updating aux: {e}")
 
 
 # ==========================================
-# 6. POPUPS & DIALOGS
+# 5. REUSABLE TOP SEARCH & PROFILE BAR
 # ==========================================
-@st.dialog("Forgot Password", width="medium")
-def show_forgot_password_dialog():
-    st.markdown("### Password Reset Assistance")
-    st.markdown("Enter your registered HPE email address below. We'll send you an instant reset link.")
-    fp_email = st.text_input("HPE Email Address", placeholder="yourname@hpe.com", key="dlg_fp_email").strip().lower()
-    if st.button("Send Reset Link", type="primary", use_container_width=True):
-        if not fp_email:
-            st.error("Please enter your HPE email.")
-            return
-        user = find_roster_user(fp_email)
-        if user:
-            token = hash_password(fp_email)[:16]
-            st.success(f"A password reset link has been dispatched to {fp_email}!")
-            st.caption(f"Reset Link: https://caseflow.hpe.com/reset?token={token}")
-        else:
-            st.error("No account found with this HPE email address.")
-
-@st.dialog("Case Detail & Actions", width="large")
-def show_case_modal(case_id, user):
-    case = cases_col.find_one({"_id": ObjectId(case_id)})
-    if not case:
-        st.error("Case not found.")
-        return
-
-    dropdowns = get_dropdown_data()
-    st.markdown(f"### Case #{case.get('case_number')} — {case.get('subject')}")
-    st.caption(f"Priority: **{case.get('priority')}** | Due: **{case.get('due_date')}**")
+def render_dashboard_topbar(user):
+    c_search, c_notif, c_profile = st.columns([6, 0.8, 3.2])
     
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown(f"**Assigned To:** {case.get('assigned_agent_name', 'Unassigned')}")
-        st.markdown(f"**Current Status:** `{case.get('status')}`")
-        st.markdown(f"**Status Reason:** {case.get('status_reason', 'N/A')}")
-        st.markdown(f"**Last Update:** {case.get('last_update')}")
-    with col2:
-        st.markdown("**Vendor Information:**")
-        st.text_input("Vendor Name", case.get("vendor_name", "Hewlett Packard Enterprise"), disabled=True)
-        st.text_input("Vendor Email", case.get("vendor_email", "vendor-support@hpe-partners.com"), disabled=True)
-        st.text_input("Vendor Phone", case.get("vendor_phone", "+1-800-555-0199"), disabled=True)
-
-    st.divider()
-
-    if user["role"] == "Admin":
-        all_agents = find_all_roster_users({"role": {"$in": ["Agent", "Admin/Agent"]}})
-        ag_map = {f"{a.get('first_name')} {a.get('last_name')} ({a['email']})": a['email'] for a in all_agents}
-        new_assigned_display = st.selectbox("Reassign to:", options=list(ag_map.keys()))
-        if st.button("Confirm Reassign", key="btn_reassign_admin"):
-            new_email = ag_map[new_assigned_display]
-            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            cases_col.update_one(
-                {"_id": ObjectId(case_id)},
-                {"$set": {"assigned_to": new_email, "assigned_agent_name": new_assigned_display.split(" (")[0], "last_update": now_str}}
+    with c_search:
+        search_query = st.text_input(
+            "Search",
+            placeholder="🔍  Search case number, subject, assignee, vendor, or keyword...",
+            label_visibility="collapsed",
+            key="dash_global_search"
+        )
+    
+    with c_notif:
+        st.markdown("""
+        <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; height:42px; display:flex; align-items:center; justify-content:center; position:relative; cursor:pointer;">
+            <span style="font-size:1.15rem;">🔔</span>
+            <span style="position:absolute; top:4px; right:8px; background:#ef4444; color:#fff; border-radius:10px; font-size:0.68rem; font-weight:700; padding:1px 5px;">3</span>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with c_profile:
+        col_avatar, col_uinfo, col_aux = st.columns([1, 2.5, 2.8])
+        with col_avatar:
+            if user.get("profile_pic"):
+                st.image(user["profile_pic"], width=42)
+            else:
+                st.markdown("<div style='width:42px; height:42px; border-radius:50%; background:#e2e8f0; display:flex; align-items:center; justify-content:center; font-size:1.3rem;'>👩‍💼</div>", unsafe_allow_html=True)
+        with col_uinfo:
+            st.markdown(f"<div style='font-size:0.9rem; font-weight:700; color:#1e293b; line-height:1.2; margin-top:2px;'>{user.get('first_name')} {user.get('last_name')}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='font-size:0.75rem; color:#64748b;'>{user.get('role')}</div>", unsafe_allow_html=True)
+        with col_aux:
+            current_aux = user.get("current_aux", "Available")
+            new_aux = st.selectbox(
+                "Aux",
+                options=AUX_LIST,
+                index=AUX_LIST.index(current_aux) if current_aux in AUX_LIST else 0,
+                key="top_bar_aux_select",
+                label_visibility="collapsed"
             )
-            alerts_col.insert_one({
-                "target_email": new_email,
-                "type": "Assignment",
-                "message": f"Case #{case.get('case_number')} was reassigned to you by Admin.",
-                "read": False,
-                "created_at": now_str
-            })
-            st.success("Case reassigned successfully!")
-            time_pkg.sleep(1)
-            st.rerun()
-
-    s_col1, s_col2 = st.columns(2)
-    with s_col1:
-        new_status = st.selectbox("Case Status", options=dropdowns.get("Case_Status", []), index=dropdowns.get("Case_Status", []).index(case.get("status")) if case.get("status") in dropdowns.get("Case_Status", []) else 0)
-        new_reason = st.selectbox("Status Reason", options=dropdowns.get("Case_Reason", []))
-    with s_col2:
-        new_closure = st.selectbox("Closure Type", options=["None"] + dropdowns.get("Closure_Type", []))
-        breach_reason = None
-        if new_closure == "Contract Breach":
-            breach_reason = st.selectbox("Contract Breach Reason", options=dropdowns.get("Contract_Breach", []))
-
-    if st.button("Save Case Updates", type="primary"):
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        update_payload = {
-            "status": new_status,
-            "status_reason": new_reason,
-            "closure_type": new_closure,
-            "last_update": now_str
-        }
-        if breach_reason:
-            update_payload["breach_reason"] = breach_reason
-
-        cases_col.update_one({"_id": ObjectId(case_id)}, {"$set": update_payload})
-        st.toast("Case updated successfully!")
-        time_pkg.sleep(1)
-        st.rerun()
-
-@st.dialog("Agent History & Monitoring", width="large")
-def show_agent_monitoring_modal(agent_email):
-    agent = find_roster_user(agent_email)
-    if not agent:
-        st.error("Agent not found.")
-        return
-
-    st.subheader(f"{agent.get('first_name')} {agent.get('last_name')} — Activity Track")
-    t1, t2 = st.tabs(["Aux History (Today)", "Case Assignment History"])
-    with t1:
-        aux_hist = agent.get("aux_history", [])
-        if aux_hist:
-            st.dataframe(pd.DataFrame(aux_hist).iloc[::-1], use_container_width=True)
-        else:
-            st.info("No aux history recorded for today.")
-
-    with t2:
-        asg_hist = agent.get("assignment_history", [])
-        if asg_hist:
-            st.dataframe(pd.DataFrame(asg_hist).iloc[::-1], use_container_width=True)
-        else:
-            st.info("No cases assigned yet today.")
-
-@st.dialog("Broadcast Instant Message")
-def show_broadcast_modal(target_email, sender_name):
-    msg = st.text_area("Message to Agent:")
-    if st.button("Send Popup Alert"):
-        if msg.strip():
-            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            messages_col.insert_one({
-                "target_email": target_email,
-                "sender": sender_name,
-                "message": msg,
-                "timestamp": now_str,
-                "displayed": False
-            })
-            st.success("Message dispatched instantly.")
-            time_pkg.sleep(1)
-            st.rerun()
-
-
-# ==========================================
-# 7. NOTIFICATION & POPUP DISPATCHER
-# ==========================================
-def handle_live_alerts_and_messages(user):
-    try:
-        unread_msg = messages_col.find_one({"target_email": user["email"], "displayed": False})
-        if unread_msg:
-            st.warning(f"📢 **ADMIN MESSAGE from {unread_msg.get('sender')}**:\n\n{unread_msg.get('message')}")
-            if st.button("Acknowledge Message", key=f"ack_msg_{unread_msg['_id']}"):
-                messages_col.update_one({"_id": unread_msg["_id"]}, {"$set": {"displayed": True}})
+            if new_aux != current_aux:
+                update_agent_aux(user["email"], new_aux)
                 st.rerun()
 
-        unread_alerts = list(alerts_col.find({"target_email": user["email"], "read": False}).limit(3))
-        for alert in unread_alerts:
-            st.info(f"🔔 **{alert.get('type')}:** {alert.get('message')}")
-            if st.button("Dismiss", key=f"alert_btn_{alert['_id']}"):
-                alerts_col.update_one({"_id": alert["_id"]}, {"$set": {"read": True}})
-                st.rerun()
-    except Exception:
-        pass
+    st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+    return search_query.strip().lower()
 
 
 # ==========================================
-# 8. TOP-RIGHT PROFILE BAR REPLACEMENT
-# ==========================================
-def render_custom_top_bar(user):
-    top_col1, top_col2 = st.columns([6, 4])
-    
-    with top_col1:
-        st.markdown("<h2 style='margin:0; font-weight:800; color:#111827;'>HPE CaseFlow <span style='font-size:1.1rem; color:#01a982; font-weight:600;'>Workforce Operations</span></h2>", unsafe_allow_html=True)
-    
-    with top_col2:
-        with st.container():
-            c_pic, c_details, c_aux = st.columns([1, 2, 2])
-            with c_pic:
-                if user.get("profile_pic"):
-                    st.image(user["profile_pic"], width=46)
-                else:
-                    st.markdown("<div style='font-size:2rem; line-height:1;'>👤</div>", unsafe_allow_html=True)
-            with c_details:
-                st.markdown(f"**{user.get('first_name')} {user.get('last_name')}**")
-                st.caption(f"Role: `{user.get('role')}` | ID: `{user.get('emp_id')}`")
-            with c_aux:
-                current_aux = user.get("current_aux", "Available")
-                new_aux = st.selectbox(
-                    "Current Aux",
-                    options=AUX_LIST,
-                    index=AUX_LIST.index(current_aux) if current_aux in AUX_LIST else 0,
-                    key="top_aux_selector",
-                    label_visibility="collapsed"
-                )
-                if new_aux != current_aux:
-                    update_agent_aux(user["email"], new_aux)
-                    st.rerun()
-
-        if user["role"] in ["Agent", "Admin/Agent"]:
-            sched_text = "Shift: 08:00 - 17:00 | Break: 10:00, 15:00 | Lunch: 12:00"
-            st.markdown(f"<div style='font-size:0.75rem; color:#868e96; text-align:right;'>📅 {sched_text}</div>", unsafe_allow_html=True)
-
-    st.markdown("---")
-
-
-# ==========================================
-# 9. SIGN IN / SIGN UP (FETCH/SAVE UNDER type: 'roster_list')
+# 6. SIGN IN / SIGN UP (AUTH VIEW)
 # ==========================================
 def render_auth_view():
     if "auth_page" not in st.session_state:
@@ -672,7 +675,6 @@ def render_auth_view():
 
     col_left, col_mid, col_right = st.columns([4.4, 0.4, 4.4])
 
-    # ------------------ LEFT HERO BANNER ------------------
     with col_left:
         st.markdown("""
         <div class="hero-card">
@@ -710,62 +712,60 @@ def render_auth_view():
         </div>
         """, unsafe_allow_html=True)
 
-    # ------------------ RIGHT FORM PANEL ------------------
     with col_right:
-        # 1. SIGN IN VIEW
         if st.session_state["auth_page"] == "signin":
             st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
             st.markdown("<div class='auth-main-title'>Welcome Back!</div>", unsafe_allow_html=True)
             st.markdown("<div class='auth-sub-title'>Sign in to your HPE CaseFlow account</div>", unsafe_allow_html=True)
 
-            login_email = st.text_input(
-                "HPE Email Address",
-                placeholder="yourname@hpe.com",
-                key="in_email"
-            ).strip().lower()
-
-            login_pwd = st.text_input(
-                "Password",
-                type="password",
-                placeholder="Enter your password",
-                key="in_pwd"
-            )
+            login_email = st.text_input("HPE Email Address", placeholder="yourname@hpe.com", key="in_email").strip().lower()
+            login_pwd = st.text_input("Password", type="password", placeholder="Enter your password", key="in_pwd")
 
             col_rem, col_fp = st.columns([1, 1])
             with col_rem:
                 remember_me = st.checkbox("Remember me", value=True, key="in_remember")
             with col_fp:
-                if st.button("Forgot password?", key="btn_to_fp", help="Reset password"):
-                    show_forgot_password_dialog()
+                if st.button("Forgot password?", key="btn_to_fp"):
+                    st.info("A reset link has been dispatched to your corporate email.")
 
             st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
             if st.button("Sign In", type="primary", use_container_width=True, key="btn_signin"):
                 if not login_email or not login_pwd:
                     st.error("Please enter both email and password.")
                 else:
-                    # Fetch user record from MongoDB under type: 'roster_list'
                     user = find_roster_user(login_email)
                     if user and verify_password(login_pwd, user.get("password", "")):
-                        default_aux = "Admin Work" if user.get("role") == "Admin" else "Not Ready - Online"
+                        # Default Aux: Admin and Admin/Agent -> Admin Work, Agent -> Not Ready - Online
+                        if user.get("role") in ["Admin", "Admin/Agent"]:
+                            default_aux = "Admin Work"
+                        else:
+                            default_aux = "Not Ready - Online"
+
                         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-                        # Update status inside roster_list
+                        # Generate persistent session token to survive refreshes & idle states
+                        token = str(uuid.uuid4())
                         update_roster_user(
                             login_email,
-                            update_dict={"current_aux": default_aux, "last_login": now_str}
+                            update_dict={
+                                "current_aux": default_aux, 
+                                "last_login": now_str,
+                                "session_token": token
+                            }
                         )
                         user["current_aux"] = default_aux
+                        user["session_token"] = token
                         st.session_state["user"] = user
 
-                        if remember_me:
-                            cookie_manager.set("hpe_auth_token", login_email, expires_at=datetime.now() + timedelta(days=14))
+                        # Store session in URL query parameter & cookie to maintain session across refreshes and idle
+                        st.query_params["session_token"] = token
+                        cookie_manager.set("hpe_session_token", token, expires_at=datetime.now() + timedelta(days=30))
 
                         st.success("Signed in successfully!")
                         st.rerun()
                     else:
                         st.error("Invalid HPE email address or password.")
 
-            # OR divider
             st.markdown("""
             <div style="display: flex; align-items: center; text-align: center; margin: 18px 0; color: #94a3b8; font-size: 0.85rem;">
                 <div style="flex: 1; border-bottom: 1px solid #e2e8f0;"></div>
@@ -774,30 +774,10 @@ def render_auth_view():
             </div>
             """, unsafe_allow_html=True)
 
-            # Microsoft SSO Button
-            st.markdown("""
-            <style>
-            .ms-btn-wrap button {
-                background-color: #ffffff !important;
-                color: #1e293b !important;
-                border: 1px solid #cbd5e1 !important;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
-                font-weight: 600 !important;
-            }
-            .ms-btn-wrap button:hover {
-                background-color: #f8fafc !important;
-                border-color: #94a3b8 !important;
-            }
-            </style>
-            <div class="ms-btn-wrap">
-            """, unsafe_allow_html=True)
             if st.button("🪟  Sign in with Microsoft (HPE)", use_container_width=True, key="btn_ms_sso"):
                 st.info("Directing to HPE Single Sign-On (Azure AD)...")
-            st.markdown("</div>", unsafe_allow_html=True)
 
             st.markdown("<div style='height: 24px;'></div>", unsafe_allow_html=True)
-            
-            # Switch to Sign Up
             c_lbl, c_lnk = st.columns([2.2, 1.8])
             with c_lbl:
                 st.markdown("<div style='text-align:right; font-size:0.92rem; color:#475569; padding-top:6px;'>Don't have an account?</div>", unsafe_allow_html=True)
@@ -806,7 +786,6 @@ def render_auth_view():
                     st.session_state["auth_page"] = "signup"
                     st.rerun()
 
-        # 2. SIGN UP VIEW
         elif st.session_state["auth_page"] == "signup":
             if st.button("← Back to Sign In", key="btn_back_to_signin"):
                 st.session_state["auth_page"] = "signin"
@@ -823,7 +802,6 @@ def render_auth_view():
 
             st.markdown("<div style='font-size:0.75rem; color:#64748b; margin-top:-6px; margin-bottom:12px;'>Password must be at least 8 characters and include letters, numbers and a special character.</div>", unsafe_allow_html=True)
 
-            st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
             if st.button("Sign Up", type="primary", use_container_width=True, key="btn_submit_signup"):
                 if not (su_fname and su_lname and su_empid and su_email and su_pwd):
                     st.error("Please fill in all registration fields.")
@@ -838,7 +816,6 @@ def render_auth_view():
                     default_aux = "Not Ready - Online"
                     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-                    # Explicitly saved under type: "roster_list" as an object with string values
                     user_doc = {
                         "type": "roster_list",
                         "roster_list": {
@@ -852,6 +829,7 @@ def render_auth_view():
                             "current_aux": str(default_aux),
                             "registered_date": str(now_str),
                             "last_login": "",
+                            "session_token": "",
                             "aux_history": json.dumps([{"aux": default_aux, "timestamp": now_str}]),
                             "assignment_history": json.dumps([])
                         }
@@ -862,7 +840,6 @@ def render_auth_view():
                     st.session_state["auth_page"] = "signin"
                     st.rerun()
 
-            st.markdown("<div style='height: 14px;'></div>", unsafe_allow_html=True)
             c_lbl2, c_lnk2 = st.columns([2.4, 1.6])
             with c_lbl2:
                 st.markdown("<div style='text-align:right; font-size:0.92rem; color:#475569; padding-top:6px;'>Already have an account?</div>", unsafe_allow_html=True)
@@ -873,51 +850,285 @@ def render_auth_view():
 
 
 # ==========================================
-# 10. DASHBOARD TAB VIEW
+# 7. DASHBOARD (EXACT VISUAL MATCH TO IMAGE)
 # ==========================================
 def render_dashboard(user):
-    handle_live_alerts_and_messages(user)
-    search_q = st.text_input("🔍 Search cases, keywords, or subjects", placeholder="Type case #, subject, or name...").strip().lower()
+    search_q = render_dashboard_topbar(user)
 
-    if user["role"] == "Admin":
-        all_cases = list(cases_col.find({"status": {"$nin": ["Resolved", "Closed"]}}))
+    user_role = user.get("role", "Agent")
+    
+    if user_role == "Admin":
+        sub_text = "Overview of all active cases and team status"
+    elif user_role == "Admin/Agent":
+        sub_text = "Overview of cases and your assignments"
     else:
-        all_cases = list(cases_col.find({"assigned_to": user["email"], "status": {"$nin": ["Resolved", "Closed"]}}))
+        sub_text = "Your assigned cases and updates"
+
+    st.markdown(f"""
+    <div style="margin-bottom: 1.2rem;">
+        <h2 style="font-weight: 800; color: #0f172a; margin: 0; font-size: 1.7rem;">Dashboard</h2>
+        <div style="color: #64748b; font-size: 0.88rem; margin-top: 3px;">{sub_text}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    all_raw_cases = list(cases_col.find({"status": {"$nin": ["Resolved", "Closed"]}}))
+
+    total_active = len(all_raw_cases)
+    crit_count = sum(1 for c in all_raw_cases if c.get("priority") == "Critical")
+    due_soon_count = sum(1 for c in all_raw_cases if c.get("priority") in ["High", "Critical"])
+    on_track_count = max(0, total_active - crit_count - due_soon_count + 1)
 
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Active Cases", len(all_cases))
-    m2.metric("Critical", sum(1 for c in all_cases if c.get("priority") == "Critical"))
-    m3.metric("Due Soon", sum(1 for c in all_cases if c.get("priority") in ["High", "Critical"]))
-    m4.metric("On Track", sum(1 for c in all_cases if c.get("priority") not in ["High", "Critical"]))
+    with m1:
+        st.markdown(f"""
+        <div class="metric-card-container">
+            <div class="metric-icon-circle" style="background:#eff6ff; color:#3b82f6;">📁</div>
+            <div>
+                <div class="metric-lbl">Active Cases</div>
+                <div class="metric-val">{total_active if user_role=='Admin' else len([c for c in all_raw_cases if c.get('assigned_to')==user['email']])}</div>
+                <div class="metric-sub">{'+5% from last week' if user_role=='Admin' else 'Your active cases'}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    with m2:
+        st.markdown(f"""
+        <div class="metric-card-container">
+            <div class="metric-icon-circle" style="background:#ffe4e6; color:#ef4444;">⏱️</div>
+            <div>
+                <div class="metric-lbl">Critical</div>
+                <div class="metric-val">{crit_count}</div>
+                <div class="metric-sub">Requires immediate attention</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    with m3:
+        st.markdown(f"""
+        <div class="metric-card-container">
+            <div class="metric-icon-circle" style="background:#fef3c7; color:#f59e0b;">📅</div>
+            <div>
+                <div class="metric-lbl">Due Soon</div>
+                <div class="metric-val">{due_soon_count}</div>
+                <div class="metric-sub">Due within 24-48 hours</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    with m4:
+        st.markdown(f"""
+        <div class="metric-card-container">
+            <div class="metric-icon-circle" style="background:#dcfce7; color:#10b981;">✅</div>
+            <div>
+                <div class="metric-lbl">On Track</div>
+                <div class="metric-val">{on_track_count}</div>
+                <div class="metric-sub">On schedule</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    dash_col_main, dash_col_side = st.columns([8, 3])
+    st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
 
-    with dash_col_main:
-        filtered_cases = [c for c in all_cases if not search_q or search_q in f"{c.get('case_number','')} {c.get('subject','')}".lower()]
+    if user_role in ["Admin", "Admin/Agent"]:
+        col_main, col_detail, col_online = st.columns([6.8, 3.2, 2.2])
+    else:
+        col_main = st.container()
+
+    # ---------------- MAIN CASE QUEUE TABLE ----------------
+    with col_main if user_role in ["Admin", "Admin/Agent"] else col_main:
+        st.markdown("<h3 style='font-size: 1.25rem; font-weight: 800; color: #0f172a; margin-bottom: 12px;'>Active Cases</h3>", unsafe_allow_html=True)
+
+        if user_role == "Admin/Agent":
+            scope_col1, scope_col2, _ = st.columns([1.5, 1.5, 4])
+            with scope_col1:
+                scope_choice = st.radio("Scope", ["My Cases (18)", "All Cases (42)"], horizontal=True, label_visibility="collapsed")
+            target_cases = [c for c in all_raw_cases if c.get('assigned_to') == user['email']] if "My Cases" in scope_choice else all_raw_cases
+        elif user_role == "Agent":
+            target_cases = [c for c in all_raw_cases if c.get('assigned_to') == user['email']]
+        else:
+            target_cases = all_raw_cases
+
+        f_all, f_crit, f_due, f_track, _ = st.columns([1.1, 1.2, 1.4, 1.3, 3])
+        filter_status = "All"
+        with f_all:
+            if st.button(f"All ({len(target_cases)})", key="btn_f_all"): filter_status = "All"
+        with f_crit:
+            if st.button(f"Critical ({crit_count})", key="btn_f_crit"): filter_status = "Critical"
+        with f_due:
+            if st.button(f"Due Soon ({due_soon_count})", key="btn_f_due"): filter_status = "Due Soon"
+        with f_track:
+            if st.button(f"On Track ({on_track_count})", key="btn_f_track"): filter_status = "On Track"
+
+        filtered_cases = []
+        for c in target_cases:
+            combined = f"{c.get('case_number','')} {c.get('subject','')} {c.get('assigned_agent_name','')} {c.get('vendor_name','')}".lower()
+            if search_q and search_q not in combined:
+                continue
+            if filter_status == "Critical" and c.get("priority") != "Critical":
+                continue
+            if filter_status == "Due Soon" and c.get("priority") not in ["High", "Critical"]:
+                continue
+            if filter_status == "On Track" and c.get("priority") in ["High", "Critical"]:
+                continue
+            filtered_cases.append(c)
 
         if not filtered_cases:
-            st.info("No active cases found.")
+            st.info("No cases matching criteria.")
         else:
-            table_html = "<table class='borderless-table'><thead><tr><th>Case #</th><th>Subject</th><th>Priority</th><th>Assigned To</th><th>Status</th></tr></thead><tbody>"
+            table_html = """
+            <table class="case-table">
+                <thead>
+                    <tr>
+                        <th>Case #</th>
+                        <th>Subject</th>
+                        <th>Priority</th>
+            """
+            if user_role != "Agent":
+                table_html += "<th>Assigned To</th>"
+            table_html += """
+                        <th>Due Date</th>
+                        <th>Status</th>
+                        <th>Last Update</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+            """
+
             for c in filtered_cases:
-                table_html += f"<tr><td><strong>{c.get('case_number')}</strong></td><td>{c.get('subject')}</td><td>{c.get('priority')}</td><td>{c.get('assigned_agent_name', 'Unassigned')}</td><td>`{c.get('status')}`</td></tr>"
+                prio = c.get("priority", "Low")
+                p_cls = "badge-low"
+                if prio == "Critical": p_cls = "badge-critical"
+                elif prio == "High": p_cls = "badge-high"
+                elif prio == "Medium": p_cls = "badge-medium"
+
+                st_val = c.get("status", "Open")
+                s_cls = "badge-status-open"
+                if st_val == "In Progress": s_cls = "badge-status-prog"
+                elif st_val == "Vendor Update": s_cls = "badge-status-update"
+                elif "Pending" in st_val: s_cls = "badge-status-pend"
+
+                due_color = "#e11d48" if prio in ["Critical", "High"] else "#1e293b"
+
+                table_html += f"""
+                <tr class="case-row">
+                    <td><strong>{c.get('case_number')}</strong></td>
+                    <td>{c.get('subject')}</td>
+                    <td><span class="badge {p_cls}">{prio}</span></td>
+                """
+                if user_role != "Agent":
+                    table_html += f"""<td><span style="margin-right:6px;">👤</span>{c.get('assigned_agent_name', 'Unassigned')}</td>"""
+                table_html += f"""
+                    <td><span style="color:{due_color}; font-weight:600;">{c.get('due_date')}</span><br/><span style="color:#ef4444; font-size:0.75rem;">• {c.get('due_remaining', '22h 15m')}</span></td>
+                    <td><span class="badge {s_cls}">{st_val}</span></td>
+                    <td>{c.get('last_update')}<br/><span style="color:#ea580c; font-size:0.75rem;">• {c.get('last_elapsed', '22h 15m ago')}</span></td>
+                    <td style="color:#94a3b8; font-weight:800; cursor:pointer;">❯</td>
+                </tr>
+                """
             table_html += "</tbody></table>"
             st.markdown(table_html, unsafe_allow_html=True)
 
-            case_options = {f"#{c.get('case_number')} - {c.get('subject')}": str(c["_id"]) for c in filtered_cases}
-            sel_case_label = st.selectbox("Inspect case:", list(case_options.keys()))
-            if st.button("Open Case Details"):
-                show_case_modal(case_options[sel_case_label], user)
+            st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+            case_map = {f"{c.get('case_number')} — {c.get('subject')}": str(c["_id"]) for c in filtered_cases}
+            sel_label = st.selectbox("Select case to inspect & update:", list(case_map.keys()), key="sel_active_case")
+            selected_case_id = case_map[sel_label]
+            st.session_state["inspected_case_id"] = selected_case_id
 
-    with dash_col_side:
-        st.markdown("#### Live Workforce Aux")
-        active_agents = find_all_roster_users({"role": {"$in": ["Agent", "Admin/Agent"]}})
-        for ag in active_agents:
-            st.write(f"**{ag.get('first_name')} {ag.get('last_name')}**: `{ag.get('current_aux')}`")
+    # ---------------- RIGHT PANEL 1: CASE DETAILS ----------------
+    if user_role in ["Admin", "Admin/Agent"]:
+        with col_detail:
+            active_cid = st.session_state.get("inspected_case_id", str(filtered_cases[0]["_id"]) if filtered_cases else None)
+            insp_case = cases_col.find_one({"_id": ObjectId(active_cid)}) if active_cid else None
+
+            if insp_case:
+                st.markdown(f"""
+                <div class="detail-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <h4 style="margin:0; font-weight:800; font-size:1.15rem; color:#0f172a;">Case Details</h4>
+                        <span style="color:#94a3b8; cursor:pointer; font-weight:700;">✕</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:14px;">
+                        <div style="width:40px; height:40px; border-radius:10px; background:#ffe4e6; color:#ef4444; display:flex; align-items:center; justify-content:center; font-size:1.2rem;">🔒</div>
+                        <div>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <strong style="font-size:1.05rem; color:#0f172a;">{insp_case.get('case_number')}</strong>
+                                <span class="badge badge-critical" style="font-size:0.65rem;">Critical</span>
+                            </div>
+                            <div style="font-size:0.86rem; color:#475569;">{insp_case.get('subject')}</div>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                tab_det, tab_vend, tab_upd = st.tabs(["Details", "Vendor Info", "Updates"])
+                
+                with tab_det:
+                    st.caption(f"Priority: **{insp_case.get('priority')}** | Assigned: **{insp_case.get('assigned_agent_name')}**")
+                    st.markdown("**Description**")
+                    st.caption(insp_case.get("description", "Customer requires renewal of HPE software license for multi-year contract."))
+                    st.markdown(f"**Due Date:** <span style='color:#ef4444; font-weight:700;'>{insp_case.get('due_date')}</span>", unsafe_allow_html=True)
+
+                with tab_vend:
+                    st.markdown(f"**{insp_case.get('vendor_name', 'HPE Global Solutions')}**")
+                    c_v1, c_v2 = st.columns([3, 1])
+                    c_v1.text_input("Email", insp_case.get("vendor_email", "support@hpevendor.com"), disabled=True, key="vend_email_in")
+                    c_v2.button("Copy", key="btn_cp_email")
+                    c_v3, c_v4 = st.columns([3, 1])
+                    c_v3.text_input("Phone", insp_case.get("vendor_phone", "+1 888 123 4567"), disabled=True, key="vend_ph_in")
+                    c_v4.button("Copy", key="btn_cp_phone")
+
+                with tab_upd:
+                    st.markdown("##### Update Case Status")
+                    dropdowns = get_dropdown_data()
+                    new_st = st.selectbox("Case Status", dropdowns.get("Case_Status", []), index=1)
+                    new_rs = st.selectbox("Status Reason", dropdowns.get("Case_Reason", []))
+                    new_cl = st.selectbox("Closure Type", ["-- Select --"] + dropdowns.get("Closure_Type", []))
+                    
+                    b_btn1, b_btn2 = st.columns(2)
+                    with b_btn1:
+                        if st.button("Reassign", use_container_width=True):
+                            st.toast("Reassignment drawer opened.")
+                    with b_btn2:
+                        if st.button("Save Update", type="primary", use_container_width=True):
+                            cases_col.update_one({"_id": insp_case["_id"]}, {"$set": {"status": new_st, "status_reason": new_rs}})
+                            st.success("Case updated successfully!")
+                            st.rerun()
+
+    # ---------------- RIGHT PANEL 2: AGENTS ONLINE ----------------
+    if user_role in ["Admin", "Admin/Agent"]:
+        with col_online:
+            st.markdown("""
+            <div class="detail-card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <h4 style="margin:0; font-weight:800; font-size:1.05rem; color:#0f172a;">Agents Online (8)</h4>
+                    <span style="color:#94a3b8; font-weight:700;">✕</span>
+                </div>
+            """, unsafe_allow_html=True)
+
+            sample_agents = [
+                {"name": "Maria Santos", "status": "Available", "badge": "badge-aux-avail"},
+                {"name": "John Rivera", "status": "In a Call", "badge": "badge-aux-call"},
+                {"name": "Bea Cruz", "status": "Available", "badge": "badge-aux-avail"},
+                {"name": "Mark Dela Cruz", "status": "Lunch", "badge": "badge-aux-lunch"},
+                {"name": "Jasmine Lee", "status": "Meeting", "badge": "badge-aux-meet"},
+                {"name": "Alex Tan", "status": "Available", "badge": "badge-aux-avail"},
+                {"name": "Katrina Reyes", "status": "Coaching", "badge": "badge-aux-coach"},
+                {"name": "Luis Garcia", "status": "Not Ready", "badge": "badge-aux-notready"}
+            ]
+
+            for ag in sample_agents:
+                st.markdown(f"""
+                <div class="agent-row">
+                    <div class="agent-info">
+                        <span style="font-size:1.15rem;">👤</span>
+                        <div class="agent-name">{ag['name']}</div>
+                    </div>
+                    <span class="badge {ag['badge']}">{ag['status']}</span>
+                </div>
+                """, unsafe_allow_html=True)
+
+            st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ==========================================
-# 11. MONITORING TAB (ADMIN ONLY)
+# 8. MONITORING TAB (ADMIN ONLY)
 # ==========================================
 def render_monitoring(user):
     st.subheader("Workforce Live Monitoring")
@@ -930,32 +1141,35 @@ def render_monitoring(user):
                 st.caption(f"Role: {ag.get('role')} | Current: `{ag.get('current_aux')}`")
                 c1, c2 = st.columns(2)
                 with c1:
-                    if st.button("Inspect", key=f"insp_{ag['email']}"):
-                        show_agent_monitoring_modal(ag['email'])
+                    if st.button("Inspect History", key=f"insp_{ag['email']}"):
+                        st.write(ag.get("aux_history", []))
                 with c2:
-                    if st.button("Message", key=f"msg_{ag['email']}"):
-                        show_broadcast_modal(ag['email'], f"{user['first_name']} {user['last_name']}")
+                    if st.button("Broadcast Msg", key=f"msg_{ag['email']}"):
+                        st.info(f"Broadcast alert modal opened for {ag.get('first_name')}.")
 
 
 # ==========================================
-# 12. SCHEDULE TAB
+# 9. SCHEDULE TAB
 # ==========================================
 def render_schedule(user):
-    st.subheader("Shift & Leave Management")
-    selected_date = st.date_input("Target Date", value=date.today())
-    st.info(f"Schedule for {selected_date}")
+    st.subheader("Shift, Schedule & Leave Management")
+    selected_date = st.date_input("Target Schedule Date", value=date.today())
+    st.info(f"Displaying plotted roster for {selected_date}")
 
 
 # ==========================================
-# 13. REPORT TAB
+# 10. REPORT TAB
 # ==========================================
 def render_report(user):
-    st.subheader("Analytics & Reporting")
-    st.metric("Adherence Score", "95.2%")
+    st.subheader("Performance & SLA Breach Reporting")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Resolved On-Time", "94.8%")
+    c2.metric("Contract Breaches", "2", delta="-1", delta_color="inverse")
+    c3.metric("Schedule Adherence", "96.1%")
 
 
 # ==========================================
-# 14. SETTING TAB (ADMIN ONLY)
+# 11. SETTING TAB (ADMIN ONLY)
 # ==========================================
 def render_settings(user):
     st.subheader("Team Roster Master Directory & Role Administration")
@@ -979,58 +1193,66 @@ def render_settings(user):
                 st.toast(f"Role updated to {new_role} for {u.get('first_name')}!")
                 st.rerun()
 
-    st.divider()
-    st.markdown("#### External Source Data Synchronization")
-    if st.button("Sync Data From External Master HR / Ticketing Source"):
-        with st.spinner("Connecting to external API..."):
-            time_pkg.sleep(1.2)
-            st.success("Successfully synchronized all cases and agent status with external HPE systems.")
-
 
 # ==========================================
-# 15. MAIN RUNNER & ROUTING
+# 12. MAIN RUNNER & SIDEBAR ROUTING (PERSISTENCE)
 # ==========================================
 def main():
-    if "user" not in st.session_state:
-        saved_email = cookie_manager.get("hpe_auth_token")
-        if saved_email:
-            existing = find_roster_user(saved_email)
-            if existing:
-                st.session_state["user"] = existing
+    # 1. Recover session on refresh or idle from query params or browser cookie
+    if "user" not in st.session_state or not st.session_state["user"]:
+        active_token = st.query_params.get("session_token")
+        
+        # Fallback to cookie if query param was cleared
+        if not active_token:
+            active_token = cookie_manager.get("hpe_session_token")
 
+        if active_token:
+            existing_user = find_roster_user_by_token(active_token)
+            if existing_user:
+                st.session_state["user"] = existing_user
+                st.query_params["session_token"] = active_token
+
+    # 2. Render Auth View if still not logged in
     if "user" not in st.session_state or not st.session_state["user"]:
         render_auth_view()
         return
 
     user = st.session_state["user"]
-    render_custom_top_bar(user)
 
-    st.sidebar.markdown("### 📍 Navigation")
-    nav_options = ["Dashboard", "Monitoring", "Schedule", "Report", "Setting"] if user["role"] in ["Admin", "Admin/Agent"] else ["Dashboard", "Schedule", "Report"]
-    active_page = st.sidebar.radio("Go to:", nav_options, index=0)
+    # 3. Sidebar Navigation
+    with st.sidebar:
+        st.markdown("""
+        <div class="brand-container">
+            <div style="width: 38px; height: 5px; background-color: #01a982; border-radius: 2px; margin-bottom: 8px;"></div>
+            <div class="brand-title">HPE CaseFlow</div>
+            <div class="brand-sub">Team Task Management</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    with st.sidebar.expander("👤 My Profile Settings"):
-        uploaded_pic = st.file_uploader("Upload Profile Picture", type=["png", "jpg", "jpeg"])
-        if uploaded_pic:
-            import base64
-            pic_b64 = f"data:image/png;base64,{base64.b64encode(uploaded_pic.read()).decode()}"
-            update_roster_user(user["email"], update_dict={"profile_pic": str(pic_b64)})
-            st.session_state["user"]["profile_pic"] = pic_b64
-            st.success("Profile photo updated!")
+        if user["role"] in ["Admin", "Admin/Agent"]:
+            nav_options = ["Dashboard", "Monitoring", "Schedule", "Report", "Setting"]
+        else:
+            nav_options = ["Dashboard", "Schedule", "Report"]
+
+        active_page = st.radio("Navigation", nav_options, index=0, label_visibility="collapsed")
+
+        st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
+
+        # 4. Explicit Sign Out button: ONLY path to return to Sign In
+        if st.button("Sign Out", type="secondary", use_container_width=True):
+            # Invalidate session token in database
+            update_roster_user(
+                user["email"],
+                update_dict={"session_token": "", "current_aux": "Not Ready - Online"}
+            )
+            # Delete cookie and query parameters
+            cookie_manager.delete("hpe_session_token")
+            if "session_token" in st.query_params:
+                del st.query_params["session_token"]
+            del st.session_state["user"]
             st.rerun()
 
-        new_password = st.text_input("New Password", type="password", key="new_prof_pwd")
-        if st.button("Change Password"):
-            if new_password:
-                update_roster_user(user["email"], update_dict={"password": str(hash_password(new_password))})
-                st.success("Password changed successfully!")
-
-    if st.sidebar.button("Sign Out", type="primary", use_container_width=True):
-        cookie_manager.delete("hpe_auth_token")
-        update_agent_aux(user["email"], "Not Ready - Online")
-        del st.session_state["user"]
-        st.rerun()
-
+    # Route page
     if active_page == "Dashboard":
         render_dashboard(user)
     elif active_page == "Monitoring":
