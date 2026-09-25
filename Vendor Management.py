@@ -1500,7 +1500,7 @@ def admin_dashboard():
     with c1: colored_metric_card("🟦", "ACTIVE CASES", len(cases), "metric-blue")
     with c2: colored_metric_card("🔺", "CRITICAL", len(critical), "metric-red")
     with c3: colored_metric_card("⏱", "DUE SOON", len(due), "metric-orange")
-    with c4: colored_colored_metric_card("✅", "ON TRACK", len(on_track), "metric-green")
+    with c4: colored_metric_card("✅", "ON TRACK", len(on_track), "metric-green")
 
     left, right = st.columns(2, gap="large")
 
