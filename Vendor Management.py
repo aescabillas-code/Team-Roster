@@ -422,7 +422,6 @@ def update_roster_user(email: str, update_dict: dict, append_history: dict = Non
             {"$set": set_payload}
         )
 
-# Seed realistic initial cases to match the screenshot
 def seed_demo_cases():
     try:
         if cases_col.count_documents({}) == 0:
@@ -814,7 +813,6 @@ def render_auth_view():
                 else:
                     user = find_roster_user(login_email)
                     if user and verify_password(login_pwd, user.get("password", "")):
-                        # Default Aux: Admin and Admin/Agent -> Admin Work, Agent -> Not Ready - Online
                         if user.get("role") in ["Admin", "Admin/Agent"]:
                             default_aux = "Admin Work"
                         else:
@@ -835,7 +833,6 @@ def render_auth_view():
                         user["session_token"] = token
                         st.session_state["user"] = user
 
-                        # Store session across page reloads & idle
                         st.query_params["session_token"] = token
                         cookie_manager.set("hpe_session_token", token, expires_at=datetime.now() + timedelta(days=30))
 
@@ -1280,11 +1277,9 @@ def render_settings(user):
 # 12. MAIN RUNNER & SIDEBAR ROUTING (PERSISTENCE)
 # ==========================================
 def main():
-    # 1. Recover session on refresh or idle from query params or browser cookie
     if "user" not in st.session_state or not st.session_state["user"]:
         active_token = st.query_params.get("session_token")
         
-        # Fallback to cookie if query param was cleared
         if not active_token:
             active_token = cookie_manager.get("hpe_session_token")
 
@@ -1294,14 +1289,12 @@ def main():
                 st.session_state["user"] = existing_user
                 st.query_params["session_token"] = active_token
 
-    # 2. Render Auth View if still not logged in
     if "user" not in st.session_state or not st.session_state["user"]:
         render_auth_view()
         return
 
     user = st.session_state["user"]
 
-    # 3. Sidebar Navigation
     with st.sidebar:
         st.markdown("""
         <div class="brand-container">
@@ -1320,7 +1313,6 @@ def main():
 
         st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
 
-        # 4. Explicit Sign Out button: ONLY path to return to Sign In
         if st.button("Sign Out", type="secondary", use_container_width=True):
             update_roster_user(
                 user["email"],
@@ -1332,7 +1324,6 @@ def main():
             del st.session_state["user"]
             st.rerun()
 
-    # Route page
     if active_page == "Dashboard":
         render_dashboard(user)
     elif active_page == "Monitoring":
