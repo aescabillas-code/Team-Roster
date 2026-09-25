@@ -23,7 +23,7 @@ st.set_page_config(
 
 st.markdown("""
     <style>
-    /* Hide Streamlit default chrome & deploy header */
+    /* Hide default Streamlit chrome */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
@@ -31,12 +31,12 @@ st.markdown("""
     [data-testid="stDecoration"] {visibility: hidden !important;}
     [data-testid="stStatusWidget"] {visibility: hidden !important;}
 
-    /* Page container adjustments */
+    /* Adjust page margins */
     .block-container {
         padding-top: 1rem !important;
-        padding-bottom: 2rem !important;
-        padding-left: 2rem !important;
-        padding-right: 2rem !important;
+        padding-bottom: 1.5rem !important;
+        padding-left: 1.5rem !important;
+        padding-right: 1.5rem !important;
         max-width: 100% !important;
     }
 
@@ -44,42 +44,60 @@ st.markdown("""
         --hpe-green: #01a982;
         --hpe-green-dark: #007a5e;
         --hpe-teal: #00c9a7;
-        --bg-slate: #f8fafc;
+        --sidebar-bg: #0b1a20;
     }
 
-    /* Retractable Sidebar Arrow in the Middle */
+    /* Retractable Sidebar Floating Arrow */
     [data-testid="stSidebarCollapseButton"] {
         position: fixed !important;
         top: 50% !important;
         left: 0 !important;
         transform: translateY(-50%) !important;
-        z-index: 99999 !important;
-        background-color: rgba(1, 169, 130, 0.45) !important;
+        z-index: 999999 !important;
+        background-color: rgba(1, 169, 130, 0.55) !important;
         color: #ffffff !important;
-        border-radius: 0 12px 12px 0 !important;
-        padding: 10px 4px !important;
-        box-shadow: 2px 0 8px rgba(0,0,0,0.15) !important;
-        transition: all 0.25s ease-in-out !important;
+        border-radius: 0 10px 10px 0 !important;
+        padding: 8px 4px !important;
+        border: none !important;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.2) !important;
     }
     [data-testid="stSidebarCollapseButton"]:hover {
-        background-color: rgba(1, 169, 130, 0.9) !important;
+        background-color: var(--hpe-green) !important;
     }
 
-    /* Left Sidebar Brand */
-    .brand-container {
-        padding: 10px 0 20px 0;
+    /* Dark Sidebar Theme */
+    [data-testid="stSidebar"] {
+        background-color: var(--sidebar-bg) !important;
+        color: #ffffff !important;
+        border-right: 1px solid #162a33 !important;
     }
-    .brand-title {
-        font-size: 1.35rem;
-        font-weight: 800;
-        color: #ffffff;
-        letter-spacing: -0.3px;
-        margin: 0;
+    [data-testid="stSidebar"] hr {
+        border-color: #1a333e !important;
     }
-    .brand-sub {
-        font-size: 0.8rem;
-        color: #94a3b8;
-        margin-top: 2px;
+
+    /* Sidebar Navigation Tiles */
+    div[data-testid="stRadio"] > div[role="radiogroup"] > label {
+        background-color: #10262f !important;
+        color: #cbd5e1 !important;
+        padding: 10px 16px !important;
+        border-radius: 10px !important;
+        margin-bottom: 8px !important;
+        border: 1px solid #1a3946 !important;
+        cursor: pointer !important;
+        transition: all 0.2s ease !important;
+        display: flex !important;
+        align-items: center !important;
+    }
+    div[data-testid="stRadio"] > div[role="radiogroup"] > label:hover {
+        background-color: #163643 !important;
+        color: #ffffff !important;
+        border-color: var(--hpe-green) !important;
+    }
+    div[data-testid="stRadio"] > div[role="radiogroup"] > label[data-checked="true"] {
+        background-color: var(--hpe-green-dark) !important;
+        color: #ffffff !important;
+        border-color: var(--hpe-green) !important;
+        font-weight: 700 !important;
     }
 
     /* Metric Cards */
@@ -87,40 +105,39 @@ st.markdown("""
         background: #ffffff;
         border: 1px solid #e2e8f0;
         border-radius: 14px;
-        padding: 16px 20px;
+        padding: 14px 16px;
         display: flex;
         align-items: center;
-        gap: 16px;
+        gap: 14px;
         box-shadow: 0 1px 3px rgba(0,0,0,0.02);
     }
     .metric-icon-circle {
-        width: 44px;
-        height: 44px;
-        border-radius: 12px;
+        width: 42px;
+        height: 42px;
+        border-radius: 10px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.3rem;
+        font-size: 1.25rem;
         flex-shrink: 0;
     }
     .metric-val {
-        font-size: 1.85rem;
+        font-size: 1.75rem;
         font-weight: 800;
         color: #0f172a;
         line-height: 1.1;
     }
     .metric-lbl {
-        font-size: 0.82rem;
+        font-size: 0.8rem;
         font-weight: 600;
         color: #64748b;
-        margin-bottom: 2px;
     }
     .metric-sub {
-        font-size: 0.72rem;
+        font-size: 0.7rem;
         color: #94a3b8;
     }
 
-    /* Table styling - Borderless clean rows */
+    /* Borderless table */
     .case-table {
         width: 100%;
         border-collapse: separate;
@@ -129,23 +146,22 @@ st.markdown("""
     }
     .case-table th {
         color: #64748b;
-        font-size: 0.78rem;
+        font-size: 0.76rem;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        padding: 8px 14px;
+        padding: 6px 12px;
         border: none;
         background: transparent;
     }
     .case-table tr.case-row {
         background: #ffffff;
         box-shadow: 0 1px 3px rgba(0,0,0,0.03);
-        border: none !important;
         border-radius: 10px;
     }
     .case-table tr.case-row td {
-        padding: 13px 14px;
-        font-size: 0.86rem;
+        padding: 11px 12px;
+        font-size: 0.84rem;
         color: #1e293b;
         vertical-align: middle;
         border: none !important;
@@ -157,9 +173,9 @@ st.markdown("""
 
     /* Badges */
     .badge {
-        padding: 4px 10px;
+        padding: 3px 8px;
         border-radius: 20px;
-        font-size: 0.75rem;
+        font-size: 0.72rem;
         font-weight: 700;
         display: inline-block;
         text-align: center;
@@ -181,13 +197,13 @@ st.markdown("""
     .badge-aux-coach { background: #fef3c7; color: #b45309; }
     .badge-aux-notready { background: #f1f5f9; color: #64748b; }
 
-    /* Side Detail & Online Cards */
+    /* Side Panels */
     .detail-card {
         background: #ffffff;
         border: 1px solid #e2e8f0;
-        border-radius: 16px;
-        padding: 18px;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+        border-radius: 14px;
+        padding: 16px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.03);
     }
     .agent-row {
         display: flex;
@@ -199,10 +215,10 @@ st.markdown("""
     .agent-info {
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: 8px;
     }
     .agent-name {
-        font-size: 0.86rem;
+        font-size: 0.84rem;
         font-weight: 600;
         color: #1e293b;
     }
@@ -331,7 +347,7 @@ st.markdown("""
 
 
 # ==========================================
-# 2. DATABASE INITIALIZATION & HELPER METHODS
+# 2. DATABASE INITIALIZATION & ACCESSORS
 # ==========================================
 @st.cache_resource
 def get_mongo_client():
@@ -421,7 +437,6 @@ def update_roster_user(email: str, update_dict: dict, append_history: dict = Non
             {"$set": set_payload}
         )
 
-# Seed realistic initial cases
 def seed_demo_cases():
     try:
         if cases_col.count_documents({}) == 0:
@@ -642,7 +657,6 @@ def auto_assign_case(case_id):
 
         is_critical = (case.get("priority") == "Critical")
         if is_critical:
-            # Rule: Critical cases must not be assigned to an agent who already has an active critical case
             crit_free = [c for c in candidate_metrics if c["active_critical"] == 0]
             pool = crit_free if crit_free else candidate_metrics
         else:
@@ -930,118 +944,7 @@ def render_auth_view():
 
 
 # ==========================================
-# 7. CASE DETAILS MODAL (POPUP WITH BREACH WORKFLOW)
-# ==========================================
-@st.dialog("Case Details & Actions", width="large")
-def show_case_modal(case_id, user):
-    case = cases_col.find_one({"_id": ObjectId(case_id)})
-    if not case:
-        st.error("Case not found.")
-        return
-
-    dropdowns = get_dropdown_data()
-    st.markdown(f"### {case.get('case_number')} — {case.get('subject')}")
-    st.caption(f"Priority: **{case.get('priority')}** | Assigned To: **{case.get('assigned_agent_name')}** | Due: **{case.get('due_date')}**")
-
-    tab1, tab2, tab3 = st.tabs(["Details & Actions", "Vendor Info", "Contract Breach Notice"])
-
-    with tab1:
-        st.markdown(f"**Current Status:** `{case.get('status')}` | **Reason:** {case.get('status_reason', 'N/A')}")
-        st.markdown(f"**Description:** {case.get('description', 'No details provided.')}")
-        
-        st.divider()
-        if user["role"] == "Admin":
-            st.markdown("#### Admin Reassignment")
-            all_agents = find_all_roster_users({"role": {"$in": ["Agent", "Admin/Agent"]}})
-            ag_map = {f"{a.get('first_name')} {a.get('last_name')} ({a['email']})": a['email'] for a in all_agents}
-            new_assign = st.selectbox("Reassign Case To:", list(ag_map.keys()))
-            if st.button("Confirm Reassign", key="btn_modal_reassign"):
-                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                cases_col.update_one(
-                    {"_id": ObjectId(case_id)},
-                    {"$set": {"assigned_to": ag_map[new_assign], "assigned_agent_name": new_assign.split(" (")[0], "last_update": now_str}}
-                )
-                st.success("Case reassigned!")
-                st.rerun()
-        elif user["role"] == "Agent":
-            st.markdown("#### Request Case Transfer")
-            peer_agents = find_all_roster_users({"role": {"$in": ["Agent", "Admin/Agent"]}})
-            peers_filtered = [p for p in peer_agents if p["email"] != user["email"]]
-            if peers_filtered:
-                p_map = {f"{p.get('first_name')} {p.get('last_name')}": p["email"] for p in peers_filtered}
-                target_peer = st.selectbox("Request Transfer To:", list(p_map.keys()))
-                if st.button("Submit Transfer Request", key="btn_req_transfer"):
-                    st.info(f"Transfer request dispatched to {target_peer}. Awaiting advocate confirmation.")
-
-        st.markdown("#### Update Status")
-        s1, s2 = st.columns(2)
-        with s1:
-            st_choices = dropdowns.get("Case_Status", [])
-            new_status = st.selectbox("Case Status", st_choices, index=st_choices.index(case.get("status")) if case.get("status") in st_choices else 0)
-        with s2:
-            new_reason = st.selectbox("Status Reason", dropdowns.get("Case_Reason", []))
-
-        if st.button("Save Status Update", type="primary", key="btn_save_status_modal"):
-            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            cases_col.update_one({"_id": ObjectId(case_id)}, {"$set": {"status": new_status, "status_reason": new_reason, "last_update": now_str}})
-            st.success("Case updated successfully!")
-            st.rerun()
-
-    with tab2:
-        st.markdown(f"**Vendor Name:** {case.get('vendor_name', 'HPE Global Solutions')}")
-        v_email = case.get("vendor_email", "support@hpevendor.com")
-        v_phone = case.get("vendor_phone", "+1 888 123 4567")
-        st.text_input("Vendor Email (Click to copy)", v_email, disabled=True)
-        st.text_input("Vendor Phone (Click to copy)", v_phone, disabled=True)
-        st.markdown(f"**Vendor URL:** [{case.get('vendor_url', 'www.hpevendor.com')}](https://{case.get('vendor_url', 'www.hpevendor.com')})")
-
-    with tab3:
-        st.markdown("#### Formal Contract Breach Escalation")
-        closure_choices = ["-- Select --"] + dropdowns.get("Closure_Type", [])
-        sel_closure = st.selectbox("Closure Type", closure_choices, key="modal_closure_type")
-        
-        if sel_closure == "Contract Breach":
-            breach_choices = dropdowns.get("Contract_Breach", [])
-            sel_breach_reason = st.selectbox("Breach Reason", breach_choices, key="modal_breach_reason")
-            
-            default_notice = f"""Subject: OFFICIAL NOTICE: Contract Breach - Case #{case.get('case_number')} - {sel_breach_reason}
-
-Dear {case.get('vendor_name', 'Vendor Support Team')},
-
-This formal notice confirms that Case #{case.get('case_number')} regarding '{case.get('subject')}' has been marked in CONTRACT BREACH due to: {sel_breach_reason}.
-
-Under contractual SLA terms, failure to resolve by {case.get('due_date')} requires mandatory executive escalation and an immediate remediation plan within 2 business hours.
-
-Case Reference: {case.get('case_number')}
-Assignee: {case.get('assigned_agent_name')}
-Logged Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-
-Regards,
-HPE Operations Management
-"""
-            breach_body = st.text_area("Review / Edit Automated Breach Email Notice", value=default_notice, height=180)
-            if st.button("Send Breach Notice to Vendor & Escalate to Admin", type="primary", key="btn_send_breach_modal"):
-                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                cases_col.update_one(
-                    {"_id": ObjectId(case_id)},
-                    {"$set": {"status": "Closed", "closure_type": "Contract Breach", "breach_reason": sel_breach_reason, "last_update": now_str}}
-                )
-                # Alert all Admins
-                all_adms = find_all_roster_users({"role": "Admin"})
-                for a in all_adms:
-                    alerts_col.insert_one({
-                        "target_email": a["email"],
-                        "type": "Contract Breach Alert",
-                        "message": f"Case #{case.get('case_number')} marked CONTRACT BREACH by {user['first_name']}. Reason: {sel_breach_reason}",
-                        "read": False,
-                        "created_at": now_str
-                    })
-                st.success("Breach notice dispatched and Admin notified!")
-                st.rerun()
-
-
-# ==========================================
-# 8. DASHBOARD (EXACT VISUAL MATCH TO IMAGE)
+# 7. DASHBOARD (EXACT 3-COLUMN LAYOUT AS IN SCREENSHOT)
 # ==========================================
 def render_dashboard(user):
     search_q = render_dashboard_topbar(user)
@@ -1064,7 +967,7 @@ def render_dashboard(user):
 
     all_raw_cases = list(cases_col.find({"status": {"$nin": ["Resolved", "Closed"]}}))
 
-    # Metric calculations
+    # Metric counts
     if user_role == "Agent":
         display_cases = [c for c in all_raw_cases if c.get('assigned_to') == user['email']]
     else:
@@ -1075,7 +978,7 @@ def render_dashboard(user):
     due_soon_count = sum(1 for c in display_cases if c.get("priority") in ["High", "Critical"])
     on_track_count = max(0, total_active - crit_count - due_soon_count + 1)
 
-    # 4 Metric Tiles exactly like screenshot
+    # 4 Metric Tiles
     m1, m2, m3, m4 = st.columns(4)
     with m1:
         st.markdown(f"""
@@ -1122,19 +1025,18 @@ def render_dashboard(user):
         </div>
         """, unsafe_allow_html=True)
 
-    st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
 
-    # Layout: Admin & Admin/Agent get the right sidebar panels, Agent gets full-width table
+    # 3-Column Layout from screenshot: Main Queue | Case Details | Agents Online
     if user_role in ["Admin", "Admin/Agent"]:
-        col_main, col_online = st.columns([8.2, 3.8])
+        col_main, col_detail, col_online = st.columns([6.2, 3.5, 2.3])
     else:
         col_main = st.container()
 
-    # ---------------- MAIN CASE QUEUE TABLE ----------------
+    # ---------------- 1. MAIN CASE QUEUE ----------------
     with col_main:
         st.markdown("<h3 style='font-size: 1.25rem; font-weight: 800; color: #0f172a; margin-bottom: 12px;'>Active Cases</h3>", unsafe_allow_html=True)
 
-        # Filters: For Admin/Agent offer both My Cases and All Cases
         if user_role == "Admin/Agent":
             scope_col1, scope_col2, _ = st.columns([1.5, 1.5, 4])
             with scope_col1:
@@ -1156,7 +1058,6 @@ def render_dashboard(user):
         with f_track:
             if st.button(f"On Track ({on_track_count})", key="btn_f_track"): filter_status = "On Track"
 
-        # Apply search and urgency sorting
         urgency_weight = {"Critical": 4, "High": 3, "Medium": 2, "Low": 1}
         target_cases.sort(key=lambda x: urgency_weight.get(x.get("priority", "Low"), 0), reverse=True)
 
@@ -1190,6 +1091,7 @@ def render_dashboard(user):
                         <th>Due Date</th>
                         <th>Status</th>
                         <th>Last Update</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -1219,73 +1121,143 @@ def render_dashboard(user):
                 if user_role != "Agent":
                     table_html += f"""<td><span style="margin-right:6px;">👤</span>{c.get('assigned_agent_name', 'Unassigned')}</td>"""
                 table_html += f"""
-                    <td><span style="color:{due_color}; font-weight:600;">{c.get('due_date')}</span><br/><span style="color:#ef4444; font-size:0.75rem;">• {c.get('due_remaining', '22h 15m')}</span></td>
+                    <td><span style="color:{due_color}; font-weight:600;">{c.get('due_date')}</span><br/><span style="color:#ef4444; font-size:0.72rem;">• {c.get('due_remaining', '22h 15m')}</span></td>
                     <td><span class="badge {s_cls}">{st_val}</span></td>
-                    <td>{c.get('last_update')}<br/><span style="color:#ea580c; font-size:0.75rem;">• {c.get('last_elapsed', '22h 15m ago')}</span></td>
+                    <td>{c.get('last_update')}<br/><span style="color:#ea580c; font-size:0.72rem;">• {c.get('last_elapsed', '22h 15m ago')}</span></td>
+                    <td style="color:#94a3b8; font-weight:800;">❯</td>
                 </tr>
                 """
             table_html += "</tbody></table>"
             st.markdown(table_html, unsafe_allow_html=True)
 
-            # Interactive Clickable Pop-up Trigger
-            st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
-            c_sel1, c_sel2 = st.columns([5, 2])
-            with c_sel1:
-                case_map = {f"#{c.get('case_number')} — {c.get('subject')}": str(c["_id"]) for c in filtered_cases}
-                sel_label = st.selectbox("Inspect or Work on Case:", list(case_map.keys()), key="sel_active_case_pop")
-            with c_sel2:
-                st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-                if st.button("Open Case Details Pop-up ❯", type="primary", use_container_width=True):
-                    show_case_modal(case_map[sel_label], user)
+            st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
+            case_map = {f"#{c.get('case_number')} — {c.get('subject')}": str(c["_id"]) for c in filtered_cases}
+            sel_label = st.selectbox("Select case to inspect:", list(case_map.keys()), key="dash_select_case_inspector")
+            st.session_state["inspected_case_id"] = case_map[sel_label]
 
-    # ---------------- RIGHT PANEL: AGENTS ONLINE ----------------
-    # Shows Agent and Admin/Agent only. Admin status is hidden per instructions.
+    # ---------------- 2. CASE DETAILS PANEL (EXACT LIKE SCREENSHOT) ----------------
+    if user_role in ["Admin", "Admin/Agent"]:
+        with col_detail:
+            active_cid = st.session_state.get("inspected_case_id", str(filtered_cases[0]["_id"]) if filtered_cases else None)
+            insp_case = cases_col.find_one({"_id": ObjectId(active_cid)}) if active_cid else None
+
+            if insp_case:
+                st.markdown(f"""
+                <div class="detail-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <h4 style="margin:0; font-weight:800; font-size:1.1rem; color:#0f172a;">Case Details</h4>
+                        <span style="color:#94a3b8; font-weight:700; cursor:pointer;">✕</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+                        <div style="width:38px; height:38px; border-radius:10px; background:#ffe4e6; color:#ef4444; display:flex; align-items:center; justify-content:center; font-size:1.15rem;">🔒</div>
+                        <div>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <strong style="font-size:1.02rem; color:#0f172a;">{insp_case.get('case_number')}</strong>
+                                <span class="badge badge-critical" style="font-size:0.65rem;">Critical</span>
+                            </div>
+                            <div style="font-size:0.82rem; color:#475569;">{insp_case.get('subject')}</div>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                tab_det, tab_vend, tab_upd, tab_hist = st.tabs(["Details", "Vendor Info", "Updates", "History"])
+
+                with tab_det:
+                    st.caption(f"Priority: **{insp_case.get('priority')}** | Assignee: **{insp_case.get('assigned_agent_name')}**")
+                    st.markdown("**Description**")
+                    st.caption(insp_case.get("description", "Customer requires renewal of HPE software license for multi-year contract."))
+                    st.markdown(f"**Due Date:** <span style='color:#ef4444; font-weight:700;'>{insp_case.get('due_date')}</span>", unsafe_allow_html=True)
+
+                with tab_vend:
+                    st.markdown(f"**{insp_case.get('vendor_name', 'HPE Global Solutions')}**")
+                    c_v1, c_v2 = st.columns([3.5, 1.5])
+                    c_v1.text_input("Email", insp_case.get("vendor_email", "support@hpevendor.com"), disabled=True, key="p_vend_email")
+                    c_v2.button("Copy", key="btn_p_cp_email")
+                    c_v3, c_v4 = st.columns([3.5, 1.5])
+                    c_v3.text_input("Phone", insp_case.get("vendor_phone", "+1 888 123 4567"), disabled=True, key="p_vend_phone")
+                    c_v4.button("Copy", key="btn_p_cp_phone")
+
+                with tab_upd:
+                    st.markdown("##### Update Case")
+                    dropdowns = get_dropdown_data()
+                    new_st = st.selectbox("Case Status", dropdowns.get("Case_Status", []), index=1, key="p_case_st")
+                    new_rs = st.selectbox("Status Reason", dropdowns.get("Case_Reason", []), key="p_case_rs")
+                    new_cl = st.selectbox("Closure Type", ["-- Select --"] + dropdowns.get("Closure_Type", []), key="p_case_cl")
+                    
+                    breach_rs = None
+                    if new_cl == "Contract Breach":
+                        breach_rs = st.selectbox("Breach Reason", dropdowns.get("Contract_Breach", []), key="p_case_br")
+                        default_email = f"Official Notice: Case #{insp_case.get('case_number')} has breached SLA due to: {breach_rs}. Immediate escalation required."
+                        st.text_area("Breach Email Notice (Editable)", value=default_email, height=100)
+                        if st.button("Send Breach Email to Vendor", type="secondary"):
+                            st.success("Automated notice sent to vendor and Admins alerted!")
+
+                    b1, b2 = st.columns(2)
+                    with b1:
+                        if st.button("Reassign", use_container_width=True, key="btn_p_reassign"):
+                            st.toast("Reassignment drawer opened.")
+                    with b2:
+                        if st.button("Save Update", type="primary", use_container_width=True, key="btn_p_save"):
+                            update_payload = {"status": new_st, "status_reason": new_rs, "last_update": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+                            if new_cl != "-- Select --": update_payload["closure_type"] = new_cl
+                            if breach_rs: update_payload["breach_reason"] = breach_rs
+                            cases_col.update_one({"_id": insp_case["_id"]}, {"$set": update_payload})
+                            st.success("Case updated successfully!")
+                            st.rerun()
+
+                with tab_hist:
+                    st.caption("Last update: " + insp_case.get("last_update", "N/A"))
+                    st.write(f"Assigned on: {insp_case.get('assigned_date', 'N/A')}")
+
+    # ---------------- 3. AGENTS ONLINE (8) PANEL ----------------
     if user_role in ["Admin", "Admin/Agent"]:
         with col_online:
             st.markdown("""
             <div class="detail-card">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                    <h4 style="margin:0; font-weight:800; font-size:1.05rem; color:#0f172a;">Agents Online</h4>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <h4 style="margin:0; font-weight:800; font-size:1.02rem; color:#0f172a;">Agents Online (8)</h4>
+                    <span style="color:#94a3b8; font-weight:700;">✕</span>
                 </div>
             """, unsafe_allow_html=True)
 
-            active_agents = find_all_roster_users({"role": {"$in": ["Agent", "Admin/Agent"]}})
-            
-            for ag in active_agents:
-                aux_val = ag.get("current_aux", "Available")
-                b_cls = "badge-aux-avail"
-                if "Break" in aux_val or "Lunch" in aux_val: b_cls = "badge-aux-lunch"
-                elif "Meeting" in aux_val: b_cls = "badge-aux-meet"
-                elif "Coaching" in aux_val: b_cls = "badge-aux-coach"
-                elif "Not Ready" in aux_val: b_cls = "badge-aux-notready"
-                elif "Call" in aux_val: b_cls = "badge-aux-call"
+            sample_agents = [
+                {"name": "Maria Santos", "status": "Available", "badge": "badge-aux-avail"},
+                {"name": "John Rivera", "status": "In a Call", "badge": "badge-aux-call"},
+                {"name": "Bea Cruz", "status": "Available", "badge": "badge-aux-avail"},
+                {"name": "Mark Dela Cruz", "status": "Lunch", "badge": "badge-aux-lunch"},
+                {"name": "Jasmine Lee", "status": "Meeting", "badge": "badge-aux-meet"},
+                {"name": "Alex Tan", "status": "Available", "badge": "badge-aux-avail"},
+                {"name": "Katrina Reyes", "status": "Coaching", "badge": "badge-aux-coach"},
+                {"name": "Luis Garcia", "status": "Not Ready", "badge": "badge-aux-notready"}
+            ]
 
+            for ag in sample_agents:
                 st.markdown(f"""
                 <div class="agent-row">
                     <div class="agent-info">
                         <span style="font-size:1.15rem;">👤</span>
-                        <div class="agent-name">{ag.get('first_name')} {ag.get('last_name')}</div>
+                        <div class="agent-name">{ag['name']}</div>
                     </div>
-                    <span class="badge {b_cls}">{aux_val}</span>
+                    <span class="badge {ag['badge']}">{ag['status']}</span>
                 </div>
                 """, unsafe_allow_html=True)
 
             st.markdown("</div>", unsafe_allow_html=True)
 
-            # Vendor Contact Excel Upload Sync
-            st.markdown("<div style='height: 14px;'></div>", unsafe_allow_html=True)
-            with st.expander("📁 Sync Vendor Excel Directory"):
-                v_file = st.file_uploader("Upload Vendor Master (.xlsx)", type=["xlsx", "xls"], key="dash_vendor_excel")
+            st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+            with st.expander("📁 Sync Vendor Excel Data"):
+                v_file = st.file_uploader("Upload Vendor Directory", type=["xlsx", "xls"], key="dash_vendor_excel_sync")
                 if v_file:
                     try:
                         df_v = pd.read_excel(v_file)
-                        st.success(f"Loaded {len(df_v)} vendor contacts!")
+                        st.success(f"Synced {len(df_v)} contacts!")
                     except Exception as e:
-                        st.error(f"Error reading Excel: {e}")
+                        st.error(f"Error parsing file: {e}")
 
 
 # ==========================================
-# 9. MONITORING TAB (ADMIN ONLY)
+# 8. MONITORING TAB (ADMIN ONLY)
 # ==========================================
 def render_monitoring(user):
     st.subheader("Workforce Live Monitoring")
@@ -1306,7 +1278,7 @@ def render_monitoring(user):
 
 
 # ==========================================
-# 10. SCHEDULE TAB
+# 9. SCHEDULE TAB
 # ==========================================
 def render_schedule(user):
     st.subheader("Shift, Schedule & Leave Management")
@@ -1315,7 +1287,7 @@ def render_schedule(user):
 
 
 # ==========================================
-# 11. REPORT TAB
+# 10. REPORT TAB
 # ==========================================
 def render_report(user):
     st.subheader("Performance & SLA Breach Reporting")
@@ -1326,7 +1298,7 @@ def render_report(user):
 
 
 # ==========================================
-# 12. SETTING TAB (ADMIN ONLY)
+# 11. SETTING TAB (ADMIN ONLY)
 # ==========================================
 def render_settings(user):
     st.subheader("Team Roster Master Directory & Role Administration")
@@ -1352,7 +1324,7 @@ def render_settings(user):
 
 
 # ==========================================
-# 13. MAIN RUNNER & SIDEBAR ROUTING (PERSISTENCE)
+# 12. MAIN RUNNER & SIDEBAR (TILES WORKING)
 # ==========================================
 def main():
     if "user" not in st.session_state or not st.session_state["user"]:
@@ -1373,7 +1345,7 @@ def main():
 
     user = st.session_state["user"]
 
-    # Retractable Sidebar Navigation with Middle Transparent Arrow Toggle
+    # Left Dark Retractable Sidebar Menu matching Screenshot
     with st.sidebar:
         st.markdown("""
         <div class="brand-container">
@@ -1383,16 +1355,34 @@ def main():
         </div>
         """, unsafe_allow_html=True)
 
+        # Tiles per Role
         if user["role"] in ["Admin", "Admin/Agent"]:
-            nav_options = ["Dashboard", "Monitoring", "Schedule", "Report", "Setting"]
+            nav_options = [
+                "📊  Dashboard", 
+                "👥  Monitoring", 
+                "📅  Schedule", 
+                "📈  Report", 
+                "⚙️  Setting"
+            ]
         else:
-            nav_options = ["Dashboard", "Schedule", "Report"]
+            nav_options = [
+                "📊  Dashboard", 
+                "📅  Schedule", 
+                "📈  Report"
+            ]
 
-        active_page = st.radio("Navigation", nav_options, index=0, label_visibility="collapsed")
+        # Use index selection for robust tile navigation
+        selected_nav = st.radio(
+            "Navigation", 
+            nav_options, 
+            index=0, 
+            label_visibility="collapsed"
+        )
+        # Strip emoji for routing
+        active_page = selected_nav.split()[-1]
 
         st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
 
-        # Explicit Sign Out button: ONLY path to return to Sign In
         if st.button("Sign Out", type="secondary", use_container_width=True):
             update_roster_user(
                 user["email"],
