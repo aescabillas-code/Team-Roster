@@ -32,9 +32,10 @@ st.set_page_config(
 # ============================================================
 
 HPE_NAVY = "#003B49"
-HPE_DARK = "#002B36"
+HPE_DARK = "#002F3A"
 HPE_TEAL = "#00A88F"
-HPE_LIGHT = "#F7F9FA"
+HPE_GREEN = "#00A88F"
+HPE_LIGHT = "#F5F8FA"
 HPE_BORDER = "#DDE5E9"
 TEXT = "#17313A"
 MUTED = "#6B7C84"
@@ -54,7 +55,7 @@ st.markdown(
     }}
 
     .stApp {{
-        background: var(--light);
+        background: #f7f9fa;
         color: var(--text);
     }}
 
@@ -64,16 +65,9 @@ st.markdown(
     }}
 
     /* =========================================
-       HIDE STREAMLIT BRANDING BUT KEEP SIDEBAR TOGGLE
+       HIDE STREAMLIT BRANDING & UI ELEMENTS
        ========================================= */
-    /* Make the header background transparent so the > button is visible */
     header[data-testid="stHeader"] {{
-        background: transparent !important;
-        box-shadow: none !important;
-    }}
-    
-    /* Hide the top-right tools specifically without destroying the header */
-    [data-testid="stToolbar"] {{
         display: none !important;
     }}
     
@@ -93,7 +87,9 @@ st.markdown(
        SIDEBAR STYLING
        ========================================= */
     [data-testid="stSidebar"] {{
-        background: var(--dark) !important;
+        background: #002B36 !important;
+        min-width: 240px !important;
+        max-width: 240px !important;
     }}
 
     [data-testid="stSidebar"] > div:first-child {{
@@ -104,7 +100,8 @@ st.markdown(
         color: #fff !important;
     }}
 
-    [data-testid="stSidebar"] .stButton > button {{
+    /* Fix white-on-white by making inactive buttons transparent */
+    [data-testid="stSidebar"] button {{
         width: 100%;
         min-height: 44px;
         border: 0 !important;
@@ -112,48 +109,66 @@ st.markdown(
         box-shadow: none !important;
         border-radius: 8px !important;
         text-align: left !important;
-        justify-content: flex-start !important;
-        padding: 10px 15px !important;
-        margin: 0 0 12px 0 !important;
-        transition: background 0.2s ease;
-    }}
-    
-    [data-testid="stSidebar"] .stButton > button p {{
         font-size: 14px !important;
         font-weight: 600 !important;
+        padding: 10px 15px !important;
+        margin: 0 0 12px 0 !important;
         color: #ffffff !important;
+        transition: background 0.2s ease;
     }}
 
-    [data-testid="stSidebar"] .stButton > button:hover {{
+    [data-testid="stSidebar"] button:hover {{
         background: rgba(255, 255, 255, 0.08) !important;
     }}
 
-    /* =========================================
-       TOP PROFILE BOX STYLING
-       ========================================= */
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.profile-marker) {{
-        border-radius: 8px;
+    /* Top Bar Styling */
+    .topbar {{
+        height: 50px;
         background: #fff;
         border: 1px solid var(--border);
-        box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        padding: 0 15px;
+        box-shadow: 0 1px 4px rgba(0,0,0,.03);
+        margin-bottom: 20px;
     }}
-    
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.profile-marker) > div {{
-        padding: 12px 15px !important;
+
+    .top-logo {{
+        color: var(--navy);
+        font-weight: 800;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+    }}
+
+    .top-logo .mini-mark {{
+        display: inline-block;
+        width: 16px;
+        height: 10px;
+        border: 2px solid var(--teal);
+        margin-right: 8px;
+        border-radius: 1px;
+    }}
+
+    .user-chip {{
+        font-size: 12px;
+        color: var(--text);
+        white-space: nowrap;
     }}
 
     .avatar {{
         display: inline-flex;
-        width: 32px;
-        height: 32px;
+        width: 26px;
+        height: 26px;
         align-items: center;
         justify-content: center;
         border-radius: 50%;
         background: var(--navy);
         color: #fff;
-        font-size: 11px;
+        font-size: 10px;
         font-weight: 800;
-        margin-right: 12px;
+        margin-right: 8px;
     }}
 
     /* Typography & Layout */
@@ -161,13 +176,13 @@ st.markdown(
         font-size: 24px;
         font-weight: 800;
         color: var(--text);
-        margin: 5px 0 4px;
+        margin: 5px 0 2px;
     }}
 
     .page-subtitle {{
         color: var(--muted);
         font-size: 12px;
-        margin-bottom: 25px;
+        margin-bottom: 20px;
     }}
 
     .section-title {{
@@ -192,17 +207,17 @@ st.markdown(
         display: flex;
         align-items: center;
         justify-content: center;
-        width: 44px;
-        height: 44px;
+        width: 40px;
+        height: 40px;
         border-radius: 8px;
         margin-right: 15px;
-        font-size: 20px;
+        font-size: 18px;
     }}
 
-    .metric-blue {{ background: #eef5ff; color: #1976d2; border: 1px solid #cce0ff; }}
-    .metric-red {{ background: #ffebeb; color: #d32f2f; border: 1px solid #ffcdd2; }}
-    .metric-orange {{ background: #fff4e5; color: #ed6c02; border: 1px solid #ffe0b2; }}
-    .metric-green {{ background: #edf7ed; color: #2e7d32; border: 1px solid #c8e6c9; }}
+    .metric-blue {{ background: #eef5ff; color: #2e7d32; }}
+    .metric-red {{ background: #ffebeb; color: #d32f2f; }}
+    .metric-orange {{ background: #fff4e5; color: #ed6c02; }}
+    .metric-green {{ background: #edf7ed; color: #2e7d32; }}
 
     .metric-content {{
         display: flex;
@@ -211,30 +226,21 @@ st.markdown(
 
     .metric-label {{
         color: var(--muted);
-        font-size: 10px;
-        font-weight: 800;
+        font-size: 11px;
+        font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        margin-bottom: 2px;
+        margin-bottom: 4px;
     }}
 
     .metric-value {{
         color: var(--text);
-        font-size: 26px;
+        font-size: 24px;
         line-height: 1;
         font-weight: 800;
     }}
 
-    /* Standard Cards & Alerts */
-    .card {{
-        background: #fff;
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 15px;
-        box-shadow: 0 2px 5px rgba(0,0,0,.02);
-        margin-bottom: 15px;
-    }}
-
+    /* Alerts */
     .alert-card {{
         background: #fffafa;
         border: 1px solid #ffcdcd;
@@ -253,6 +259,16 @@ st.markdown(
         display: flex;
         align-items: center;
         gap: 6px;
+    }}
+
+    /* Standard Cards */
+    .card {{
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: 0 2px 5px rgba(0,0,0,.02);
+        margin-bottom: 15px;
     }}
 
     /* Auth Screens */
@@ -436,13 +452,10 @@ REQUESTS_COLLECTION = "Requests"
 
 AUX_OPTIONS = [
     "Available",
-    "Busy - Away",
     "Break",
-    "Unscheduled Break",
     "Lunch",
     "Meeting",
-    "Coaching",
-    "Admin Task",
+    "Training",
     "Offline",
 ]
 
@@ -1097,7 +1110,7 @@ if not st.session_state.authenticated:
 
 user = st.session_state.user_data or {}
 is_admin = user.get("role") == "Admin"
-role_name = user.get("role", "Admin" if is_admin else "Agent")
+role_name = user.get("role", "Agent")
 name = display_name(user)
 initial = initials(user)
 
@@ -1106,16 +1119,19 @@ initial = initials(user)
 # TOP HEADER & PROFILE SECTION
 # ============================================================
 
-current_aux = user.get("aux", "Available")
+current_aux = "Admin Task" if is_admin else user.get("aux", "Available")
 
-top_logo, top_space, top_prof = st.columns([2, 3, 4])
+# Restructured layout to place the AUX selector inside a unified Profile box
+top1, top2, top_prof = st.columns([3, 4, 4.5])
 
-with top_logo:
+with top1:
     st.markdown(
         """
-        <div style="display:flex; align-items:center; gap:8px; padding-top:15px;">
-            <span style="width:16px; height:11px; border: 2px solid #00A88F; border-radius:1px; display:inline-block;"></span>
-            <span style="color:#003B49; font-size:15px; font-weight:800;">HPE CaseFlow</span>
+        <div class="topbar" style="border:none; box-shadow:none; padding:0; background:transparent;">
+            <div class="top-logo">
+                <span class="mini-mark"></span>
+                HPE CaseFlow
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1123,15 +1139,14 @@ with top_logo:
 
 with top_prof:
     with st.container(border=True):
-        st.markdown('<div class="profile-marker" style="display:none;"></div>', unsafe_allow_html=True)
-        c_avatar, c_aux, c_btn = st.columns([2.5, 2.5, 1.5])
+        c_avatar, c_aux, c_btn = st.columns([2.5, 2, 1])
         
         with c_avatar:
             st.markdown(
                 f"""
-                <div style="display:flex; align-items:center; height:36px; padding-top:2px;">
-                    <span class="avatar" style="margin-right:12px;">{initial}</span>
-                    <div style="line-height:1.3;">
+                <div style="display:flex; align-items:center; height:36px;">
+                    <span class="avatar" style="margin-right:10px;">{initial}</span>
+                    <div style="line-height:1.2;">
                         <strong style="font-size:12px; color:var(--text);">{name}</strong><br>
                         <span style="font-size:10px; color:var(--muted);">{role_name}</span>
                     </div>
@@ -1141,18 +1156,18 @@ with top_prof:
             )
             
         with c_aux:
+            aux_options = ["Admin Task"] if is_admin else AUX_OPTIONS
             selected_aux = st.selectbox(
                 "AUX",
-                AUX_OPTIONS,
-                index=(AUX_OPTIONS.index(current_aux) if current_aux in AUX_OPTIONS else 0),
+                aux_options,
+                index=(aux_options.index(current_aux) if current_aux in aux_options else 0),
                 label_visibility="collapsed",
                 key="profile_aux",
             )
-            if selected_aux != current_aux:
+            if not is_admin and selected_aux != current_aux:
                 if update_agent_aux(user.get("email"), selected_aux):
                     st.session_state.user_data["aux"] = selected_aux
                     st.toast("AUX status updated.")
-                    st.rerun()
                     
         with c_btn:
             if st.button("Sign Out", key="header_signout", use_container_width=True):
@@ -1168,7 +1183,7 @@ with top_prof:
                 st.session_state.user_data = None
                 st.rerun()
 
-st.markdown("<hr style='margin-top:10px; margin-bottom:20px; border-color:transparent;'>", unsafe_allow_html=True)
+st.markdown("<hr style='margin-top:0; margin-bottom:20px; border-color:var(--border);'>", unsafe_allow_html=True)
 
 
 # ============================================================
@@ -1194,8 +1209,9 @@ st.sidebar.markdown(
     unsafe_allow_html=True,
 )
 
+menu_title = "MENU (ADMIN)" if is_admin else "MENU (AGENT)"
 st.sidebar.markdown(
-    '<div style="font-size:11px; color:#8baaa9 !important; font-weight:700; margin-bottom: 20px; letter-spacing: 0.5px;">MENU</div>', 
+    f'<div style="font-size:11px; color:#8baaa9 !important; font-weight:700; margin-bottom: 20px; letter-spacing: 0.5px;">{menu_title}</div>', 
     unsafe_allow_html=True
 )
 
@@ -1205,7 +1221,7 @@ menu = st.session_state.menu
 st.sidebar.markdown(
     f"""
     <style>
-    div[data-testid="stSidebar"] button:has(p:contains("{menu}")) {{
+    div[data-testid="stSidebar"] button:has(div:contains(" {menu} ")) {{
         background: #1B4B5A !important;
         border-left: 3px solid var(--teal) !important;
     }}
@@ -1266,10 +1282,10 @@ def agent_dashboard():
     page_header(f"Good Morning, {first_name(user)}!", dt.datetime.now().strftime("%A, %B %-d, %Y"))
 
     c1, c2, c3, c4 = st.columns(4)
-    with c1: colored_metric_card("🟦", "ACTIVE CASES", len(my_cases), "metric-blue")
-    with c2: colored_metric_card("🔺", "CRITICAL", len(critical), "metric-red")
-    with c3: colored_metric_card("⏱", "DUE SOON", len(due), "metric-orange")
-    with c4: colored_metric_card("✅", "ON TRACK", len(on_track), "metric-green")
+    with c1: colored_metric_card("🟦", "My Active Cases", len(my_cases), "metric-blue")
+    with c2: colored_metric_card("🔺", "Critical", len(critical), "metric-red")
+    with c3: colored_metric_card("⏱", "Due Soon", len(due), "metric-orange")
+    with c4: colored_metric_card("✅", "On Track", len(on_track), "metric-green")
 
     stale_cases = [x for x in my_cases if stale(x)]
     if stale_cases or critical:
@@ -1497,10 +1513,10 @@ def admin_dashboard():
     page_header("Team Overview", "Operational visibility across active cases and agents.")
     c1, c2, c3, c4 = st.columns(4)
 
-    with c1: colored_metric_card("🟦", "ACTIVE CASES", len(cases), "metric-blue")
-    with c2: colored_metric_card("🔺", "CRITICAL", len(critical), "metric-red")
-    with c3: colored_metric_card("⏱", "DUE SOON", len(due), "metric-orange")
-    with c4: colored_metric_card("✅", "ON TRACK", len(on_track), "metric-green")
+    with c1: colored_metric_card("🟦", "Active Cases", len(cases), "metric-blue")
+    with c2: colored_metric_card("🔺", "Critical", len(critical), "metric-red")
+    with c3: colored_metric_card("⏱", "Due Soon", len(due), "metric-orange")
+    with c4: colored_metric_card("✅", "On Track", len(on_track), "metric-green")
 
     left, right = st.columns(2, gap="large")
 
