@@ -66,10 +66,13 @@ st.markdown(
     /* =========================================
        HIDE STREAMLIT BRANDING BUT KEEP SIDEBAR TOGGLE
        ========================================= */
+    /* Make the header background transparent so the > button is visible */
     header[data-testid="stHeader"] {{
         background: transparent !important;
+        box-shadow: none !important;
     }}
     
+    /* Hide the top-right tools specifically without destroying the header */
     [data-testid="stToolbar"] {{
         display: none !important;
     }}
@@ -101,7 +104,7 @@ st.markdown(
         color: #fff !important;
     }}
 
-    [data-testid="stSidebar"] button {{
+    [data-testid="stSidebar"] .stButton > button {{
         width: 100%;
         min-height: 44px;
         border: 0 !important;
@@ -109,15 +112,19 @@ st.markdown(
         box-shadow: none !important;
         border-radius: 8px !important;
         text-align: left !important;
-        font-size: 14px !important;
-        font-weight: 600 !important;
+        justify-content: flex-start !important;
         padding: 10px 15px !important;
         margin: 0 0 12px 0 !important;
-        color: #ffffff !important;
         transition: background 0.2s ease;
     }}
+    
+    [data-testid="stSidebar"] .stButton > button p {{
+        font-size: 14px !important;
+        font-weight: 600 !important;
+        color: #ffffff !important;
+    }}
 
-    [data-testid="stSidebar"] button:hover {{
+    [data-testid="stSidebar"] .stButton > button:hover {{
         background: rgba(255, 255, 255, 0.08) !important;
     }}
 
@@ -132,13 +139,13 @@ st.markdown(
     }}
     
     div[data-testid="stVerticalBlockBorderWrapper"]:has(.profile-marker) > div {{
-        padding: 10px 15px !important;
+        padding: 12px 15px !important;
     }}
 
     .avatar {{
         display: inline-flex;
-        width: 30px;
-        height: 30px;
+        width: 32px;
+        height: 32px;
         align-items: center;
         justify-content: center;
         border-radius: 50%;
@@ -146,7 +153,7 @@ st.markdown(
         color: #fff;
         font-size: 11px;
         font-weight: 800;
-        margin-right: 10px;
+        margin-right: 12px;
     }}
 
     /* Typography & Layout */
@@ -192,10 +199,10 @@ st.markdown(
         font-size: 20px;
     }}
 
-    .metric-blue {{ background: #eef5ff; color: #1976d2; }}
-    .metric-red {{ background: #ffebeb; color: #d32f2f; }}
-    .metric-orange {{ background: #fff4e5; color: #ed6c02; }}
-    .metric-green {{ background: #edf7ed; color: #2e7d32; }}
+    .metric-blue {{ background: #eef5ff; color: #1976d2; border: 1px solid #cce0ff; }}
+    .metric-red {{ background: #ffebeb; color: #d32f2f; border: 1px solid #ffcdd2; }}
+    .metric-orange {{ background: #fff4e5; color: #ed6c02; border: 1px solid #ffe0b2; }}
+    .metric-green {{ background: #edf7ed; color: #2e7d32; border: 1px solid #c8e6c9; }}
 
     .metric-content {{
         display: flex;
@@ -1101,8 +1108,7 @@ initial = initials(user)
 
 current_aux = user.get("aux", "Available")
 
-# Matching layout of floating logo and floating profile box[cite: 8]
-top_logo, top_space, top_prof = st.columns([2, 2, 4])
+top_logo, top_space, top_prof = st.columns([2, 3, 4])
 
 with top_logo:
     st.markdown(
@@ -1118,7 +1124,7 @@ with top_logo:
 with top_prof:
     with st.container(border=True):
         st.markdown('<div class="profile-marker" style="display:none;"></div>', unsafe_allow_html=True)
-        c_avatar, c_aux, c_btn = st.columns([2.5, 2, 1.5])
+        c_avatar, c_aux, c_btn = st.columns([2.5, 2.5, 1.5])
         
         with c_avatar:
             st.markdown(
@@ -1199,7 +1205,7 @@ menu = st.session_state.menu
 st.sidebar.markdown(
     f"""
     <style>
-    div[data-testid="stSidebar"] button:has(div:contains(" {menu} ")) {{
+    div[data-testid="stSidebar"] button:has(p:contains("{menu}")) {{
         background: #1B4B5A !important;
         border-left: 3px solid var(--teal) !important;
     }}
@@ -1494,7 +1500,7 @@ def admin_dashboard():
     with c1: colored_metric_card("🟦", "ACTIVE CASES", len(cases), "metric-blue")
     with c2: colored_metric_card("🔺", "CRITICAL", len(critical), "metric-red")
     with c3: colored_metric_card("⏱", "DUE SOON", len(due), "metric-orange")
-    with c4: colored_metric_card("✅", "ON TRACK", len(on_track), "metric-green")
+    with c4: colored_colored_metric_card("✅", "ON TRACK", len(on_track), "metric-green")
 
     left, right = st.columns(2, gap="large")
 
