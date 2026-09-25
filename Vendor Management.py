@@ -17,7 +17,7 @@ except ImportError:
 
 
 # ============================================================
-# HPE CASEFLOW — PERFORMANCE + UI VERSION
+# HPE CASEFLOW — EXACT UI MATCH VERSION
 # ============================================================
 
 st.set_page_config(
@@ -28,7 +28,7 @@ st.set_page_config(
 )
 
 # ============================================================
-# DESIGN SYSTEM
+# DESIGN SYSTEM & CSS
 # ============================================================
 
 HPE_NAVY = "#003B49"
@@ -61,338 +61,342 @@ st.markdown(
 
     .block-container {{
         max-width: 1480px;
-        padding: .55rem 1.05rem 1.4rem;
+        padding: 1rem 1.5rem 2rem;
     }}
 
     header[data-testid="stHeader"] {{
         background: transparent;
     }}
 
+    /* Sidebar Styling */
     [data-testid="stSidebar"] {{
         background: linear-gradient(180deg, #003B49 0%, #002F3A 100%);
-        min-width: 180px;
-        max-width: 180px;
+        min-width: 220px !important;
+        max-width: 220px !important;
     }}
 
     [data-testid="stSidebar"] > div:first-child {{
-        padding: .45rem .45rem 1rem;
+        padding: 1rem 0.5rem;
     }}
 
     [data-testid="stSidebar"] * {{
         color: #fff !important;
     }}
 
-    [data-testid="stSidebar"] button {{
-        width: 100%;
-        min-height: 34px;
-        border: 0 !important;
-        background: transparent !important;
-        box-shadow: none !important;
-        border-radius: 7px !important;
-        text-align: left !important;
-        font-size: 12px !important;
-        padding: 5px 9px !important;
-        margin: 1px 0 !important;
-    }}
-
-    [data-testid="stSidebar"] button:hover {{
-        background: rgba(0,168,143,.24) !important;
-    }}
-
     .side-brand {{
-        padding: 8px 7px 13px;
-        border-bottom: 1px solid rgba(255,255,255,.16);
-        margin-bottom: 8px;
+        padding: 10px 15px 20px;
+        border-bottom: 1px solid rgba(255,255,255,.10);
+        margin-bottom: 15px;
     }}
 
     .brand-mark {{
-        width: 21px;
-        height: 12px;
+        width: 24px;
+        height: 14px;
         border: 2px solid var(--teal);
-        border-radius: 1px;
+        border-radius: 2px;
         display: inline-block;
-        margin-bottom: 5px;
+        margin-bottom: 8px;
     }}
 
     .brand-name {{
         color: #fff;
-        font-size: 11px;
+        font-size: 14px;
         font-weight: 800;
-        line-height: 1.08;
+        line-height: 1.1;
     }}
 
     .side-section {{
-        font-size: 10px;
-        opacity: .8;
-        padding: 7px 8px 3px;
+        font-size: 11px;
+        opacity: .7;
+        padding: 10px 15px 5px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }}
 
+    /* Top Bar Styling */
     .topbar {{
-        height: 47px;
+        height: 50px;
         background: #fff;
         border: 1px solid var(--border);
-        border-radius: 7px;
+        border-radius: 8px;
         display: flex;
         align-items: center;
-        padding: 0 10px;
-        gap: 14px;
-        box-shadow: 0 1px 4px rgba(0,0,0,.04);
-        margin-bottom: 12px;
+        padding: 0 15px;
+        box-shadow: 0 1px 4px rgba(0,0,0,.03);
+        margin-bottom: 20px;
     }}
 
     .top-logo {{
         color: var(--navy);
         font-weight: 800;
-        font-size: 13px;
-        white-space: nowrap;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
     }}
 
     .top-logo .mini-mark {{
         display: inline-block;
-        width: 13px;
-        height: 8px;
+        width: 16px;
+        height: 10px;
         border: 2px solid var(--teal);
-        margin-right: 5px;
-        vertical-align: middle;
-    }}
-
-    .top-spacer {{
-        flex: 1;
+        margin-right: 8px;
+        border-radius: 1px;
     }}
 
     .user-chip {{
-        font-size: 11px;
+        font-size: 12px;
         color: var(--text);
         white-space: nowrap;
     }}
 
     .avatar {{
         display: inline-flex;
-        width: 23px;
-        height: 23px;
+        width: 26px;
+        height: 26px;
         align-items: center;
         justify-content: center;
         border-radius: 50%;
         background: var(--navy);
         color: #fff;
-        font-size: 9px;
+        font-size: 10px;
         font-weight: 800;
-        margin-right: 5px;
+        margin-right: 8px;
     }}
 
+    /* Typography & Layout */
     .page-title {{
-        font-size: 23px;
+        font-size: 24px;
         font-weight: 800;
         color: var(--text);
-        margin: 4px 0 2px;
+        margin: 5px 0 2px;
     }}
 
     .page-subtitle {{
         color: var(--muted);
-        font-size: 11px;
-        margin-bottom: 13px;
+        font-size: 12px;
+        margin-bottom: 20px;
     }}
 
     .section-title {{
         color: var(--text);
-        font-size: 15px;
+        font-size: 16px;
         font-weight: 800;
-        margin: 10px 0 7px;
+        margin: 15px 0 10px;
     }}
 
+    /* Metrics Cards */
     .metric-card {{
         background: #fff;
         border: 1px solid var(--border);
-        border-radius: 7px;
-        padding: 10px 11px;
-        min-height: 68px;
-        box-shadow: 0 1px 3px rgba(0,0,0,.035);
+        border-radius: 8px;
+        padding: 15px;
+        display: flex;
+        align-items: center;
+        box-shadow: 0 2px 5px rgba(0,0,0,.02);
+    }}
+
+    .metric-icon-wrap {{
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        margin-right: 15px;
+        font-size: 18px;
+    }}
+
+    .metric-blue {{ background: #eef5ff; color: #2e7d32; }}
+    .metric-red {{ background: #ffebeb; color: #d32f2f; }}
+    .metric-orange {{ background: #fff4e5; color: #ed6c02; }}
+    .metric-green {{ background: #edf7ed; color: #2e7d32; }}
+
+    .metric-content {{
+        display: flex;
+        flex-direction: column;
     }}
 
     .metric-label {{
         color: var(--muted);
-        font-size: 10px;
+        font-size: 11px;
         font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
         margin-bottom: 4px;
     }}
 
     .metric-value {{
         color: var(--text);
-        font-size: 21px;
+        font-size: 24px;
         line-height: 1;
         font-weight: 800;
     }}
 
-    .metric-icon {{
-        float: left;
-        margin-right: 9px;
-        width: 28px;
-        height: 28px;
-        border-radius: 7px;
-        background: #edf7f5;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 14px;
-    }}
-
+    /* Alerts */
     .alert-card {{
-        background: #fff1f1;
-        border: 1px solid #ffd0d0;
-        border-left: 3px solid {RED};
-        border-radius: 5px;
-        padding: 8px 10px;
-        margin: 9px 0 13px;
-        font-size: 10px;
+        background: #fffafa;
+        border: 1px solid #ffcdcd;
+        border-left: 4px solid {RED};
+        border-radius: 6px;
+        padding: 12px 15px;
+        margin: 15px 0;
+        font-size: 12px;
+        color: #b71c1c;
     }}
 
     .alert-title {{
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 800;
-        margin-bottom: 3px;
+        margin-bottom: 5px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
     }}
 
+    /* Standard Cards */
     .card {{
         background: #fff;
         border: 1px solid var(--border);
-        border-radius: 7px;
-        padding: 12px;
-        box-shadow: 0 1px 3px rgba(0,0,0,.035);
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: 0 2px 5px rgba(0,0,0,.02);
+        margin-bottom: 15px;
     }}
 
-    [data-testid="stHorizontalBlock"] {{
-        align-items: flex-start !important;
-    }}
-
+    /* Auth Screens */
     .auth-brand {{
         min-height: 560px;
         height: 100%;
         background: linear-gradient(150deg, #003B49 0%, #002C38 100%);
         color: #fff;
-        border-radius: 9px 0 0 9px;
-        padding: 30px 27px;
+        border-radius: 10px 0 0 10px;
+        padding: 40px 35px;
     }}
 
     .auth-brand h1 {{
-        font-size: 29px;
-        margin: 14px 0 4px;
+        font-size: 32px;
+        margin: 20px 0 5px;
         color: #fff;
+        font-weight: 800;
     }}
 
     .auth-brand-subtitle {{
-        color: #e5f1f3 !important;
-        font-size: 11px !important;
-        line-height: 1.45;
-        max-width: 250px;
-        margin: 0 0 24px;
+        color: #d6e7ea !important;
+        font-size: 13px !important;
+        line-height: 1.5;
+        margin: 0 0 35px 0;
     }}
 
     .auth-feature {{
         display: flex;
-        gap: 10px;
-        margin-top: 18px;
-        align-items: center;
+        gap: 15px;
+        margin-top: 25px;
+        align-items: flex-start;
     }}
 
     .auth-feature-icon {{
-        width: 25px;
-        height: 25px;
-        border-radius: 5px;
-        background: rgba(0,168,143,.18);
+        width: 32px;
+        height: 32px;
+        border-radius: 6px;
+        background: rgba(0,168,143,.15);
         color: #16d4b5;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 13px;
+        font-size: 16px;
+        flex-shrink: 0;
     }}
 
     .auth-feature b {{
-        font-size: 11px;
+        font-size: 13px;
         display: block;
+        margin-bottom: 3px;
     }}
 
     .auth-feature small {{
         color: #c8dcdf;
-        font-size: 9px;
+        font-size: 11px;
+        line-height: 1.4;
     }}
 
     div[data-testid="stVerticalBlockBorderWrapper"]:has(.auth-panel-marker) {{
         min-height: 560px;
         background: #fff;
         border: 1px solid var(--border);
-        border-radius: 0 9px 9px 0;
+        border-radius: 0 10px 10px 0;
         padding: 0 !important;
-        box-sizing: border-box;
-        box-shadow: 0 5px 20px rgba(0,0,0,.06);
+        box-shadow: 0 5px 20px rgba(0,0,0,.05);
     }}
 
     div[data-testid="stVerticalBlockBorderWrapper"]:has(.auth-panel-marker) > div {{
-        padding: 24px 28px 22px !important;
+        padding: 35px 40px !important;
     }}
 
     .auth-panel-title {{
-        margin: 6px 0 2px;
-        font-size: 19px;
+        margin: 10px 0 5px;
+        font-size: 22px;
         font-weight: 800;
         color: var(--text);
     }}
 
     .auth-panel-subtitle {{
-        margin: 0 0 14px;
-        color: var(--muted);
-        font-size: 10px;
-    }}
-
-    .auth-panel-marker {{
-        display: none;
-    }}
-
-    .pill {{
-        display: inline-block;
-        padding: 3px 8px;
-        border-radius: 10px;
-        font-size: 9px;
-        font-weight: 800;
-        white-space: nowrap;
-    }}
-
-    .pill-critical {{ background:#ffe3e3; color:#c92d2d; }}
-    .pill-high {{ background:#fff0dd; color:#b65e00; }}
-    .pill-medium {{ background:#fff6ce; color:#866900; }}
-    .pill-low {{ background:#e9f0f2; color:#4c6871; }}
-    .pill-green {{ background:#dcf7ef; color:#08795e; }}
-    .pill-purple {{ background:#eee8ff; color:#6240bf; }}
-
-    .info-grid {{
-        display: grid;
-        grid-template-columns: 110px 1fr;
-        gap: 8px 10px;
-        font-size: 11px;
-    }}
-
-    .info-grid .label {{
-        color: var(--muted);
-        font-weight: 700;
-    }}
-
-    .empty {{
-        text-align: center;
-        padding: 30px 10px;
+        margin: 0 0 20px;
         color: var(--muted);
         font-size: 12px;
     }}
 
+    .auth-panel-marker {{ display: none; }}
+
+    /* Pills */
+    .pill {{
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 10px;
+        font-weight: 800;
+        white-space: nowrap;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }}
+    .pill-critical {{ background:#ffebee; color:#c62828; }}
+    .pill-high {{ background:#fff3e0; color:#ef6c00; }}
+    .pill-medium {{ background:#fff9c4; color:#f57f17; }}
+    .pill-low {{ background:#f5f5f5; color:#616161; }}
+    .pill-green {{ background:#e8f5e9; color:#2e7d32; }}
+    .pill-purple {{ background:#f3e5f5; color:#6a1b9a; }}
+
+    /* Grids & Tables */
+    .info-grid {{
+        display: grid;
+        grid-template-columns: 120px 1fr;
+        gap: 12px 15px;
+        font-size: 13px;
+    }}
+    .info-grid .label {{ color: var(--muted); font-weight: 700; }}
+    
+    .empty {{
+        text-align: center;
+        padding: 40px 20px;
+        color: var(--muted);
+        font-size: 14px;
+        background: #fff;
+        border: 1px dashed var(--border);
+        border-radius: 8px;
+    }}
+
     div[data-testid="stDataFrame"] {{
         border: 1px solid var(--border);
-        border-radius: 7px;
+        border-radius: 8px;
         overflow: hidden;
     }}
 
+    /* Inputs & Buttons */
     .stButton > button,
     .stDownloadButton > button {{
-        border-radius: 5px;
-        min-height: 31px;
-        font-size: 11px;
+        border-radius: 6px;
+        min-height: 36px;
+        font-size: 13px;
+        font-weight: 600;
     }}
 
     .stButton > button[kind="primary"],
@@ -406,26 +410,22 @@ st.markdown(
     .stTextArea textarea,
     .stSelectbox [data-baseweb="select"] > div,
     .stDateInput input {{
-        font-size: 11px !important;
+        font-size: 13px !important;
+        border-radius: 6px !important;
     }}
 
     label {{
-        font-size: 10px !important;
+        font-size: 12px !important;
         font-weight: 700 !important;
+        color: var(--text) !important;
     }}
 
-    @media (max-width: 900px) {{
-        [data-testid="stSidebar"] {{
-            min-width: 150px;
-            max-width: 150px;
-        }}
-        .auth-brand {{
-            border-radius: 7px;
-        }}
-        div[data-testid="stVerticalBlockBorderWrapper"]:has(.auth-panel-marker) {{
-            border-radius: 7px;
-            min-height: 0;
-        }}
+    /* Remove Streamlit Top Padding */
+    [data-testid="stAppViewContainer"] > .main {{
+        padding-top: 0 !important;
+    }}
+    [data-testid="stMainBlockContainer"] {{
+        padding-top: 1rem !important;
     }}
     </style>
     """,
@@ -519,15 +519,15 @@ def ensure_indexes():
 
     try:
         roster.create_index(
-            [("type", 1), ("email", 1)],
+            [("type", 1), ("data.email", 1)],
             name="roster_type_email_lookup",
         )
         roster.create_index(
-            [("session_token", 1)],
+            [("data.session_token", 1)],
             name="session_token_lookup",
         )
         roster.create_index(
-            [("role", 1), ("status", 1), ("aux", 1)],
+            [("data.role", 1), ("data.status", 1), ("data.aux", 1)],
             name="agent_availability",
         )
 
@@ -581,17 +581,19 @@ def init_session():
         if key not in st.session_state:
             st.session_state[key] = value
 
-    # Check for persistent login via query parameter
     if not st.session_state.authenticated:
         token = st.query_params.get("session")
         if token:
             collections = get_collections()
             if collections:
                 roster = collections[0]
-                user = roster.find_one({"session_token": token, "type": "roster_list", "status": "Active"}, {"_id": 0})
-                if user:
+                user_doc = roster.find_one(
+                    {"data.session_token": token, "type": "roster_list", "data.status": "Active"}, 
+                    {"_id": 0}
+                )
+                if user_doc and "data" in user_doc:
                     st.session_state.authenticated = True
-                    st.session_state.user_data = user
+                    st.session_state.user_data = user_doc["data"]
 
 init_session()
 
@@ -641,23 +643,8 @@ def load_roster():
     if collections:
         roster, _, _ = collections
         try:
-            return list(
-                roster.find(
-                    {"type": "roster_list"},
-                    {
-                        "_id": 0,
-                        "type": 1,
-                        "first_name": 1,
-                        "last_name": 1,
-                        "name": 1,
-                        "email": 1,
-                        "employee_id": 1,
-                        "role": 1,
-                        "status": 1,
-                        "aux": 1,
-                    },
-                )
-            )
+            raw = list(roster.find({"type": "roster_list"}, {"_id": 0}))
+            return [x.get("data", {}) for x in raw if "data" in x]
         except PyMongoError:
             pass
     return []
@@ -669,12 +656,7 @@ def load_cases():
     if collections:
         _, cases, _ = collections
         try:
-            return list(
-                cases.find(
-                    {},
-                    {"_id": 0},
-                )
-            )
+            return list(cases.find({}, {"_id": 0}))
         except PyMongoError:
             pass
     return []
@@ -686,12 +668,7 @@ def load_requests():
     if collections:
         _, _, requests = collections
         try:
-            return list(
-                requests.find(
-                    {},
-                    {"_id": 0},
-                ).sort("created_at", -1)
-            )
+            return list(requests.find({}, {"_id": 0}).sort("created_at", -1))
         except PyMongoError:
             pass
     return []
@@ -708,22 +685,21 @@ def create_user(data):
 
         try:
             if roster.find_one(
-                {
-                    "type": "roster_list",
-                    "email": data["email"],
-                },
+                {"type": "roster_list", "data.email": data["email"]},
                 {"_id": 1},
             ):
                 return False, "An account with this email already exists."
 
-            record = dict(data)
-            # Ensuring type is saved strictly as "roster_list" string
-            record["type"] = "roster_list"
-            record["password_hash"] = hash_password(
-                record.pop("password")
-            )
-            record.pop("confirm_password", None)
-            record["created_at"] = dt.datetime.now()
+            user_data = dict(data)
+            password = user_data.pop("password")
+            user_data.pop("confirm_password", None)
+            user_data["password_hash"] = hash_password(password)
+            user_data["created_at"] = dt.datetime.now()
+
+            record = {
+                "type": "roster_list",
+                "data": user_data
+            }
 
             roster.insert_one(record)
             clear_data_caches()
@@ -745,36 +721,27 @@ def find_user(email, password):
         roster, _, _ = collections
 
         try:
-            user = roster.find_one(
-                {
-                    "type": "roster_list",
-                    "email": email,
-                    "status": "Active",
-                },
+            user_doc = roster.find_one(
+                {"type": "roster_list", "data.email": email, "data.status": "Active"},
                 {"_id": 0},
             )
 
-            if not user:
+            if not user_doc or "data" not in user_doc:
                 return None
 
+            user = user_doc["data"]
             stored = user.get("password_hash")
 
             if stored:
                 valid = verify_password(password, stored)
             else:
-                valid = verify_password(
-                    password,
-                    user.get("password", ""),
-                )
-
+                valid = verify_password(password, user.get("password", ""))
                 if valid:
                     roster.update_one(
-                        {"email": email},
+                        {"type": "roster_list", "data.email": email},
                         {
-                            "$set": {
-                                "password_hash": hash_password(password)
-                            },
-                            "$unset": {"password": ""},
+                            "$set": {"data.password_hash": hash_password(password)},
+                            "$unset": {"data.password": ""},
                         },
                     )
 
@@ -791,10 +758,7 @@ def update_case(case_id, updates):
     if collections:
         _, cases, _ = collections
         try:
-            result = cases.update_one(
-                {"case_id": case_id},
-                {"$set": updates},
-            )
+            result = cases.update_one({"case_id": case_id}, {"$set": updates})
             clear_data_caches()
             return result.modified_count > 0
         except PyMongoError:
@@ -808,8 +772,8 @@ def update_agent_aux(email, aux):
         roster, _, _ = collections
         try:
             roster.update_one(
-                {"email": email},
-                {"$set": {"aux": aux}},
+                {"type": "roster_list", "data.email": email},
+                {"$set": {"data.aux": aux}},
             )
             clear_data_caches()
             return True
@@ -836,11 +800,7 @@ def create_request(data):
 # ============================================================
 
 def is_active(case):
-    return case.get("status") not in (
-        "Completed",
-        "Closed",
-        "Cancelled",
-    )
+    return case.get("status") not in ("Completed", "Closed", "Cancelled")
 
 def due_soon(case):
     due = case.get("due_date")
@@ -870,10 +830,7 @@ def first_name(user):
     return name.split()[0] if name else "User"
 
 def display_name(user):
-    value = (
-        f"{user.get('first_name', '')} "
-        f"{user.get('last_name', '')}"
-    ).strip()
+    value = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip()
     return value or user.get("name") or user.get("email", "User")
 
 def initials(user):
@@ -884,8 +841,7 @@ def initials(user):
 def agent_label(agent):
     return (
         agent.get("name")
-        or f"{agent.get('first_name', '')} "
-           f"{agent.get('last_name', '')}".strip()
+        or f"{agent.get('first_name', '')} {agent.get('last_name', '')}".strip()
         or agent.get("email", "")
     )
 
@@ -941,62 +897,31 @@ def case_dataframe(cases):
 def available_agents():
     return [
         x for x in load_roster()
-        if x.get("role") == "Agent"
-        and x.get("status", "Active") == "Active"
-        and x.get("aux") == "Available"
+        if x.get("role") == "Agent" and x.get("status", "Active") == "Active" and x.get("aux") == "Available"
     ]
 
 def assign_unassigned_cases():
     cases = load_cases()
-    unassigned = [
-        x for x in cases
-        if x.get("assigned_to") in ("", None, "Unassigned")
-        and is_active(x)
-    ]
-    if not unassigned:
-        return 0
+    unassigned = [x for x in cases if x.get("assigned_to") in ("", None, "Unassigned") and is_active(x)]
+    if not unassigned: return 0
     agents = available_agents()
-    if not agents:
-        return 0
+    if not agents: return 0
 
-    loads = Counter(
-        x.get("assigned_to")
-        for x in cases
-        if x.get("assigned_to")
-        not in ("", None, "Unassigned")
-        and is_active(x)
-    )
-
+    loads = Counter(x.get("assigned_to") for x in cases if x.get("assigned_to") not in ("", None, "Unassigned") and is_active(x))
     collections = get_collections()
     changed = 0
     unassigned.sort(key=case_sort)
 
     for case in unassigned:
-        agent = min(
-            agents,
-            key=lambda x: (
-                loads[x.get("email", agent_label(x))],
-                x.get("email", agent_label(x)),
-            ),
-        )
-
+        agent = min(agents, key=lambda x: (loads[x.get("email", agent_label(x))], x.get("email", agent_label(x))))
         email = agent.get("email", agent_label(agent))
-        updates = {
-            "assigned_to": email,
-            "status": "Assigned",
-            "last_update": dt.datetime.now(),
-        }
+        updates = {"assigned_to": email, "status": "Assigned", "last_update": dt.datetime.now()}
 
         if collections:
             _, cases_collection, _ = collections
             try:
                 result = cases_collection.update_one(
-                    {
-                        "case_id": case.get("case_id"),
-                        "assigned_to": {
-                            "$in": ["", None, "Unassigned"]
-                        },
-                    },
+                    {"case_id": case.get("case_id"), "assigned_to": {"$in": ["", None, "Unassigned"]}},
                     {"$set": updates},
                 )
                 if result.modified_count:
@@ -1015,7 +940,6 @@ def assign_unassigned_cases():
 # ============================================================
 
 def check_db_setup():
-    """Forces the user to configure MongoDB to avoid local failover behaviors."""
     if not MONGO_ENABLED:
         st.error("### 🛑 MongoDB Not Configured")
         st.markdown(
@@ -1076,61 +1000,34 @@ def auth_brand_panel():
 
 
 def auth_screen():
-    left, right = st.columns(
-        [1, 1.25],
-        gap="small",
-        vertical_alignment="top",
-    )
+    left, right = st.columns([1, 1.25], gap="small", vertical_alignment="top")
 
     with left:
         auth_brand_panel()
 
     with right:
         with st.container(border=True):
-            st.markdown(
-                '<div class="auth-panel-marker"></div>',
-                unsafe_allow_html=True,
-            )
-
+            st.markdown('<div class="auth-panel-marker"></div>', unsafe_allow_html=True)
             t1, t2 = st.tabs(["Sign In", "Sign Up"])
 
             with t1:
-                st.markdown(
-                    '<div class="auth-panel-title">Sign In</div>',
-                    unsafe_allow_html=True,
-                )
-                st.markdown(
-                    '<div class="auth-panel-subtitle">Access your HPE CaseFlow account</div>',
-                    unsafe_allow_html=True,
-                )
+                st.markdown('<div class="auth-panel-title">Sign In</div>', unsafe_allow_html=True)
+                st.markdown('<div class="auth-panel-subtitle">Access your HPE CaseFlow account</div>', unsafe_allow_html=True)
 
                 with st.form("signin_form", clear_on_submit=False):
-                    email = st.text_input(
-                        "HPE Email Address",
-                        placeholder="name@hpe.com",
-                    )
-                    password = st.text_input(
-                        "Password",
-                        type="password",
-                        placeholder="••••••••",
-                    )
-
-                    submitted = st.form_submit_button(
-                        "Sign In",
-                        type="primary",
-                        use_container_width=True,
-                    )
+                    email = st.text_input("HPE Email Address", placeholder="name@hpe.com")
+                    password = st.text_input("Password", type="password", placeholder="••••••••")
+                    submitted = st.form_submit_button("Sign In", type="primary", use_container_width=True)
 
                 if submitted:
                     user = find_user(email, password)
-
                     if user:
                         session_token = secrets.token_hex(16)
                         collections = get_collections()
                         if collections:
                             collections[0].update_one(
-                                {"email": user["email"]},
-                                {"$set": {"session_token": session_token}}
+                                {"type": "roster_list", "data.email": user["email"]},
+                                {"$set": {"data.session_token": session_token}}
                             )
                             user["session_token"] = session_token
                             
@@ -1140,64 +1037,31 @@ def auth_screen():
                         st.session_state.menu = "Dashboard"
                         st.rerun()
                     else:
-                        st.error(
-                            "Invalid email, password, or inactive account."
-                        )
+                        st.error("Invalid email, password, or inactive account.")
 
             with t2:
-                st.markdown(
-                    '<div class="auth-panel-title">Sign Up</div>',
-                    unsafe_allow_html=True,
-                )
-                st.markdown(
-                    '<div class="auth-panel-subtitle">Create your HPE CaseFlow account</div>',
-                    unsafe_allow_html=True,
-                )
+                st.markdown('<div class="auth-panel-title">Sign Up</div>', unsafe_allow_html=True)
+                st.markdown('<div class="auth-panel-subtitle">Create your HPE CaseFlow account</div>', unsafe_allow_html=True)
 
                 with st.form("signup_form", clear_on_submit=True):
                     c1, c2 = st.columns(2, gap="small")
-
                     with c1:
                         first = st.text_input("First Name")
                         employee_id = st.text_input("Employee ID")
-                        birthday = st.date_input(
-                            "Birthday",
-                            value=dt.date(1990, 1, 1),
-                        )
+                        birthday = st.date_input("Birthday", value=dt.date(1990, 1, 1))
                         home = st.text_input("Home Address")
-                        password = st.text_input(
-                            "Password",
-                            type="password",
-                        )
-
+                        password = st.text_input("Password", type="password")
                     with c2:
                         last = st.text_input("Last Name")
                         email = st.text_input("HPE Email Address")
                         contact = st.text_input("Contact Number")
-                        confirm = st.text_input(
-                            "Confirm Password",
-                            type="password",
-                        )
+                        confirm = st.text_input("Confirm Password", type="password")
 
-                    submitted = st.form_submit_button(
-                        "Create Account",
-                        type="primary",
-                        use_container_width=True,
-                    )
+                    submitted = st.form_submit_button("Create Account", type="primary", use_container_width=True)
 
                 if submitted:
                     email_clean = email.strip().lower()
-
-                    if not all(
-                        [
-                            first.strip(),
-                            last.strip(),
-                            employee_id.strip(),
-                            email_clean,
-                            password,
-                            confirm,
-                        ]
-                    ):
+                    if not all([first.strip(), last.strip(), employee_id.strip(), email_clean, password, confirm]):
                         st.error("Complete all required fields.")
                     elif not email_clean.endswith("@hpe.com"):
                         st.error("Use your HPE email address.")
@@ -1221,11 +1085,8 @@ def auth_screen():
                                 "aux": "Available",
                             }
                         )
-
-                        if success:
-                            st.success(message)
-                        else:
-                            st.error(message)
+                        if success: st.success(message)
+                        else: st.error(message)
 
 
 # ============================================================
@@ -1250,20 +1111,14 @@ initial = initials(user)
 # TOP HEADER — MATCH REFERENCE
 # ============================================================
 
-current_aux = (
-    "Admin Task"
-    if is_admin
-    else user.get("aux", "Available")
-)
+current_aux = "Admin Task" if is_admin else user.get("aux", "Available")
 
-top1, top2, top3, top4 = st.columns(
-    [2.3, 2.6, 3.2, 1.1]
-)
+top1, top2, top3, top4 = st.columns([1.5, 3.5, 4.5, 1])
 
 with top1:
     st.markdown(
-        f"""
-        <div class="topbar">
+        """
+        <div class="topbar" style="border:none; box-shadow:none; padding:0; background:transparent;">
             <div class="top-logo">
                 <span class="mini-mark"></span>
                 HPE CaseFlow
@@ -1274,84 +1129,63 @@ with top1:
     )
 
 with top2:
-    st.markdown(
-        '<div style="height:1px"></div>',
-        unsafe_allow_html=True,
-    )
-    aux_options = ["Admin Task"] if is_admin else AUX_OPTIONS
-    selected_aux = st.selectbox(
-        "Current AUX Status",
-        aux_options,
-        index=(
-            aux_options.index(current_aux)
-            if current_aux in aux_options
-            else 0
-        ),
-        label_visibility="collapsed",
-        key="header_aux",
-    )
-
-    if not is_admin and selected_aux != current_aux:
-        if update_agent_aux(
-            user.get("email"),
-            selected_aux,
-        ):
-            st.session_state.user_data["aux"] = selected_aux
-            st.toast("AUX status updated.")
+    st.markdown('<div style="height:2px"></div>', unsafe_allow_html=True)
+    c_a, c_b = st.columns([1.5, 3])
+    c_a.markdown("<div style='font-size:12px; font-weight:700; padding-top:10px;'>Current AUX Status</div>", unsafe_allow_html=True)
+    with c_b:
+        aux_options = ["Admin Task"] if is_admin else AUX_OPTIONS
+        selected_aux = st.selectbox(
+            "Current AUX Status",
+            aux_options,
+            index=(aux_options.index(current_aux) if current_aux in aux_options else 0),
+            label_visibility="collapsed",
+            key="header_aux",
+        )
+        if not is_admin and selected_aux != current_aux:
+            if update_agent_aux(user.get("email"), selected_aux):
+                st.session_state.user_data["aux"] = selected_aux
+                st.toast("AUX status updated.")
 
 with top3:
     st.markdown(
         f"""
-        <div style="height:47px;display:flex;align-items:center;
-                    justify-content:flex-end;font-size:10px">
+        <div style="height:47px;display:flex;align-items:center;justify-content:flex-end;">
             <span class="avatar">{initial}</span>
-            <span class="user-chip">
-                User: <b>{name}</b> ({role_name})
-            </span>
+            <span class="user-chip">User: <b>{name}</b> ({role_name})</span>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
 with top4:
-    if st.button(
-        "Sign Out",
-        key="header_signout",
-        use_container_width=True,
-    ):
+    st.markdown('<div style="height:4px"></div>', unsafe_allow_html=True)
+    if st.button("Sign Out", key="header_signout", use_container_width=True):
         user_email = user.get("email")
         collections = get_collections()
         if collections and user_email:
-            collections[0].update_one({"email": user_email}, {"$unset": {"session_token": ""}})
-        
+            collections[0].update_one(
+                {"type": "roster_list", "data.email": user_email}, 
+                {"$unset": {"data.session_token": ""}}
+            )
         st.query_params.clear()
         st.session_state.authenticated = False
         st.session_state.user_data = None
         st.rerun()
 
+st.markdown("<hr style='margin-top:0; margin-bottom:20px; border-color:var(--border);'>", unsafe_allow_html=True)
+
 
 # ============================================================
-# SIDEBAR — CLICKABLE WORDS, NO RADIO/SELECTBOX
+# SIDEBAR
 # ============================================================
 
 if is_admin:
     NAV = [
-        ("▣", "Dashboard"),
-        ("▤", "Cases"),
-        ("♙", "Agents"),
-        ("◷", "Schedule"),
-        ("▧", "Requests"),
-        ("▥", "Reports"),
-        ("☁", "Salesforce"),
-        ("⚙", "Settings"),
+        ("▣", "Dashboard"), ("▤", "Cases"), ("♙", "Agents"), ("◷", "Schedule"),
+        ("▧", "Requests"), ("▥", "Reports"), ("☁", "Salesforce"), ("⚙", "Settings"),
     ]
 else:
-    NAV = [
-        ("▣", "Dashboard"),
-        ("▤", "My Cases"),
-        ("◷", "Schedule"),
-        ("▧", "Requests"),
-    ]
+    NAV = [("▣", "Dashboard"), ("▤", "My Cases"), ("◷", "Schedule"), ("▧", "Requests")]
 
 st.sidebar.markdown(
     """
@@ -1363,54 +1197,48 @@ st.sidebar.markdown(
     unsafe_allow_html=True,
 )
 
-st.sidebar.markdown(
-    f'<div class="side-section">Menu ({role_name})</div>',
-    unsafe_allow_html=True,
-)
-
-for icon, label in NAV:
-    if st.sidebar.button(
-        f"{icon}  {label}",
-        key=f"nav_{label}",
-    ):
-        st.session_state.menu = label
-        st.rerun()
+st.sidebar.markdown(f'<div class="side-section">Menu ({role_name})</div>', unsafe_allow_html=True)
 
 menu = st.session_state.menu
 
-st.sidebar.markdown(
-    f"""
-    <div style="font-size:9px;color:#8be7da;
-                padding:8px 9px;border-top:1px solid rgba(255,255,255,.10)">
-        ● {menu}
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+for icon, label in NAV:
+    # Adding a visual highlight trick using markdown right before the button for active state
+    if menu == label:
+        st.sidebar.markdown(
+            """
+            <style>
+            div[data-testid="stSidebar"] button:has(div:contains(" """ + label + """ ")) {
+                background: rgba(0,168,143,.24) !important;
+                border-left: 3px solid var(--teal) !important;
+                border-radius: 4px !important;
+            }
+            </style>
+            """, unsafe_allow_html=True
+        )
+        
+    if st.sidebar.button(f"{icon}  {label}", key=f"nav_{label}"):
+        st.session_state.menu = label
+        st.rerun()
 
 
 # ============================================================
-# COMMON PAGE HEADER
+# COMMON PAGE HEADER & METRICS
 # ============================================================
 
 def page_header(title, subtitle=""):
-    st.markdown(
-        f'<div class="page-title">{title}</div>',
-        unsafe_allow_html=True,
-    )
-    if subtitle:
-        st.markdown(
-            f'<div class="page-subtitle">{subtitle}</div>',
-            unsafe_allow_html=True,
-        )
+    st.markdown(f'<div class="page-title">{title}</div>', unsafe_allow_html=True)
+    if subtitle: st.markdown(f'<div class="page-subtitle">{subtitle}</div>', unsafe_allow_html=True)
 
-def metric_card(icon, label, value):
+def colored_metric_card(icon, label, value, color_class):
+    """Matches the 4 specific colored metric cards from the reference image."""
     st.markdown(
         f"""
         <div class="metric-card">
-            <div class="metric-icon">{icon}</div>
-            <div class="metric-label">{label}</div>
-            <div class="metric-value">{value}</div>
+            <div class="metric-icon-wrap {color_class}">{icon}</div>
+            <div class="metric-content">
+                <div class="metric-label">{label}</div>
+                <div class="metric-value">{value}</div>
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1423,91 +1251,52 @@ def metric_card(icon, label, value):
 
 def agent_dashboard():
     if st_autorefresh is not None:
-        st_autorefresh(
-            interval=60_000,
-            key="agent_dashboard_refresh",
-        )
+        st_autorefresh(interval=60_000, key="agent_dashboard_refresh")
 
     changed = assign_unassigned_cases()
-
-    if changed:
-        st.toast(f"{changed} case(s) auto-assigned.")
+    if changed: st.toast(f"{changed} case(s) auto-assigned.")
 
     cases = load_cases()
     active = [x for x in cases if is_active(x)]
-
     email = user.get("email", "")
-    my_cases = [
-        x for x in active
-        if x.get("assigned_to") in (email, name)
-    ]
+    my_cases = [x for x in active if x.get("assigned_to") in (email, name)]
 
     critical = [x for x in my_cases if x.get("priority") == "Critical"]
     due = [x for x in my_cases if due_soon(x)]
-    on_track = [
-        x for x in my_cases
-        if x not in critical and not due_soon(x) and not stale(x)
-    ]
+    on_track = [x for x in my_cases if x not in critical and not due_soon(x) and not stale(x)]
 
-    page_header(
-        f"Good Morning, {first_name(user)}!",
-        dt.datetime.now().strftime("%A, %B %-d, %Y"),
-    )
+    page_header(f"Good Morning, {first_name(user)}!", dt.datetime.now().strftime("%A, %B %-d, %Y"))
 
     c1, c2, c3, c4 = st.columns(4)
-
-    with c1:
-        metric_card("▣", "My Active Cases", len(my_cases))
-    with c2:
-        metric_card("▲", "Critical", len(critical))
-    with c3:
-        metric_card("◷", "Due Soon", len(due))
-    with c4:
-        metric_card("✓", "On Track", len(on_track))
+    with c1: colored_metric_card("🟦", "My Active Cases", len(my_cases), "metric-blue")
+    with c2: colored_metric_card("🔺", "Critical", len(critical), "metric-red")
+    with c3: colored_metric_card("⏱", "Due Soon", len(due), "metric-orange")
+    with c4: colored_metric_card("✅", "On Track", len(on_track), "metric-green")
 
     stale_cases = [x for x in my_cases if stale(x)]
-
     if stale_cases or critical:
         alert_lines = []
-        if stale_cases:
-            alert_lines.append(f"⚠ You have {len(stale_cases)} case(s) not updated for 24+ hours!")
-        if critical:
-            alert_lines.append(f"♟ Case #{critical[0].get('case_id')} ({critical[0].get('subject')}) is Critical!")
+        if stale_cases: alert_lines.append(f"⚠ You have {len(stale_cases)} case(s) not updated for 24+ hours!")
+        if critical: alert_lines.append(f"♟ Case #{critical[0].get('case_id')} ({critical[0].get('subject')}) is Critical!")
 
         st.markdown(
             f"""
             <div class="alert-card">
-                <div class="alert-title">Alerts for You</div>
+                <div class="alert-title">⚠ Alerts for You</div>
                 {"<br>".join(alert_lines)}
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-    st.markdown(
-        '<div class="section-title">My Cases (Sorted by Urgency)</div>',
-        unsafe_allow_html=True,
-    )
-
+    st.markdown('<div class="section-title">My Cases (Sorted by Urgency)</div>', unsafe_allow_html=True)
     if not my_cases:
-        st.markdown(
-            '<div class="card empty">No cases are currently assigned to you.</div>',
-            unsafe_allow_html=True,
-        )
+        st.markdown('<div class="empty">No cases are currently assigned to you.</div>', unsafe_allow_html=True)
         return
 
     my_cases.sort(key=case_sort)
     df = case_dataframe(my_cases)
-
-    st.dataframe(
-        df,
-        use_container_width=True,
-        hide_index=True,
-        height=260,
-        column_config={
-            "Priority": st.column_config.TextColumn("Priority"),
-        },
-    )
+    st.dataframe(df, use_container_width=True, hide_index=True, height=260)
 
 
 # ============================================================
@@ -1515,19 +1304,13 @@ def agent_dashboard():
 # ============================================================
 
 def agent_cases():
-    cases = [
-        x for x in load_cases()
-        if x.get("assigned_to") in (user.get("email"), name) and is_active(x)
-    ]
+    cases = [x for x in load_cases() if x.get("assigned_to") in (user.get("email"), name) and is_active(x)]
     cases.sort(key=case_sort)
 
     page_header("My Cases Management", "Select a case to view and update")
 
     if not cases:
-        st.markdown(
-            '<div class="card empty">No cases are assigned to you.</div>',
-            unsafe_allow_html=True,
-        )
+        st.markdown('<div class="empty">No cases are assigned to you.</div>', unsafe_allow_html=True)
         return
 
     options = [f"{x.get('case_id')} - {x.get('subject')}" for x in cases]
@@ -1535,82 +1318,55 @@ def agent_cases():
     case_id = selected.split(" - ", 1)[0]
     case = next(x for x in cases if x.get("case_id") == case_id)
 
-    left, right = st.columns([1.05, 1.15], gap="medium")
+    left, right = st.columns([1, 1], gap="large")
 
     with left:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.markdown('<div class="section-title">Case Details</div>', unsafe_allow_html=True)
         st.markdown(
             f"""
-            <div class="info-grid">
-                <div class="label">Case #</div>
-                <div><b>{case.get('case_id')}</b></div>
-
-                <div class="label">Subject</div>
-                <div>{case.get('subject')}</div>
-
-                <div class="label">Priority</div>
-                <div>{priority_html(case.get('priority'))}</div>
-
-                <div class="label">Due Date</div>
-                <div><b>{format_due(case)}</b></div>
+            <div class="info-grid" style="margin-bottom:20px;">
+                <div class="label">Case #</div><div><b>{case.get('case_id')}</b></div>
+                <div class="label">Subject</div><div>{case.get('subject')}</div>
+                <div class="label">Priority</div><div>{priority_html(case.get('priority'))}</div>
+                <div class="label">Due Date</div><div><b>{format_due(case)}</b></div>
+            </div>
+            <div style="font-size:12px">
+                🔗 <a href="{case.get('salesforce_url', '#')}" target="_blank" style="color:var(--teal); font-weight:600;">Contact Vendor/Technician in Salesforce</a>
+            </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
-        st.markdown(
-            f"""
-            <div style="margin-top:15px;font-size:10px">
-                🔗 <a href="{case.get('salesforce_url', '#')}" target="_blank">Contact Vendor/Technician in Salesforce</a>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.markdown("</div>", unsafe_allow_html=True)
 
     with right:
-        with st.form(f"case_update_{case_id}"):
-            status_options = ["In Progress", "Pending Vendor", "Assigned", "Completed"]
-            current = case.get("status", "Assigned")
+        with st.container(border=True):
+            with st.form(f"case_update_{case_id}"):
+                status_options = ["In Progress", "Pending Vendor", "Assigned", "Completed"]
+                current = case.get("status", "Assigned")
 
-            status = st.selectbox(
-                "Update Status",
-                status_options,
-                index=(status_options.index(current) if current in status_options else 0),
-            )
-            breach = st.checkbox("Contract Breached", value=bool(case.get("breach_reason")))
+                status = st.selectbox("Update Status", status_options, index=(status_options.index(current) if current in status_options else 0))
+                breach = st.checkbox("Contract Breached", value=bool(case.get("breach_reason")))
 
-            reason_options = ["SLA Missed", "Vendor Delay", "Customer Delay", "Technical Issue", "Other"]
-            reason = st.selectbox(
-                "Breach Reason",
-                reason_options,
-                index=(reason_options.index(case.get("breach_reason")) if case.get("breach_reason") in reason_options else 0),
-                disabled=not breach,
-            )
+                reason_options = ["SLA Missed", "Vendor Delay", "Customer Delay", "Technical Issue", "Other"]
+                reason = st.selectbox(
+                    "Breach Reason", reason_options,
+                    index=(reason_options.index(case.get("breach_reason")) if case.get("breach_reason") in reason_options else 0),
+                    disabled=not breach,
+                )
 
-            st.text_area(
-                "Generated Automated Notification Email",
-                value=f"Dear Team, Case {case_id} breached SLA due to: {reason}.",
-                disabled=True,
-            )
+                st.text_area("Generated Automated Notification Email", value=f"Dear Team, Case {case_id} breached SLA due to: {reason}.", disabled=True)
 
-            notify = st.form_submit_button("Send Breach Notification", type="primary", use_container_width=True)
-            save = st.form_submit_button("Save Case Update", use_container_width=True)
+                st.markdown('<div style="height:10px;"></div>', unsafe_allow_html=True)
+                col_a, col_b = st.columns(2)
+                with col_a: notify = st.form_submit_button("Send Breach Notification", use_container_width=True)
+                with col_b: save = st.form_submit_button("Save Case Update", type="primary", use_container_width=True)
 
-        if notify:
-            st.success(f"Breach notification prepared for Case #{case_id}.")
-
-        if save:
-            update_case(
-                case_id,
-                {
-                    "status": status,
-                    "breach_reason": reason if breach else "",
-                    "last_update": dt.datetime.now(),
-                },
-            )
-            st.success("Case update saved.")
-            st.rerun()
+            if notify: st.success(f"Breach notification prepared for Case #{case_id}.")
+            if save:
+                update_case(case_id, {"status": status, "breach_reason": reason if breach else "", "last_update": dt.datetime.now()})
+                st.success("Case update saved.")
+                st.rerun()
 
 
 # ============================================================
@@ -1618,26 +1374,19 @@ def agent_cases():
 # ============================================================
 
 def schedule_page(admin=False):
-    page_header(
-        "Team Schedule Management" if admin else "My Schedule",
-        "Auto-ensuring queue coverage across all operating hours." if admin else "Your scheduled activities",
-    )
+    page_header("My Schedule" if not admin else "Team Schedule Management", "Your scheduled activities" if not admin else "Auto-ensuring queue coverage across all operating hours.")
 
-    if admin:
-        st.info("Interval Optimizer: Auto-ensuring queue coverage across all operating hours.")
+    if admin: st.info("Interval Optimizer: Auto-ensuring queue coverage across all operating hours.")
 
     tab_day, tab_week, tab_month = st.tabs(["Day", "Week", "Month"])
 
-    schedule = pd.DataFrame(
-        [
-            ["08:00 AM - 10:00 AM", "▣", "Work / Case Processing"],
-            ["10:00 AM - 10:15 AM", "☕", "Break"],
-            ["10:15 AM - 12:00 PM", "▣", "Work / Case Processing"],
-            ["12:00 PM - 01:00 PM", "🍴", "Lunch"],
-            ["03:00 PM - 03:15 PM", "☕", "Break"],
-        ],
-        columns=["Time", "", "Activity"],
-    )
+    schedule = pd.DataFrame([
+        ["08:00 AM - 10:00 AM", "▣", "Work / Case Processing"],
+        ["10:00 AM - 10:15 AM", "☕", "Break"],
+        ["10:15 AM - 12:00 PM", "▣", "Work / Case Processing"],
+        ["12:00 PM - 01:00 PM", "🍴", "Lunch"],
+        ["03:00 PM - 03:15 PM", "☕", "Break"],
+    ], columns=["Time", "", "Activity"])
 
     with tab_day:
         left, right = st.columns([5, 2])
@@ -1647,8 +1396,8 @@ def schedule_page(admin=False):
             st.markdown(
                 f"""
                 <div class="card">
-                    <div class="section-title">Coverage</div>
-                    <div style="font-size:11px;line-height:2">
+                    <div class="section-title" style="margin-top:0;">Coverage</div>
+                    <div style="font-size:12px;line-height:2">
                         <b>Tuesday</b><br>
                         {dt.datetime.now().strftime("%B %-d, %Y")}<br><br>
                         <span class="pill pill-green">Available</span>
@@ -1661,18 +1410,14 @@ def schedule_page(admin=False):
 
     with tab_week:
         st.dataframe(
-            pd.DataFrame(
-                [
-                    ["Monday", "09:00 AM - 06:00 PM", "Regular"],
-                    ["Tuesday", "09:00 AM - 06:00 PM", "Regular"],
-                    ["Wednesday", "09:00 AM - 06:00 PM", "Regular"],
-                    ["Thursday", "09:00 AM - 06:00 PM", "Regular"],
-                    ["Friday", "09:00 AM - 06:00 PM", "Regular"],
-                ],
-                columns=["Day", "Hours", "Coverage"],
-            ),
-            use_container_width=True,
-            hide_index=True,
+            pd.DataFrame([
+                ["Monday", "09:00 AM - 06:00 PM", "Regular"],
+                ["Tuesday", "09:00 AM - 06:00 PM", "Regular"],
+                ["Wednesday", "09:00 AM - 06:00 PM", "Regular"],
+                ["Thursday", "09:00 AM - 06:00 PM", "Regular"],
+                ["Friday", "09:00 AM - 06:00 PM", "Regular"],
+            ], columns=["Day", "Hours", "Coverage"]),
+            use_container_width=True, hide_index=True,
         )
 
     with tab_month:
@@ -1687,56 +1432,42 @@ def requests_page(admin=False):
     if admin:
         page_header("Manage Requests", "Review team requests and approval status.")
         requests = load_requests()
-
         if requests:
-            df = pd.DataFrame(
-                [
-                    {
-                        "Agent": x.get("requested_by", ""),
-                        "Type": x.get("request_type", ""),
-                        "Start Date": x.get("start_date", ""),
-                        "End Date": x.get("end_date", ""),
-                        "Status": x.get("status", "Pending"),
-                    }
-                    for x in requests
-                ]
-            )
+            df = pd.DataFrame([{
+                "Agent": x.get("requested_by", ""), "Type": x.get("request_type", ""),
+                "Start Date": x.get("start_date", ""), "End Date": x.get("end_date", ""),
+                "Status": x.get("status", "Pending"),
+            } for x in requests])
             st.dataframe(df, use_container_width=True, hide_index=True)
         else:
-            st.markdown('<div class="card empty">No requests found.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="empty">No requests found.</div>', unsafe_allow_html=True)
         return
 
     page_header("Submit Request (Leave / Swap)", "Create a request for schedule or leave changes.")
 
-    with st.form("request_form"):
+    with st.form("request_form", border=False):
+        st.markdown('<div class="card">', unsafe_allow_html=True)
         c1, c2, c3 = st.columns(3)
-        with c1:
-            request_type = st.selectbox("Request Type", ["PTO", "Sick Leave", "Schedule Swap", "Other"])
-        with c2:
-            start_date = st.date_input("Start Date", value=dt.date.today())
-        with c3:
-            end_date = st.date_input("End Date", value=dt.date.today())
+        with c1: request_type = st.selectbox("Request Type", ["PTO", "Sick Leave", "Schedule Swap", "Other"])
+        with c2: start_date = st.date_input("Start Date", value=dt.date.today())
+        with c3: end_date = st.date_input("End Date", value=dt.date.today())
 
         reason = st.text_area("Reason", placeholder="Family event")
-        submitted = st.form_submit_button("Submit Request", type="primary", use_container_width=True)
+        
+        col1, col2, col3 = st.columns([1,1,1])
+        with col3:
+            submitted = st.form_submit_button("Submit Request", type="primary", use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
     if submitted:
-        if end_date < start_date:
-            st.error("End Date cannot be before Start Date.")
-        elif not reason.strip():
-            st.error("Enter a reason.")
+        if end_date < start_date: st.error("End Date cannot be before Start Date.")
+        elif not reason.strip(): st.error("Enter a reason.")
         else:
-            if create_request(
-                {
-                    "requested_by": user.get("email", name),
-                    "request_type": request_type,
-                    "start_date": str(start_date),
-                    "end_date": str(end_date),
-                    "reason": reason.strip(),
-                    "status": "Pending",
-                    "created_at": dt.datetime.now(),
-                }
-            ):
+            if create_request({
+                "requested_by": user.get("email", name), "request_type": request_type,
+                "start_date": str(start_date), "end_date": str(end_date),
+                "reason": reason.strip(), "status": "Pending", "created_at": dt.datetime.now(),
+            }):
                 st.success("Request submitted.")
                 st.rerun()
 
@@ -1744,24 +1475,13 @@ def requests_page(admin=False):
     mine = [x for x in load_requests() if x.get("requested_by") in (user.get("email"), name)]
 
     if mine:
-        st.dataframe(
-            pd.DataFrame(
-                [
-                    {
-                        "Date Filed": (x.get("created_at").strftime("%b %-d, %Y") if isinstance(x.get("created_at"), dt.datetime) else ""),
-                        "Type": x.get("request_type", ""),
-                        "Start Date": x.get("start_date", ""),
-                        "End Date": x.get("end_date", ""),
-                        "Status": x.get("status", "Pending"),
-                    }
-                    for x in mine
-                ]
-            ),
-            use_container_width=True,
-            hide_index=True,
-        )
+        st.dataframe(pd.DataFrame([{
+            "Date Filed": (x.get("created_at").strftime("%b %-d, %Y") if isinstance(x.get("created_at"), dt.datetime) else ""),
+            "Type": x.get("request_type", ""), "Start Date": x.get("start_date", ""),
+            "End Date": x.get("end_date", ""), "Status": x.get("status", "Pending"),
+        } for x in mine]), use_container_width=True, hide_index=True)
     else:
-        st.markdown('<div class="card empty">No requests submitted.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="empty">No requests submitted.</div>', unsafe_allow_html=True)
 
 
 # ============================================================
@@ -1779,37 +1499,34 @@ def admin_dashboard():
     page_header("Team Overview", "Operational visibility across active cases and agents.")
     c1, c2, c3, c4 = st.columns(4)
 
-    with c1:
-        metric_card("▣", "Active Cases", len(cases))
-    with c2:
-        metric_card("▲", "Critical", len(critical))
-    with c3:
-        metric_card("◷", "Due Soon", len(due))
-    with c4:
-        metric_card("✓", "On Track", len(on_track))
+    with c1: colored_metric_card("🟦", "Active Cases", len(cases), "metric-blue")
+    with c2: colored_metric_card("🔺", "Critical", len(critical), "metric-red")
+    with c3: colored_metric_card("⏱", "Due Soon", len(due), "metric-orange")
+    with c4: colored_metric_card("✅", "On Track", len(on_track), "metric-green")
 
-    st.markdown('<div class="section-title">Agent Status Distribution</div>', unsafe_allow_html=True)
-    left, right = st.columns(2)
+    left, right = st.columns(2, gap="large")
 
     with left:
+        st.markdown('<div class="section-title">Agent Status Distribution</div>', unsafe_allow_html=True)
         agents = [x for x in roster if x.get("role") == "Agent"]
         if agents:
             aux_df = pd.DataFrame([{"AUX": x.get("aux", "Available")} for x in agents])
             counts = aux_df["AUX"].value_counts().reset_index()
             counts.columns = ["AUX", "Count"]
 
-            fig = px.pie(counts, names="AUX", values="Count", hole=.55)
-            fig.update_layout(height=270, margin=dict(l=10, r=10, t=20, b=10), showlegend=True)
+            fig = px.pie(counts, names="AUX", values="Count", hole=.55, color_discrete_sequence=px.colors.qualitative.Pastel)
+            fig.update_layout(height=280, margin=dict(l=0, r=0, t=20, b=0), showlegend=True)
             st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
     with right:
+        st.markdown('<div class="section-title">Active Case Distribution</div>', unsafe_allow_html=True)
         assigned = [x for x in cases if x.get("assigned_to") not in ("", None, "Unassigned")]
         if assigned:
             counts = pd.Series([x.get("assigned_to") for x in assigned]).value_counts().reset_index()
             counts.columns = ["Agent", "Cases"]
 
-            fig = px.bar(counts, x="Agent", y="Cases")
-            fig.update_layout(height=270, margin=dict(l=10, r=10, t=20, b=10))
+            fig = px.bar(counts, x="Agent", y="Cases", color_discrete_sequence=["#4285F4"])
+            fig.update_layout(height=280, margin=dict(l=0, r=0, t=20, b=0), xaxis_title="", yaxis_title="")
             st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
 
@@ -1831,36 +1548,26 @@ def admin_cases():
     if cases:
         st.dataframe(case_dataframe(cases), use_container_width=True, hide_index=True, height=300)
     else:
-        st.markdown('<div class="card empty">No cases found.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="empty">No cases found.</div>', unsafe_allow_html=True)
         return
 
     st.markdown('<div class="section-title">Reassign Case</div>', unsafe_allow_html=True)
     case_ids = [f"{x.get('case_id')} - {x.get('subject')}" for x in cases]
-    c1, c2, c3 = st.columns([1.2, 1.2, .8])
-
-    with c1:
-        selected = st.selectbox("Select Case ID", case_ids)
-
-    selected_id = selected.split(" - ", 1)[0]
-
-    with c2:
-        agents = [x for x in load_roster() if x.get("role") == "Agent" and x.get("status", "Active") == "Active"]
-        agent_options = ["Unassigned"] + [x.get("email") for x in agents if x.get("email")]
-        assignee = st.selectbox("Reassign to Agent Email", agent_options)
-
-    with c3:
-        st.markdown("<div style='height:27px'></div>", unsafe_allow_html=True)
-        if st.button("Reassign Case", type="primary", use_container_width=True):
-            if update_case(
-                selected_id,
-                {
-                    "assigned_to": assignee,
-                    "status": ("Assigned" if assignee != "Unassigned" else "Pending"),
-                    "last_update": dt.datetime.now(),
-                },
-            ):
-                st.success("Case reassigned.")
-                st.rerun()
+    
+    with st.container(border=True):
+        c1, c2, c3 = st.columns([2, 2, 1])
+        with c1: selected = st.selectbox("Select Case ID", case_ids)
+        selected_id = selected.split(" - ", 1)[0]
+        with c2:
+            agents = [x for x in load_roster() if x.get("role") == "Agent" and x.get("status", "Active") == "Active"]
+            agent_options = ["Unassigned"] + [x.get("email") for x in agents if x.get("email")]
+            assignee = st.selectbox("Reassign to Agent Email", agent_options)
+        with c3:
+            st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+            if st.button("Reassign Case", type="primary", use_container_width=True):
+                if update_case(selected_id, {"assigned_to": assignee, "status": ("Assigned" if assignee != "Unassigned" else "Pending"), "last_update": dt.datetime.now()}):
+                    st.success("Case reassigned.")
+                    st.rerun()
 
 
 # ============================================================
@@ -1872,42 +1579,35 @@ def admin_agents():
     agents = [x for x in load_roster() if x.get("role") == "Agent"]
 
     if not agents:
-        st.markdown('<div class="card empty">No agents found.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="empty">No agents found.</div>', unsafe_allow_html=True)
         return
 
-    st.dataframe(
-        pd.DataFrame(
-            [
-                {
-                    "Name": agent_label(x),
-                    "Email": x.get("email", ""),
-                    "AUX Status": x.get("aux", "Available"),
-                    "Status": x.get("status", "Active"),
-                }
-                for x in agents
-            ]
-        ),
-        use_container_width=True,
-        hide_index=True,
+    # To match the image perfectly, we render custom HTML for the agents list with buttons inline, 
+    # but Streamlit dataframes don't support actionable buttons inside cells natively easily without hacky components.
+    # We will build a clean column layout list instead that matches the visual of a table.
+    st.markdown(
+        """
+        <div style="display:grid; grid-template-columns: 2fr 2.5fr 1.5fr 1fr; padding: 10px 15px; border-bottom: 2px solid var(--border); font-weight: 700; font-size: 12px; color: var(--muted);">
+            <div>Name</div><div>Email</div><div>AUX Status</div><div>Action</div>
+        </div>
+        """, unsafe_allow_html=True
     )
 
-    st.markdown('<div class="section-title">Agent Controls</div>', unsafe_allow_html=True)
-
     for index, agent in enumerate(agents):
-        c1, c2, c3, c4 = st.columns([2.5, 3.2, 1.5, 1])
-
-        c1.write(f"**{agent_label(agent)}**")
-        c2.write(agent.get("email", ""))
-
+        c1, c2, c3, c4 = st.columns([2, 2.5, 1.5, 1])
+        with c1: st.markdown(f"<div style='padding-top:8px; font-size:13px;'>{agent_label(agent)}</div>", unsafe_allow_html=True)
+        with c2: st.markdown(f"<div style='padding-top:8px; font-size:13px; color:var(--muted);'>{agent.get('email', '')}</div>", unsafe_allow_html=True)
+        
         aux = agent.get("aux", "Available")
         css = ("pill-green" if aux == "Available" else "pill-purple" if aux == "Admin Task" else "pill-high")
-
-        c3.markdown(f'<span class="pill {css}">{aux}</span>', unsafe_allow_html=True)
-
-        if c4.button("Kick Agent", key=f"kick_{index}"):
-            if update_agent_aux(agent.get("email"), "Offline"):
-                st.success(f"{agent_label(agent)} set to Offline.")
-                st.rerun()
+        with c3: st.markdown(f"<div style='padding-top:8px;'><span class='pill {css}'>{aux}</span></div>", unsafe_allow_html=True)
+        
+        with c4:
+            if st.button("Kick Agent", key=f"kick_{index}", type="primary"):
+                if update_agent_aux(agent.get("email"), "Offline"):
+                    st.toast(f"{agent_label(agent)} set to Offline.")
+                    st.rerun()
+        st.markdown("<hr style='margin:0; border-color:var(--border);'>", unsafe_allow_html=True)
 
 
 # ============================================================
@@ -1918,10 +1618,10 @@ def admin_reports():
     page_header("Extract Operational Reports", "Download operational data for analysis and reporting purposes.")
     st.markdown(
         """
-        <div class="card" style="text-align:center;padding:38px 20px">
-            <div style="font-size:42px">▤</div>
-            <div style="font-size:16px;font-weight:800;margin-top:8px">Export Cases to CSV</div>
-            <div style="font-size:10px;color:#6B7C84;margin:5px 0 16px">Download all case data for analysis and reporting purposes.</div>
+        <div class="card" style="text-align:center;padding:50px 20px; border: 1px dashed var(--teal);">
+            <div style="font-size:48px; color:var(--teal);">▤</div>
+            <div style="font-size:18px;font-weight:800;margin-top:10px;">Export Cases to CSV</div>
+            <div style="font-size:12px;color:var(--muted);margin:5px 0 20px;">Download all case data for analysis and reporting purposes.</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1931,7 +1631,9 @@ def admin_reports():
     df = case_dataframe(cases)
     csv = df.to_csv(index=False).encode("utf-8")
 
-    st.download_button("Export Cases to CSV", csv, file_name="hpe_caseflow_cases.csv", mime="text/csv", type="primary", use_container_width=True)
+    col1, col2, col3 = st.columns([1,2,1])
+    with col2:
+        st.download_button("Export Cases to CSV", csv, file_name="hpe_caseflow_cases.csv", mime="text/csv", type="primary", use_container_width=True)
 
 
 # ============================================================
@@ -1940,9 +1642,12 @@ def admin_reports():
 
 def admin_salesforce():
     page_header("Salesforce Integration (Admin Only)", "View Salesforce information without loading it during normal navigation.")
-    url = st.text_input("Salesforce Link", value="https://example.salesforce.com/")
-    if st.button("Open Salesforce", type="primary"):
-        st.link_button("Open in Salesforce", url)
+    
+    with st.container(border=True):
+        url = st.text_input("Direct link:", value="https://example.salesforce.com/")
+        st.markdown('<div style="height:10px;"></div>', unsafe_allow_html=True)
+        c1, c2, c3 = st.columns([1,2,1])
+        with c2: st.link_button("Open in Salesforce", url, use_container_width=True)
 
     st.markdown('<div class="section-title">Cases — Recently Viewed</div>', unsafe_allow_html=True)
     recent = sorted(load_cases(), key=lambda x: x.get("last_update", dt.datetime.min), reverse=True)[:5]
@@ -1950,8 +1655,7 @@ def admin_salesforce():
     if recent:
         st.dataframe(
             pd.DataFrame([{"Case Number": x.get("case_id"), "Subject": x.get("subject"), "Status": x.get("status")} for x in recent]),
-            use_container_width=True,
-            hide_index=True,
+            use_container_width=True, hide_index=True,
         )
 
 
@@ -1966,33 +1670,23 @@ def admin_settings():
     roster = load_roster()
     if roster:
         st.dataframe(
-            pd.DataFrame(
-                [
-                    {
-                        "Name": agent_label(x),
-                        "Email": x.get("email", ""),
-                        "Role": x.get("role", "Agent"),
-                        "Status": x.get("status", "Active"),
-                        "AUX": x.get("aux", "Available"),
-                    }
-                    for x in roster
-                ]
-            ),
-            use_container_width=True,
-            hide_index=True,
+            pd.DataFrame([{
+                "Name": agent_label(x), "Email": x.get("email", ""),
+                "Role": x.get("role", "Agent"), "Status": x.get("status", "Active"), "AUX": x.get("aux", "Available"),
+            } for x in roster]),
+            use_container_width=True, hide_index=True,
         )
     else:
         st.info("No users found.")
 
     st.markdown('<div class="section-title">System Configuration</div>', unsafe_allow_html=True)
-    c1, c2, c3 = st.columns(3)
-
-    c1.metric("MongoDB", "Connected" if MONGO_ENABLED else "Disconnected")
-    c2.metric("Database", DB_NAME)
-    c3.metric("Roster Collection", ROSTER_COLLECTION)
+    with st.container(border=True):
+        c1, c2, c3 = st.columns(3)
+        c1.metric("MongoDB", "Connected" if MONGO_ENABLED else "Disconnected")
+        c2.metric("Database", DB_NAME)
+        c3.metric("Roster Collection", ROSTER_COLLECTION)
 
     st.caption("No personal administrator account or password is hard-coded in this application.")
-
     if st.button("Clear Application Cache", use_container_width=True):
         clear_data_caches()
         st.success("Cache cleared.")
