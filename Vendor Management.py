@@ -317,20 +317,29 @@ def create_session(email, remember):
 
 
 def session_user():
+    email = None
     if st.session_state.get("user"):
-        return st.session_state.user
-    token = get_cookie("hpe_caseflow_session")
-    if not token:
-        return None
-    d = one("sessions", {"session.token_hash": sha(token)})
-    if not d:
-        return None
-    try:
-        if datetime.fromisoformat(d["session"]["expires_at"]) < datetime.now():
+        email = st.session_state.user.get("email")
+    else:
+        token = get_cookie("hpe_caseflow_session")
+        if not token:
             return None
-    except Exception:
-        return None
-    return find_user(d["session"]["email"])
+        d = one("sessions", {"session.token_hash": sha(token)})
+        if not d:
+            return None
+        try:
+            if datetime.fromisoformat(d["session"]["expires_at"]) < datetime.now():
+                return None
+        except Exception:
+            return None
+        email = d["session"]["email"]
+        
+    # Re-verify the user's active status against the database
+    if email:
+        u = find_user(email)
+        if u and u.get("account_status", "Active") == "Active":
+            return u
+    return None
 
 
 def logout():
@@ -987,9 +996,8 @@ def dashboard(user):
     st.text_input("Search",placeholder="Search cases, names, vendors, or issues...",
                   label_visibility="collapsed",key="global_case_search")
     q=st.session_state.get("global_case_search","").lower()
-    if q:
-        data=[c for c in data if q in str(c).lower()]
 
+    # Calculate metrics using the FULL unmodified dataset
     critical=[c for c in data if c.get("priority")=="Critical"]
     due=[]
     for c in data:
@@ -1004,6 +1012,10 @@ def dashboard(user):
         ("Due Soon",len(due),"◷"),("On Track",len(on_track),"✓")
     ]):
         with col: metric(label,value,icon)
+
+    # NOW apply the search filter exclusively for the table rendering
+    if q:
+        data=[c for c in data if q in str(c).lower()]
 
     if role in ("Admin","Admin/Agent"):
         st.markdown("### Admin Case Queue")
@@ -1482,6 +1494,7 @@ def settings_page(user):
                     }}
                 )
                 st.success("User information and role updated.")
+                st.rerun()
         else:
             st.info("No registered users yet.")
 
@@ -1563,7 +1576,10 @@ def settings_page(user):
 def alert_center(user):
     pending=[a for a in alerts_for(full_name(user)) if not a.get("ack")]
     if pending:
+        # Read the state and consume it immediately 
         expanded = bool(st.session_state.get("show_alerts", False))
+        st.session_state.show_alerts = False
+        
         with st.expander(f"🔔 Alerts ({len(pending)})",expanded=expanded):
             for a in pending[:8]:
                 alert_key = sha("|".join(str(a.get(k,"")) for k in ("created_at","title","kind","case_no","to")))[:16]
@@ -1571,8 +1587,10 @@ def alert_center(user):
                 if a.get("case_no"):
                     st.caption(f'Case: {a["case_no"]} · Priority: {a.get("priority","")} · Due: {a.get("due_date","")}')
                 if st.button("Acknowledge",key=f"ack_{alert_key}"):
-                    ack_alert(a); st.rerun()
-        st.session_state.show_alerts = False
+                    ack_alert(a)
+                    # Keep the expander open for the upcoming rerun
+                    st.session_state.show_alerts = True 
+                    st.rerun()
 
 
 # ============================================================
@@ -1583,25 +1601,35 @@ def reset_screen(token):
     st.markdown("## Set New Password")
     email=st.text_input("HPE Email")
     new_pw=st.text_input("New Password",type="password")
-    if st.button("Reset Password",type="primary"):
-        d=one("password_resets",{"reset.token_hash":sha(token)})
-        valid=False
-        if d:
-            try:
-                valid=datetime.fromisoformat(d["reset"]["expires_at"]) > datetime.now()
-            except Exception:
-                valid=False
-        if not valid:
-            st.error("Invalid or expired reset token.")
-            return
-        if len(new_pw)<8:
-            st.error("Password must be at least 8 characters.")
-            return
-        collection().update_one(
-            {"type":"roster_list","roster_list.email":email.lower()},
-            {"$set":{"roster_list.password_hash":pw_hash(new_pw)}}
-        )
-        st.success("Password reset successfully. You may now sign in.")
+    
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("Reset Password",type="primary", use_container_width=True):
+            d=one("password_resets",{"reset.token_hash":sha(token)})
+            valid=False
+            if d:
+                try:
+                    valid=datetime.fromisoformat(d["reset"]["expires_at"]) > datetime.now()
+                except Exception:
+                    valid=False
+            if not valid:
+                st.error("Invalid or expired reset token.")
+                return
+            if len(new_pw)<8:
+                st.error("Password must be at least 8 characters.")
+                return
+            
+            collection().update_one(
+                {"type":"roster_list","roster_list.email":email.lower()},
+                {"$set":{"roster_list.password_hash":pw_hash(new_pw)}}
+            )
+            st.success("Password reset successfully. You may now sign in.")
+            st.query_params.clear()
+            
+    with c2:
+        if st.button("Return to Sign In", use_container_width=True):
+            st.query_params.clear()
+            st.rerun()
 
 
 # ============================================================
