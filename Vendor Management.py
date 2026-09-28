@@ -1,11 +1,3 @@
-"""
-================================================================================
-APPLICATION: HPE CaseFlow — Task Monitoring & Management System
-VISUAL SPECIFICATION: Exact reproduction of HPE Enterprise Design & Screenshots
-ARCHITECTURE: Single-file production Streamlit application with PyMongo persistence
-================================================================================
-"""
-
 import os
 import sys
 import re
@@ -16,15 +8,21 @@ import uuid
 import hmac
 import hashlib
 import smtplib
+import secrets  # <--- ADD THIS LINE HERE
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from datetime import datetime, timedelta
-import pytz
+from datetime import datetime, timedelta, timezone
 
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+
+# Built-in timezone without needing external pytz package
+MANILA_TZ = timezone(timedelta(hours=8))
+
+def get_current_ph_time():
+    return datetime.now(MANILA_TZ)
 
 # ==============================================================================
 # 1. PAGE CONFIGURATION & STREAMLIT INITIALIZATION
@@ -34,12 +32,6 @@ st.set_page_config(
     page_icon="🟩",
     layout="wide",
     initial_sidebar_state="collapsed",
-)
-
-MANILA_TZ = pytz.timezone("Asia/Manila")
-
-def get_current_ph_time():
-    return datetime.now(MANILA_TZ)
 
 # ==============================================================================
 # 2. DATABASE ARCHITECTURE (PYMONGO + FAIL-SAFE IN-MEMORY STORE)
