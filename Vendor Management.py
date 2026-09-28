@@ -782,8 +782,11 @@ def render_auth_page():
 # 7. GLOBAL HEADER COMPONENT
 # ==============================================================================
 def render_global_header(user: Dict[str, Any]):
+    # Safely retrieve email (supporting both 'hpe_email' and 'email')
+    user_email = user.get("hpe_email") or user.get("email", "")
+    
     is_admin = user.get("role") in ["Admin", "Admin/Agent"]
-    user_notifs = db_mgr.get_notifications(user["hpe_email"], is_admin=is_admin)
+    user_notifs = db_mgr.get_notifications(user_email, is_admin=is_admin)
     unread_count = len([n for n in user_notifs if not n.get("read", False)])
     
     col_brand, col_search, col_aux, col_profile = st.columns([1.6, 2.8, 1.8, 1.8], gap="medium")
@@ -823,18 +826,20 @@ def render_global_header(user: Dict[str, Any]):
             key="header_aux_selector"
         )
         if new_aux != current_aux:
-            db_mgr.update_user_aux(user["hpe_email"], new_aux)
+            db_mgr.update_user_aux(user_email, new_aux)
             user["current_aux"] = new_aux
             st.rerun()
 
     with col_profile:
         bell_icon = f"🔔 ({unread_count})" if unread_count > 0 else "🔔"
-        btn_label = f"{bell_icon} {user.get('first_name')} ({user.get('role')}) ▾"
+        first_name = user.get("first_name", "User")
+        role = user.get("role", "Agent")
+        btn_label = f"{bell_icon} {first_name} ({role}) ▾"
         popover = st.popover(btn_label, use_container_width=True)
         with popover:
-            st.markdown(f"### {user.get('first_name')} {user.get('last_name')}")
-            st.caption(f"Employee ID: {user.get('employee_id')} | {user.get('hpe_email')}")
-            st.markdown(f"**Role:** `{user.get('role')}`")
+            st.markdown(f"### {user.get('first_name', '')} {user.get('last_name', '')}")
+            st.caption(f"Employee ID: {user.get('employee_id', 'N/A')} | {user_email}")
+            st.markdown(f"**Role:** `{role}`")
             st.markdown(f"**Current Aux:** `{user.get('current_aux', 'Available')}`")
             st.markdown(f"**Today's Schedule:** `08:00 - 17:00 (Case Work & Dispatch)`")
             
@@ -842,37 +847,19 @@ def render_global_header(user: Dict[str, Any]):
             st.markdown(f"**Notifications ({unread_count} unread)**")
             if user_notifs:
                 for notif in user_notifs[:4]:
-                    st.caption(f"• **{notif['title']}**: {notif['text']} *({notif.get('timestamp')})*")
+                    st.caption(f"• **{notif.get('title')}**: {notif.get('text')} *({notif.get('timestamp')})*")
                 if st.button("Mark All Notifications Read", key="popover_mark_read"):
-                    db_mgr.mark_notifications_read(user["hpe_email"])
+                    db_mgr.mark_notifications_read(user_email)
                     st.rerun()
             else:
                 st.caption("No notifications.")
             
             st.divider()
-            # Profile options
-            with st.expander("Change Password"):
-                with st.form("pwd_change_form"):
-                    old_p = st.text_input("Current Password", type="password")
-                    new_p = st.text_input("New Password", type="password")
-                    if st.form_submit_button("Update Password"):
-                        if verify_password(user.get("password_hash", ""), old_p):
-                            if len(new_p) >= 8:
-                                db_mgr.update_user_field(user["hpe_email"], {"password_hash": hash_password(new_p)})
-                                user["password_hash"] = hash_password(new_p)
-                                st.success("Password changed successfully.")
-                            else:
-                                st.error("New password must be at least 8 characters.")
-                        else:
-                            st.error("Current password invalid.")
-
             if st.button("Sign Out", type="primary", use_container_width=True):
-                # Update status in MongoDB
-                db_mgr.update_user_field(user["hpe_email"], {
+                db_mgr.update_user_field(user_email, {
                     "login_status": "Offline",
                     "current_aux": "Not Ready - Online"
                 })
-                db_mgr.log_audit(user["hpe_email"], "Sign Out", "Session ended")
                 st.session_state.clear()
                 st.rerun()
 
