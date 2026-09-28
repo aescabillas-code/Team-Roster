@@ -925,7 +925,8 @@ def render_dashboard(user):
                 n_subj = st.text_input("Subject", placeholder="E.g., Storage SAN failure")
                 n_prio = st.selectbox("Priority", ["Critical", "High", "Medium", "Low"])
                 n_client = st.text_input("Client", value="Enterprise Partner")
-                n_vendor = st.selectbox("Vendor Component", [v["name"] for v in db_mgr.get_users()[:3]] + ["Intel Platform Support"])
+                vendor_options = [v["name"] for v in st.session_state.get("vendors", [])] + ["Intel Platform Support"]
+                n_vendor = st.selectbox("Vendor Component", list(dict.fromkeys(vendor_options)))
                 n_due = (datetime.now() + timedelta(hours=4)).strftime("%Y-%m-%d %H:%M")
                 if st.form_submit_button("Auto-Assign & Dispatch", type="primary", use_container_width=True):
                     new_c = {
