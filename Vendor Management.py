@@ -875,7 +875,7 @@ def render_auth_view():
         if st.session_state["auth_page"] == "signin":
             st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
             st.markdown("<div class='auth-main-title'>Welcome Back!</div>", unsafe_allow_html=True)
-            st.markdown("<div class='auth-sub-title'>Sign in to your HPE CaseFlow account</div>", unsafe_allow_html=True)
+            st.markdown("<div class='auth-sub-title'>Sign in to your CaseFlow account</div>", unsafe_allow_html=True)
 
             login_email = st.text_input("HPE Email Address", placeholder="yourname@hpe.com", key="in_email").strip().lower()
             login_pwd = st.text_input("Password", type="password", placeholder="Enter your password", key="in_pwd")
