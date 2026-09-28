@@ -647,7 +647,6 @@ def send_reset_email(email, token):
     except Exception:
         return False
 
-
 def auth_page():
     mode = st.session_state.get("auth_mode","signin")
     left = """
@@ -664,8 +663,10 @@ def auth_page():
     with a:
         st.markdown(left, unsafe_allow_html=True)
     with b:
-        st.markdown('<div class="auth-right">', unsafe_allow_html=True)
-
+        # Add a little native Streamlit spacing to visually align with the left panel
+        st.write("")
+        st.write("")
+        
         if mode == "signin":
             st.markdown("## Welcome Back!")
             st.caption("Sign in to your HPE CaseFlow account")
@@ -681,10 +682,6 @@ def auth_page():
                         st.session_state.page = "Dashboard"
                         create_session(user["email"],remember)
                         st.success("Signed in successfully.")
-                        # Do not call st.rerun() here. CookieManager needs this
-                        # script run to finish so the browser can receive the
-                        # cookie write instruction. The main() flow continues
-                        # into the dashboard in this same run.
                         return True
                     else:
                         st.error("Invalid email/password or inactive account.")
