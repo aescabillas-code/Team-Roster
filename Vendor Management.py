@@ -111,18 +111,7 @@ HPE_THEME_CSS = """
     .badge-resolved { background-color: #D1E7DD; color: #0F5132; }
     .badge-breached { background-color: #FCEBE8; color: #DE3618; font-weight: 700; }
 
-    /* Borderless Enterprise Table Rows */
-    .hpe-table-row {
-        background: #FFFFFF;
-        border-bottom: 1px solid #EDF2F7;
-        padding: 0.85rem 1rem;
-        display: flex;
-        align-items: center;
-        transition: background 0.15s ease-in-out;
-    }
-    .hpe-table-row:hover { background: #F8FAFC; }
-    
-    /* Buttons */
+    /* Custom Buttons */
     .stButton>button {
         border-radius: 6px;
         font-weight: 600;
@@ -156,7 +145,7 @@ def verify_password(stored_password: str, provided_password: str) -> bool:
         return False
 
 # ==============================================================================
-# 3. DATABASE REPOSITORY LAYER (MongoDB Integration)
+# 3. DATABASE REPOSITORY LAYER (Strict PyMongo Object Checking)
 # ==============================================================================
 AUX_STATUSES = [
     "Available", "Admin Work", "Not Ready - Online", 
@@ -188,27 +177,27 @@ def get_mongo_client():
         return None
 
 class DatabaseManager:
-    """Manages all persistent operations strictly across MongoDB collections."""
+    """Manages all persistent operations strictly across MongoDB collections without bool() checks."""
     def __init__(self):
         self.client = get_mongo_client()
         self.db = None
         self.collection = None
-        if self.client:
+        if self.client is not None:
             self.db = self.client["TeamRoster"]
             self.collection = self.db["Team Roster Collection"]
             self._seed_reference_data_if_empty()
 
     def is_connected(self) -> bool:
-        if not self.client:
+        if self.client is None:
             self.client = get_mongo_client()
-            if self.client:
+            if self.client is not None:
                 self.db = self.client["TeamRoster"]
                 self.collection = self.db["Team Roster Collection"]
                 self._seed_reference_data_if_empty()
-        return self.client is not None
+        return (self.client is not None) and (self.collection is not None)
 
     def _seed_reference_data_if_empty(self):
-        """Pre-populates MongoDB on first deployment if empty."""
+        """Populates MongoDB on first run so the UI matches the reference screenshots."""
         if self.collection is None:
             return
         
@@ -671,7 +660,7 @@ def dlg_schedule_swap_declined(requester, shift_date, reason):
     st.markdown(f"❌ **{requester} has declined your schedule swap request.**")
     st.markdown(f"**Date:** `{shift_date}`")
     st.markdown(f"**Reason:** {reason}")
-    if st.button("OK", use_container_width=True):
+    if st.button("OK", type="primary", use_container_width=True):
         st.rerun()
 
 @st.dialog("7. Critical Case Alert (Nearing Due Date)")
@@ -717,7 +706,7 @@ def dlg_admin_broadcast(msg, sender, ts):
 # ==============================================================================
 def render_auth_page():
     if not db_mgr.is_connected():
-        st.error("Unable to connect to the authentication service. Please try again later or contact your administrator.")
+        st.error("Unable to connect to the authentication service. Please verify your MongoDB configuration.")
         st.caption("Enterprise Security Policy: Authentication bypass is strictly prohibited.")
         return
 
@@ -1066,8 +1055,7 @@ def render_sidebar(user: Dict[str, Any]):
 # ==============================================================================
 # 9. DASHBOARD MODULE (Fullscreen, Urgent Sorting, Multi-Select Reassign)
 # ==============================================================================
-@st.fragment(run_every=15)
-def render_dashboard_fragment(user: Dict[str, Any]):
+def render_dashboard(user: Dict[str, Any]):
     is_admin = (user.get("role") == "Admin") or (user.get("role") == "Admin/Agent" and st.session_state.get("view_mode") != "Agent View")
     user_email = user.get("hpe_email") or user.get("email", "")
 
@@ -1506,7 +1494,7 @@ def main():
     active_nav = st.session_state.get("active_nav", "Dashboard")
     
     if active_nav == "Dashboard":
-        render_dashboard_fragment(current_user)
+        render_dashboard(current_user)
     elif active_nav == "Case Details":
         render_case_details(current_user)
     elif active_nav == "Monitoring":
