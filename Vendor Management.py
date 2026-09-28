@@ -748,66 +748,74 @@ def set_aux(user,new_aux):
     auto_assign_unassigned()
 
 
-def render_sidebar(user):
-    role=user.get("role","Agent")
-    pages=["Dashboard","Schedule","Report"]
-    if role in ("Admin","Admin/Agent"):
-        pages=["Dashboard","Monitoring","Schedule","Report","Settings"]
+def render_sidebar(user, container=None):
+    """Render authenticated navigation into a clearable sidebar container."""
+    target = container if container is not None else st.sidebar
+    with target.container():
+        role=user.get("role","Agent")
+        pages=["Dashboard","Schedule","Report"]
+        if role in ("Admin","Admin/Agent"):
+            pages=["Dashboard","Monitoring","Schedule","Report","Settings"]
 
-    st.sidebar.markdown(
-        '<div style="padding:10px 8px 18px"><span class="hpe-logo"></span>'
-        '<div style="color:white;font-size:20px;font-weight:800;margin-top:8px">HPE CaseFlow</div>'
-        '<div style="color:#b7c8d8;font-size:11px">Team Task and Case Management System</div></div>',
-        unsafe_allow_html=True
-    )
-    current=st.session_state.get("page","Dashboard")
-    for page in pages:
-        if st.sidebar.button(page, use_container_width=True,
-                              type="primary" if page==current else "secondary"):
-            st.session_state.page=page
-            st.rerun()
-    st.sidebar.divider()
-    st.sidebar.caption("HPE CaseFlow v1.0.0")
-    if st.sidebar.button("Sign Out",use_container_width=True):
-        return logout()
+        target.markdown(
+            '<div style="padding:10px 8px 18px"><span class="hpe-logo"></span>'
+            '<div style="color:white;font-size:20px;font-weight:800;margin-top:8px">HPE CaseFlow</div>'
+            '<div style="color:#b7c8d8;font-size:11px">Team Task and Case Management System</div></div>',
+            unsafe_allow_html=True
+        )
+        current=st.session_state.get("page","Dashboard")
+        for page in pages:
+            if target.button(page, use_container_width=True,
+                              type="primary" if page==current else "secondary",
+                              key=f"sidebar_nav_{page}"):
+                st.session_state.page=page
+                st.rerun()
+        target.divider()
+        target.caption("HPE CaseFlow v1.0.0")
+        if target.button("Sign Out",use_container_width=True,key="sidebar_signout"):
+            return logout()
     return False
 
 
-def topbar(user):
-    st.markdown(
-        f'<div class="hpe-topbar"><span class="hpe-logo"></span>'
-        f'<div><div class="hpe-brand">HPE CaseFlow</div><div class="hpe-sub">Team Task and Case Management System</div></div>'
-        f'<div style="flex:1"></div><div style="font-size:25px">♧</div>'
-        f'<div><b>{full_name(user)}</b><br><span style="font-size:12px;opacity:.8">{user.get("role","Agent")}</span></div>'
-        f'<div style="background:#0aa88f;border-radius:20px;padding:8px 14px">'
-        f'<span style="color:#baffdc">●</span> {user.get("current_aux","Available")}</div></div>',
-        unsafe_allow_html=True
-    )
-    if st.button("Profile ▾",key="profile_button"):
-        st.session_state.profile_open=not st.session_state.get("profile_open",False)
-        st.rerun()
-    if st.session_state.get("profile_open"):
-        with st.container(border=True):
-            st.markdown(f"### {full_name(user)}")
-            st.caption(f'{user.get("role","Agent")} · {user.get("employee_id","")}')
-            st.caption(user.get("email",""))
-            idx=AUXES.index(user.get("current_aux")) if user.get("current_aux") in AUXES else 0
-            new_aux=st.selectbox("Current Status / Aux",AUXES,index=idx)
-            if new_aux != user.get("current_aux"):
-                set_aux(user,new_aux)
-                st.success(f"Status changed to {new_aux}")
-                st.rerun()
-            if user.get("role") in ("Agent","Admin/Agent"):
-                st.markdown("**Today's Schedule**")
-                render_schedule_for_user(full_name(user))
-            x,y,z=st.columns(3)
-            with x:
-                if st.button("View Profile"): st.session_state.page="Settings"; st.rerun()
-            with y:
-                if st.button("Notifications"): st.session_state.show_alerts=True
-            with z:
-                if st.button("Sign Out"):
-                    return logout()
+def topbar(user, container=None):
+    """Render topbar/profile into a clearable main-page container."""
+    target = container if container is not None else st
+    with target.container():
+        st.markdown(
+            f'<div class="hpe-topbar"><span class="hpe-logo"></span>'
+            f'<div><div class="hpe-brand">HPE CaseFlow</div><div class="hpe-sub">Team Task and Case Management System</div></div>'
+            f'<div style="flex:1"></div><div style="font-size:25px">♧</div>'
+            f'<div><b>{full_name(user)}</b><br><span style="font-size:12px;opacity:.8">{user.get("role","Agent")}</span></div>'
+            f'<div style="background:#0aa88f;border-radius:20px;padding:8px 14px">'
+            f'<span style="color:#baffdc">●</span> {user.get("current_aux","Available")}</div></div>',
+            unsafe_allow_html=True
+        )
+        if st.button("Profile ▾",key="profile_button"):
+            st.session_state.profile_open=not st.session_state.get("profile_open",False)
+            st.rerun()
+        if st.session_state.get("profile_open"):
+            with st.container(border=True):
+                st.markdown(f"### {full_name(user)}")
+                st.caption(f'{user.get("role","Agent")} · {user.get("employee_id","")}')
+                st.caption(user.get("email",""))
+                idx=AUXES.index(user.get("current_aux")) if user.get("current_aux") in AUXES else 0
+                new_aux=st.selectbox("Current Status / Aux",AUXES,index=idx)
+                if new_aux != user.get("current_aux"):
+                    set_aux(user,new_aux)
+                    st.success(f"Status changed to {new_aux}")
+                    st.rerun()
+                if user.get("role") in ("Agent","Admin/Agent"):
+                    st.markdown("**Today's Schedule**")
+                    render_schedule_for_user(full_name(user))
+                x,y,z=st.columns(3)
+                with x:
+                    if st.button("View Profile"): st.session_state.page="Settings"; st.rerun()
+                with y:
+                    if st.button("Notifications"):
+                        st.session_state.show_alerts=True
+                with z:
+                    if st.button("Sign Out"):
+                        return logout()
     return False
 
 
@@ -1019,6 +1027,7 @@ def dashboard(user):
                         "case_no":no,"created_at":datetime.now().isoformat(),"ack":False
                     }})
                 st.success("Selected cases reassigned.")
+                st.rerun()
     else:
         st.markdown("### My Cases")
 
@@ -1554,7 +1563,8 @@ def settings_page(user):
 def alert_center(user):
     pending=[a for a in alerts_for(full_name(user)) if not a.get("ack")]
     if pending:
-        with st.expander(f"🔔 Alerts ({len(pending)})",expanded=True):
+        expanded = bool(st.session_state.get("show_alerts", False))
+        with st.expander(f"🔔 Alerts ({len(pending)})",expanded=expanded):
             for a in pending[:8]:
                 alert_key = sha("|".join(str(a.get(k,"")) for k in ("created_at","title","kind","case_no","to")))[:16]
                 st.warning(f'**{a.get("title","Alert")}** — {a.get("message","")}')
@@ -1562,6 +1572,7 @@ def alert_center(user):
                     st.caption(f'Case: {a["case_no"]} · Priority: {a.get("priority","")} · Due: {a.get("due_date","")}')
                 if st.button("Acknowledge",key=f"ack_{alert_key}"):
                     ack_alert(a); st.rerun()
+        st.session_state.show_alerts = False
 
 
 # ============================================================
@@ -1630,23 +1641,40 @@ def main():
 
     user=st.session_state.get("user") or session_user()
     if not user:
-        signed_in=auth_page()
+        # Render authentication inside a clearable placeholder. On successful
+        # sign-in, remove the auth UI and continue rendering the dashboard in
+        # the same run. This avoids both st.stop() dead ends and overlapping
+        # login/dashboard layouts while still allowing CookieManager to finish
+        # its browser-side cookie write.
+        auth_placeholder = st.empty()
+        with auth_placeholder.container():
+            signed_in=auth_page()
         if not signed_in:
             return
-        # Authentication changed state during this run. Stop before the
-        # dashboard/sidebar is rendered so login UI and dashboard UI never
-        # appear together. CookieManager has already received the cookie-write
-        # command and this run is allowed to finish cleanly.
-        st.stop()
+        auth_placeholder.empty()
+        user=st.session_state.get("user")
+        if not user:
+            return
 
     st.session_state.user=user
     st.session_state.setdefault("page","Dashboard")
-    if render_sidebar(user):
-        # Logout queues the CookieManager delete. Stop instead of rendering
-        # authentication UI underneath the partially-rendered sidebar.
-        st.stop()
-    if topbar(user):
-        auth_page()
+    sidebar_placeholder = st.sidebar.empty()
+    sidebar_logged_out = render_sidebar(user, sidebar_placeholder)
+    if sidebar_logged_out:
+        sidebar_placeholder.empty()
+        auth_placeholder = st.empty()
+        with auth_placeholder.container():
+            auth_page()
+        return
+
+    topbar_placeholder = st.empty()
+    topbar_logged_out = topbar(user, topbar_placeholder)
+    if topbar_logged_out:
+        topbar_placeholder.empty()
+        sidebar_placeholder.empty()
+        auth_placeholder = st.empty()
+        with auth_placeholder.container():
+            auth_page()
         return
     alert_center(user)
 
