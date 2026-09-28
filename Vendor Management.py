@@ -104,7 +104,6 @@ box-shadow:0 4px 18px rgba(20,54,84,.05)}
 .table-head{background:#eef4fa;border-radius:8px;padding:8px;font-size:12px;font-weight:800;color:#42536b}
 .auth-left{background:linear-gradient(145deg,rgba(3,30,49,.96),rgba(0,86,91,.8));
 padding:48px;color:#fff;border-radius:18px 0 0 18px;min-height:620px}
-.auth-right{background:#fff;padding:42px;border-radius:0 18px 18px 0;min-height:620px}
 .auth-brand{font-size:44px;font-weight:900}.auth-brand span{color:#11d8bb}
 .auth-feature{display:flex;gap:13px;margin-top:28px}.auth-icon{border:2px solid #11d8bb;border-radius:50%;padding:10px}
 .small-muted{color:#6d7e94;font-size:12px}
@@ -136,24 +135,33 @@ def get_mongo_client():
     client = MongoClient(uri, serverSelectionTimeoutMS=3500, connectTimeoutMS=3500)
     client.admin.command("ping")
 
-    # Indexes are created once when the cached Mongo client is initialized.
-    # Do not perform create_index() inside collection(), because collection()
-    # is called by many read/write helpers during a single page render.
     col = client[DB_NAME][COLLECTION_NAME]
     try:
+        # Drop existing faulty sparse indexes to clear the collision issue
+        existing_indexes = col.index_information()
+        for index_name in existing_indexes:
+            if index_name != "_id_":
+                col.drop_index(index_name)
+        
+        # Recreate indexes using strict partialFilterExpressions
         col.create_index([("type", ASCENDING)])
-        col.create_index([("type", ASCENDING), ("roster_list.email", ASCENDING)])
+        
+        col.create_index(
+            [("type", ASCENDING), ("roster_list.email", ASCENDING)],
+            unique=True,
+            partialFilterExpression={"roster_list.email": {"$exists": True}}
+        )
         col.create_index(
             [("type", ASCENDING), ("case.case_no", ASCENDING)],
-            unique=True, sparse=True
+            unique=True,
+            partialFilterExpression={"case.case_no": {"$exists": True}}
         )
         col.create_index(
             [("type", ASCENDING), ("session.token_hash", ASCENDING)],
-            unique=True, sparse=True
+            unique=True,
+            partialFilterExpression={"session.token_hash": {"$exists": True}}
         )
     except Exception:
-        # Existing conflicting indexes/data should not prevent the app from
-        # starting; MongoDB will continue using any indexes already present.
         pass
 
     return client
@@ -647,6 +655,7 @@ def send_reset_email(email, token):
     except Exception:
         return False
 
+
 def auth_page():
     mode = st.session_state.get("auth_mode","signin")
     left = """
@@ -730,8 +739,6 @@ def auth_page():
                         st.success("Reset link sent to your HPE email.")
                     else:
                         st.info("Reset token created. Configure SMTP_HOST, SMTP_USER and SMTP_PASSWORD for automatic email delivery.")
-
-        st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ============================================================
