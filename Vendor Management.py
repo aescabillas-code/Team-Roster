@@ -1,11 +1,3 @@
-"""
-================================================================================
-APPLICATION: HPE CaseFlow — Task Monitoring & Management System
-VISUAL SPECIFICATION: Exact reproduction of HPE Enterprise Design & Screenshots
-ARCHITECTURE: Single-file production Streamlit application with PyMongo persistence
-================================================================================
-"""
-
 import os
 import sys
 import re
@@ -254,7 +246,7 @@ def init_database():
                 "created_at": now.strftime("%Y-%m-%d %H:%M:%S")
             })
 
-    # 4. Default Seed Cases (Active and Completed / Closed Cases)
+    # 4. Default Seed Cases
     if collection.count_documents({"type": "cases"}) == 0:
         now = get_current_ph_time()
         cases_seed = [
@@ -353,98 +345,6 @@ def init_database():
                 "related_system": "HPE GreenLake",
                 "case_category": "Contracts & Subscriptions"
             },
-            {
-                "case_number": "HPE-2026-1036",
-                "subject": "Account Access Restoration",
-                "description": "Restore administrative privileges for backup operations engineering team.",
-                "priority": "High",
-                "assigned_to": "Rafael Cruz",
-                "assignee_email": "rafael.cruz@hpe.com",
-                "due_date": (now + timedelta(hours=5, minutes=36)).strftime("%b %d, %Y %I:%M %p"),
-                "status": "In Progress",
-                "status_reason": "Customer Verification",
-                "closure_type": "",
-                "breach_reason": "",
-                "created_at": (now - timedelta(days=1, hours=3)).strftime("%b %d, %Y %I:%M %p"),
-                "last_update": (now - timedelta(minutes=54)).strftime("%b %d, %Y %I:%M %p"),
-                "last_update_ts": (now - timedelta(minutes=54)),
-                "vendor_name": "SecureID Systems",
-                "vendor_contact": "Rachel Adams",
-                "vendor_email": "help@secureid.org",
-                "vendor_phone": "+1 555 777 8899",
-                "account": "SkyLine Air",
-                "related_system": "IAM Portal",
-                "case_category": "Access Management"
-            },
-            {
-                "case_number": "HPE-2026-1033",
-                "subject": "Portal Error - 500 Internal",
-                "description": "Intermittent HTTP 500 error when uploading bulk cluster hardware manifests.",
-                "priority": "Medium",
-                "assigned_to": "Alyssa Ramos",
-                "assignee_email": "alyssa.ramos@hpe.com",
-                "due_date": (now + timedelta(days=1)).strftime("%b %d, %Y %I:%M %p"),
-                "status": "Open",
-                "status_reason": "Under Investigation",
-                "closure_type": "",
-                "breach_reason": "",
-                "created_at": (now - timedelta(days=2)).strftime("%b %d, %Y %I:%M %p"),
-                "last_update": (now - timedelta(hours=2, minutes=4)).strftime("%b %d, %Y %I:%M %p"),
-                "last_update_ts": (now - timedelta(hours=2, minutes=4)),
-                "vendor_name": "InfraAPI LLC",
-                "vendor_contact": "Carlos Mendez",
-                "vendor_email": "carlos@infraapi.com",
-                "vendor_phone": "+1 555 333 2211",
-                "account": "AutoCorp Industries",
-                "related_system": "Storage Central",
-                "case_category": "API Gateway"
-            },
-            {
-                "case_number": "HPE-2026-1031",
-                "subject": "Usage Report Request",
-                "description": "Quarterly consumed storage and memory compute export in JSON format.",
-                "priority": "Medium",
-                "assigned_to": "Daniel Lim",
-                "assignee_email": "daniel.lim@hpe.com",
-                "due_date": (now + timedelta(days=1, hours=1)).strftime("%b %d, %Y %I:%M %p"),
-                "status": "In Progress",
-                "status_reason": "Waiting for Vendor Response",
-                "closure_type": "",
-                "breach_reason": "",
-                "created_at": (now - timedelta(days=2, hours=4)).strftime("%b %d, %Y %I:%M %p"),
-                "last_update": (now - timedelta(hours=1, minutes=19)).strftime("%b %d, %Y %I:%M %p"),
-                "last_update_ts": (now - timedelta(hours=1, minutes=19)),
-                "vendor_name": "DataMetric Analytics",
-                "vendor_contact": "Lisa Chen",
-                "vendor_email": "lisa@datametric.com",
-                "vendor_phone": "+1 555 444 3322",
-                "account": "Apex Banking",
-                "related_system": "Metering Engine",
-                "case_category": "Analytics"
-            },
-            {
-                "case_number": "HPE-2026-1029",
-                "subject": "Vendor Confirmation Needed",
-                "description": "Warranty entitlement verification for ProLiant DL380 Gen10 chassis.",
-                "priority": "Medium",
-                "assigned_to": "Arianne Escabillas",
-                "assignee_email": "arianne.escabillas@hpe.com",
-                "due_date": (now + timedelta(days=1, hours=4)).strftime("%b %d, %Y %I:%M %p"),
-                "status": "Pending Info",
-                "status_reason": "Initial contact with vendor",
-                "closure_type": "",
-                "breach_reason": "",
-                "created_at": (now - timedelta(days=3)).strftime("%b %d, %Y %I:%M %p"),
-                "last_update": (now - timedelta(hours=1, minutes=29)).strftime("%b %d, %Y %I:%M %p"),
-                "last_update_ts": (now - timedelta(hours=1, minutes=29)),
-                "vendor_name": "HardwareDepot Inc",
-                "vendor_contact": "Tom Bradley",
-                "vendor_email": "service@hardwaredepot.com",
-                "vendor_phone": "+1 555 666 7788",
-                "account": "Metro Retailers",
-                "related_system": "Pointnext Services",
-                "case_category": "Hardware RMA"
-            },
             # SEEDED CLOSED CASES
             {
                 "case_number": "HPE-2026-1020",
@@ -497,7 +397,6 @@ def init_database():
             c["type"] = "cases"
             collection.insert_one(c)
 
-        # Initial Case History
         collection.insert_one({
             "type": "case_history",
             "case_number": "HPE-2026-1045",
@@ -589,11 +488,12 @@ def logout_user():
     st.session_state["authenticated"] = False
     st.session_state["current_user"] = None
     st.session_state["session_token"] = None
+    st.session_state["show_profile_flyout"] = False
     st.query_params.clear()
     st.rerun()
 
 # ==============================================================================
-# 5. CASE AUTO-ASSIGNMENT & AUX LOGIC ENGINE
+# 5. REAL-TIME AUX ENGINE (INSTANT PERSISTENCE ON CHANGE)
 # ==============================================================================
 def update_user_aux(email, new_aux):
     user = collection.find_one({"type": "roster_list", "email": email})
@@ -617,6 +517,14 @@ def update_user_aux(email, new_aux):
     })
     if "current_user" in st.session_state and st.session_state["current_user"]["email"] == email:
         st.session_state["current_user"]["current_aux"] = new_aux
+
+def on_aux_dropdown_change():
+    """Triggered instantly when user chooses a new status in the Profile Flyout."""
+    selected_aux = st.session_state.get("flyout_aux_selector")
+    user = st.session_state.get("current_user")
+    if user and selected_aux:
+        update_user_aux(user["email"], selected_aux)
+        st.toast(f"Status changed to {selected_aux}!", icon="🟢")
 
 def auto_assign_new_case(case_data):
     """Fair round-robin & workload-balanced assignment strictly for Available agents."""
@@ -685,7 +593,7 @@ def auto_assign_new_case(case_data):
     return True, chosen["name"]
 
 # ==============================================================================
-# 6. ENTERPRISE CSS DESIGN SYSTEM (PIXEL-PERFECT FIDELITY)
+# 6. ENTERPRISE CSS DESIGN SYSTEM (PIXEL-PERFECT SPECIFICATION)
 # ==============================================================================
 ENTERPRISE_CSS = """
 <style>
@@ -703,7 +611,7 @@ ENTERPRISE_CSS = """
 
 .block-container {
     padding-top: 5.5rem !important;
-    padding-bottom: 95px !important;
+    padding-bottom: 110px !important;
     padding-left: 2rem !important;
     padding-right: 2rem !important;
     max-width: 100% !important;
@@ -730,14 +638,14 @@ div[class*="st-key-hpe_top_bar_container"] [data-testid="stHorizontalBlock"] {
     gap: 16px !important;
 }
 
-/* Top Profile Pill Button */
+/* Top Profile Pill Button (Header Right) */
 div[class*="st-key-top_profile_pill_btn"] button {
     background: #FFFFFF !important;
     color: #0F172A !important;
     border: 1px solid #CBD5E1 !important;
     border-radius: 30px !important;
     padding: 6px 14px !important;
-    font-size: 12.5px !important;
+    font-size: 13px !important;
     font-weight: 700 !important;
     display: flex !important;
     align-items: center !important;
@@ -751,51 +659,144 @@ div[class*="st-key-top_profile_pill_btn"] button:hover {
     border-color: #00B388 !important;
 }
 
-/* 3. Metric KPI Cards */
+/* 3. PROFILE FLYOUT DROPDOWN CARD (ANCHORED TO TOP-RIGHT) */
+div[class*="st-key-profile_flyout_card"] {
+    position: fixed !important;
+    top: 76px !important;
+    right: 28px !important;
+    width: 490px !important;
+    max-width: 95vw !important;
+    background: #FFFFFF !important;
+    border-radius: 18px !important;
+    box-shadow: 0 16px 45px rgba(0, 0, 0, 0.22), 0 3px 10px rgba(0, 0, 0, 0.08) !important;
+    border: 1px solid #E2E8F0 !important;
+    z-index: 99999 !important;
+    padding: 24px 26px !important;
+}
+
+.flyout-pointer {
+    position: absolute;
+    top: -8px;
+    right: 48px;
+    width: 16px;
+    height: 16px;
+    background: #FFFFFF;
+    transform: rotate(45deg);
+    border-top: 1px solid #E2E8F0;
+    border-left: 1px solid #E2E8F0;
+}
+
+.session-stat-card {
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    border-radius: 10px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.schedule-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 0;
+    border-bottom: 1px solid #F1F5F9;
+    font-size: 12px;
+}
+
+/* 4. SEGMENTED TILE TOGGLE FOR VIEW (MATCHING MOCKUP 1000057253) */
+div[class*="st-key-view_mode_segmented_tile"] {
+    background: #E2E8F0 !important;
+    border-radius: 10px !important;
+    padding: 3px !important;
+    border: 1px solid #CBD5E1 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+}
+
+div[class*="st-key-view_mode_segmented_tile"] [data-testid="stHorizontalBlock"] {
+    gap: 2px !important;
+    align-items: center !important;
+}
+
+div[class*="st-key-view_mode_segmented_tile"] button {
+    border-radius: 8px !important;
+    font-size: 13.5px !important;
+    font-weight: 700 !important;
+    padding: 6px 18px !important;
+    height: 38px !important;
+    border: none !important;
+    transition: all 0.2s ease !important;
+}
+
+div[class*="st-key-view_mode_segmented_tile"] button[kind="secondary"],
+div[class*="st-key-view_mode_segmented_tile"] button[data-testid="baseButton-secondary"] {
+    background-color: transparent !important;
+    color: #475569 !important;
+}
+
+div[class*="st-key-view_mode_segmented_tile"] button[kind="secondary"]:hover,
+div[class*="st-key-view_mode_segmented_tile"] button[data-testid="baseButton-secondary"]:hover {
+    background-color: rgba(255, 255, 255, 0.5) !important;
+    color: #0F172A !important;
+}
+
+div[class*="st-key-view_mode_segmented_tile"] button[kind="primary"],
+div[class*="st-key-view_mode_segmented_tile"] button[data-testid="baseButton-primary"] {
+    background-color: #0A385C !important;
+    color: #FFFFFF !important;
+    box-shadow: 0 2px 6px rgba(10, 56, 92, 0.35) !important;
+}
+
+/* 5. Metric KPI Cards */
 .metric-container {
     background: #FFFFFF;
     border-radius: 12px;
-    padding: 16px 20px;
+    padding: 14px 14px;
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
     border: 1px solid #E2E8F0;
     box-shadow: 0 1px 3px rgba(0,0,0,0.03);
     margin-bottom: 12px;
 }
 
 .metric-icon-box {
-    width: 44px;
-    height: 44px;
+    width: 40px;
+    height: 40px;
     border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 20px;
+    font-size: 18px;
+    flex-shrink: 0;
 }
 
 .metric-title {
-    font-size: 13px;
+    font-size: 12px;
     color: #64748B;
     font-weight: 600;
     margin: 0;
+    white-space: nowrap;
 }
 
 .metric-value {
-    font-size: 26px;
+    font-size: 24px;
     font-weight: 800;
     color: #0F172A;
     margin: 0;
-    line-height: 1.2;
+    line-height: 1.1;
 }
 
 .metric-sub {
-    font-size: 11px;
+    font-size: 10.5px;
     font-weight: 600;
     margin: 0;
+    white-space: nowrap;
 }
 
-/* 4. Badges & Aux Dots */
+/* 6. Badges & Aux Dots */
 .badge {
     display: inline-block;
     padding: 4px 10px;
@@ -842,50 +843,56 @@ div[class*="st-key-top_profile_pill_btn"] button:hover {
 .aux-break { background-color: #94A3B8; }
 .aux-unscheduled { background-color: #334155; }
 
-/* 5. Fixed Seamless Bottom Navigation Bar */
+/* 7. BIGGER & SPREAD OUT BOTTOM NAVIGATION BAR */
 div[class*="st-key-hpe_bottom_nav_container"] {
     position: fixed !important;
     bottom: 0 !important;
     left: 0 !important;
     right: 0 !important;
     width: 100vw !important;
-    height: 64px !important;
+    height: 74px !important;
     background-color: #062323 !important;
-    border-top: 1px solid rgba(255, 255, 255, 0.12) !important;
-    z-index: 99999 !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.15) !important;
+    z-index: 99998 !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    padding: 8px 140px 8px 20px !important;
-    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.35) !important;
+    padding: 10px 140px 10px 40px !important;
+    box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.4) !important;
 }
 
 div[class*="st-key-hpe_bottom_nav_container"] > div {
     width: 100% !important;
-    max-width: 850px !important;
+    max-width: 1300px !important;
     margin: 0 auto !important;
 }
 
 div[class*="st-key-hpe_bottom_nav_container"] [data-testid="stHorizontalBlock"] {
     align-items: center !important;
-    gap: 8px !important;
+    justify-content: space-between !important;
+    gap: 20px !important;
 }
 
 div[class*="st-key-hpe_bottom_nav_container"] button {
     background-color: transparent !important;
     color: #94A3B8 !important;
     border: 1px solid transparent !important;
-    border-radius: 6px !important;
+    border-radius: 10px !important;
     font-weight: 600 !important;
-    font-size: 13px !important;
-    padding: 6px 14px !important;
-    height: 40px !important;
-    transition: all 0.2s ease !important;
+    font-size: 15px !important;
+    letter-spacing: 0.2px !important;
+    padding: 8px 24px !important;
+    height: 48px !important;
+    transition: all 0.2s ease-in-out !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
 }
 
 div[class*="st-key-hpe_bottom_nav_container"] button:hover {
-    background-color: rgba(255, 255, 255, 0.08) !important;
+    background-color: rgba(255, 255, 255, 0.1) !important;
     color: #FFFFFF !important;
+    transform: translateY(-1px) !important;
 }
 
 div[class*="st-key-hpe_bottom_nav_container"] button[kind="primary"],
@@ -893,11 +900,12 @@ div[class*="st-key-hpe_bottom_nav_container"] button[data-testid="baseButton-pri
     background-color: #00B388 !important;
     color: #FFFFFF !important;
     font-weight: 700 !important;
+    font-size: 15.5px !important;
     border: none !important;
-    box-shadow: 0 2px 8px rgba(0, 179, 136, 0.35) !important;
+    box-shadow: 0 4px 14px rgba(0, 179, 136, 0.4) !important;
 }
 
-/* 6. Case Details Modal */
+/* 8. Case Details Modal */
 .modal-strip {
     background-color: #F8FAFC;
     border: 1px solid #E2E8F0;
@@ -930,7 +938,7 @@ div[class*="st-key-hpe_bottom_nav_container"] button[data-testid="baseButton-pri
 st.markdown(ENTERPRISE_CSS, unsafe_allow_html=True)
 
 # ==============================================================================
-# 7. INTERACTIVE DIALOGS (@st.dialog)
+# 7. INTERACTIVE CASE MODAL DIALOG (@st.dialog)
 # ==============================================================================
 @st.dialog("Case Details", width="large")
 def render_case_modal(case_num):
@@ -959,7 +967,6 @@ def render_case_modal(case_num):
         else:
             st.markdown("<span class='badge badge-critical'>Due in 36m</span>", unsafe_allow_html=True)
 
-    # Meta Strip
     st.markdown(f"""
     <div class="modal-strip">
         <div><small>Assigned To</small><br><strong>{case.get('assigned_to')}</strong></div>
@@ -1078,7 +1085,7 @@ def render_case_modal(case_num):
                     st.toast("Transfer request dispatched to team lead!")
 
     with tab_breach:
-        st.markdown("##### ✉️ Automated Breach Notice Notice")
+        st.markdown("##### ✉️ Automated Breach Notice")
         st.caption("Standard legal breach template auto-populated with active ticket telemetry:")
         to_email = st.text_input("To", value=case.get("vendor_email", "support@abcsoftware.com"))
         subj = st.text_input("Subject", value=f"Notice of Contract Breach — {case_num} SLA Missed")
@@ -1109,49 +1116,6 @@ HPE Operations Management"""
             })
             st.success(f"Breach notice successfully transmitted to {to_email}!")
 
-@st.dialog("Profile & Aux Management", width="medium")
-def render_profile_dialog():
-    """Profile & Aux control modal triggered exclusively from the top-right profile corner."""
-    user = st.session_state.get("current_user", {})
-    p1, p2 = st.columns([1, 2])
-    with p1:
-        st.image(user.get("profile_picture", "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150"), width=120)
-    with p2:
-        st.markdown(f"### {user.get('name')}")
-        st.caption(f"Role: **{user.get('role')}** | Dept: **{user.get('department')}**")
-        st.write(f"**Employee ID:** `{user.get('employee_id')}`")
-        st.write(f"**Email:** `{user.get('email')}`")
-
-    st.divider()
-    st.markdown("##### 🔄 Change Real-time Aux Status")
-    aux_list = ["Available", "Admin Work", "Not Ready - Online", "Coaching", "Meeting", "Lunch", "Break", "Unscheduled Break"]
-    curr = user.get("current_aux", "Available")
-    new_aux = st.selectbox("Select Current Aux", aux_list, index=aux_list.index(curr) if curr in aux_list else 0)
-    
-    if st.button("Apply Aux Change", type="primary"):
-        update_user_aux(user.get("email"), new_aux)
-        st.toast(f"Status changed to {new_aux}!")
-        time.sleep(0.5)
-        st.rerun()
-
-    st.divider()
-    st.markdown("##### 📅 Today's Plotted Schedule")
-    st.markdown("""
-    <div style="font-size:12px; line-height:1.8;">
-        🟢 08:00 AM – 10:00 AM &nbsp; <strong>Available</strong><br>
-        ⚪ 10:00 AM – 10:15 AM &nbsp; <strong>Break</strong><br>
-        🟢 10:15 AM – 12:00 PM &nbsp; <strong>Available</strong><br>
-        🟡 12:00 PM – 01:00 PM &nbsp; <strong>Lunch</strong><br>
-        🟢 01:00 PM – 03:00 PM &nbsp; <strong>Available</strong><br>
-        ⚪ 03:00 PM – 03:15 PM &nbsp; <strong>Break</strong><br>
-        🟢 03:15 PM – 05:00 PM &nbsp; <strong>Available</strong>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.divider()
-    if st.button("🚪 Sign Out of HPE CaseFlow", type="secondary", use_container_width=True):
-        logout_user()
-
 @st.dialog("Broadcast Message", width="small")
 def render_admin_message_dialog():
     user = st.session_state.get("current_user", {})
@@ -1171,7 +1135,113 @@ def render_admin_message_dialog():
         st.success("Alert broadcasted successfully!")
 
 # ==============================================================================
-# 8. TOP HEADER (WITH PROFILE/AUX CLICKABLE TRIGGER AT UPPER RIGHT)
+# 8. TOP-RIGHT ALIGNED PROFILE FLYOUT DROPDOWN (EXACT VISUAL RECREATION)
+# ==============================================================================
+def render_profile_flyout():
+    """Renders profile flyout card positioned directly beneath the top-right profile button."""
+    user = st.session_state.get("current_user", {})
+    
+    with st.container(key="profile_flyout_card"):
+        st.markdown('<div class="flyout-pointer"></div>', unsafe_allow_html=True)
+        
+        c_top1, c_top2 = st.columns([5, 1])
+        with c_top1:
+            pass
+        with c_top2:
+            if st.button("✕", key="btn_close_profile_flyout", help="Close Profile"):
+                st.session_state["show_profile_flyout"] = False
+                st.rerun()
+
+        u_col1, u_col2 = st.columns([1, 2.5])
+        with u_col1:
+            st.markdown(f"""
+            <div style="position:relative; width:80px; height:80px; margin-bottom:10px;">
+                <img src="{user.get('profile_picture', 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150')}" style="width:80px; height:80px; border-radius:50%; object-fit:cover; border:3px solid #00B388;" />
+                <div style="position:absolute; bottom:0; right:0; background:#062323; border-radius:50%; padding:4px 6px; font-size:11px; border:1px solid #E2E8F0;">📷</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with u_col2:
+            st.markdown(f"""
+            <div style="line-height:1.2;">
+                <h3 style="margin:0 0 4px 0; font-size:20px; font-weight:800; color:#0F172A;">{user.get('name')}</h3>
+                <span style="background:#E6F7F3; color:#00B388; font-weight:700; font-size:11px; padding:2px 8px; border-radius:12px;">{user.get('role')}</span>
+                <p style="margin:6px 0 2px 0; font-size:12px; color:#64748B;">ID: <strong>{user.get('employee_id')}</strong></p>
+                <p style="margin:0; font-size:12px; color:#64748B;">{user.get('email')}</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+
+        s1, s2 = st.columns(2)
+        with s1:
+            st.markdown("""
+            <div class="session-stat-card">
+                <span style="font-size:18px;">⏰</span>
+                <div>
+                    <div style="font-size:10px; color:#64748B; font-weight:600;">Login Time</div>
+                    <div style="font-size:13.5px; font-weight:800; color:#0F172A;">08:45 AM</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        with s2:
+            st.markdown("""
+            <div class="session-stat-card">
+                <span style="font-size:18px;">💻</span>
+                <div>
+                    <div style="font-size:10px; color:#64748B; font-weight:600;">Current Session</div>
+                    <div style="font-size:13.5px; font-weight:800; color:#00B388;">3h 42m</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.divider()
+
+        st.markdown("<label style='font-size:12px; font-weight:700; color:#475569;'>Current Status / Aux (Real-Time Auto-Update)</label>", unsafe_allow_html=True)
+        aux_list = ["Available", "Admin Work", "Not Ready - Online", "Coaching", "Meeting", "Lunch", "Break", "Unscheduled Break"]
+        curr_aux = user.get("current_aux", "Available")
+        cur_idx = aux_list.index(curr_aux) if curr_aux in aux_list else 0
+
+        st.selectbox(
+            "Current Status (Aux)",
+            aux_list,
+            index=cur_idx,
+            key="flyout_aux_selector",
+            on_change=on_aux_dropdown_change,
+            label_visibility="collapsed"
+        )
+
+        st.divider()
+
+        sc_h1, sc_h2 = st.columns([1.5, 1])
+        with sc_h1:
+            st.markdown("<strong style='font-size:13px; color:#0F172A;'>Today's Schedule</strong>", unsafe_allow_html=True)
+        with sc_h2:
+            st.markdown("<span style='font-size:11px; color:#64748B; float:right;'>Monday, Sep 28, 2026 📅</span>", unsafe_allow_html=True)
+
+        st.markdown("""
+        <div style="margin-top:6px;">
+            <div class="schedule-row"><span>🟢 08:00 AM – 10:00 AM</span> <strong style="color:#00B388;">Available</strong></div>
+            <div class="schedule-row"><span>⚪ 10:00 AM – 10:15 AM</span> <strong style="color:#94A3B8;">Break</strong></div>
+            <div class="schedule-row"><span>🟢 10:15 AM – 12:00 PM</span> <strong style="color:#00B388;">Available</strong></div>
+            <div class="schedule-row"><span>🟡 12:00 PM – 01:00 PM</span> <strong style="color:#D97706;">Lunch</strong></div>
+            <div class="schedule-row"><span>🟢 01:00 PM – 03:00 PM</span> <strong style="color:#00B388;">Available</strong></div>
+            <div class="schedule-row"><span>⚪ 03:00 PM – 03:15 PM</span> <strong style="color:#94A3B8;">Break</strong></div>
+            <div class="schedule-row"><span>🟢 03:15 PM – 05:00 PM</span> <strong style="color:#00B388;">Available</strong></div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.divider()
+
+        act_col1, act_col2 = st.columns(2)
+        with act_col1:
+            if st.button("🔒 Change Password", key="flyout_change_pw", use_container_width=True):
+                st.info("Password self-service portal active via HPE Global SSO.")
+        with act_col2:
+            if st.button("🚪 Sign Out", key="flyout_sign_out", type="secondary", use_container_width=True):
+                logout_user()
+
+# ==============================================================================
+# 9. TOP HEADER (PROFILE TRIGGER AT UPPER-RIGHT CORNER)
 # ==============================================================================
 def render_top_header():
     user = st.session_state.get("current_user", {})
@@ -1232,92 +1302,139 @@ def render_top_header():
 
         with col_profile:
             with st.container(key="top_profile_pill_btn"):
-                # Profile / Aux Clickable Trigger at the Upper Right
                 btn_label = f"👤 {user.get('name')}  •  {curr_aux} ▾"
                 if st.button(btn_label, key="btn_open_profile_upper_right", use_container_width=True):
-                    render_profile_dialog()
+                    st.session_state["show_profile_flyout"] = not st.session_state.get("show_profile_flyout", False)
+                    st.rerun()
+
+    if st.session_state.get("show_profile_flyout", False):
+        render_profile_flyout()
 
 # ==============================================================================
-# 9. DASHBOARD: METRICS & CASES (WITH VIEW ALL / CLOSED CASES TOGGLE)
+# 10. DASHBOARD: PERFECTLY ALIGNED STATUS TILES & SIDE PANELS
 # ==============================================================================
 def render_dashboard():
     user = st.session_state.get("current_user", {})
-    is_admin = user.get("role") in ["Admin", "Admin/Agent"]
+    user_role = user.get("role", "Agent")
     
-    col_t1, col_t2 = st.columns([3, 1])
-    with col_t1:
-        if is_admin and st.session_state.get("view_mode", "Admin") == "Admin":
-            st.markdown("## **Active Cases** &nbsp; <span style='font-size:14px; background:#DCFCE7; color:#16A34A; padding:3px 10px; border-radius:12px;'>Live Team Feed</span>", unsafe_allow_html=True)
-        else:
-            st.markdown(f"## **My Cases** &nbsp; <span style='font-size:14px; background:#E0F2FE; color:#0284C7; padding:3px 10px; border-radius:12px;'>{user.get('name')}</span>", unsafe_allow_html=True)
-    with col_t2:
-        if user.get("role") == "Admin/Agent":
-            mode = st.radio("Perspective", ["Admin View", "Agent View"], horizontal=True, label_visibility="collapsed")
-            st.session_state["view_mode"] = "Admin" if "Admin" in mode else "Agent"
+    # Initialize perspective mode
+    if "view_mode" not in st.session_state:
+        st.session_state["view_mode"] = "Admin" if user_role in ["Admin", "Admin/Agent"] else "Agent"
+    
+    if user_role == "Agent":
+        st.session_state["view_mode"] = "Agent"
 
-    filter_email = user.get("email") if (not is_admin or st.session_state.get("view_mode") == "Agent") else None
+    is_admin_mode = (st.session_state["view_mode"] == "Admin")
 
-    # Base Metrics Counts
+    # Base Filtering according to Perspective
     q_base = {"type": "cases"}
-    if filter_email:
-        q_base["assignee_email"] = filter_email
+    if not is_admin_mode:
+        q_base["assignee_email"] = user.get("email")
 
     total_active = collection.count_documents({**q_base, "status": {"$ne": "Closed"}})
     total_critical = collection.count_documents({**q_base, "priority": "Critical", "status": {"$ne": "Closed"}})
     total_due_soon = collection.count_documents({**q_base, "priority": {"$in": ["Critical", "High"]}, "status": {"$ne": "Closed"}})
     total_on_track = collection.count_documents({**q_base, "priority": {"$in": ["Medium", "Low"]}, "status": {"$ne": "Closed"}})
-    total_closed = collection.count_documents({**q_base, "status": "Closed"})
 
-    # 4 Metric KPI Cards
-    m1, m2, m3, m4 = st.columns(4)
-    with m1:
-        st.markdown(f"""
-        <div class="metric-container" style="background:#F0F9FF; border-left:4px solid #0284C7;">
-            <div class="metric-icon-box" style="background:#E0F2FE; color:#0284C7;">📁</div>
-            <div>
-                <p class="metric-title">{'My Active Cases' if filter_email else 'Active Cases'}</p>
-                <h3 class="metric-value">{total_active}</h3>
-                <p class="metric-sub" style="color:#0284C7;">↑ +5% vs last week</p>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    with m2:
-        st.markdown(f"""
-        <div class="metric-container" style="background:#FEF2F2; border-left:4px solid #DC2626;">
-            <div class="metric-icon-box" style="background:#FEE2E2; color:#DC2626;">⚠️</div>
-            <div>
-                <p class="metric-title">{'My Critical Cases' if filter_email else 'Critical Cases'}</p>
-                <h3 class="metric-value">{total_critical}</h3>
-                <p class="metric-sub" style="color:#DC2626;">↑ +2 vs last week</p>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    with m3:
-        st.markdown(f"""
-        <div class="metric-container" style="background:#FFFBEB; border-left:4px solid #D97706;">
-            <div class="metric-icon-box" style="background:#FEF3C7; color:#D97706;">⏰</div>
-            <div>
-                <p class="metric-title">Due Soon</p>
-                <h3 class="metric-value">{total_due_soon}</h3>
-                <p class="metric-sub" style="color:#D97706;">↑ +1 vs last week</p>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    with m4:
-        st.markdown(f"""
-        <div class="metric-container" style="background:#F0FDF4; border-left:4px solid #16A34A;">
-            <div class="metric-icon-box" style="background:#DCFCE7; color:#16A34A;">✅</div>
-            <div>
-                <p class="metric-title">On Track</p>
-                <h3 class="metric-value">{total_on_track}</h3>
-                <p class="metric-sub" style="color:#16A34A;">↑ +10% vs last week</p>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+    # ==========================================================================
+    # 2-COLUMN MASTER GRID (TILES & SCHEDULE/AGENTS START AT THE EXACT SAME TOP ROW)
+    # ==========================================================================
+    main_left_col, main_right_col = st.columns([2.85, 1.15], gap="large")
 
-    left_col, right_col = st.columns([2.8, 1.2])
+    # --------------------------------------------------------------------------
+    # LEFT COLUMN: DASHBOARD TITLE + 4 KPI TILES + CASE MANAGEMENT TABLE
+    # --------------------------------------------------------------------------
+    with main_left_col:
+        # Header Row: Title + Segmented Tile Toggle (for Admin/Agent)
+        head_c1, head_c2 = st.columns([2.2, 1.8])
+        with head_c1:
+            if is_admin_mode:
+                st.markdown(f"""
+                <div style="margin-bottom:8px;">
+                    <h1 style="font-size:26px; font-weight:800; color:#0F172A; margin:0 0 2px 0;">Dashboard</h1>
+                    <p style="font-size:13px; color:#64748B; margin:0;">Welcome back, <strong>{user.get('first_name', 'User')}</strong>! Here's what's happening with your team today.</p>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                <div style="margin-bottom:8px;">
+                    <h1 style="font-size:26px; font-weight:800; color:#0F172A; margin:0 0 2px 0;">My Dashboard</h1>
+                    <p style="font-size:13px; color:#64748B; margin:0;">Good morning, <strong>{user.get('first_name', 'User')}</strong>! Here are your assigned cases for today.</p>
+                </div>
+                """, unsafe_allow_html=True)
 
-    with left_col:
+        with head_c2:
+            if user_role == "Admin/Agent":
+                st.markdown("<div style='text-align:right; margin-bottom:8px;'>", unsafe_allow_html=True)
+                with st.container(key="view_mode_segmented_tile"):
+                    t_col1, t_col2 = st.columns(2)
+                    with t_col1:
+                        is_adm_active = (st.session_state["view_mode"] == "Admin")
+                        btn_kind_adm = "primary" if is_adm_active else "secondary"
+                        if st.button("Admin View", key="btn_tile_admin_view", type=btn_kind_adm, use_container_width=True):
+                            st.session_state["view_mode"] = "Admin"
+                            st.rerun()
+                    with t_col2:
+                        is_agt_active = (st.session_state["view_mode"] == "Agent")
+                        btn_kind_agt = "primary" if is_agt_active else "secondary"
+                        if st.button("Agent View", key="btn_tile_agent_view", type=btn_kind_agt, use_container_width=True):
+                            st.session_state["view_mode"] = "Agent"
+                            st.rerun()
+                st.markdown("</div>", unsafe_allow_html=True)
+
+        # 4 KPI Status Metric Cards (nested horizontally inside main_left_col)
+        m1, m2, m3, m4 = st.columns(4)
+        with m1:
+            st.markdown(f"""
+            <div class="metric-container" style="background:#F0F9FF; border-left:4px solid #0284C7;">
+                <div class="metric-icon-box" style="background:#E0F2FE; color:#0284C7;">📁</div>
+                <div>
+                    <p class="metric-title">{'Active Cases' if is_admin_mode else 'My Active Cases'}</p>
+                    <h3 class="metric-value">{total_active}</h3>
+                    <p class="metric-sub" style="color:#0284C7;">↑ +5% vs last week</p>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        with m2:
+            st.markdown(f"""
+            <div class="metric-container" style="background:#FEF2F2; border-left:4px solid #DC2626;">
+                <div class="metric-icon-box" style="background:#FEE2E2; color:#DC2626;">⚠️</div>
+                <div>
+                    <p class="metric-title">{'Critical Cases' if is_admin_mode else 'My Critical Cases'}</p>
+                    <h3 class="metric-value">{total_critical}</h3>
+                    <p class="metric-sub" style="color:#DC2626;">↑ +2 vs last week</p>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        with m3:
+            st.markdown(f"""
+            <div class="metric-container" style="background:#FFFBEB; border-left:4px solid #D97706;">
+                <div class="metric-icon-box" style="background:#FEF3C7; color:#D97706;">⏰</div>
+                <div>
+                    <p class="metric-title">Due Soon</p>
+                    <h3 class="metric-value">{total_due_soon}</h3>
+                    <p class="metric-sub" style="color:#D97706;">↑ +1 vs last week</p>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        with m4:
+            st.markdown(f"""
+            <div class="metric-container" style="background:#F0FDF4; border-left:4px solid #16A34A;">
+                <div class="metric-icon-box" style="background:#DCFCE7; color:#16A34A;">✅</div>
+                <div>
+                    <p class="metric-title">On Track</p>
+                    <h3 class="metric-value">{total_on_track}</h3>
+                    <p class="metric-sub" style="color:#16A34A;">↑ +10% vs last week</p>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
+
+        # Cases Table Header
+        table_heading = "Active Cases" if is_admin_mode else "My Cases"
+        st.markdown(f"### **{table_heading}** &nbsp; <span style='font-size:13px; font-weight:700; background:#E2E8F0; color:#475569; padding:2px 8px; border-radius:10px;'>{total_active} cases</span>", unsafe_allow_html=True)
+
         # Filter & View All Cases Controls
         f1, f2, f3, f4, f5 = st.columns([2.2, 1.2, 1.3, 1.4, 0.9])
         with f1:
@@ -1325,24 +1442,20 @@ def render_dashboard():
         with f2:
             pri_filter = st.selectbox("Priority", ["All Priorities", "Critical", "High", "Medium", "Low"], label_visibility="collapsed")
         with f3:
-            # Dropdown with explicit "Closed" status option
             st_filter = st.selectbox(
                 "Status",
                 ["All Statuses", "Open", "In Progress", "Vendor Response", "Waiting Vendor", "Pending Info", "Closed"],
                 label_visibility="collapsed"
             )
         with f4:
-            # Checkbox allowing users to view all cases including closed cases
             include_closed = st.checkbox("Include Closed Cases", value=st.session_state.get("show_closed", False), key="chk_include_closed")
             st.session_state["show_closed"] = include_closed
         with f5:
-            # Export Button
-            all_cases_df = pd.DataFrame(collection.find({"type": "cases"}))
+            all_cases_df = pd.DataFrame(collection.find(q_base))
             if not all_cases_df.empty:
                 csv_bytes = all_cases_df.to_csv(index=False).encode("utf-8")
                 st.download_button("📥 Export", csv_bytes, "HPE_Cases_Export.csv", "text/csv", use_container_width=True)
 
-        # Quick New Case Option (Admin & Agents)
         if st.button("➕ Register New Case for Auto-Assignment"):
             st.session_state["show_new_case_expander"] = not st.session_state.get("show_new_case_expander", False)
 
@@ -1384,17 +1497,13 @@ def render_dashboard():
                     st.rerun()
 
         # Build Query with Closed Cases Handling
-        q = {"type": "cases"}
-        if filter_email:
-            q["assignee_email"] = filter_email
+        q = q_base.copy()
         if pri_filter != "All Priorities":
             q["priority"] = pri_filter
             
-        # Status Filtering:
         if st_filter != "All Statuses":
             q["status"] = st_filter
         elif not include_closed:
-            # Active Cases default view excludes Closed
             q["status"] = {"$ne": "Closed"}
 
         if search_val:
@@ -1406,7 +1515,6 @@ def render_dashboard():
             ]
 
         case_list = list(collection.find(q))
-        
         pri_weights = {"Critical": 1, "High": 2, "Medium": 3, "Low": 4}
         case_list.sort(key=lambda x: pri_weights.get(x.get("priority", "Low"), 5))
 
@@ -1415,6 +1523,7 @@ def render_dashboard():
             showing_msg += " <em>(including closed / archived records)</em>"
         st.markdown(f"<div style='font-size:12px; color:#64748B; margin-bottom:10px;'>{showing_msg}</div>", unsafe_allow_html=True)
         
+        # Render Table Rows
         for c in case_list:
             pri = c.get("priority", "Low")
             badge_class = f"badge-{pri.lower()}"
@@ -1423,14 +1532,15 @@ def render_dashboard():
             
             r1, r2, r3, r4, r5, r6 = st.columns([1.5, 3.2, 1.2, 2, 1.8, 1.2])
             with r1:
-                if st.button(f"📄 {c['case_number']}", key=f"btn_{c['case_number']}", use_container_width=True):
+                if st.button(f"📄 {c['case_number']}", key=f"btn_{c['case_number']}_{'adm' if is_admin_mode else 'agt'}", use_container_width=True):
                     render_case_modal(c["case_number"])
             with r2:
                 st.markdown(f"**{c.get('subject')}**<br><small style='color:#64748B;'>{c.get('vendor_name', 'HPE')}</small>", unsafe_allow_html=True)
             with r3:
                 st.markdown(f"<span class='badge {badge_class}'>{pri}</span>", unsafe_allow_html=True)
             with r4:
-                st.markdown(f"👤 <small>{c.get('assigned_to')}</small>", unsafe_allow_html=True)
+                assignee_display = "Me" if (not is_admin_mode and c.get('assignee_email') == user.get('email')) else c.get('assigned_to')
+                st.markdown(f"👤 <small>{assignee_display}</small>", unsafe_allow_html=True)
             with r5:
                 due_color = "#64748B" if status_val == "Closed" else "#DC2626"
                 st.markdown(f"<span style='color:{due_color}; font-size:12px; font-weight:600;'>{c.get('due_date')}</span>", unsafe_allow_html=True)
@@ -1438,8 +1548,12 @@ def render_dashboard():
                 st.markdown(f"<span class='badge {st_class}'>{status_val}</span>", unsafe_allow_html=True)
             st.divider()
 
-    with right_col:
-        if is_admin and st.session_state.get("view_mode", "Admin") == "Admin":
+    # --------------------------------------------------------------------------
+    # RIGHT COLUMN: EXACT SAME TOP LEVEL AS METRIC CARDS
+    # --------------------------------------------------------------------------
+    with main_right_col:
+        if is_admin_mode:
+            # ADMIN RIGHT RAIL: Agents Online (12) starts side-by-side with Status Tiles
             st.markdown("#### 👥 Online Agents (12)")
             st.caption("Live telemetry & shift aux distribution:")
             agent_search = st.text_input("Filter agent", placeholder="Search agent name...", label_visibility="collapsed")
@@ -1478,9 +1592,15 @@ def render_dashboard():
                 render_admin_message_dialog()
 
         else:
-            st.markdown("#### 📅 Today's Schedule")
+            # AGENT RIGHT RAIL: Today's Schedule starts side-by-side with Status Tiles
+            sc_c1, sc_c2 = st.columns([2, 1])
+            with sc_c1:
+                st.markdown("#### 📅 Today's Schedule")
+            with sc_c2:
+                st.markdown("<span style='font-size:12px; color:#0284C7; font-weight:700; float:right; cursor:pointer;'>View All</span>", unsafe_allow_html=True)
+                
             st.markdown("""
-            <div style="background:white; border-radius:10px; padding:12px 16px; border:1px solid #E2E8F0; font-size:12px; line-height:2.2;">
+            <div style="background:white; border-radius:10px; padding:12px 16px; border:1px solid #E2E8F0; font-size:12px; line-height:2.2; margin-bottom:16px;">
                 🟢 08:00 AM &nbsp; <strong>On Shift / Available</strong><br>
                 🔵 10:00 AM &nbsp; <strong>Case Work</strong><br>
                 🟡 12:00 PM &nbsp; <strong>Lunch Break</strong><br>
@@ -1490,7 +1610,12 @@ def render_dashboard():
             </div>
             """, unsafe_allow_html=True)
 
-            st.markdown("#### 🔔 Announcements / Alerts")
+            al_c1, al_c2 = st.columns([2, 1])
+            with al_c1:
+                st.markdown("#### 🔔 Announcements / Alerts")
+            with al_c2:
+                st.markdown("<span style='font-size:12px; color:#0284C7; font-weight:700; float:right; cursor:pointer;'>View All</span>", unsafe_allow_html=True)
+
             notifs = list(collection.find({
                 "type": "notifications",
                 "$or": [{"target_email": user.get("email")}, {"target_email": "all"}]
@@ -1506,8 +1631,24 @@ def render_dashboard():
                 </div>
                 """, unsafe_allow_html=True)
 
+            st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+            st.markdown("#### ⚡ Quick Actions")
+            qa1, qa2 = st.columns(2)
+            with qa1:
+                if st.button("✉️ Send Message", use_container_width=True):
+                    st.toast("Direct messaging workspace active.")
+                if st.button("📅 View Schedule", use_container_width=True):
+                    st.session_state["current_tab"] = "Schedule"
+                    st.rerun()
+            with qa2:
+                if st.button("🔄 Request Transfer", use_container_width=True):
+                    st.toast("Open a case to initiate peer transfer.")
+                if st.button("📊 View Report", use_container_width=True):
+                    st.session_state["current_tab"] = "Report"
+                    st.rerun()
+
 # ==============================================================================
-# 10. MONITORING TAB (ADMIN ONLY)
+# 11. MONITORING TAB (ADMIN ONLY)
 # ==============================================================================
 def render_monitoring():
     st.markdown("### 📊 Operational Roster & Telemetry Monitoring")
@@ -1546,7 +1687,7 @@ def render_monitoring():
         st.info("Tip: Aux telemetry events are recorded in real-time to avoid duplicate critical case distribution.")
 
 # ==============================================================================
-# 11. SCHEDULE TAB
+# 12. SCHEDULE TAB
 # ==============================================================================
 def render_schedule():
     user = st.session_state.get("current_user", {})
@@ -1609,7 +1750,7 @@ def render_schedule():
             st.success(f"Shift swap request dispatched to {colleague} and automatically synced!")
 
 # ==============================================================================
-# 12. REPORT TAB (PLOTLY VISUALIZATIONS)
+# 13. REPORT TAB (PLOTLY VISUALIZATIONS)
 # ==============================================================================
 def render_report():
     user = st.session_state.get("current_user", {})
@@ -1657,7 +1798,7 @@ def render_report():
     a3.metric("SLA Resolution Compliance", "94.8%", "Target: 95.0%")
 
 # ==============================================================================
-# 13. SETTINGS TAB (ADMIN ONLY)
+# 14. SETTINGS TAB (ADMIN ONLY)
 # ==============================================================================
 def render_settings():
     st.markdown("### ⚙️ Enterprise Configuration & Master Registry")
@@ -1707,7 +1848,7 @@ def render_settings():
                 st.error(f"Error parsing Excel file: {e}")
 
 # ==============================================================================
-# 14. AUTHENTICATION PAGES (SIGN-IN & SIGN-UP)
+# 15. AUTHENTICATION PAGES (SIGN-IN & SIGN-UP)
 # ==============================================================================
 def render_auth_page():
     auth_mode = st.session_state.get("auth_mode", "Sign In")
@@ -1838,7 +1979,7 @@ def render_auth_page():
                 st.rerun()
 
 # ==============================================================================
-# 15. FIXED BOTTOM NAVIGATION (PURE TABS, NO PROFILE BUTTON AT BOTTOM)
+# 16. FIXED BOTTOM NAVIGATION (BIGGER & SPREAD OUT)
 # ==============================================================================
 def render_bottom_navigation():
     """Renders bottom navigation tabs pinned inside the dark teal bar."""
@@ -1852,11 +1993,11 @@ def render_bottom_navigation():
     current_tab = st.session_state.get("current_tab", "Dashboard")
     
     icons = {
-        "Dashboard": "⊞ Dashboard",
-        "Monitoring": "👥 Monitoring",
-        "Schedule": "📅 Schedule",
-        "Report": "📊 Report",
-        "Setting": "⚙️ Setting"
+        "Dashboard": "⊞  Dashboard",
+        "Monitoring": "👥  Monitoring",
+        "Schedule": "📅  Schedule",
+        "Report": "📊  Report",
+        "Setting": "⚙️  Setting"
     }
 
     with st.container(key="hpe_bottom_nav_container"):
@@ -1870,7 +2011,7 @@ def render_bottom_navigation():
                     st.rerun()
 
 # ==============================================================================
-# 16. MAIN ROUTER
+# 17. MAIN ROUTER
 # ==============================================================================
 def main():
     if not st.session_state.get("authenticated", False):
