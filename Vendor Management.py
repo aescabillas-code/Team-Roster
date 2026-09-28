@@ -15,7 +15,7 @@ import extra_streamlit_components as stx
 # 1. STREAMLIT PAGE CONFIG & CSS CUSTOMIZATION
 # ==========================================
 st.set_page_config(
-    page_title="HPE CaseFlow - Team Task Management",
+    page_title="CaseFlow - Team Task Management",
     page_icon="📋",
     layout="wide",
     initial_sidebar_state="expanded"
