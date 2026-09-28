@@ -30,14 +30,10 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Render the CookieManager on every Streamlit script run.  A stable
-# component key preserves its browser-side identity across reruns while
-# reusing the same instance within a single run prevents duplicate widget IDs
-# when authentication code reads/writes/deletes the cookie.
-if stx is not None:
-    _COOKIE_MANAGER = stx.CookieManager(key="hpe_cookie_manager")
-else:
-    _COOKIE_MANAGER = None
+# CookieManager is initialized inside main() once per Streamlit run.
+# The stable key preserves browser-side cookie state across reruns without
+# creating a custom component at module import time.
+_COOKIE_MANAGER = None
 
 APP_TITLE = "HPE CaseFlow"
 DB_NAME = "TeamRoster"
@@ -136,21 +132,42 @@ def get_mongo_client():
             'MongoDB is not configured. Add [mongo] uri="..." to '
             '.streamlit/secrets.toml or set MONGO_URI.'
         )
+
     client = MongoClient(uri, serverSelectionTimeoutMS=3500, connectTimeoutMS=3500)
     client.admin.command("ping")
-    return client
 
-
-def collection():
-    col = get_mongo_client()[DB_NAME][COLLECTION_NAME]
+    # Indexes are created once when the cached Mongo client is initialized.
+    # Do not perform create_index() inside collection(), because collection()
+    # is called by many read/write helpers during a single page render.
+    col = client[DB_NAME][COLLECTION_NAME]
     try:
         col.create_index([("type", ASCENDING)])
         col.create_index([("type", ASCENDING), ("roster_list.email", ASCENDING)])
-        col.create_index([("type", ASCENDING), ("case.case_no", ASCENDING)], unique=True, sparse=True)
-        col.create_index([("type", ASCENDING), ("session.token_hash", ASCENDING)], unique=True, sparse=True)
+        col.create_index(
+            [("type", ASCENDING), ("case.case_no", ASCENDING)],
+            unique=True, sparse=True
+        )
+        col.create_index(
+            [("type", ASCENDING), ("session.token_hash", ASCENDING)],
+            unique=True, sparse=True
+        )
     except Exception:
+        # Existing conflicting indexes/data should not prevent the app from
+        # starting; MongoDB will continue using any indexes already present.
         pass
-    return col
+
+    return client
+
+
+@st.cache_resource(show_spinner=False)
+def get_collection():
+    # Collection handles are lightweight references and can safely be cached
+    # alongside the cached MongoClient.
+    return get_mongo_client()[DB_NAME][COLLECTION_NAME]
+
+
+def collection():
+    return get_collection()
 
 
 def db_ok():
@@ -323,9 +340,13 @@ def logout():
             collection().delete_one({"type": "sessions", "session.token_hash": sha(token)})
         except Exception:
             pass
+    # Do not call st.rerun() here. Let this run finish so CookieManager can
+    # deliver the browser-side delete instruction.
     delete_cookie("hpe_caseflow_session")
     st.session_state.clear()
-    st.rerun()
+    st.session_state.auth_mode = "signin"
+    st.session_state.logged_out = True
+    return True
 
 
 # ============================================================
@@ -424,18 +445,33 @@ def seed_schedule():
 # ============================================================
 
 def dt(value):
+    """Parse a timestamp used for general case history/update fields.
+    Invalid values retain the previous safe-now behavior for those fields.
+    Due dates use due_dt() so malformed dates are never treated as due now.
+    """
     try:
         return datetime.fromisoformat(str(value))
     except Exception:
         return datetime.now()
 
 
+def due_dt(value):
+    """Return a valid due date, or None when the source is missing/invalid."""
+    if value is None or not str(value).strip():
+        return None
+    try:
+        return datetime.fromisoformat(str(value))
+    except Exception:
+        return None
+
+
 def all_cases():
     return [d.get("case", {}) for d in docs("cases")]
 
 
-def active_cases():
-    return [c for c in all_cases() if c.get("status") not in ("Resolved", "Closed")]
+def active_cases(cases=None):
+    cases = all_cases() if cases is None else cases
+    return [c for c in cases if c.get("status") not in ("Resolved", "Closed")]
 
 
 def agents():
@@ -447,18 +483,19 @@ def agents():
     return out
 
 
-def active_count(name):
-    return sum(1 for c in active_cases() if c.get("assigned_to") == name)
+def active_count(name, cases=None):
+    return sum(1 for c in active_cases(cases) if c.get("assigned_to") == name)
 
 
-def critical_count(name):
-    return sum(1 for c in active_cases()
+def critical_count(name, cases=None):
+    return sum(1 for c in active_cases(cases)
                if c.get("assigned_to") == name and c.get("priority") == "Critical")
 
 
-def today_assigned(name):
+def today_assigned(name, cases=None):
     today = date.today().isoformat()
-    return sum(1 for c in all_cases()
+    cases = all_cases() if cases is None else cases
+    return sum(1 for c in cases
                if c.get("assigned_to") == name and str(c.get("created_date","")).startswith(today))
 
 
@@ -467,20 +504,22 @@ def auto_assign_case(case):
     if not candidates:
         return None
 
+    cases = all_cases()
+    active = active_cases(cases)
     critical = case.get("priority") == "Critical"
     if critical:
         # First distribute critical work to agents with no active critical case,
         # then minimize active load and today's assignments.
         candidates.sort(key=lambda u: (
-            critical_count(full_name(u)) > 0,
-            active_count(full_name(u)),
-            today_assigned(full_name(u))
+            critical_count(full_name(u), active) > 0,
+            active_count(full_name(u), active),
+            today_assigned(full_name(u), cases)
         ))
     else:
         candidates.sort(key=lambda u: (
-            active_count(full_name(u)),
-            today_assigned(full_name(u)),
-            critical_count(full_name(u))
+            active_count(full_name(u), active),
+            today_assigned(full_name(u), cases),
+            critical_count(full_name(u), active)
         ))
 
     chosen = full_name(candidates[0])
@@ -550,7 +589,10 @@ def generate_critical_alerts():
     for c in active_cases():
         if c.get("priority") != "Critical":
             continue
-        minutes = (dt(c.get("due_date")) - now).total_seconds()/60
+        due = due_dt(c.get("due_date"))
+        if due is None:
+            continue
+        minutes = (due - now).total_seconds()/60
         if 0 < minutes <= 120:
             recent = collection().find_one({
                 "type":"alerts","alert.kind":"critical_due",
@@ -629,7 +671,12 @@ def auth_page():
                         st.session_state.user = user
                         st.session_state.page = "Dashboard"
                         create_session(user["email"],remember)
-                        st.rerun()
+                        st.success("Signed in successfully.")
+                        # Do not call st.rerun() here. CookieManager needs this
+                        # script run to finish so the browser can receive the
+                        # cookie write instruction. The main() flow continues
+                        # into the dashboard in this same run.
+                        return True
                     else:
                         st.error("Invalid email/password or inactive account.")
             with c2:
@@ -722,7 +769,8 @@ def render_sidebar(user):
     st.sidebar.divider()
     st.sidebar.caption("HPE CaseFlow v1.0.0")
     if st.sidebar.button("Sign Out",use_container_width=True):
-        logout()
+        return logout()
+    return False
 
 
 def topbar(user):
@@ -758,7 +806,9 @@ def topbar(user):
             with y:
                 if st.button("Notifications"): st.session_state.show_alerts=True
             with z:
-                if st.button("Sign Out"): logout()
+                if st.button("Sign Out"):
+                    return logout()
+    return False
 
 
 def render_schedule_for_user(name):
@@ -793,7 +843,8 @@ def case_dialog(case,user):
     a,b,c,d=st.columns(4)
     a.metric("Priority",case.get("priority"))
     b.metric("Status",case.get("status"))
-    c.metric("Due",dt(case.get("due_date")).strftime("%b %d, %Y %I:%M %p"))
+    due_value = due_dt(case.get("due_date"))
+    c.metric("Due", due_value.strftime("%b %d, %Y %I:%M %p") if due_value else "Not set")
     c4=(datetime.now()-dt(case.get("last_update"))).total_seconds()/3600
     d.metric("Last Update",f"{c4:.1f}h ago")
 
@@ -870,6 +921,7 @@ def case_dialog(case,user):
                 "due_date":case.get("due_date"),"created_at":datetime.now().isoformat(),"ack":False
             }})
             st.success("Case reassigned.")
+            st.rerun()
     else:
         choices=[""]+[full_name(u) for u in agents() if full_name(u)!=full_name(user)]
         target=st.selectbox("Request Transfer To",choices,key=f"transfer_{case['case_no']}")
@@ -886,6 +938,7 @@ def case_dialog(case,user):
                 "due_date":case.get("due_date"),"created_at":now,"ack":False
             }})
             st.success("Transfer request sent.")
+            st.rerun()
 
     if st.button("Update Case",type="primary",key=f"save_case_{case['case_no']}"):
         update_case(
@@ -896,6 +949,7 @@ def case_dialog(case,user):
             f"Status changed to {status} by {full_name(user)}"
         )
         st.success("Case updated.")
+        st.rerun()
 
 
 # ============================================================
@@ -929,7 +983,11 @@ def dashboard(user):
         data=[c for c in data if q in str(c).lower()]
 
     critical=[c for c in data if c.get("priority")=="Critical"]
-    due=[c for c in data if 0 <= (dt(c.get("due_date"))-datetime.now()).total_seconds()/3600 <= 24]
+    due=[]
+    for c in data:
+        due_value = due_dt(c.get("due_date"))
+        if due_value is not None and 0 <= (due_value-datetime.now()).total_seconds()/3600 <= 24:
+            due.append(c)
     on_track=[c for c in data if c.get("status") in ("Open","In Progress") and c.get("priority")!="Critical"]
 
     cols=st.columns(4)
@@ -968,7 +1026,7 @@ def dashboard(user):
     for col,h in zip(header,["Case #","Subject","Priority","Assigned To","Due Date","Status","Last Update"]):
         col.markdown(f'<div class="table-head">{h}</div>',unsafe_allow_html=True)
 
-    data=sorted(data,key=lambda c:(PRIORITY_ORDER.get(c.get("priority","Low"),9),dt(c.get("due_date"))))
+    data=sorted(data,key=lambda c:(PRIORITY_ORDER.get(c.get("priority","Low"),9),due_dt(c.get("due_date")) or datetime.max))
     for c in data[:100]:
         cols=st.columns([1.1,2.1,1,1.5,1.7,1.2,1.6])
         if cols[0].button(c.get("case_no",""),key=f"open_case_{c.get('case_no')}"):
@@ -977,7 +1035,8 @@ def dashboard(user):
         p=c.get("priority","Low")
         cols[2].markdown(f'<span class="badge badge-{p.lower()}">{p}</span>',unsafe_allow_html=True)
         cols[3].write(c.get("assigned_to","Unassigned"))
-        cols[4].write(dt(c.get("due_date")).strftime("%b %d, %Y %I:%M %p"))
+        due_value = due_dt(c.get("due_date"))
+        cols[4].write(due_value.strftime("%b %d, %Y %I:%M %p") if due_value else "Not set")
         s=c.get("status","Open")
         sc={"In Progress":"progress","On Hold":"hold","Open":"open","Resolved":"track","Closed":"track"}.get(s,"open")
         cols[5].markdown(f'<span class="badge badge-{sc}">{s}</span>',unsafe_allow_html=True)
@@ -1006,6 +1065,8 @@ def monitoring(user):
                 '<div class="page-subtitle">Realtime agent status and activities.</div>',
                 unsafe_allow_html=True)
     users=agents()
+    cases=all_cases()
+    active=active_cases(cases)
     vals=[
         ("Total Logged In",len(users)),
         ("Available",sum(u.get("current_aux")=="Available" for u in users)),
@@ -1026,7 +1087,7 @@ def monitoring(user):
         b.write(u.get("role"))
         c.markdown(f'<span style="color:{AUX_COLOR.get(u.get("current_aux"),"#16b77a")}">●</span> {u.get("current_aux")}',
                    unsafe_allow_html=True)
-        d.write(active_count(full_name(u)))
+        d.write(active_count(full_name(u), active))
         if e.button("View",key=f"view_agent_{u.get('employee_id')}"):
             st.session_state.monitor_agent=u
 
@@ -1037,14 +1098,14 @@ def monitoring(user):
         t1,t2,t3=st.tabs(["Overview","Aux History","Case Assignment"])
         with t1:
             st.write(f'Role: {u.get("role")} · Status: {u.get("current_aux")}')
-            st.write(f"Active Cases: {active_count(full_name(u))}")
-            st.write(f"Today's Assigned: {sum(1 for c in all_cases() if c.get('assigned_to')==full_name(u) and str(c.get('created_date','')).startswith(date.today().isoformat()))}")
+            st.write(f"Active Cases: {active_count(full_name(u), active)}")
+            st.write(f"Today's Assigned: {today_assigned(full_name(u), cases)}")
         with t2:
             for d in docs("Aux_History"):
                 h=d.get("aux",{})
                 if h.get("agent")==full_name(u): st.write(h)
         with t3:
-            for c in all_cases():
+            for c in cases:
                 if c.get("assigned_to")==full_name(u):
                     st.write(f'{c.get("case_no")} · {c.get("priority")} · {c.get("status")}')
         x,y=st.columns(2)
@@ -1072,8 +1133,8 @@ def monitoring(user):
             rows.append({
                 "Agent":full_name(u),"Employee ID":u.get("employee_id"),
                 "Role":u.get("role"),"Aux":u.get("current_aux"),
-                "Active Cases":active_count(full_name(u)),
-                "Today Assigned":today_assigned(full_name(u))
+                "Active Cases":active_count(full_name(u), active),
+                "Today Assigned":today_assigned(full_name(u), cases)
             })
         st.download_button("Download CSV",pd.DataFrame(rows).to_csv(index=False),
                            "monitoring.csv","text/csv")
@@ -1494,11 +1555,12 @@ def alert_center(user):
     pending=[a for a in alerts_for(full_name(user)) if not a.get("ack")]
     if pending:
         with st.expander(f"🔔 Alerts ({len(pending)})",expanded=True):
-            for i,a in enumerate(pending[:8]):
+            for a in pending[:8]:
+                alert_key = sha("|".join(str(a.get(k,"")) for k in ("created_at","title","kind","case_no","to")))[:16]
                 st.warning(f'**{a.get("title","Alert")}** — {a.get("message","")}')
                 if a.get("case_no"):
                     st.caption(f'Case: {a["case_no"]} · Priority: {a.get("priority","")} · Due: {a.get("due_date","")}')
-                if st.button("Acknowledge",key=f"ack_{i}_{a.get('created_at')}"):
+                if st.button("Acknowledge",key=f"ack_{alert_key}"):
                     ack_alert(a); st.rerun()
 
 
@@ -1541,6 +1603,14 @@ def main():
     st.session_state.setdefault("page", "Dashboard")
     st.session_state.setdefault("profile_open", False)
     st.session_state.setdefault("show_alerts", False)
+
+    global _COOKIE_MANAGER
+    # Initialize the custom component during normal Streamlit execution,
+    # after page configuration and exactly once per run. The stable key keeps
+    # browser cookie state across reruns without module-import side effects.
+    if stx is not None and _COOKIE_MANAGER is None:
+        _COOKIE_MANAGER = stx.CookieManager(key="hpe_cookie_manager")
+
     reset_token=st.query_params.get("reset")
     if reset_token:
         reset_screen(reset_token)
@@ -1560,13 +1630,24 @@ def main():
 
     user=st.session_state.get("user") or session_user()
     if not user:
-        auth_page()
-        return
+        signed_in=auth_page()
+        if not signed_in:
+            return
+        # Authentication changed state during this run. Stop before the
+        # dashboard/sidebar is rendered so login UI and dashboard UI never
+        # appear together. CookieManager has already received the cookie-write
+        # command and this run is allowed to finish cleanly.
+        st.stop()
 
     st.session_state.user=user
     st.session_state.setdefault("page","Dashboard")
-    render_sidebar(user)
-    topbar(user)
+    if render_sidebar(user):
+        # Logout queues the CookieManager delete. Stop instead of rendering
+        # authentication UI underneath the partially-rendered sidebar.
+        st.stop()
+    if topbar(user):
+        auth_page()
+        return
     alert_center(user)
 
     page=st.session_state.page
