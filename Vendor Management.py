@@ -2423,7 +2423,7 @@ def render_monitoring():
     st.caption("Active shift telemetry, login durations, and case allocation load per agent:")
 
     roster_doc = collection.find_one({"type": "roster_list"}) or {}
-    agents = [u for u in roster_doc.get("Data", []) if u.get("role"] != "Admin"]
+    agents = [u for u in roster_doc.get("Data", []) if u.get("role") != "Admin"]
     table_data = []
     for a in agents:
         assigned_today = cases_collection.count_documents({"type": "cases", "assignee_email": a["email"]})
