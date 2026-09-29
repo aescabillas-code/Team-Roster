@@ -286,26 +286,24 @@ cases_collection = db["Cases_Collection"]
 validation_collection = db["Validation_Dropdown"]
 
 # ==============================================================================
-# 3. INITIAL SEED DATA & DROPDOWNS SETUP (PERFORMANCE OPTIMIZED)
+# 3. INITIAL SEED DATA & DROPDOWNS SETUP (RUN ONCE PER LIFECYCLE)
 # ==============================================================================
 def init_database():
-    """Initializes indexes, validation objects, and realistic reference records (runs once)."""
     try:
-        try:
-            existing_indexes = collection.index_information()
-            for idx_name in list(existing_indexes.keys()):
-                if idx_name not in ["_id_", "_id"]:
-                    collection.drop_index(idx_name)
-        except Exception:
-            pass
+        existing_indexes = collection.index_information()
+        for idx_name in list(existing_indexes.keys()):
+            if idx_name not in ["_id_", "_id"]:
+                collection.drop_index(idx_name)
+    except Exception:
+        pass
 
+    try:
         collection.create_index([("type", 1)], unique=True)
         cases_collection.create_index([("case_number", 1)], sparse=True)
         cases_collection.create_index([("type", 1)])
     except Exception:
         pass
 
-    # 1. Validation Dropdowns Document in Validation_Dropdown collection
     try:
         dropdown_doc = validation_collection.find_one({"type": "Validation_Dropdown"})
         if not dropdown_doc:
@@ -337,7 +335,6 @@ def init_database():
     except Exception:
         pass
 
-    # 2. Schedule & PTO Setup in Team Roster Collection
     try:
         current_year_month = get_current_ph_time().strftime("%Y-%m")
         pto_doc = collection.find_one({"type": "Schedule_Monitoring"})
@@ -355,7 +352,6 @@ def init_database():
     except Exception:
         pass
 
-    # 3. Default Roster Seed
     try:
         roster_doc = collection.find_one({"type": "roster_list"})
         if not roster_doc or not roster_doc.get("Data"):
@@ -414,7 +410,6 @@ def init_database():
     except Exception:
         pass
 
-    # 4. Default Seed Cases
     try:
         if cases_collection.count_documents({"type": "cases"}) == 0:
             cases_seed = [
@@ -451,55 +446,10 @@ def init_database():
                             "type": "Status Changes",
                             "badge": "Status changed to On Hold",
                             "details": "Waiting for Vendor Response"
-                        },
-                        {
-                            "timestamp": "Sep 28, 2026 08:15 AM",
-                            "user": "John Dela Cruz",
-                            "type": "Communications",
-                            "badge": "Initial contact with vendor",
-                            "details": "Sent follow up email to vendor. Awaiting response."
-                        },
-                        {
-                            "timestamp": "Sep 27, 2026 03:15 PM",
-                            "user": "System",
-                            "type": "Assignments",
-                            "badge": "Case created and assigned",
-                            "details": "Case automatically assigned to John Dela Cruz."
                         }
                     ],
-                    "communications": [
-                        {
-                            "timestamp": "Sep 28, 2026 08:15 AM",
-                            "sender": "John Dela Cruz",
-                            "recipient": "support@abcsoftware.com",
-                            "subject": "Urgent: Provisioning Key Status - HC-2026-1044",
-                            "message": "Sent initial follow up requesting SLA status confirmation.",
-                            "type": "Email Sent"
-                        }
-                    ],
-                    "attachments": [
-                        {
-                            "name": "Vendor_Contract_Schedule_B.pdf",
-                            "type": "PDF",
-                            "size": "2.4 MB",
-                            "uploaded_by": "John Dela Cruz",
-                            "upload_date": "Sep 27, 2026"
-                        },
-                        {
-                            "name": "Provisioning_Error_Logs.txt",
-                            "type": "TXT",
-                            "size": "450 KB",
-                            "uploaded_by": "System",
-                            "upload_date": "Sep 27, 2026"
-                        },
-                        {
-                            "name": "License_Key_Entitlements.xlsx",
-                            "type": "XLSX",
-                            "size": "1.1 MB",
-                            "uploaded_by": "John Dela Cruz",
-                            "upload_date": "Sep 28, 2026"
-                        }
-                    ]
+                    "communications": [],
+                    "attachments": []
                 },
                 {
                     "case_number": "HPE-2026-1045",
@@ -527,15 +477,7 @@ def init_database():
                     "vendor_alt_contact": "Sarah Lim",
                     "vendor_alt_email": "sarah.lim@abcsoftware.com",
                     "vendor_address": "123 Innovation Drive, San Jose, CA 95134",
-                    "history": [
-                        {
-                            "timestamp": "Sep 28, 2026 08:15 AM",
-                            "user": "Mark Santos",
-                            "type": "Status Changes",
-                            "badge": "Status changed to In Progress",
-                            "details": "Waiting for Vendor Response"
-                        }
-                    ],
+                    "history": [],
                     "communications": [],
                     "attachments": []
                 },
@@ -667,7 +609,7 @@ if "db_initialized" not in st.session_state:
     st.session_state["db_initialized"] = True
 
 # ==============================================================================
-# 4. SECURITY, PASSWORDS & AUTHENTICATION HELPER ENGINE
+# 4. SECURITY & AUTHENTICATION ENGINE
 # ==============================================================================
 def hash_password(password: str) -> str:
     salt = secrets.token_hex(8)
@@ -773,7 +715,7 @@ def logout_user():
     st.rerun()
 
 # ==============================================================================
-# 5. REAL-TIME AUX ENGINE (INSTANT PERSISTENCE ON CHANGE)
+# 5. REAL-TIME AUX ENGINE
 # ==============================================================================
 def update_user_aux(email, new_aux):
     roster_doc = collection.find_one({"type": "roster_list"}) or {}
@@ -886,7 +828,7 @@ def auto_assign_new_case(case_data):
     return True, chosen["name"]
 
 # ==============================================================================
-# 6. ENTERPRISE CSS DESIGN SYSTEM (INTER FONT & CLEAN UI)
+# 6. ENTERPRISE CSS DESIGN SYSTEM (INTER FONT & FOCUSED REFINEMENTS)
 # ==============================================================================
 ENTERPRISE_CSS = """
 <style>
@@ -937,7 +879,6 @@ div[class*="st-key-hpe_top_bar_container"] [data-testid="stHorizontalBlock"] {
     gap: 16px !important;
 }
 
-/* Header Profile Pill at Corner - Background Matches Top Margin (#042121) */
 div[class*="st-key-top_profile_pill_btn"] button {
     background: #042121 !important;
     background-color: #042121 !important;
@@ -954,18 +895,6 @@ div[class*="st-key-top_profile_pill_btn"] button {
     box-shadow: none !important;
 }
 
-div[class*="st-key-top_profile_pill_btn"] button:hover {
-    background-color: rgba(255, 255, 255, 0.1) !important;
-    border-color: #00B388 !important;
-    color: #FFFFFF !important;
-}
-
-div[class*="st-key-top_profile_pill_btn"] button p,
-div[class*="st-key-top_profile_pill_btn"] button span {
-    color: #FFFFFF !important;
-}
-
-/* Notification Bell Popover Button - Background Matches Top Margin (#042121) */
 div[class*="st-key-top_bell_popover"] button,
 div[class*="st-key-top_bell_popover"] [data-testid="stPopoverButton"],
 div[class*="st-key-top_bell_popover"] > div > button {
@@ -979,37 +908,22 @@ div[class*="st-key-top_bell_popover"] > div > button {
     gap: 0 !important;
 }
 
-div[class*="st-key-top_bell_popover"] button:hover,
-div[class*="st-key-top_bell_popover"] [data-testid="stPopoverButton"]:hover {
-    background-color: rgba(255, 255, 255, 0.1) !important;
-    border-color: #00B388 !important;
-    color: #FFFFFF !important;
-}
-
-div[class*="st-key-top_bell_popover"] button p,
-div[class*="st-key-top_bell_popover"] [data-testid="stPopoverButton"] p,
-div[class*="st-key-top_bell_popover"] span {
-    color: #FFFFFF !important;
-}
-
-/* REMOVE ICONS & CHEVRONS BESIDE ELLIPSES & BELL */
+/* 1. STRICTLY REMOVE EXPAND MORE TEXT, SVG ICONS, AND CHEVRONS BESIDE BELL & ELLIPSES */
 div[class*="st-key-top_bell_popover"] [data-testid="stPopoverButton"] svg,
-div[class*="st-key-top_bell_popover"] button svg,
-div[class*="st-key-top_bell_popover"] svg,
+div[class*="st-key-top_bell_popover"] [data-testid="stPopoverButton"] span:last-child:not(:first-child),
 div[class*="st-key-top_bell_popover"] [data-testid="stIconChevronDown"],
 div[class*="st-key-pop_row_act_"] [data-testid="stPopoverButton"] svg,
-div[class*="st-key-pop_row_act_"] button svg,
-div[class*="st-key-pop_row_act_"] svg,
+div[class*="st-key-pop_row_act_"] [data-testid="stPopoverButton"] span:last-child:not(:first-child),
 div[class*="st-key-pop_row_act_"] [data-testid="stIconChevronDown"] {
     display: none !important;
     visibility: hidden !important;
+    font-size: 0 !important;
     width: 0 !important;
     height: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
 }
 
-/* Notification Drawer Container */
 .notif-item-card {
     background: #FFFFFF;
     border: 1px solid #E2E8F0;
@@ -1022,7 +936,6 @@ div[class*="st-key-pop_row_act_"] [data-testid="stIconChevronDown"] {
     background: #F8FAFC;
 }
 
-/* Profile Flyout */
 div[class*="st-key-profile_flyout_card"] {
     position: fixed !important;
     top: 72px !important;
@@ -1061,7 +974,6 @@ div[class*="st-key-profile_aux_wrapper"] div[data-baseweb="select"] {
     border-top: 1px solid #E2E8F0 !important;
 }
 
-/* Segmented View Mode Toggle - Same Color As Top Margin */
 div[class*="st-key-view_mode_segmented_tile"] {
     background: #042121 !important;
     background-color: #042121 !important;
@@ -1093,12 +1005,6 @@ div[class*="st-key-view_mode_segmented_tile"] button[data-testid="baseButton-sec
     color: #94A3B8 !important;
 }
 
-div[class*="st-key-view_mode_segmented_tile"] button[kind="secondary"]:hover,
-div[class*="st-key-view_mode_segmented_tile"] button[data-testid="baseButton-secondary"]:hover {
-    background-color: rgba(255, 255, 255, 0.08) !important;
-    color: #FFFFFF !important;
-}
-
 div[class*="st-key-view_mode_segmented_tile"] button[kind="primary"],
 div[class*="st-key-view_mode_segmented_tile"] button[data-testid="baseButton-primary"] {
     background-color: #00B388 !important;
@@ -1106,11 +1012,6 @@ div[class*="st-key-view_mode_segmented_tile"] button[data-testid="baseButton-pri
     box-shadow: 0 2px 6px rgba(10, 56, 92, 0.35) !important;
 }
 
-div[class*="st-key-view_mode_segmented_tile"] button p {
-    margin: 0 !important;
-}
-
-/* Status Count Metric Tiles */
 .metric-card-box {
     border-radius: 12px;
     padding: 12px 14px;
@@ -1139,11 +1040,10 @@ div[class*="st-key-view_mode_segmented_tile"] button p {
     flex-shrink: 0;
 }
 
-.metric-card-label { font-size: 12px; font-weight: 600; color: #475569; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.metric-card-val { font-size: 26px; font-weight: 800; color: #0F172A; margin: 2px 0; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.metric-card-trend { font-size: 11px; font-weight: 700; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.metric-card-label { font-size: 12px; font-weight: 600; color: #475569; margin: 0; }
+.metric-card-val { font-size: 26px; font-weight: 800; color: #0F172A; margin: 2px 0; line-height: 1.1; }
+.metric-card-trend { font-size: 11px; font-weight: 700; margin: 0; }
 
-/* Badges */
 .badge { display: inline-block; padding: 3px 12px; border-radius: 20px; font-size: 11.5px; font-weight: 700; }
 .badge-critical { background-color: #FEE2E2; color: #E31B23; }
 .badge-high { background-color: #FFEDD5; color: #EA580C; }
@@ -1166,7 +1066,6 @@ div[class*="st-key-view_mode_segmented_tile"] button p {
 .aux-not-ready { background-color: #F1F5F9; color: #475569; }
 .aux-break { background-color: #FEF3C7; color: #D97706; }
 
-/* Action Toolbar */
 div[class*="st-key-action_toolbar_container"] button {
     border: 1px solid #CBD5E1 !important;
     background: #FFFFFF !important;
@@ -1177,35 +1076,27 @@ div[class*="st-key-action_toolbar_container"] button {
     height: 36px !important;
 }
 
-/* CASE HEADER BOX */
-div[class*="st-key-dashboard_table_header"] {
+/* 2. UNIFIED CASE TABLE HEADER BOX: PERFECT FIT WITH TOP/BOTTOM MARGINS & UNIFORM FONT */
+.table-header-row {
+    display: flex !important;
+    align-items: center !important;
+    width: 100% !important;
     background-color: #F1F5F9 !important;
     border: 1px solid #E2E8F0 !important;
     border-radius: 8px !important;
-    padding: 6px 12px !important;
-    margin-bottom: 4px !important;
+    padding: 7px 10px !important;
+    margin-top: 3px !important;
+    margin-bottom: 5px !important;
     box-sizing: border-box !important;
-    width: 100% !important;
-    overflow: hidden !important;
 }
-div[class*="st-key-dashboard_table_header"] [data-testid="stHorizontalBlock"] {
-    width: 100% !important;
-    gap: 4px !important;
-    align-items: center !important;
-}
-div[class*="st-key-dashboard_table_header"] [data-testid="column"] {
-    min-width: 0 !important;
-    padding: 0 !important;
-}
-div[class*="st-key-dashboard_table_header"] p {
+.th-cell {
     font-size: 11px !important;
     font-weight: 700 !important;
     color: #475569 !important;
-    letter-spacing: 0.1px !important;
-    margin: 0 !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
+    margin: 2px 0 !important;
 }
 
 .case-table-divider { margin: 2px 0 4px 0 !important; border: none !important; border-top: 1px solid #F1F5F9 !important; }
@@ -1221,7 +1112,7 @@ div[class*="st-key-btn_case_"] button {
     color: #0067B9 !important;
 }
 
-/* ELLIPSES BUTTON IN CASE TABLE: ZERO BOX / ZERO OUTLINE / NO CHEVRON ARROW */
+/* 1. ELLIPSES BUTTON IN CASE TABLE: ZERO BOX / ZERO OUTLINE / NO CHEVRON ARROW */
 div[class*="st-key-pop_row_act_"] button,
 div[class*="st-key-pop_row_act_"] [data-testid="stPopoverButton"],
 div[class*="st-key-pop_row_act_"] [data-testid="baseButton-secondary"],
@@ -1266,7 +1157,6 @@ div[class*="st-key-pop_row_act_"] [data-testid="stPopoverButton"] p {
     line-height: 1 !important;
 }
 
-/* Bottom Navigation Bar */
 div[class*="st-key-hpe_bottom_nav_container"] {
     position: fixed !important;
     bottom: 0 !important;
@@ -1334,14 +1224,13 @@ div[class*="st-key-update_case_block_"] {
     padding: 14px 16px !important;
     margin-bottom: 4px !important;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02) !important;
-    min-height: 520px !important;
+    min-height: 535px !important;
     height: 100% !important;
     display: flex !important;
     flex-direction: column !important;
     box-sizing: border-box !important;
 }
 
-/* Minimal Margins for Bottom Cards */
 div[class*="st-key-case_history_block_"],
 div[class*="st-key-breach_email_block_"] {
     background: #FFFFFF !important;
@@ -1358,7 +1247,6 @@ div[class*="st-key-breach_email_block_"] {
     box-sizing: border-box !important;
 }
 
-/* Quick Actions Panel & Reassign Case Panel Styling */
 div[class*="st-key-qa_panel_"] {
     background-color: #F0FDF4 !important;
     border: 1px solid #BBF7D0 !important;
@@ -1375,7 +1263,7 @@ div[class*="st-key-reassign_box_"] {
     margin-top: 10px !important;
 }
 
-/* 3. LIGHT BLUE BACKGROUND IN ANY ENTRY FORM OR DROPDOWN INITIAL INTERFACE IN CASE DETAIL */
+/* 3. LIGHT BLUE BACKGROUND IN ENTRY FORMS & DROPDOWNS IN CASE DETAIL */
 div[data-testid="stDialog"] div[data-baseweb="select"] > div,
 div[data-testid="stDialog"] div[data-baseweb="input"] > div,
 div[data-testid="stDialog"] div[data-baseweb="textarea"] > textarea,
@@ -1395,23 +1283,18 @@ div[data-testid="stDialog"] div[data-baseweb="input"] input {
     background-color: transparent !important;
 }
 
-div[data-testid="stDialog"] div[data-baseweb="select"]:hover,
-div[data-testid="stDialog"] div[data-baseweb="input"]:hover,
-div[data-testid="stDialog"] div[data-baseweb="textarea"]:hover {
-    border-color: #0067B9 !important;
+/* 3. EXPLICIT WHITE DROPDOWN INTERFACE FOR SELECT AGENT IN REASSIGN CASE */
+div[class*="st-key-reassign_box_"] div[data-baseweb="select"] > div {
+    background-color: #FFFFFF !important;
+    border: 1.5px solid #CBD5E1 !important;
+    border-radius: 6px !important;
 }
 
-.case-summary-box {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    background: #FFFFFF;
-    border: 1px solid #D9E2EC;
-    border-radius: 10px;
-    padding: 12px 18px;
-    margin-bottom: 12px;
+div[class*="st-key-reassign_box_"] div[data-baseweb="select"] span,
+div[class*="st-key-reassign_box_"] div[data-baseweb="select"] div {
+    color: #17233C !important;
 }
+
 .case-meta-bar {
     display: flex;
     background-color: #EEF6FC;
@@ -1450,7 +1333,7 @@ div[data-testid="stDialog"] div[data-baseweb="textarea"]:hover {
 st.markdown(ENTERPRISE_CSS, unsafe_allow_html=True)
 
 # ==============================================================================
-# 7. CASE DETAILS MODAL OVERLAY (CLEAN SINGLE UPPER-LEFT TITLE)
+# 7. CASE DETAILS MODAL OVERLAY
 # ==============================================================================
 @st.dialog("📁 Case Details", width="large")
 def render_case_modal(case_num):
@@ -1463,7 +1346,6 @@ def render_case_modal(case_num):
     user_role = user.get("role", "Agent")
     is_admin = user_role in ["Admin", "Admin/Agent"]
 
-    # 4. Clean Subtitle under Header with controlled spacing from corner
     st.markdown("""
     <div style="line-height:1.2; margin-top:-4px; margin-bottom:12px; padding-left:4px;">
         <p style="font-size:12.5px; color:#5F6B7A; margin:0;">
@@ -1473,7 +1355,6 @@ def render_case_modal(case_num):
     <hr style='margin:0 0 12px 0; border:none; border-top:1px solid #D9E2EC;'>
     """, unsafe_allow_html=True)
 
-    # 2. Case Summary Header
     pri = case.get("priority", "Critical")
     pri_badge_cls = f"badge-{pri.lower()}"
     countdown_txt, countdown_color, is_overdue = calculate_countdown(case.get("due_date"))
@@ -1516,7 +1397,6 @@ def render_case_modal(case_num):
         </div>
         """, unsafe_allow_html=True)
 
-    # 3. Case Metadata Bar (7 columns light blue bar)
     st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
     assigned_name = case.get("assigned_to", "John Dela Cruz")
     initials = "".join([part[0] for part in assigned_name.split()[:2]]).upper() or "JD"
@@ -1564,7 +1444,6 @@ def render_case_modal(case_num):
     </div>
     """, unsafe_allow_html=True)
 
-    # 4. Tab Navigation
     tab_info, tab_vendor, tab_comm, tab_att = st.tabs([
         "ⓘ Case Information",
         "♧ Vendor Information",
@@ -1572,13 +1451,9 @@ def render_case_modal(case_num):
         f"📎 Attachments ({len(case.get('attachments', []))})"
     ])
 
-    # --------------------------------------------------------------------------
-    # TAB 1: CASE INFORMATION (1. Minimal Margins & Equal Heights)
-    # --------------------------------------------------------------------------
     with tab_info:
         col_left, col_center, col_right = st.columns([3.3, 3.0, 3.7], gap="small")
 
-        # --- LEFT CARD: CASE INFORMATION (Equal Height Solid White Block) ---
         with col_left:
             with st.container(key=f"case_info_block_{case_num}"):
                 head_l1, head_l2 = st.columns([3, 1])
@@ -1628,7 +1503,6 @@ def render_case_modal(case_num):
                     </div>
                     """, unsafe_allow_html=True)
 
-        # --- CENTER CARD: VENDOR INFORMATION (Equal Height Solid White Block) ---
         with col_center:
             with st.container(key=f"vendor_info_block_{case_num}"):
                 v_head1, v_head2 = st.columns([1.8, 1.2])
@@ -1658,7 +1532,6 @@ def render_case_modal(case_num):
                 </div>
                 """, unsafe_allow_html=True)
 
-                # Quick Actions Panel - Light Green Background
                 with st.container(key=f"qa_panel_{case_num}"):
                     st.markdown("<strong style='font-size:12px; color:#16855B;'>➕ Quick Actions</strong>", unsafe_allow_html=True)
                     qa_c1, qa_c2, qa_c3 = st.columns(3)
@@ -1687,7 +1560,6 @@ def render_case_modal(case_num):
                                 excel_data = v_excel_df.to_csv(index=False).encode("utf-8")
                         st.download_button("View Excel", excel_data, f"{case['case_number']}_Vendor.xlsx", key=f"btn_down_vexc_{case_num}")
 
-        # --- RIGHT CARD: UPDATE CASE (Equal Height Solid White Block) ---
         with col_right:
             with st.container(key=f"update_case_block_{case_num}"):
                 st.markdown("<strong style='font-size:15px; color:#17233C;'>⏱️ Update Case</strong>", unsafe_allow_html=True)
@@ -1765,7 +1637,7 @@ def render_case_modal(case_num):
                     if st.button("Request Transfer", key=f"btn_trf_req_{case_num}"):
                         st.session_state[f"show_transfer_dialog_{case_num}"] = True
 
-                # Dedicated Admin-Only Reassignment Section
+                # 3. Dedicated Admin-Only Reassignment Section (Solid White Dropdown UI)
                 if is_admin:
                     with st.container(key=f"reassign_box_{case_num}"):
                         st.markdown("<strong style='font-size:12.5px; color:#0067B9;'>🔄 Reassign Case (Admin Only)</strong>", unsafe_allow_html=True)
@@ -1819,12 +1691,8 @@ def render_case_modal(case_num):
                             else:
                                 st.warning("Please choose an agent to reassign.")
 
-        # ----------------------------------------------------------------------
-        # BOTTOM ROW: CASE HISTORY (LEFT 63%) & BREACH NOTICE EMAIL (RIGHT 37%)
-        # ----------------------------------------------------------------------
         col_hist, col_email = st.columns([6.3, 3.7], gap="small")
 
-        # --- CASE HISTORY CARD (Solid White Block Background) ---
         with col_hist:
             with st.container(key=f"case_history_block_{case_num}"):
                 h_top1, h_top2 = st.columns([3, 2])
@@ -1866,7 +1734,6 @@ def render_case_modal(case_num):
                         </div>
                         """, unsafe_allow_html=True)
 
-        # --- AUTOMATED BREACH NOTICE EMAIL CARD (Solid White Block Background) ---
         with col_email:
             with st.container(key=f"breach_email_block_{case_num}"):
                 st.markdown("<strong style='font-size:15px; color:#17233C;'>✉️ Automated Breach Notice Email</strong>", unsafe_allow_html=True)
@@ -1924,9 +1791,6 @@ HPE Operations Management"""
                         else:
                             st.warning("Please fill in recipient, subject, and body.")
 
-    # --------------------------------------------------------------------------
-    # TAB 2: VENDOR INFORMATION
-    # --------------------------------------------------------------------------
     with tab_vendor:
         st.markdown(f"### 🏢 Vendor Profile: {case.get('vendor_name', 'ABC Software Inc.')}")
         st.caption(f"Vendor Code: {case.get('vendor_id', 'VEND-ABC-019')} &bull; Status: Active Certified Partner")
@@ -1942,9 +1806,6 @@ HPE Operations Management"""
             st.write("**SLA Contract Adherence:** `94.2%` (Target: 95.0%)")
             st.write(f"**Linked Account:** {case.get('account')}")
 
-    # --------------------------------------------------------------------------
-    # TAB 3: COMMUNICATION LOG & COMPOSE
-    # --------------------------------------------------------------------------
     with tab_comm:
         st.markdown("### ✉️ Case Communication Log")
         comms = case.get("communications", [])
@@ -1998,9 +1859,6 @@ HPE Operations Management"""
                 time.sleep(0.5)
                 st.rerun()
 
-    # --------------------------------------------------------------------------
-    # TAB 4: ATTACHMENTS
-    # --------------------------------------------------------------------------
     with tab_att:
         st.markdown("### 📎 Case Attachments")
         atts = case.get("attachments", [])
@@ -2078,7 +1936,7 @@ HPE Operations Management"""
             st.rerun()
 
 # ==============================================================================
-# 8. TOP HEADER (PROFILE AT FAR-RIGHT, NO ARROWS ON BELL)
+# 8. TOP HEADER
 # ==============================================================================
 def render_top_header():
     user = st.session_state.get("current_user", {})
@@ -2106,7 +1964,7 @@ def render_top_header():
         with c_search:
             st.text_input("Global Search", placeholder="🔍 Search cases, names, issues...", label_visibility="collapsed")
 
-        # Notification Bell Popover (Arrow Down Removed in CSS)
+        # 1. Notification Bell Popover (Zero chevrons, icons, or expand_more text)
         with c_bell:
             with st.container(key="top_bell_popover"):
                 with st.popover(f"🔔 {unread_count}", help="Notifications"):
@@ -2157,7 +2015,7 @@ def render_top_header():
         render_profile_flyout()
 
 # ==============================================================================
-# 9. PROFILE FLYOUT DROPDOWN (UPPER RIGHT)
+# 9. PROFILE FLYOUT DROPDOWN
 # ==============================================================================
 def render_profile_flyout():
     user = st.session_state.get("current_user", {})
@@ -2241,7 +2099,6 @@ def render_dashboard():
 
     is_admin_mode = (st.session_state["view_mode"] == "Admin")
 
-    # FAST IN-MEMORY AGGREGATION
     q_base = {"type": "cases"}
     if not is_admin_mode:
         q_base["assignee_email"] = user.get("email")
@@ -2252,7 +2109,6 @@ def render_dashboard():
     total_due_soon = sum(1 for c in all_base_cases if c.get("priority") in ["Critical", "High"] and c.get("status") != "Closed")
     total_on_track = sum(1 for c in all_base_cases if c.get("priority") in ["Medium", "Low"] and c.get("status") != "Closed")
 
-    # 2-COLUMN MASTER GRID
     main_left, main_right = st.columns([2.88, 1.12], gap="large")
 
     with main_left:
@@ -2278,7 +2134,6 @@ def render_dashboard():
                             st.rerun()
                 st.markdown("</div>", unsafe_allow_html=True)
 
-        # 4 Metric Cards Exactly Aligned with Restored Colors & Overflow Protection
         mc1, mc2, mc3, mc4 = st.columns(4)
         with mc1:
             st.markdown(f"""
@@ -2327,7 +2182,6 @@ def render_dashboard():
 
         st.markdown("<div style='height:14px;'></div>", unsafe_allow_html=True)
 
-        # Title & Toolbar
         t_head, t_act = st.columns([1.5, 2.5])
         with t_head:
             heading = "Active Cases" if is_admin_mode else "My Cases"
@@ -2356,7 +2210,6 @@ def render_dashboard():
                     if st.button("⟳", key="btn_tb_refresh", help="Refresh Data", use_container_width=True):
                         st.rerun()
 
-        # Filter Strip
         f1, f2, f3, f4 = st.columns([2.5, 1.2, 1.3, 1.5])
         with f1:
             search_val = st.text_input("Search", placeholder="🔍 Search by case #, subject, assignee...", label_visibility="collapsed")
@@ -2418,20 +2271,21 @@ def render_dashboard():
 
         st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
 
-        # 1. FIXED CASE HEADER: PREVENT EXTENDING OUTSIDE BOX (REFINED PROPORTIONS & GAP)
-        with st.container(key="dashboard_table_header"):
-            h_chk, h_num, h_sub, h_pri, h_ass, h_due, h_st, h_up, h_opt = st.columns([0.35, 1.4, 2.7, 1.05, 1.5, 1.5, 1.3, 1.4, 0.8], gap="small")
-            with h_chk: st.markdown("**☐**")
-            with h_num: st.markdown("**Case # ⇅**")
-            with h_sub: st.markdown("**Subject**")
-            with h_pri: st.markdown("**Priority ⇅**")
-            with h_ass: st.markdown("**Assigned To ⇅**")
-            with h_due: st.markdown("**Due Date ⇅**")
-            with h_st: st.markdown("**Current Status ⇅**")
-            with h_up: st.markdown("**Last Update ⇅**")
-            with h_opt: st.markdown("<div style='text-align:right; padding-right:4px;'><strong>Actions</strong></div>", unsafe_allow_html=True)
+        # 2. EXACT CASE TABLE HEADER BOX: UNIFORM FONT SIZE, CONTROLLED PADDING/MARGIN (NO OVERFLOW)
+        st.markdown("""
+        <div class="table-header-row">
+            <div style="flex: 0 0 35px; text-align: center;"><span class="th-cell">☐</span></div>
+            <div style="flex: 0 0 100px;"><span class="th-cell">Case # ⇅</span></div>
+            <div style="flex: 1 1 200px; padding: 0 6px;"><span class="th-cell">Subject</span></div>
+            <div style="flex: 0 0 85px;"><span class="th-cell">Priority ⇅</span></div>
+            <div style="flex: 0 0 120px;"><span class="th-cell">Assigned To ⇅</span></div>
+            <div style="flex: 0 0 120px;"><span class="th-cell">Due Date ⇅</span></div>
+            <div style="flex: 0 0 105px;"><span class="th-cell">Current Status ⇅</span></div>
+            <div style="flex: 0 0 115px;"><span class="th-cell">Last Update ⇅</span></div>
+            <div style="flex: 0 0 65px; text-align: center;"><span class="th-cell">Actions</span></div>
+        </div>
+        """, unsafe_allow_html=True)
 
-        # Filter the in-memory cases list for ultra-fast, smooth table rendering
         filtered_cases = all_base_cases
         if pri_filter != "All Priorities":
             filtered_cases = [c for c in filtered_cases if c.get("priority") == pri_filter]
@@ -2497,7 +2351,7 @@ def render_dashboard():
                 </div>
                 """, unsafe_allow_html=True)
             
-            # Action Ellipses (⋮) - Pure ellipses button with zero box & arrow down removed
+            # 1. Action Ellipses (⋮) - Pure ellipses button with zero chevron / expand_more text
             with rc9:
                 with st.container(key=f"pop_row_act_{c['case_number']}"):
                     with st.popover("⋮", help="Case Actions"):
@@ -2537,7 +2391,6 @@ def render_dashboard():
 
             st.markdown('<hr class="case-table-divider">', unsafe_allow_html=True)
 
-        # Pagination Footer
         p_info, p_btns = st.columns([1, 1])
         with p_info:
             st.caption(f"Showing 1 - {len(filtered_cases)} of {total_active} cases")
@@ -2552,9 +2405,6 @@ def render_dashboard():
             </div>
             """, unsafe_allow_html=True)
 
-    # --------------------------------------------------------------------------
-    # RIGHT COLUMN: EXACTLY ALIGNED WITH THE METRIC CARDS
-    # --------------------------------------------------------------------------
     with main_right:
         if is_admin_mode:
             st.markdown('<div class="agents-panel-card">', unsafe_allow_html=True)
@@ -3002,7 +2852,7 @@ def render_auth_page():
                 st.rerun()
 
 # ==============================================================================
-# 16. FIXED BOTTOM NAVIGATION (BIGGER & SPREAD OUT)
+# 16. FIXED BOTTOM NAVIGATION
 # ==============================================================================
 def render_bottom_navigation():
     user = st.session_state.get("current_user", {})
