@@ -669,7 +669,7 @@ def auto_assign_new_case(case_data):
     users = roster_doc.get("Data", [])
     available_agents = [
         u for u in users
-        if u.get("role") in ["Agent", "Admin/Agent"] and u.get("current_aux") == "Available"
+        if u.get("role") in ["Agent", "Admin/Agent"] and u.get("current_aux") == "Available"]
     
     if not available_agents:
         case_data["assigned_to"] = "Unassigned (Queue)"
