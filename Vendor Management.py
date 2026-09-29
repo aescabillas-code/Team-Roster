@@ -1,11 +1,3 @@
-"""
-================================================================================
-APPLICATION: HPE CaseFlow — Task Monitoring & Management System
-VISUAL SPECIFICATION: Exact reproduction of HPE Enterprise Reference (1000057381_2.png)
-ARCHITECTURE: Single-file production Streamlit application with PyMongo persistence
-================================================================================
-"""
-
 import os
 import sys
 import re
@@ -41,6 +33,69 @@ MANILA_TZ = timezone(timedelta(hours=8))
 
 def get_current_ph_time():
     return datetime.now(MANILA_TZ)
+
+# ==============================================================================
+# DYNAMIC TIME PARSING & COUNTDOWN ENGINE (PC/LOCAL TIME AWARE)
+# ==============================================================================
+def parse_case_datetime(dt_str):
+    if not dt_str:
+        return None
+    formats = [
+        "%b %d, %Y %I:%M %p",
+        "%b %d, %Y %I:%M%p",
+        "%Y-%m-%d %H:%M:%S",
+        "%b %d, %Y %H:%M",
+        "%Y-%m-%d %I:%M %p",
+        "%Y-%m-%d"
+    ]
+    for fmt in formats:
+        try:
+            return datetime.strptime(str(dt_str).strip(), fmt).replace(tzinfo=MANILA_TZ)
+        except Exception:
+            continue
+    return None
+
+def calculate_countdown(due_date_str):
+    due_dt = parse_case_datetime(due_date_str)
+    if not due_dt:
+        return "No Due Date", "#64748B", False
+    now = get_current_ph_time()
+    diff_secs = (due_dt - now).total_seconds()
+    is_overdue = diff_secs < 0
+    abs_secs = abs(diff_secs)
+    hours = int(abs_secs // 3600)
+    minutes = int((abs_secs % 3600) // 60)
+
+    if is_overdue:
+        text = f"Overdue by {hours}h {minutes}m" if hours > 0 else f"Overdue by {minutes}m"
+        return text, "#DC2626", True
+    else:
+        if abs_secs < 60:
+            text = "Due now"
+        elif hours > 0:
+            text = f"Due in {hours}h {minutes}m"
+        else:
+            text = f"Due in {minutes}m"
+        color = "#DC2626" if hours < 2 else "#D97706"
+        return text, color, False
+
+def calculate_elapsed(created_date_str):
+    c_dt = parse_case_datetime(created_date_str)
+    if not c_dt:
+        return "19h 45m"
+    now = get_current_ph_time()
+    diff_secs = max(0, (now - c_dt).total_seconds())
+    hours = int(diff_secs // 3600)
+    minutes = int((diff_secs % 3600) // 60)
+    return f"{hours}h {minutes}m"
+
+def calculate_hours_ago(update_str):
+    u_dt = parse_case_datetime(update_str)
+    if not u_dt:
+        return "0.7h ago"
+    now = get_current_ph_time()
+    diff_hours = max(0.0, (now - u_dt).total_seconds() / 3600.0)
+    return f"{diff_hours:.1f}h ago"
 
 # ==============================================================================
 # 2. DATABASE ARCHITECTURE (PYMONGO + FAIL-SAFE IN-MEMORY STORE)
@@ -236,7 +291,6 @@ validation_collection = db["Validation_Dropdown"]
 def init_database():
     """Initializes indexes, validation objects, and realistic reference records."""
     try:
-        # Cleanly drop legacy unique indexes that conflict with polymorphic schemas
         try:
             existing_indexes = collection.index_information()
             for idx_name in list(existing_indexes.keys()):
@@ -257,23 +311,27 @@ def init_database():
         if not dropdown_doc:
             validation_collection.insert_one({
                 "type": "Validation_Dropdown",
-                "Case_Status": ["Open", "In Progress", "On Hold", "Waiting Vendor", "Vendor Response", "Pending Info", "Closed"],
+                "Case_Status": ["New", "Open", "In Progress", "On Hold", "Pending Vendor", "Pending Client", "Resolved", "Closed"],
                 "Case_Reason": [
                     "Waiting for Vendor Response",
+                    "Waiting for Client",
+                    "Pending Internal Action",
+                    "Pending Approval",
+                    "Investigation",
+                    "Technical Issue",
                     "Initial contact with vendor",
-                    "Under Investigation",
-                    "Vendor SLA Warning Sent",
-                    "Pending License Generation",
-                    "Customer Verification",
-                    "Resolved - Contract Complete"
+                    "Other"
                 ],
-                "Closure_Type": ["Resolved", "Customer Cancelled", "Contract Breach", "Duplicate"],
+                "Closure_Type": ["-- Select Closure Type --", "Resolved", "Completed", "Cancelled", "Duplicate", "No Response"],
                 "Contract_Breach": [
+                    "-- Select Breach Reason --",
+                    "Vendor Delay",
+                    "Client Delay",
+                    "Internal Delay",
+                    "System Issue",
+                    "Resource Constraint",
                     "SLA Missed - Non-Delivery",
-                    "Vendor Unreachable > 48h",
-                    "Critical Milestone Failed",
-                    "Unapproved Sub-Contracting",
-                    "Security Policy Violation"
+                    "Other"
                 ]
             })
     except Exception:
@@ -367,267 +425,221 @@ def init_database():
         if cases_collection.count_documents({"type": "cases"}) == 0:
             cases_seed = [
                 {
-                    "case_number": "HPE-2026-1045",
-                    "subject": "License Key Provisioning Delay",
+                    "case_number": "HC-2026-1044",
+                    "subject": "License Renewal Delay",
                     "priority": "Critical",
-                    "assigned_to": "Mark Santos",
-                    "assignee_email": "mark.santos@hpe.com",
-                    "assignee_avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150",
+                    "assigned_to": "John Dela Cruz",
+                    "assigned_employee_id": "HPE10003",
+                    "assignee_email": "james.delacruz@hpe.com",
+                    "assignee_avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
                     "due_date": "Sep 28, 2026 11:00 AM",
-                    "status": "In Progress",
+                    "status": "On Hold",
                     "status_reason": "Waiting for Vendor Response",
-                    "last_update": "Sep 28, 2026 8:15 AM",
-                    "elapsed": "2h 9m ago",
+                    "created_at": "Sep 27, 2026 03:15 PM",
+                    "last_update": "Sep 28, 2026 08:45 AM",
+                    "case_category": "License Renewal",
+                    "account": "ABC Enterprise",
+                    "client": "ABC Enterprise",
+                    "related_system": "HPE Licensing Portal",
+                    "description": "Client is experiencing delay in license renewal. Vendor confirmation is still pending. Need follow up and escalation if no response by EOD.",
                     "vendor_name": "ABC Software Inc.",
+                    "vendor_id": "VEND-ABC-019",
                     "vendor_contact": "Michael Tan",
                     "vendor_email": "support@abcsoftware.com",
                     "vendor_phone": "+1 555 123 4567",
                     "vendor_alt_contact": "Sarah Lim",
                     "vendor_alt_email": "sarah.lim@abcsoftware.com",
                     "vendor_address": "123 Innovation Drive, San Jose, CA 95134",
-                    "account": "ABC Enterprise",
-                    "related_system": "HPE Licensing Portal",
+                    "history": [
+                        {
+                            "timestamp": "Sep 28, 2026 08:45 AM",
+                            "user": "John Dela Cruz",
+                            "type": "Status Changes",
+                            "badge": "Status changed to On Hold",
+                            "details": "Waiting for Vendor Response"
+                        },
+                        {
+                            "timestamp": "Sep 28, 2026 08:15 AM",
+                            "user": "John Dela Cruz",
+                            "type": "Communications",
+                            "badge": "Initial contact with vendor",
+                            "details": "Sent follow up email to vendor. Awaiting response."
+                        },
+                        {
+                            "timestamp": "Sep 27, 2026 03:15 PM",
+                            "user": "System",
+                            "type": "Assignments",
+                            "badge": "Case created and assigned",
+                            "details": "Case automatically assigned to John Dela Cruz."
+                        }
+                    ],
+                    "communications": [
+                        {
+                            "timestamp": "Sep 28, 2026 08:15 AM",
+                            "sender": "John Dela Cruz",
+                            "recipient": "support@abcsoftware.com",
+                            "subject": "Urgent: Provisioning Key Status - HC-2026-1044",
+                            "message": "Sent initial follow up requesting SLA status confirmation.",
+                            "type": "Email Sent"
+                        }
+                    ],
+                    "attachments": [
+                        {
+                            "name": "Vendor_Contract_Schedule_B.pdf",
+                            "type": "PDF",
+                            "size": "2.4 MB",
+                            "uploaded_by": "John Dela Cruz",
+                            "upload_date": "Sep 27, 2026"
+                        },
+                        {
+                            "name": "Provisioning_Error_Logs.txt",
+                            "type": "TXT",
+                            "size": "450 KB",
+                            "uploaded_by": "System",
+                            "upload_date": "Sep 27, 2026"
+                        },
+                        {
+                            "name": "License_Key_Entitlements.xlsx",
+                            "type": "XLSX",
+                            "size": "1.1 MB",
+                            "uploaded_by": "John Dela Cruz",
+                            "upload_date": "Sep 28, 2026"
+                        }
+                    ]
+                },
+                {
+                    "case_number": "HPE-2026-1045",
+                    "subject": "License Key Provisioning Delay",
+                    "priority": "Critical",
+                    "assigned_to": "Mark Santos",
+                    "assigned_employee_id": "HPE10001",
+                    "assignee_email": "mark.santos@hpe.com",
+                    "assignee_avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150",
+                    "due_date": "Sep 28, 2026 11:00 AM",
+                    "status": "In Progress",
+                    "status_reason": "Waiting for Vendor Response",
+                    "created_at": "Sep 27, 2026 03:15 PM",
+                    "last_update": "Sep 28, 2026 8:15 AM",
                     "case_category": "License Renewal",
-                    "created_at": "Sep 27, 2026 03:15 PM"
+                    "account": "ABC Enterprise",
+                    "client": "ABC Enterprise",
+                    "related_system": "HPE Licensing Portal",
+                    "description": "Client is experiencing delay in license provisioning. Escalation raised with ABC Software team.",
+                    "vendor_name": "ABC Software Inc.",
+                    "vendor_id": "VEND-ABC-019",
+                    "vendor_contact": "Michael Tan",
+                    "vendor_email": "support@abcsoftware.com",
+                    "vendor_phone": "+1 555 123 4567",
+                    "vendor_alt_contact": "Sarah Lim",
+                    "vendor_alt_email": "sarah.lim@abcsoftware.com",
+                    "vendor_address": "123 Innovation Drive, San Jose, CA 95134",
+                    "history": [
+                        {
+                            "timestamp": "Sep 28, 2026 08:15 AM",
+                            "user": "Mark Santos",
+                            "type": "Status Changes",
+                            "badge": "Status changed to In Progress",
+                            "details": "Waiting for Vendor Response"
+                        }
+                    ],
+                    "communications": [],
+                    "attachments": []
                 },
                 {
                     "case_number": "HPE-2026-1042",
                     "subject": "Portal Access Issue",
                     "priority": "Critical",
                     "assigned_to": "Chelsea Reyes",
+                    "assigned_employee_id": "HPE10002",
                     "assignee_email": "chelsea.reyes@hpe.com",
                     "assignee_avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
                     "due_date": "Sep 28, 2026 12:00 PM",
                     "status": "Vendor Response",
                     "status_reason": "Under Investigation",
+                    "created_at": "Sep 27, 2026 04:00 PM",
                     "last_update": "Sep 28, 2026 9:10 AM",
-                    "elapsed": "1h 14m ago",
+                    "case_category": "Identity & Access",
+                    "account": "Global FinTech",
+                    "client": "Global FinTech",
+                    "related_system": "SSO Federation Broker",
+                    "description": "Enterprise customer administrator unable to log into provisioning console with SAML SSO.",
                     "vendor_name": "CloudAuth Corp",
+                    "vendor_id": "VEND-CA-004",
                     "vendor_contact": "David Miller",
                     "vendor_email": "support@cloudauth.io",
                     "vendor_phone": "+1 800 555 0199",
-                    "account": "Global FinTech",
-                    "related_system": "SSO Federation Broker",
-                    "case_category": "Identity & Access",
-                    "created_at": "Sep 27, 2026 04:00 PM"
-                },
-                {
-                    "case_number": "HPE-2026-1041",
-                    "subject": "Software Installation Error",
-                    "priority": "Critical",
-                    "assigned_to": "James Dela Cruz",
-                    "assignee_email": "james.delacruz@hpe.com",
-                    "assignee_avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150",
-                    "due_date": "Sep 28, 2026 1:00 PM",
-                    "status": "In Progress",
-                    "status_reason": "Initial contact with vendor",
-                    "last_update": "Sep 28, 2026 9:45 AM",
-                    "elapsed": "39m ago",
-                    "vendor_name": "LinuxDistro Solutions",
-                    "vendor_contact": "Alex Wong",
-                    "vendor_email": "support@linuxdistro.com",
-                    "vendor_phone": "+1 555 987 6543",
-                    "account": "BioPharm Labs",
-                    "related_system": "Compute Orchestrator",
-                    "case_category": "OS Deployment",
-                    "created_at": "Sep 27, 2026 05:00 PM"
+                    "vendor_alt_contact": "Karen Scott",
+                    "vendor_alt_email": "karen@cloudauth.io",
+                    "vendor_address": "456 Security Blvd, Austin, TX 78701",
+                    "history": [],
+                    "communications": [],
+                    "attachments": []
                 },
                 {
                     "case_number": "HPE-2026-1038",
                     "subject": "License Renewal Request",
                     "priority": "High",
                     "assigned_to": "Arianne Escabillas",
+                    "assigned_employee_id": "HPE12345",
                     "assignee_email": "arianne.escabillas@hpe.com",
                     "assignee_avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150",
                     "due_date": "Sep 28, 2026 3:00 PM",
                     "status": "Waiting Vendor",
                     "status_reason": "Waiting for Vendor Response",
+                    "created_at": "Sep 27, 2026 06:00 PM",
                     "last_update": "Sep 28, 2026 10:00 AM",
-                    "elapsed": "24m ago",
+                    "case_category": "Contracts & Subscriptions",
+                    "account": "Nexus Telecom",
+                    "client": "Nexus Telecom",
+                    "related_system": "HPE GreenLake",
+                    "description": "Annual enterprise license renewal quote confirmation pending validation.",
                     "vendor_name": "ABC Software Inc.",
+                    "vendor_id": "VEND-ABC-019",
                     "vendor_contact": "Michael Tan",
                     "vendor_email": "support@abcsoftware.com",
                     "vendor_phone": "+1 555 123 4567",
-                    "account": "Nexus Telecom",
-                    "related_system": "HPE GreenLake",
-                    "case_category": "Contracts & Subscriptions",
-                    "created_at": "Sep 27, 2026 06:00 PM"
+                    "vendor_alt_contact": "Sarah Lim",
+                    "vendor_alt_email": "sarah.lim@abcsoftware.com",
+                    "vendor_address": "123 Innovation Drive, San Jose, CA 95134",
+                    "history": [],
+                    "communications": [],
+                    "attachments": []
                 },
-                {
-                    "case_number": "HPE-2026-1036",
-                    "subject": "Account Access Restoration",
-                    "priority": "High",
-                    "assigned_to": "Rafael Cruz",
-                    "assignee_email": "rafael.cruz@hpe.com",
-                    "assignee_avatar": "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150",
-                    "due_date": "Sep 28, 2026 4:00 PM",
-                    "status": "In Progress",
-                    "status_reason": "Customer Verification",
-                    "last_update": "Sep 28, 2026 9:30 AM",
-                    "elapsed": "54m ago",
-                    "vendor_name": "SecureID Systems",
-                    "vendor_contact": "Rachel Adams",
-                    "vendor_email": "help@secureid.org",
-                    "vendor_phone": "+1 555 777 8899",
-                    "account": "SkyLine Air",
-                    "related_system": "IAM Portal",
-                    "case_category": "Access Management",
-                    "created_at": "Sep 27, 2026 07:00 PM"
-                },
-                {
-                    "case_number": "HPE-2026-1033",
-                    "subject": "Portal Error - 500",
-                    "priority": "Medium",
-                    "assigned_to": "Alyssa Ramos",
-                    "assignee_email": "alyssa.ramos@hpe.com",
-                    "assignee_avatar": "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150",
-                    "due_date": "Sep 29, 2026 10:00 AM",
-                    "status": "Open",
-                    "status_reason": "Under Investigation",
-                    "last_update": "Sep 28, 2026 8:20 AM",
-                    "elapsed": "2h 4m ago",
-                    "vendor_name": "InfraAPI LLC",
-                    "vendor_contact": "Carlos Mendez",
-                    "vendor_email": "carlos@infraapi.com",
-                    "vendor_phone": "+1 555 333 2211",
-                    "account": "AutoCorp Industries",
-                    "related_system": "Storage Central",
-                    "case_category": "API Gateway",
-                    "created_at": "Sep 27, 2026 08:00 PM"
-                },
-                {
-                    "case_number": "HPE-2026-1031",
-                    "subject": "Usage Report Request",
-                    "priority": "Medium",
-                    "assigned_to": "Daniel Lim",
-                    "assignee_email": "daniel.lim@hpe.com",
-                    "assignee_avatar": "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150",
-                    "due_date": "Sep 29, 2026 11:00 AM",
-                    "status": "In Progress",
-                    "status_reason": "Waiting for Vendor Response",
-                    "last_update": "Sep 28, 2026 9:05 AM",
-                    "elapsed": "1h 19m ago",
-                    "vendor_name": "DataMetric Analytics",
-                    "vendor_contact": "Lisa Chen",
-                    "vendor_email": "lisa@datametric.com",
-                    "vendor_phone": "+1 555 444 3322",
-                    "account": "Apex Banking",
-                    "related_system": "Metering Engine",
-                    "case_category": "Analytics",
-                    "created_at": "Sep 27, 2026 09:00 PM"
-                },
-                {
-                    "case_number": "HPE-2026-1029",
-                    "subject": "Vendor Confirmation Needed",
-                    "priority": "Medium",
-                    "assigned_to": "Arianne Escabillas",
-                    "assignee_email": "arianne.escabillas@hpe.com",
-                    "assignee_avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150",
-                    "due_date": "Sep 29, 2026 2:00 PM",
-                    "status": "Pending Info",
-                    "status_reason": "Initial contact with vendor",
-                    "last_update": "Sep 28, 2026 8:55 AM",
-                    "elapsed": "1h 29m ago",
-                    "vendor_name": "HardwareDepot Inc",
-                    "vendor_contact": "Tom Bradley",
-                    "vendor_email": "service@hardwaredepot.com",
-                    "vendor_phone": "+1 555 666 7788",
-                    "account": "Metro Retailers",
-                    "related_system": "Pointnext Services",
-                    "case_category": "Hardware RMA",
-                    "created_at": "Sep 27, 2026 10:00 PM"
-                },
-                {
-                    "case_number": "HPE-2026-1027",
-                    "subject": "License Transfer",
-                    "priority": "Low",
-                    "assigned_to": "Kevin Navarro",
-                    "assignee_email": "kevin.navarro@hpe.com",
-                    "assignee_avatar": "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=150",
-                    "due_date": "Sep 30, 2026 10:00 AM",
-                    "status": "Open",
-                    "status_reason": "Waiting for Vendor Response",
-                    "last_update": "Sep 28, 2026 9:15 AM",
-                    "elapsed": "1h 9m ago",
-                    "vendor_name": "VMware by Broadcom",
-                    "vendor_contact": "Karen Scott",
-                    "vendor_email": "support@vmware.com",
-                    "vendor_phone": "+1 877 486 9273",
-                    "account": "Global Shipping Co",
-                    "related_system": "VMware Cloud Foundation",
-                    "case_category": "Virtualization",
-                    "created_at": "Sep 27, 2026 11:00 PM"
-                },
-                {
-                    "case_number": "HPE-2026-1025",
-                    "subject": "Entitlement Update",
-                    "priority": "Low",
-                    "assigned_to": "Nicole Garcia",
-                    "assignee_email": "nicole.garcia@hpe.com",
-                    "assignee_avatar": "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150",
-                    "due_date": "Sep 30, 2026 3:00 PM",
-                    "status": "In Progress",
-                    "status_reason": "Pending License Generation",
-                    "last_update": "Sep 28, 2026 9:40 AM",
-                    "elapsed": "44m ago",
-                    "vendor_name": "HPE Internal Ops",
-                    "vendor_contact": "Support Tier 2",
-                    "vendor_email": "tier2-support@hpe.com",
-                    "vendor_phone": "+1 800 473 4000",
-                    "account": "First National Insurance",
-                    "related_system": "HPE InfoSight",
-                    "case_category": "Entitlements",
-                    "created_at": "Sep 28, 2026 12:00 AM"
-                },
-                # Seeded Closed Cases
                 {
                     "case_number": "HPE-2026-1020",
                     "subject": "Firmware Patch 4.1.2 Validation",
                     "priority": "Medium",
                     "assigned_to": "Arianne Escabillas",
+                    "assigned_employee_id": "HPE12345",
                     "assignee_email": "arianne.escabillas@hpe.com",
                     "assignee_avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150",
                     "due_date": "Sep 27, 2026 11:00 AM",
                     "status": "Closed",
                     "status_reason": "Resolved - Contract Complete",
                     "closure_type": "Resolved",
+                    "created_at": "Sep 25, 2026 09:00 AM",
                     "last_update": "Sep 27, 2026 2:15 PM",
-                    "elapsed": "1d ago",
+                    "case_category": "Firmware",
+                    "account": "Enterprise Core",
+                    "client": "Enterprise Core",
+                    "related_system": "HPE Smart Update",
+                    "description": "Routine security certification validation for rack compute clusters.",
                     "vendor_name": "ABC Software Inc.",
+                    "vendor_id": "VEND-ABC-019",
+                    "vendor_contact": "Michael Tan",
                     "vendor_email": "support@abcsoftware.com",
-                    "created_at": "Sep 25, 2026 09:00 AM"
-                },
-                {
-                    "case_number": "HPE-2026-1018",
-                    "subject": "Legacy Storage License Decommission",
-                    "priority": "Low",
-                    "assigned_to": "Mark Santos",
-                    "assignee_email": "mark.santos@hpe.com",
-                    "assignee_avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150",
-                    "due_date": "Sep 26, 2026 05:00 PM",
-                    "status": "Closed",
-                    "status_reason": "Resolved - Contract Complete",
-                    "closure_type": "Resolved",
-                    "last_update": "Sep 26, 2026 4:30 PM",
-                    "elapsed": "2d ago",
-                    "vendor_name": "HPE Storage Ops",
-                    "vendor_email": "tier2-storage@hpe.com",
-                    "created_at": "Sep 24, 2026 10:00 AM"
+                    "vendor_phone": "+1 555 123 4567",
+                    "vendor_alt_contact": "Sarah Lim",
+                    "vendor_alt_email": "sarah.lim@abcsoftware.com",
+                    "vendor_address": "123 Innovation Drive, San Jose, CA 95134",
+                    "history": [],
+                    "communications": [],
+                    "attachments": []
                 }
             ]
             for c in cases_seed:
                 c["type"] = "cases"
-                c["description"] = f"Operational ticket for {c['subject']}."
                 cases_collection.insert_one(c)
-
-            cases_collection.insert_one({
-                "type": "case_history",
-                "case_number": "HPE-2026-1045",
-                "timestamp": "Sep 27, 2026 03:15 PM",
-                "user": "System",
-                "action": "Case created and assigned",
-                "details": "Case automatically assigned to Mark Santos based on lowest active critical count."
-            })
     except Exception:
         pass
 
@@ -639,15 +651,28 @@ def init_database():
                 {"type": "notifications"},
                 {"$set": {
                     "type": "notifications",
-                    "Data": [{
-                        "target_email": "arianne.escabillas@hpe.com",
-                        "title": "Critical Case Alert",
-                        "message": "HPE-2026-1045 is nearing due date. Due in 36 minutes (11:00 AM). Please take action.",
-                        "category": "critical",
-                        "case_number": "HPE-2026-1045",
-                        "acknowledged": "false",
-                        "created_at": "10:22 AM"
-                    }]
+                    "Data": [
+                        {
+                            "id": "notif-001",
+                            "target_email": "arianne.escabillas@hpe.com",
+                            "title": "Critical Case Alert",
+                            "message": "HC-2026-1044 is nearing SLA breach (Due in 36 minutes). Immediate follow-up required.",
+                            "category": "critical",
+                            "case_number": "HC-2026-1044",
+                            "acknowledged": "false",
+                            "created_at": "10:22 AM"
+                        },
+                        {
+                            "id": "notif-002",
+                            "target_email": "all",
+                            "title": "Scheduled Portal Maintenance",
+                            "message": "HPE Licensing Gateway will undergo scheduled maintenance on Saturday 02:00 AM.",
+                            "category": "broadcast",
+                            "case_number": "",
+                            "acknowledged": "false",
+                            "created_at": "09:00 AM"
+                        }
+                    ]
                 }},
                 upsert=True
             )
@@ -698,7 +723,6 @@ def create_session(user_doc, remember_me=False):
         "status": "active"
     }
 
-    # All sessions go inside type: 'sessions' in Team Roster Collection
     sess_doc = collection.find_one({"type": "sessions"}) or {}
     sess_list = sess_doc.get("Data", [])
     sess_list = [s for s in sess_list if s.get("email") != user_doc["email"]]
@@ -783,7 +807,6 @@ def update_user_aux(email, new_aux):
             break
     collection.update_one({"type": "roster_list"}, {"$set": {"Data": users}}, upsert=True)
 
-    # All aux history contained inside type: 'aux_history' in Team Roster Collection
     aux_doc = collection.find_one({"type": "aux_history"}) or {}
     aux_list = aux_doc.get("Data", [])
     aux_list.append({
@@ -800,7 +823,6 @@ def update_user_aux(email, new_aux):
         st.session_state["current_user"]["current_aux"] = new_aux
 
 def on_aux_dropdown_change():
-    """Triggered instantly when user chooses a new status in the Profile Flyout."""
     selected_aux = st.session_state.get("flyout_aux_selector")
     user = st.session_state.get("current_user")
     if user and selected_aux:
@@ -808,7 +830,6 @@ def on_aux_dropdown_change():
         st.toast(f"Status changed to {selected_aux}!", icon="🟢")
 
 def auto_assign_new_case(case_data):
-    """Fair round-robin & workload-balanced assignment strictly for Available agents."""
     roster_doc = collection.find_one({"type": "roster_list"}) or {}
     users = roster_doc.get("Data", [])
     available_agents = [
@@ -848,26 +869,25 @@ def auto_assign_new_case(case_data):
 
     chosen = candidate_scores[0]["agent"]
     case_data["assigned_to"] = chosen["name"]
+    case_data["assigned_employee_id"] = chosen.get("employee_id", "")
     case_data["assignee_email"] = chosen["email"]
     case_data["assignee_avatar"] = chosen.get("profile_picture", "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150")
 
-    # All cases go to Cases_Collection
-    cases_collection.insert_one(case_data)
-
     now_str = get_current_ph_time().strftime("%b %d, %Y %I:%M %p")
-    cases_collection.insert_one({
-        "type": "case_history",
-        "case_number": case_data["case_number"],
+    case_data.setdefault("history", []).append({
         "timestamp": now_str,
         "user": "Auto-Assignment Engine",
-        "action": "Case created and assigned",
-        "details": f"Automatically assigned to {chosen['name']} (Active Workload: {candidate_scores[0]['active_count']} cases)."
+        "type": "Assignments",
+        "badge": "Case created and assigned",
+        "details": f"Automatically assigned to {chosen['name']} based on lowest active workload."
     })
 
-    # All notifications go inside type: 'notifications' in Team Roster Collection
+    cases_collection.insert_one(case_data)
+
     notif_doc = collection.find_one({"type": "notifications"}) or {}
     notif_list = notif_doc.get("Data", [])
     notif_list.append({
+        "id": str(uuid.uuid4()),
         "target_email": str(chosen["email"]),
         "title": "New Case Assigned",
         "message": f"{case_data['case_number']} has been assigned to you. Priority: {case_data['priority']}",
@@ -885,7 +905,7 @@ def auto_assign_new_case(case_data):
 # ==============================================================================
 ENTERPRISE_CSS = """
 <style>
-/* 1. Global Reset & Streamlit Toolbar Neutralization */
+/* Global Reset */
 #MainMenu, header, footer, [data-testid="stToolbar"], [data-testid="stDecoration"] {
     visibility: hidden !important;
     display: none !important;
@@ -893,8 +913,8 @@ ENTERPRISE_CSS = """
 
 .stApp {
     background-color: #F8FAFC !important;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
-    color: #1E293B !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif !important;
+    color: #17233C !important;
 }
 
 .block-container {
@@ -905,7 +925,7 @@ ENTERPRISE_CSS = """
     max-width: 100% !important;
 }
 
-/* 2. Top Header Bar */
+/* Header Bar */
 div[class*="st-key-hpe_top_bar_container"] {
     position: fixed !important;
     top: 0 !important;
@@ -926,7 +946,6 @@ div[class*="st-key-hpe_top_bar_container"] [data-testid="stHorizontalBlock"] {
     gap: 16px !important;
 }
 
-/* Header Profile Pill */
 div[class*="st-key-top_profile_pill_btn"] button {
     background: #FFFFFF !important;
     color: #0F172A !important;
@@ -937,15 +956,35 @@ div[class*="st-key-top_profile_pill_btn"] button {
     font-weight: 700 !important;
     display: flex !important;
     align-items: center !important;
+    justify-content: center !important;
     gap: 6px !important;
     box-shadow: 0 1px 2px rgba(0,0,0,0.06) !important;
 }
 
-div[class*="st-key-top_profile_pill_btn"] button:hover {
-    border-color: #00B388 !important;
+/* Notification Bell Popover Button */
+div[class*="st-key-top_bell_popover"] > div > button {
+    background: transparent !important;
+    border: none !important;
+    color: #FFFFFF !important;
+    font-size: 20px !important;
+    padding: 2px 6px !important;
+    box-shadow: none !important;
 }
 
-/* 3. PROFILE FLYOUT DROPDOWN CARD (ANCHORED TO TOP-RIGHT) */
+/* Notification Drawer Container */
+.notif-item-card {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+}
+.notif-item-card.unread {
+    border-left: 3.5px solid #00B388;
+    background: #F8FAFC;
+}
+
+/* Profile Flyout */
 div[class*="st-key-profile_flyout_card"] {
     position: fixed !important;
     top: 72px !important;
@@ -962,7 +1001,7 @@ div[class*="st-key-profile_flyout_card"] {
 .flyout-pointer {
     position: absolute;
     top: -8px;
-    right: 48px;
+    right: 36px;
     width: 16px;
     height: 16px;
     background: #FFFFFF;
@@ -971,72 +1010,26 @@ div[class*="st-key-profile_flyout_card"] {
     border-left: 1px solid #E2E8F0;
 }
 
-/* Profile Flyout Aux Selector: Border Around & Transparent Teal */
-div[class*="st-key-profile_aux_wrapper"] {
-    margin-top: 4px !important;
-    margin-bottom: 0px !important;
-}
-
-div[class*="st-key-profile_aux_wrapper"] [data-testid="stSelectbox"] {
-    margin-bottom: 0px !important;
-    padding-bottom: 0px !important;
-}
-
-div[class*="st-key-profile_aux_wrapper"] [data-testid="stElementContainer"] {
-    margin-bottom: 0px !important;
-    padding-bottom: 0px !important;
-}
-
 div[class*="st-key-profile_aux_wrapper"] div[data-baseweb="select"] {
     border: 1.5px solid #00B388 !important;
     border-radius: 8px !important;
     background-color: rgba(0, 179, 136, 0.08) !important;
     min-height: 40px !important;
-    box-shadow: none !important;
 }
 
-div[class*="st-key-profile_aux_wrapper"] div[data-baseweb="select"]:hover,
-div[class*="st-key-profile_aux_wrapper"] div[data-baseweb="select"]:focus-within {
-    background-color: rgba(0, 179, 136, 0.14) !important;
-    border-color: #009671 !important;
-}
-
-div[class*="st-key-profile_aux_wrapper"] div[data-baseweb="select"] > div {
-    background-color: transparent !important;
-    border: none !important;
-    min-height: 38px !important;
-}
-
-div[class*="st-key-profile_aux_wrapper"] div[data-baseweb="select"] span {
-    color: #062323 !important;
-    font-weight: 700 !important;
-    font-size: 13.5px !important;
-}
-
-div[class*="st-key-profile_aux_wrapper"] div[data-baseweb="select"] svg {
-    fill: #00B388 !important;
-}
-
-/* Reduced space below aux selector using compact divider */
 .flyout-divider {
     margin: 6px 0 10px 0 !important;
     border: none !important;
     border-top: 1px solid #E2E8F0 !important;
 }
 
-/* 4. SEGMENTED TILE TOGGLE FOR VIEW (MATCHING MOCKUP 1000057253) */
+/* Segmented View Mode Toggle */
 div[class*="st-key-view_mode_segmented_tile"] {
     background: #E2E8F0 !important;
     border-radius: 10px !important;
     padding: 3px !important;
     border: 1px solid #CBD5E1 !important;
     display: inline-flex !important;
-    align-items: center !important;
-}
-
-div[class*="st-key-view_mode_segmented_tile"] [data-testid="stHorizontalBlock"] {
-    gap: 2px !important;
-    align-items: center !important;
 }
 
 div[class*="st-key-view_mode_segmented_tile"] button {
@@ -1046,143 +1039,71 @@ div[class*="st-key-view_mode_segmented_tile"] button {
     padding: 6px 18px !important;
     height: 38px !important;
     border: none !important;
-    transition: all 0.2s ease !important;
-}
-
-div[class*="st-key-view_mode_segmented_tile"] button[kind="secondary"],
-div[class*="st-key-view_mode_segmented_tile"] button[data-testid="baseButton-secondary"] {
-    background-color: transparent !important;
-    color: #475569 !important;
-}
-
-div[class*="st-key-view_mode_segmented_tile"] button[kind="secondary"]:hover,
-div[class*="st-key-view_mode_segmented_tile"] button[data-testid="baseButton-secondary"]:hover {
-    background-color: rgba(255, 255, 255, 0.5) !important;
-    color: #0F172A !important;
 }
 
 div[class*="st-key-view_mode_segmented_tile"] button[kind="primary"],
 div[class*="st-key-view_mode_segmented_tile"] button[data-testid="baseButton-primary"] {
     background-color: #0A385C !important;
     color: #FFFFFF !important;
-    box-shadow: 0 2px 6px rgba(10, 56, 92, 0.35) !important;
 }
 
-/* 5. 4 Metric KPI Cards */
+/* Status Count Metric Tiles */
 .metric-card-box {
-    background: #FFFFFF;
     border-radius: 12px;
-    padding: 16px 18px;
+    padding: 12px 14px;
     display: flex;
     align-items: center;
-    gap: 16px;
-    border: 1px solid #E2E8F0;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.02);
-    height: 102px;
+    gap: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+    min-height: 98px;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
+.metric-card-box-active { background-color: #F0F9FF !important; border: 1px solid #BAE6FD !important; border-left: 4px solid #0284C7 !important; }
+.metric-card-box-critical { background-color: #FEF2F2 !important; border: 1px solid #FECACA !important; border-left: 4px solid #DC2626 !important; }
+.metric-card-box-duesoon { background-color: #FFFBEB !important; border: 1px solid #FDE68A !important; border-left: 4px solid #D97706 !important; }
+.metric-card-box-ontrack { background-color: #F0FDF4 !important; border: 1px solid #BBF7D0 !important; border-left: 4px solid #16A34A !important; }
+
 .metric-circle-icon {
-    width: 44px;
-    height: 44px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 20px;
+    font-size: 18px;
     flex-shrink: 0;
 }
 
-.metric-card-label {
-    font-size: 13px;
-    font-weight: 600;
-    color: #475569;
-    margin: 0;
-}
+.metric-card-label { font-size: 12px; font-weight: 600; color: #475569; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.metric-card-val { font-size: 26px; font-weight: 800; color: #0F172A; margin: 2px 0; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.metric-card-trend { font-size: 11px; font-weight: 700; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-.metric-card-val {
-    font-size: 30px;
-    font-weight: 800;
-    color: #0F172A;
-    margin: 2px 0 0 0;
-    line-height: 1;
-}
-
-.metric-card-trend {
-    font-size: 11.5px;
-    font-weight: 700;
-    margin-top: 4px;
-}
-
-/* 6. Online Agents Right Panel (Card Container) */
-.agents-panel-card {
-    background: #FFFFFF;
-    border: 1px solid #E2E8F0;
-    border-radius: 14px;
-    padding: 16px 18px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
-}
-
-.agent-row-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 7px 0;
-    border-bottom: 1px solid #F8FAFC;
-}
-
-/* 7. Priority & Status Badges (Exact Mockup Colors) */
-.badge {
-    display: inline-block;
-    padding: 3px 12px;
-    border-radius: 20px;
-    font-size: 11.5px;
-    font-weight: 700;
-    text-align: center;
-}
-
-.badge-critical { background-color: #FEE2E2; color: #DC2626; }
+/* Badges */
+.badge { display: inline-block; padding: 3px 12px; border-radius: 20px; font-size: 11.5px; font-weight: 700; }
+.badge-critical { background-color: #FEE2E2; color: #E31B23; }
 .badge-high { background-color: #FFEDD5; color: #EA580C; }
 .badge-medium { background-color: #FEF3C7; color: #D97706; }
-.badge-low { background-color: #DCFCE7; color: #16A34A; }
+.badge-low { background-color: #DCFCE7; color: #16855B; }
 
-.badge-status {
-    display: inline-block;
-    padding: 4px 12px;
-    border-radius: 6px;
-    font-size: 11.5px;
-    font-weight: 600;
-    text-align: center;
-}
-
-.st-in-progress { background-color: #E0F2FE; color: #0284C7; }
+.badge-status { display: inline-block; padding: 4px 12px; border-radius: 6px; font-size: 11.5px; font-weight: 600; }
+.st-in-progress { background-color: #E0F2FE; color: #0067B9; }
+.st-on-hold { background-color: #FEF3C7; color: #D97706; }
 .st-vendor-response { background-color: #FEF9C3; color: #A16207; }
 .st-waiting-vendor { background-color: #FEF3C7; color: #D97706; }
 .st-open { background-color: #F1F5F9; color: #475569; }
 .st-pending-info { background-color: #F3E8FF; color: #7E22CE; }
 .st-closed { background-color: #F1F5F9; color: #64748B; }
 
-.aux-badge {
-    padding: 3px 10px;
-    border-radius: 12px;
-    font-size: 11px;
-    font-weight: 700;
-    display: inline-block;
-}
-
-.aux-avail { background-color: #DCFCE7; color: #16A34A; }
+.aux-badge { padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: inline-block; }
+.aux-avail { background-color: #DCFCE7; color: #16855B; }
 .aux-lunch { background-color: #FEF3C7; color: #D97706; }
-.aux-meeting { background-color: #FEE2E2; color: #DC2626; }
+.aux-meeting { background-color: #FEE2E2; color: #E31B23; }
 .aux-not-ready { background-color: #F1F5F9; color: #475569; }
 .aux-break { background-color: #FEF3C7; color: #D97706; }
 
-/* 8. Action Toolbar Styling */
-div[class*="st-key-action_toolbar_container"] {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
-}
-
+/* Action Toolbar */
 div[class*="st-key-action_toolbar_container"] button {
     border: 1px solid #CBD5E1 !important;
     background: #FFFFFF !important;
@@ -1193,7 +1114,40 @@ div[class*="st-key-action_toolbar_container"] button {
     height: 36px !important;
 }
 
-/* 9. Fixed Bottom Navigation Bar */
+/* Compact Table Formatting */
+div[class*="st-key-dashboard_table_header"] {
+    background-color: #F1F5F9 !important;
+    border: 1px solid #E2E8F0 !important;
+    border-radius: 8px !important;
+    padding: 6px 10px !important;
+    margin-bottom: 2px !important;
+}
+div[class*="st-key-dashboard_table_header"] p { font-size: 12px !important; font-weight: 700 !important; color: #475569 !important; margin: 0 !important; }
+.case-table-divider { margin: 2px 0 4px 0 !important; border: none !important; border-top: 1px solid #F1F5F9 !important; }
+
+div[class*="st-key-btn_case_"] button {
+    padding: 2px 8px !important;
+    min-height: 28px !important;
+    height: 28px !important;
+    font-size: 12.5px !important;
+    font-weight: 700 !important;
+    border: 1px solid #CBD5E1 !important;
+    border-radius: 6px !important;
+    color: #0067B9 !important;
+}
+
+/* Ellipses Popover Trigger Button */
+div[class*="st-key-pop_row_act_"] > div > button {
+    padding: 1px 6px !important;
+    border: none !important;
+    background: transparent !important;
+    font-size: 16px !important;
+    font-weight: 900 !important;
+    color: #64748B !important;
+    height: 28px !important;
+}
+
+/* Bottom Navigation Bar */
 div[class*="st-key-hpe_bottom_nav_container"] {
     position: fixed !important;
     bottom: 0 !important;
@@ -1210,60 +1164,97 @@ div[class*="st-key-hpe_bottom_nav_container"] {
     padding: 10px 140px 10px 40px !important;
     box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.35) !important;
 }
-
-div[class*="st-key-hpe_bottom_nav_container"] > div {
-    width: 100% !important;
-    max-width: 1300px !important;
-    margin: 0 auto !important;
-}
-
-div[class*="st-key-hpe_bottom_nav_container"] [data-testid="stHorizontalBlock"] {
-    align-items: center !important;
-    justify-content: space-between !important;
-    gap: 18px !important;
-}
-
 div[class*="st-key-hpe_bottom_nav_container"] button {
     background-color: transparent !important;
     color: #94A3B8 !important;
-    border: 1px solid transparent !important;
+    border: none !important;
     border-radius: 8px !important;
     font-weight: 600 !important;
     font-size: 14.5px !important;
     padding: 8px 24px !important;
     height: 46px !important;
-    transition: all 0.2s ease !important;
 }
-
-div[class*="st-key-hpe_bottom_nav_container"] button:hover {
-    background-color: rgba(255, 255, 255, 0.08) !important;
-    color: #FFFFFF !important;
-}
-
 div[class*="st-key-hpe_bottom_nav_container"] button[kind="primary"],
 div[class*="st-key-hpe_bottom_nav_container"] button[data-testid="baseButton-primary"] {
     background-color: #00B388 !important;
     color: #FFFFFF !important;
     font-weight: 700 !important;
-    border: none !important;
-    box-shadow: 0 2px 8px rgba(0, 179, 136, 0.35) !important;
 }
 
-/* 10. Dashboard Table Header */
-div[class*="st-key-dashboard_table_header"] {
-    background-color: #F1F5F9 !important;
-    border: 1px solid #E2E8F0 !important;
-    border-radius: 8px !important;
-    padding: 8px 10px !important;
-    margin-bottom: 6px !important;
+/* =============================================================================
+   ENTERPRISE CASE DETAILS MODAL OVERLAY STYLES
+   ============================================================================= */
+.case-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #D9E2EC;
+    margin-bottom: 12px;
 }
-
-div[class*="st-key-dashboard_table_header"] [data-testid="stMarkdownContainer"] p {
-    font-size: 12px !important;
-    font-weight: 700 !important;
-    color: #475569 !important;
-    letter-spacing: 0.3px !important;
-    margin: 0 !important;
+.case-summary-box {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    background: #FFFFFF;
+    border: 1px solid #D9E2EC;
+    border-radius: 10px;
+    padding: 12px 18px;
+    margin-bottom: 12px;
+}
+.case-meta-bar {
+    display: flex;
+    background-color: #EEF6FC;
+    border: 1px solid #D9E2EC;
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-bottom: 16px;
+    align-items: center;
+}
+.case-meta-col {
+    flex: 1;
+    padding: 0 10px;
+    border-right: 1px solid #D9E2EC;
+}
+.case-meta-col:last-child {
+    border-right: none;
+}
+.case-card {
+    background: #FFFFFF;
+    border: 1px solid #DFE7EF;
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+.quick-actions-panel {
+    background: #F0FDF4;
+    border: 1px solid #BBF7D0;
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 14px;
+}
+.reassign-box {
+    background: #EEF6FC;
+    border: 1px solid #BAE6FD;
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 14px;
+}
+.timeline-item {
+    border-left: 2px solid #D9E2EC;
+    padding-left: 14px;
+    padding-bottom: 12px;
+    position: relative;
+}
+.timeline-dot {
+    position: absolute;
+    left: -6px;
+    top: 2px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: #0067B9;
 }
 </style>
 """
@@ -1271,106 +1262,735 @@ div[class*="st-key-dashboard_table_header"] [data-testid="stMarkdownContainer"] 
 st.markdown(ENTERPRISE_CSS, unsafe_allow_html=True)
 
 # ==============================================================================
-# 7. INTERACTIVE CASE MODAL DIALOG (@st.dialog)
+# 7. CASE DETAILS MODAL OVERLAY (LARGE ENTERPRISE-STYLE SPECIFICATION)
 # ==============================================================================
 @st.dialog("Case Details", width="large")
 def render_case_modal(case_num):
     case = cases_collection.find_one({"type": "cases", "case_number": case_num})
     if not case:
-        st.error(f"Case {case_num} not found.")
+        st.error("Case details are currently unavailable.")
         return
 
     user = st.session_state.get("current_user", {})
-    is_admin = user.get("role") in ["Admin", "Admin/Agent"]
+    user_role = user.get("role", "Agent")
+    is_admin = user_role in ["Admin", "Admin/Agent"]
 
-    c1, c2, c3, c4 = st.columns([3, 2, 2, 2])
-    with c1:
-        st.markdown(f"### 📁 {case['case_number']} &nbsp; <span class='badge badge-critical'>{case.get('priority')}</span>", unsafe_allow_html=True)
-        st.markdown(f"**{case.get('subject')}**")
-    with c2:
-        st.caption("Created Date")
-        st.write(case.get("created_at", "Sep 27, 2026 03:15 PM"))
-    with c3:
-        st.caption("Due Date")
-        st.markdown(f"<span style='color:#DC2626; font-weight:700;'>{case.get('due_date')}</span>", unsafe_allow_html=True)
-    with c4:
-        st.caption("Time Remaining")
-        if case.get("status") == "Closed":
-            st.markdown("<span class='badge badge-status st-closed'>Ticket Closed</span>", unsafe_allow_html=True)
-        else:
-            st.markdown("<span class='badge badge-critical'>Due in 36m</span>", unsafe_allow_html=True)
+    # 1. Header Section
+    c_h1, c_h2 = st.columns([9, 1])
+    with c_h1:
+        st.markdown("""
+        <div style="line-height:1.2;">
+            <h2 style="font-size:22px; font-weight:800; color:#17233C; margin:0 0 4px 0;">
+                📁 Case Details
+            </h2>
+            <p style="font-size:12.5px; color:#5F6B7A; margin:0;">
+                View and update case information, communicate with vendor, and manage status.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    with c_h2:
+        if st.button("✕", key="btn_close_case_modal", help="Close Case Details"):
+            st.rerun()
 
-    tab_info, tab_vendor, tab_update, tab_breach = st.tabs([
-        "📋 Case Information", "🏢 Vendor Information", "✏️ Update Case", "⚠️ Breach Notice Email"
+    st.markdown("<hr style='margin:10px 0 12px 0; border:none; border-top:1px solid #D9E2EC;'>", unsafe_allow_html=True)
+
+    # 2. Case Summary Header
+    pri = case.get("priority", "Critical")
+    pri_badge_cls = f"badge-{pri.lower()}"
+    countdown_txt, countdown_color, is_overdue = calculate_countdown(case.get("due_date"))
+    elapsed_txt = calculate_elapsed(case.get("created_at"))
+
+    sum_col1, sum_col2, sum_col3, sum_col4 = st.columns([3, 2.5, 3.5, 2.5])
+    with sum_col1:
+        st.markdown(f"""
+        <div style="line-height:1.2;">
+            <small style="color:#5F6B7A; font-weight:600; font-size:11px;">CASE NUMBER</small><br>
+            <strong style="font-size:20px; color:#17233C;">{case['case_number']}</strong>
+            <span class='badge {pri_badge_cls}' style='margin-left:8px;'>{pri}</span>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("📋 Copy Case ID", key="copy_case_id_btn"):
+            st.toast(f"Case ID {case['case_number']} copied to clipboard!")
+
+    with sum_col2:
+        st.markdown(f"""
+        <div style="line-height:1.2;">
+            <small style="color:#5F6B7A; font-weight:600; font-size:11px;">📅 CREATED</small><br>
+            <strong style="font-size:13.5px; color:#17233C;">{case.get('created_at', 'Sep 27, 2026 03:15 PM')}</strong>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with sum_col3:
+        st.markdown(f"""
+        <div style="line-height:1.2;">
+            <small style="color:#5F6B7A; font-weight:600; font-size:11px;">⏰ DUE DATE</small><br>
+            <span style="font-size:13.5px; font-weight:700; color:{countdown_color};">{case.get('due_date')}</span>
+            <span style="background-color:#FEE2E2; color:{countdown_color}; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:700; margin-left:6px;">{countdown_txt}</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with sum_col4:
+        st.markdown(f"""
+        <div style="line-height:1.2;">
+            <small style="color:#5F6B7A; font-weight:600; font-size:11px;">⏱️ TOTAL ELAPSED</small><br>
+            <strong style="font-size:14px; color:#17233C;">{elapsed_txt}</strong>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # 3. Case Metadata Bar (7 columns light blue bar)
+    st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+    assigned_name = case.get("assigned_to", "John Dela Cruz")
+    initials = "".join([part[0] for part in assigned_name.split()[:2]]).upper() or "JD"
+    status_val = case.get("status", "On Hold")
+    hours_ago_txt = calculate_hours_ago(case.get("last_update"))
+
+    st.markdown(f"""
+    <div class="case-meta-bar">
+        <div class="case-meta-col">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <div style="width:28px; height:28px; border-radius:50%; background:#0067B9; color:white; font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center;">
+                    {initials}
+                </div>
+                <div style="line-height:1.15;">
+                    <small style="color:#5F6B7A; font-size:10px;">Assigned To</small><br>
+                    <strong style="font-size:12px; color:#17233C;">{assigned_name}</strong>
+                </div>
+            </div>
+        </div>
+        <div class="case-meta-col">
+            <small style="color:#5F6B7A; font-size:10px;">Priority</small><br>
+            <span class="badge {pri_badge_cls}" style="padding:2px 8px; font-size:11px;">{pri}</span>
+        </div>
+        <div class="case-meta-col">
+            <small style="color:#5F6B7A; font-size:10px;">Current Status</small><br>
+            <span class="badge-status st-on-hold">{status_val}</span>
+        </div>
+        <div class="case-meta-col">
+            <small style="color:#5F6B7A; font-size:10px;">Last Update</small><br>
+            <strong style="font-size:11.5px; color:#17233C;">{case.get('last_update')}</strong>
+            <small style="color:#5F6B7A;">({hours_ago_txt})</small>
+        </div>
+        <div class="case-meta-col">
+            <small style="color:#5F6B7A; font-size:10px;">Case Type</small><br>
+            <strong style="font-size:11.5px; color:#17233C;">{case.get('case_category', 'License Renewal')}</strong>
+        </div>
+        <div class="case-meta-col">
+            <small style="color:#5F6B7A; font-size:10px;">Account</small><br>
+            <strong style="font-size:11.5px; color:#17233C;">{case.get('account', 'ABC Enterprise')}</strong>
+        </div>
+        <div class="case-meta-col">
+            <small style="color:#5F6B7A; font-size:10px;">Related System</small><br>
+            <strong style="font-size:11.5px; color:#17233C;">{case.get('related_system', 'HPE Licensing Portal')}</strong>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # 4. Tab Navigation (Working Tabs)
+    tab_info, tab_vendor, tab_comm, tab_att = st.tabs([
+        "ⓘ Case Information",
+        "♧ Vendor Information",
+        "✉ Communication",
+        f"📎 Attachments ({len(case.get('attachments', []))})"
     ])
 
+    # --------------------------------------------------------------------------
+    # TAB 1: CASE INFORMATION (3-COLUMN LAYOUT)
+    # --------------------------------------------------------------------------
     with tab_info:
-        st.write(f"**Description:** {case.get('description')}")
-        st.divider()
-        st.markdown("##### 🕒 Case Activity History")
-        history = list(cases_collection.find({"type": "case_history", "case_number": case_num}, sort=[("timestamp", -1)]))
-        for h in history:
-            st.markdown(f"• **{h.get('timestamp')}** - *{h.get('user')}*: **{h.get('action')}** ({h.get('details')})")
+        col_left, col_center, col_right = st.columns([3.3, 3.0, 3.7], gap="medium")
 
+        # --- LEFT CARD: CASE INFORMATION ---
+        with col_left:
+            st.markdown('<div class="case-card">', unsafe_allow_html=True)
+            head_l1, head_l2 = st.columns([3, 1])
+            with head_l1:
+                st.markdown("<strong style='font-size:15px; color:#17233C;'>📄 Case Information</strong>", unsafe_allow_html=True)
+            with head_l2:
+                edit_mode = st.session_state.get(f"edit_case_{case_num}", False)
+                btn_txt = "Done" if edit_mode else "Edit"
+                if st.button(btn_txt, key=f"btn_toggle_edit_{case_num}"):
+                    st.session_state[f"edit_case_{case_num}"] = not edit_mode
+                    st.rerun()
+
+            if st.session_state.get(f"edit_case_{case_num}", False):
+                new_sub = st.text_input("Subject", value=case.get("subject", ""))
+                new_desc = st.text_area("Description", value=case.get("description", ""), height=90)
+                new_client = st.text_input("Client / Account", value=case.get("account", ""))
+                new_sys = st.text_input("Related System", value=case.get("related_system", ""))
+                new_cat = st.text_input("Category", value=case.get("case_category", ""))
+                if st.button("💾 Save Changes", key=f"btn_save_edit_{case_num}", type="primary"):
+                    now_str = get_current_ph_time().strftime("%b %d, %Y %I:%M %p")
+                    cases_collection.update_one(
+                        {"type": "cases", "case_number": case_num},
+                        {"$set": {
+                            "subject": new_sub, "description": new_desc, "account": new_client,
+                            "client": new_client, "related_system": new_sys, "case_category": new_cat,
+                            "last_update": now_str
+                        }}
+                    )
+                    st.session_state[f"edit_case_{case_num}"] = False
+                    st.success("Case information updated!")
+                    st.rerun()
+            else:
+                st.markdown(f"""
+                <div style="font-size:12px; line-height:1.9;">
+                    <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Case #:</span> <strong style="color:#17233C;">{case['case_number']}</strong></div>
+                    <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Subject:</span> <strong style="color:#17233C;">{case.get('subject')}</strong></div>
+                    <div style="margin:4px 0;"><span style="color:#5F6B7A;">Description:</span><br><span style="color:#17233C; font-size:11.5px;">{case.get('description')}</span></div>
+                    <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Priority:</span> <span class="badge {pri_badge_cls}">{pri}</span></div>
+                    <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Assigned To:</span> <strong style="color:#17233C;">{case.get('assigned_to')}</strong></div>
+                    <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Due Date:</span> <strong style="color:{countdown_color};">{case.get('due_date')}</strong></div>
+                    <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Created Date:</span> <strong style="color:#17233C;">{case.get('created_at')}</strong></div>
+                    <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Last Update:</span> <strong style="color:#17233C;">{case.get('last_update')}</strong></div>
+                    <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Current Status:</span> <span class="badge-status st-on-hold">{case.get('status')}</span></div>
+                    <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Case Category:</span> <strong style="color:#17233C;">{case.get('case_category')}</strong></div>
+                    <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Client:</span> <strong style="color:#17233C;">{case.get('account')}</strong></div>
+                    <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Related System:</span> <strong style="color:#17233C;">{case.get('related_system')}</strong></div>
+                </div>
+                """, unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # --- CENTER CARD: VENDOR INFORMATION ---
+        with col_center:
+            st.markdown('<div class="case-card">', unsafe_allow_html=True)
+            v_head1, v_head2 = st.columns([1.8, 1.2])
+            with v_head1:
+                st.markdown("<strong style='font-size:15px; color:#17233C;'>🏢 Vendor Information</strong>", unsafe_allow_html=True)
+            with v_head2:
+                if st.button("Open Record", key=f"btn_open_vend_{case_num}", help="Open full vendor record"):
+                    st.session_state[f"show_vendor_record_modal_{case_num}"] = True
+
+            st.markdown(f"""
+            <div style="display:flex; align-items:center; gap:10px; margin:8px 0 10px 0;">
+                <div style="width:36px; height:36px; border-radius:6px; background:#0067B9; color:white; font-size:13px; font-weight:800; display:flex; align-items:center; justify-content:center;">
+                    ABC
+                </div>
+                <div style="line-height:1.15;">
+                    <strong style="font-size:14.5px; color:#17233C;">{case.get('vendor_name', 'ABC Software Inc.')}</strong><br>
+                    <small style="color:#5F6B7A;">ID: {case.get('vendor_id', 'VEND-ABC-019')}</small>
+                </div>
+            </div>
+            <div style="font-size:12px; line-height:1.75;">
+                <div><span style="color:#5F6B7A;">Primary Contact:</span> <strong style="color:#17233C;">{case.get('vendor_contact', 'Michael Tan')}</strong></div>
+                <div><span style="color:#5F6B7A;">Email:</span> <a href="mailto:{case.get('vendor_email', 'support@abcsoftware.com')}" style="color:#0067B9; text-decoration:none;">{case.get('vendor_email', 'support@abcsoftware.com')}</a></div>
+                <div><span style="color:#5F6B7A;">Phone:</span> <strong style="color:#17233C;">{case.get('vendor_phone', '+1 555 123 4567')}</strong></div>
+                <div><span style="color:#5F6B7A;">Alternate Contact:</span> <strong style="color:#17233C;">{case.get('vendor_alt_contact', 'Sarah Lim')}</strong></div>
+                <div><span style="color:#5F6B7A;">Alternate Email:</span> <a href="mailto:{case.get('vendor_alt_email', 'sarah.lim@abcsoftware.com')}" style="color:#0067B9; text-decoration:none;">{case.get('vendor_alt_email', 'sarah.lim@abcsoftware.com')}</a></div>
+                <div><span style="color:#5F6B7A;">Address:</span> <br><span style="color:#17233C; font-size:11.5px;">{case.get('vendor_address', '123 Innovation Drive, San Jose, CA 95134')}</span></div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Quick Actions Panel
+            st.markdown('<div class="quick-actions-panel">', unsafe_allow_html=True)
+            st.markdown("<strong style='font-size:12px; color:#16855B;'>➕ Quick Actions</strong>", unsafe_allow_html=True)
+            qa_c1, qa_c2, qa_c3 = st.columns(3)
+            with qa_c1:
+                if st.button("Copy Email", key=f"btn_cpy_vemail_{case_num}"):
+                    st.toast("Vendor email copied to clipboard!")
+            with qa_c2:
+                if st.button("Copy Phone", key=f"btn_cpy_vphone_{case_num}"):
+                    st.toast("Vendor phone copied to clipboard!")
+            with qa_c3:
+                # Dynamic Excel generation via pandas
+                v_excel_df = pd.DataFrame([{
+                    "Case #": case["case_number"],
+                    "Vendor": case.get("vendor_name"),
+                    "Contact": case.get("vendor_contact"),
+                    "Email": case.get("vendor_email"),
+                    "Phone": case.get("vendor_phone"),
+                    "Due Date": case.get("due_date"),
+                    "Status": case.get("status")
+                }])
+                buf = io.BytesIO()
+                with pd.ExcelWriter(buf, engine="openpyxl") if "openpyxl" in sys.modules else io.BytesIO() as writer:
+                    try:
+                        v_excel_df.to_excel(writer, index=False)
+                        excel_data = buf.getvalue()
+                    except Exception:
+                        excel_data = v_excel_df.to_csv(index=False).encode("utf-8")
+                st.download_button("View Excel", excel_data, f"{case['case_number']}_Vendor.xlsx", key=f"btn_down_vexc_{case_num}")
+            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # --- RIGHT CARD: UPDATE CASE ---
+        with col_right:
+            st.markdown('<div class="case-card">', unsafe_allow_html=True)
+            st.markdown("<strong style='font-size:15px; color:#17233C;'>⏱️ Update Case</strong>", unsafe_allow_html=True)
+
+            dd_doc = validation_collection.find_one({"type": "Validation_Dropdown"}) or {}
+            statuses = dd_doc.get("Case_Status", ["New", "Open", "In Progress", "On Hold", "Pending Vendor", "Pending Client", "Resolved", "Closed"])
+            reasons = dd_doc.get("Case_Reason", ["Waiting for Vendor Response", "Waiting for Client", "Pending Internal Action", "Investigation", "Other"])
+            closures = dd_doc.get("Closure_Type", ["-- Select Closure Type --", "Resolved", "Completed", "Cancelled", "Duplicate"])
+            breaches = dd_doc.get("Contract_Breach", ["-- Select Breach Reason --", "Vendor Delay", "Client Delay", "Internal Delay", "SLA Missed - Non-Delivery"])
+
+            u_c1, u_c2 = st.columns(2)
+            with u_c1:
+                cur_s = case.get("status", "On Hold")
+                s_idx = statuses.index(cur_s) if cur_s in statuses else 0
+                sel_status = st.selectbox("Case Status", statuses, index=s_idx, key=f"sel_st_{case_num}")
+                sel_closure = st.selectbox("Closure Type", closures, key=f"sel_cl_{case_num}")
+            with u_c2:
+                cur_r = case.get("status_reason", "Waiting for Vendor Response")
+                r_idx = reasons.index(cur_r) if cur_r in reasons else 0
+                sel_reason = st.selectbox("Status Reason", reasons, index=r_idx, key=f"sel_rs_{case_num}")
+                sel_breach = st.selectbox("Breach Reason", breaches, key=f"sel_br_{case_num}")
+
+            remarks_val = st.text_area("Remarks / Update", placeholder="Add update, notes or next steps...", key=f"rem_{case_num}", height=75)
+            st.caption(f"{len(remarks_val)}/1000 characters")
+
+            # Update Action Buttons
+            act_b1, act_b2, act_b3 = st.columns([1.5, 1.2, 1.7])
+            with act_b1:
+                if st.button("✓ Update Case", type="primary", key=f"btn_upd_sub_{case_num}"):
+                    now_str = get_current_ph_time().strftime("%b %d, %Y %I:%M %p")
+                    new_hist_entry = {
+                        "timestamp": now_str,
+                        "user": user.get("name", "User"),
+                        "type": "Status Changes",
+                        "badge": f"Status changed to {sel_status}",
+                        "details": remarks_val or f"Reason: {sel_reason}"
+                    }
+                    cases_collection.update_one(
+                        {"type": "cases", "case_number": case_num},
+                        {
+                            "$set": {
+                                "status": sel_status, "status_reason": sel_reason,
+                                "closure_type": sel_closure if sel_closure != "-- Select Closure Type --" else "",
+                                "breach_reason": sel_breach if sel_breach != "-- Select Breach Reason --" else "",
+                                "last_update": now_str
+                            },
+                            "$push": {"history": {"$each": [new_hist_entry], "$position": 0}}
+                        }
+                    )
+                    st.success("Case successfully updated!")
+                    time.sleep(0.5)
+                    st.rerun()
+
+            with act_b2:
+                if st.button("Add Note", key=f"btn_add_note_{case_num}"):
+                    if remarks_val:
+                        now_str = get_current_ph_time().strftime("%b %d, %Y %I:%M %p")
+                        note_entry = {
+                            "timestamp": now_str,
+                            "user": user.get("name", "User"),
+                            "type": "Notes",
+                            "badge": "Note Added",
+                            "details": remarks_val
+                        }
+                        cases_collection.update_one(
+                            {"type": "cases", "case_number": case_num},
+                            {"$push": {"history": {"$each": [note_entry], "$position": 0}}}
+                        )
+                        st.success("Note logged to Case History!")
+                        time.sleep(0.5)
+                        st.rerun()
+                    else:
+                        st.warning("Please type a note in the remarks box.")
+
+            with act_b3:
+                if st.button("Request Transfer", key=f"btn_trf_req_{case_num}"):
+                    st.session_state[f"show_transfer_dialog_{case_num}"] = True
+
+            # Dedicated Admin-Only Reassignment Section
+            if is_admin:
+                st.markdown('<div class="reassign-box">', unsafe_allow_html=True)
+                st.markdown("<strong style='font-size:12.5px; color:#0067B9;'>🔄 Reassign Case (Admin Only)</strong>", unsafe_allow_html=True)
+                roster_doc = collection.find_one({"type": "roster_list"}) or {}
+                all_agents = [u for u in roster_doc.get("Data", []) if u.get("role") in ["Agent", "Admin/Agent"]]
+                agent_names = ["-- Select Agent --"] + [u["name"] for u in all_agents]
+
+                reassign_to = st.selectbox("Reassign To", agent_names, key=f"sel_reassign_{case_num}", label_visibility="collapsed")
+                send_notif = st.checkbox("Send notification to new assignee", value=True, key=f"chk_reassign_notif_{case_num}")
+
+                if st.button("Reassign Case", key=f"btn_exec_reassign_{case_num}"):
+                    if reassign_to != "-- Select Agent --":
+                        chosen_agent = next((u for u in all_agents if u["name"] == reassign_to), None)
+                        now_str = get_current_ph_time().strftime("%b %d, %Y %I:%M %p")
+                        new_hist = {
+                            "timestamp": now_str,
+                            "user": user.get("name", "Admin"),
+                            "type": "Assignments",
+                            "badge": f"Reassigned to {reassign_to}",
+                            "details": f"Reassigned by {user.get('name')}."
+                        }
+                        cases_collection.update_one(
+                            {"type": "cases", "case_number": case_num},
+                            {
+                                "$set": {
+                                    "assigned_to": reassign_to,
+                                    "assigned_employee_id": chosen_agent.get("employee_id", "") if chosen_agent else "",
+                                    "assignee_email": chosen_agent.get("email", "") if chosen_agent else "",
+                                    "last_update": now_str
+                                },
+                                "$push": {"history": {"$each": [new_hist], "$position": 0}}
+                            }
+                        )
+                        if send_notif and chosen_agent:
+                            notif_doc = collection.find_one({"type": "notifications"}) or {}
+                            n_list = notif_doc.get("Data", [])
+                            n_list.append({
+                                "id": str(uuid.uuid4()),
+                                "target_email": chosen_agent["email"],
+                                "title": "Case Reassigned To You",
+                                "message": f"{case_num} has been reassigned to you by {user.get('name')}.",
+                                "category": "new_case",
+                                "case_number": case_num,
+                                "acknowledged": "false",
+                                "created_at": get_current_ph_time().strftime("%I:%M %p")
+                            })
+                            collection.update_one({"type": "notifications"}, {"$set": {"Data": n_list}}, upsert=True)
+                        st.success(f"Case {case_num} reassigned to {reassign_to}!")
+                        time.sleep(0.5)
+                        st.rerun()
+                    else:
+                        st.warning("Please choose an agent to reassign.")
+                st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # ----------------------------------------------------------------------
+        # BOTTOM ROW: CASE HISTORY (LEFT 63%) & BREACH NOTICE EMAIL (RIGHT 37%)
+        # ----------------------------------------------------------------------
+        col_hist, col_email = st.columns([6.3, 3.7], gap="medium")
+
+        # --- CASE HISTORY CARD ---
+        with col_hist:
+            st.markdown('<div class="case-card">', unsafe_allow_html=True)
+            h_top1, h_top2 = st.columns([3, 2])
+            with h_top1:
+                st.markdown("<strong style='font-size:15px; color:#17233C;'>🕒 Case History</strong>", unsafe_allow_html=True)
+            with h_top2:
+                hist_filter = st.selectbox(
+                    "Show",
+                    ["All Activities", "Status Changes", "Notes", "Communications", "Assignments"],
+                    key=f"hist_filter_{case_num}",
+                    label_visibility="collapsed"
+                )
+
+            history_items = case.get("history", [])
+            badge_color_map = {
+                "Status Changes": "#D97706",
+                "Communications": "#0067B9",
+                "Notes": "#00B388",
+                "Assignments": "#7E22CE",
+                "Escalation": "#E31B23"
+            }
+
+            if not history_items:
+                st.caption("No history records logged yet.")
+            for h in history_items:
+                h_type = h.get("type", "Status Changes")
+                if hist_filter == "All Activities" or hist_filter == h_type:
+                    badge_color = badge_color_map.get(h_type, "#5F6B7A")
+                    st.markdown(f"""
+                    <div class="timeline-item">
+                        <div class="timeline-dot" style="background:{badge_color};"></div>
+                        <div style="font-size:12px; line-height:1.2;">
+                            <span style="color:#5F6B7A;">{h.get('timestamp')} &bull; <strong>{h.get('user')}</strong></span><br>
+                            <span style="background:{badge_color}18; color:{badge_color}; font-weight:700; font-size:10.5px; padding:2px 8px; border-radius:10px; display:inline-block; margin:3px 0;">
+                                {h.get('badge')}
+                            </span><br>
+                            <span style="color:#17233C; font-size:11.5px;">&gt; {h.get('details')}</span>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # --- AUTOMATED BREACH NOTICE EMAIL CARD ---
+        with col_email:
+            st.markdown('<div class="case-card">', unsafe_allow_html=True)
+            st.markdown("<strong style='font-size:15px; color:#17233C;'>✉️ Automated Breach Notice Email</strong>", unsafe_allow_html=True)
+
+            use_tmpl = st.toggle("Use Template", value=True, key=f"tgl_tmpl_{case_num}")
+            default_to = case.get("vendor_email", "support@abcsoftware.com")
+            default_subj = f"Notice of Contract Breach – {case['case_number']}"
+            default_body = f"""Dear {case.get('vendor_name', 'ABC Software Inc.')},
+
+This is to inform you that the following case ({case['case_number']}) is nearing breach due to continued delay in the license renewal. As per our agreement, we have not yet received the required confirmation from your team.
+
+Please provide an update at your earliest convenience to avoid contract breach.
+
+Thank you,
+HPE Operations Management"""
+
+            to_field = st.text_input("To", value=default_to, key=f"em_to_{case_num}")
+            subj_field = st.text_input("Subject", value=default_subj if use_tmpl else "", key=f"em_subj_{case_num}")
+            body_field = st.text_area("Email Body", value=default_body if use_tmpl else "", height=140, key=f"em_body_{case_num}")
+
+            em_b1, em_b2 = st.columns(2)
+            with em_b1:
+                if st.button("✏️ Edit Email", key=f"btn_edit_em_{case_num}"):
+                    st.toast("Email body unlocked for direct editing.")
+            with em_b2:
+                if st.button("📤 Send Email", type="primary", key=f"btn_send_em_{case_num}"):
+                    if to_field and subj_field and body_field:
+                        now_str = get_current_ph_time().strftime("%b %d, %Y %I:%M %p")
+                        comm_entry = {
+                            "timestamp": now_str,
+                            "user": user.get("name", "User"),
+                            "type": "Communications",
+                            "badge": f"Breach notice sent to {to_field}",
+                            "details": f"Subject: {subj_field}"
+                        }
+                        cases_collection.update_one(
+                            {"type": "cases", "case_number": case_num},
+                            {
+                                "$push": {
+                                    "history": {"$each": [comm_entry], "$position": 0},
+                                    "communications": {
+                                        "timestamp": now_str,
+                                        "sender": user.get("name"),
+                                        "recipient": to_field,
+                                        "subject": subj_field,
+                                        "message": body_field,
+                                        "type": "Breach Notice Sent"
+                                    }
+                                }
+                            }
+                        )
+                        st.success(f"Breach notice successfully delivered to {to_field}!")
+                        time.sleep(0.5)
+                        st.rerun()
+                    else:
+                        st.warning("Please fill in recipient, subject, and body.")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+    # --------------------------------------------------------------------------
+    # TAB 2: VENDOR INFORMATION (FULL DETAILED PROFILE)
+    # --------------------------------------------------------------------------
     with tab_vendor:
-        st.markdown(f"#### {case.get('vendor_name', 'ABC Software Inc.')}")
-        st.write(f"**Contact:** {case.get('vendor_contact', 'Michael Tan')} | **Email:** `{case.get('vendor_email', 'support@abcsoftware.com')}`")
-        if st.button("📋 Copy Email", key="cpy_modal_em"):
-            st.toast("Vendor email copied!")
+        st.markdown(f"### 🏢 Vendor Profile: {case.get('vendor_name', 'ABC Software Inc.')}")
+        st.caption(f"Vendor Code: {case.get('vendor_id', 'VEND-ABC-019')} &bull; Status: Active Certified Partner")
+        v_col1, v_col2 = st.columns(2)
+        with v_col1:
+            st.write(f"**Primary Contact:** {case.get('vendor_contact', 'Michael Tan')}")
+            st.write(f"**Direct Email:** `{case.get('vendor_email', 'support@abcsoftware.com')}`")
+            st.write(f"**Phone Support:** `{case.get('vendor_phone', '+1 555 123 4567')}`")
+            st.write(f"**Physical Address:** {case.get('vendor_address')}")
+        with v_col2:
+            st.write(f"**Alternate Representative:** {case.get('vendor_alt_contact', 'Sarah Lim')}")
+            st.write(f"**Alternate Email:** `{case.get('vendor_alt_email', 'sarah.lim@abcsoftware.com')}`")
+            st.write("**SLA Contract Adherence:** `94.2%` (Target: 95.0%)")
+            st.write(f"**Linked Account:** {case.get('account')}")
 
-    with tab_update:
-        dropdowns = validation_collection.find_one({"type": "Validation_Dropdown"}) or {}
-        st_opts = dropdowns.get("Case_Status", ["Open", "In Progress", "On Hold", "Closed"])
-        new_st = st.selectbox("Status", st_opts, index=st_opts.index(case.get("status")) if case.get("status") in st_opts else 0)
-        remarks = st.text_area("Remarks / Work Notes")
+    # --------------------------------------------------------------------------
+    # TAB 3: COMMUNICATION LOG & COMPOSE
+    # --------------------------------------------------------------------------
+    with tab_comm:
+        st.markdown("### ✉️ Case Communication Log")
+        comms = case.get("communications", [])
+        if not comms:
+            st.info("No prior email correspondence recorded for this case.")
+        for cm in comms:
+            st.markdown(f"""
+            <div style="background:#FFFFFF; border:1px solid #D9E2EC; border-left:3.5px solid #0067B9; border-radius:8px; padding:10px 14px; margin-bottom:8px; font-size:12px;">
+                <div style="display:flex; justify-content:space-between;">
+                    <strong>{cm.get('subject')}</strong>
+                    <span style="color:#5F6B7A;">{cm.get('timestamp')}</span>
+                </div>
+                <small style="color:#5F6B7A;">From: {cm.get('sender')} &rarr; To: {cm.get('recipient')}</small><br>
+                <p style="margin:4px 0 0 0; color:#17233C;">{cm.get('message')}</p>
+            </div>
+            """, unsafe_allow_html=True)
 
-        target_agent = None
-        if is_admin:
-            roster_doc = collection.find_one({"type": "roster_list"}) or {}
-            agents = [u["name"] for u in roster_doc.get("Data", []) if u.get("role") in ["Agent", "Admin/Agent"]]
-            target_agent = st.selectbox("Reassign Case (Admin Only)", ["-- Keep Current Assignee --"] + agents)
+        st.divider()
+        st.markdown("#### ✍️ Compose New Communication")
+        c_to = st.text_input("To", value=case.get("vendor_email", ""), key=f"comp_to_{case_num}")
+        c_cc = st.text_input("CC", key=f"comp_cc_{case_num}")
+        c_sub = st.text_input("Subject", value=f"Follow-up on {case_num}", key=f"comp_sub_{case_num}")
+        c_msg = st.text_area("Message", key=f"comp_msg_{case_num}", height=90)
+        if st.button("Send Communication", type="primary", key=f"btn_send_comp_{case_num}"):
+            if c_to and c_sub and c_msg:
+                now_str = get_current_ph_time().strftime("%b %d, %Y %I:%M %p")
+                cases_collection.update_one(
+                    {"type": "cases", "case_number": case_num},
+                    {"$push": {
+                        "communications": {
+                            "timestamp": now_str,
+                            "sender": user.get("name"),
+                            "recipient": c_to,
+                            "subject": c_sub,
+                            "message": c_msg,
+                            "type": "Email"
+                        },
+                        "history": {
+                            "$each": [{
+                                "timestamp": now_str,
+                                "user": user.get("name"),
+                                "type": "Communications",
+                                "badge": f"Email sent to {c_to}",
+                                "details": c_sub
+                            }],
+                            "$position": 0
+                        }
+                    }}
+                )
+                st.success("Message dispatched and logged to case history!")
+                time.sleep(0.5)
+                st.rerun()
 
-        if st.button("💾 Update Case", type="primary"):
-            updates = {"status": new_st, "last_update": get_current_ph_time().strftime("%b %d, %Y %I:%M %p")}
-            if target_agent and target_agent != "-- Keep Current Assignee --":
-                updates["assigned_to"] = target_agent
-            cases_collection.update_one({"type": "cases", "case_number": case_num}, {"$set": updates})
-            st.success("Case updated successfully!")
+    # --------------------------------------------------------------------------
+    # TAB 4: ATTACHMENTS
+    # --------------------------------------------------------------------------
+    with tab_att:
+        st.markdown("### 📎 Case Attachments")
+        atts = case.get("attachments", [])
+        if not atts:
+            st.info("No attachments uploaded yet.")
+        for idx, at in enumerate(atts):
+            at1, at2, at3, at4 = st.columns([4, 2, 2, 1.5])
+            with at1:
+                st.markdown(f"📄 **{at.get('name')}** &bull; <small style='color:#5F6B7A;'>{at.get('size')}</small>", unsafe_allow_html=True)
+            with at2:
+                st.caption(f"Uploaded by: {at.get('uploaded_by')}")
+            with at3:
+                st.caption(at.get("upload_date"))
+            with at4:
+                st.download_button("Download", data=b"Sample content", file_name=at.get("name"), key=f"down_att_{case_num}_{idx}")
+
+        st.divider()
+        st.markdown("#### 📤 Upload New Attachment")
+        uploaded_file = st.file_uploader(
+            "Choose file",
+            type=["pdf", "docx", "xlsx", "csv", "png", "jpg", "jpeg", "txt"],
+            key=f"upload_att_widget_{case_num}"
+        )
+        if uploaded_file and st.button("Attach File", key=f"btn_save_att_{case_num}", type="primary"):
+            new_att = {
+                "name": uploaded_file.name,
+                "type": uploaded_file.name.split(".")[-1].upper(),
+                "size": f"{uploaded_file.size / 1024:.1f} KB",
+                "uploaded_by": user.get("name", "User"),
+                "upload_date": get_current_ph_time().strftime("%b %d, %Y")
+            }
+            cases_collection.update_one(
+                {"type": "cases", "case_number": case_num},
+                {"$push": {"attachments": new_att}}
+            )
+            st.success(f"{uploaded_file.name} attached successfully!")
             time.sleep(0.5)
             st.rerun()
 
-    with tab_breach:
-        st.markdown("##### ✉️ Automated Breach Notice Notice")
-        to_email = st.text_input("To", value=case.get("vendor_email", "support@abcsoftware.com"))
-        subj = st.text_input("Subject", value=f"Notice of Contract Breach — {case_num} SLA Missed")
-        body_template = f"Dear Partner,\n\nCase {case_num} has breached SLA. Immediate remediation required."
-        st.text_area("Body", value=body_template, height=120)
-        if st.button("📤 Send Notice", type="primary"):
-            st.success(f"Breach notice delivered to {to_email}!")
+    # Sub-dialog for Vendor Record Overlay
+    if st.session_state.get(f"show_vendor_record_modal_{case_num}", False):
+        st.divider()
+        st.markdown(f"#### 🏢 Master Vendor Record: {case.get('vendor_name')}")
+        st.write(f"**Vendor ID:** `{case.get('vendor_id', 'VEND-ABC-019')}` | **Account:** `{case.get('account')}`")
+        st.write("**Active Enterprise Contracts:** 3 Active (Gold Support SLA)")
+        st.write("**Open Cases with Vendor:** 2 Pending Milestone Confirmation")
+        if st.button("Close Vendor Record", key=f"btn_close_vrec_{case_num}"):
+            st.session_state[f"show_vendor_record_modal_{case_num}"] = False
+            st.rerun()
 
-@st.dialog("Broadcast Message", width="small")
-def render_admin_message_dialog():
-    st.markdown("### 📢 Broadcast Team Alert")
-    roster_doc = collection.find_one({"type": "roster_list"}) or {}
-    all_names = [u["name"] for u in roster_doc.get("Data", [])]
-    target = st.selectbox("Target Recipient", ["All Logged-in Agents"] + all_names)
-    msg = st.text_area("Alert Message", placeholder="Enter priority broadcast notification...")
-    if st.button("Send Alert", type="primary", use_container_width=True):
-        notif_doc = collection.find_one({"type": "notifications"}) or {}
-        notif_list = notif_doc.get("Data", [])
-        notif_list.append({
-            "target_email": "all" if target == "All Logged-in Agents" else str(target),
-            "title": "Admin Broadcast",
-            "message": str(msg),
-            "category": "broadcast",
-            "acknowledged": "false",
-            "created_at": str(get_current_ph_time().strftime("%I:%M %p"))
-        })
-        collection.update_one({"type": "notifications"}, {"$set": {"type": "notifications", "Data": notif_list}}, upsert=True)
-        st.success("Alert broadcasted successfully!")
+    # Sub-dialog for Transfer Request
+    if st.session_state.get(f"show_transfer_dialog_{case_num}", False):
+        st.divider()
+        st.markdown("#### 🔄 Propose Case Transfer")
+        roster_doc = collection.find_one({"type": "roster_list"}) or {}
+        transfer_candidates = [u["name"] for u in roster_doc.get("Data", []) if u["name"] != case.get("assigned_to")]
+        req_target = st.selectbox("Target Colleague", transfer_candidates, key=f"trf_cand_{case_num}")
+        req_reason = st.text_input("Transfer Reason", "Workload rebalance", key=f"trf_rs_{case_num}")
+        if st.button("Dispatch Transfer Request", key=f"btn_trf_submit_{case_num}", type="primary"):
+            now_str = get_current_ph_time().strftime("%b %d, %Y %I:%M %p")
+            cases_collection.update_one(
+                {"type": "cases", "case_number": case_num},
+                {"$push": {"history": {
+                    "$each": [{
+                        "timestamp": now_str,
+                        "user": user.get("name"),
+                        "type": "Assignments",
+                        "badge": f"Transfer Requested to {req_target}",
+                        "details": req_reason
+                    }],
+                    "$position": 0
+                }}}
+            )
+            st.session_state[f"show_transfer_dialog_{case_num}"] = False
+            st.success(f"Transfer request to {req_target} dispatched!")
+            time.sleep(0.5)
+            st.rerun()
 
 # ==============================================================================
-# 8. TOP-RIGHT ALIGNED PROFILE FLYOUT DROPDOWN (EXACT VISUAL RECREATION)
+# 8. TOP HEADER (SWAPPED: PROFILE IS AT FAR-RIGHT, BELL HAS ALERT POPOVER)
+# ==============================================================================
+def render_top_header():
+    user = st.session_state.get("current_user", {})
+    curr_aux = user.get("current_aux", "Admin Work")
+
+    notif_doc = collection.find_one({"type": "notifications"}) or {}
+    notifs = notif_doc.get("Data", [])
+    user_notifs = [n for n in notifs if n.get("target_email") in [user.get("email"), "all"]]
+    unread_count = sum(1 for n in user_notifs if str(n.get("acknowledged", "false")).lower() in ["false", "0"])
+
+    with st.container(key="hpe_top_bar_container"):
+        c_brand, c_search, c_bell, c_time, c_prof = st.columns([3.0, 4.0, 0.6, 1.8, 2.6])
+
+        with c_brand:
+            st.markdown("""
+            <div style="display:flex; align-items:center; gap:10px;">
+                <div style="border:3.5px solid #00B388; width:26px; height:18px; border-radius:2px;"></div>
+                <div style="color:white; line-height:1.15;">
+                    <strong style="font-size:19px; letter-spacing:-0.2px;">HPE &nbsp;CaseFlow</strong><br>
+                    <small style="color:#94A3B8; font-size:11px;">Task Monitoring & Management</small>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with c_search:
+            st.text_input("Global Search", placeholder="🔍 Search cases, names, issues...", label_visibility="collapsed")
+
+        # Notification Bell Popover
+        with c_bell:
+            with st.container(key="top_bell_popover"):
+                with st.popover(f"🔔 {unread_count}", help="Notifications"):
+                    st.markdown("### 🔔 Alerts & Notifications")
+                    if user_notifs:
+                        if st.button("Mark All as Read", key="btn_ack_all_notifs"):
+                            for n in notifs:
+                                if n.get("target_email") in [user.get("email"), "all"]:
+                                    n["acknowledged"] = "true"
+                            collection.update_one({"type": "notifications"}, {"$set": {"Data": notifs}}, upsert=True)
+                            st.rerun()
+
+                        for n in reversed(user_notifs):
+                            is_unr = str(n.get("acknowledged", "false")).lower() in ["false", "0"]
+                            cat = n.get("category", "info")
+                            badge_color = "#E31B23" if cat == "critical" else "#0067B9"
+                            unread_cls = "unread" if is_unr else ""
+                            st.markdown(f"""
+                            <div class="notif-item-card {unread_cls}">
+                                <div style="display:flex; justify-content:space-between;">
+                                    <strong style="font-size:12.5px; color:#17233C;">{n.get('title')}</strong>
+                                    <span style="background:{badge_color}20; color:{badge_color}; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px;">{cat.upper()}</span>
+                                </div>
+                                <p style="margin:4px 0 2px 0; font-size:12px; color:#475569;">{n.get('message')}</p>
+                                <small style="color:#94A3B8; font-size:10.5px;">{n.get('created_at', 'Today')}</small>
+                            </div>
+                            """, unsafe_allow_html=True)
+                    else:
+                        st.info("No notifications received.")
+
+        with c_time:
+            now_dt = get_current_ph_time()
+            st.markdown(f"""
+            <div style="text-align:right; color:white; line-height:1.15; padding-right:8px;">
+                <small style="color:#94A3B8; font-size:11px;">{now_dt.strftime("%a, %b %d, %Y")}</small><br>
+                <strong style="font-size:16px;">{now_dt.strftime("%I:%M %p")}</strong>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # Profile Pill at Far-Right Corner
+        with c_prof:
+            with st.container(key="top_profile_pill_btn"):
+                btn_label = f"👤 {user.get('name', 'Arianne Escabillas')} • {curr_aux} ▾"
+                if st.button(btn_label, key="btn_open_profile_top_right", use_container_width=True):
+                    st.session_state["show_profile_flyout"] = not st.session_state.get("show_profile_flyout", False)
+                    st.rerun()
+
+    if st.session_state.get("show_profile_flyout", False):
+        render_profile_flyout()
+
+# ==============================================================================
+# 9. PROFILE FLYOUT DROPDOWN (UPPER RIGHT)
 # ==============================================================================
 def render_profile_flyout():
     user = st.session_state.get("current_user", {})
@@ -1395,7 +2015,6 @@ def render_profile_flyout():
 
         st.markdown("<label style='font-size:12px; font-weight:700; color:#475569;'>Current Status / Aux (Real-Time Auto-Update)</label>", unsafe_allow_html=True)
         
-        # Aux Selector with Border, Transparent Teal Background & Compact Spacing
         with st.container(key="profile_aux_wrapper"):
             aux_list = ["Available", "Admin Work", "Not Ready - Online", "Coaching", "Meeting", "Lunch", "Break", "Unscheduled Break"]
             curr_aux = user.get("current_aux", "Admin Work")
@@ -1408,10 +2027,8 @@ def render_profile_flyout():
                 label_visibility="collapsed"
             )
 
-        # Compact Divider to Reduce Space Below Aux Selector
         st.markdown('<hr class="flyout-divider">', unsafe_allow_html=True)
         
-        # CONDITIONAL TODAY'S SCHEDULE (OMITTED FOR PURE ADMIN AS THEY HAVE NO PLOTTED SHIFTS)
         if user.get("role") != "Admin":
             sc_h1, sc_h2 = st.columns([1.5, 1])
             with sc_h1:
@@ -1441,66 +2058,12 @@ def render_profile_flyout():
                 logout_user()
 
 # ==============================================================================
-# 9. TOP HEADER (PROFILE TRIGGER AT UPPER-RIGHT CORNER)
-# ==============================================================================
-def render_top_header():
-    user = st.session_state.get("current_user", {})
-    curr_aux = user.get("current_aux", "Admin Work")
-
-    notif_doc = collection.find_one({"type": "notifications"}) or {}
-    notifs = notif_doc.get("Data", [])
-    unread_notifs = sum(1 for n in notifs if (n.get("target_email") in [user.get("email"), "all"]) and (str(n.get("acknowledged")).lower() in ["false", "0"]))
-
-    with st.container(key="hpe_top_bar_container"):
-        c_brand, c_search, c_bell, c_prof, c_time = st.columns([3.0, 4.2, 0.5, 2.5, 1.8])
-
-        with c_brand:
-            st.markdown("""
-            <div style="display:flex; align-items:center; gap:10px;">
-                <div style="border:3.5px solid #00B388; width:26px; height:18px; border-radius:2px;"></div>
-                <div style="color:white; line-height:1.15;">
-                    <strong style="font-size:19px; letter-spacing:-0.2px;">HPE &nbsp;CaseFlow</strong><br>
-                    <small style="color:#94A3B8; font-size:11px;">Task Monitoring & Management</small>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        with c_search:
-            st.text_input("Global Search", placeholder="🔍 Search cases, names, issues...", label_visibility="collapsed")
-
-        with c_bell:
-            st.markdown(f"""
-            <div style="position:relative; text-align:center; font-size:20px; cursor:pointer; color:white; padding-top:4px;">
-                🔔<span style="position:absolute; top:-3px; right:2px; background:#EF4444; color:white; font-size:10px; font-weight:800; border-radius:50%; padding:1px 5px;">{unread_notifs}</span>
-            </div>
-            """, unsafe_allow_html=True)
-
-        with c_prof:
-            with st.container(key="top_profile_pill_btn"):
-                btn_label = f"👤 {user.get('name', 'Arianne Escabillas')} • {curr_aux} ▾"
-                if st.button(btn_label, key="btn_open_profile_top_right", use_container_width=True):
-                    st.session_state["show_profile_flyout"] = not st.session_state.get("show_profile_flyout", False)
-                    st.rerun()
-
-        with c_time:
-            st.markdown("""
-            <div style="text-align:right; color:white; line-height:1.15;">
-                <small style="color:#94A3B8; font-size:11px;">Mon, Sep 28, 2026</small><br>
-                <strong style="font-size:16px;">10:24 AM</strong>
-            </div>
-            """, unsafe_allow_html=True)
-
-    if st.session_state.get("show_profile_flyout", False):
-        render_profile_flyout()
-
-# ==============================================================================
 # 10. DASHBOARD: PERFECT HORIZONTAL ALIGNMENT (TILES & SCHEDULE/ROSTER)
 # ==============================================================================
 def render_dashboard():
     user = st.session_state.get("current_user", {})
     user_role = user.get("role", "Admin/Agent")
 
-    # Perspective State Management
     if "view_mode" not in st.session_state:
         st.session_state["view_mode"] = "Admin" if user_role in ["Admin", "Admin/Agent"] else "Agent"
     
@@ -1509,7 +2072,7 @@ def render_dashboard():
 
     is_admin_mode = (st.session_state["view_mode"] == "Admin")
 
-    # Query Base Filter on Cases_Collection
+    # Base Query on Cases_Collection
     q_base = {"type": "cases"}
     if not is_admin_mode:
         q_base["assignee_email"] = user.get("email")
@@ -1520,18 +2083,14 @@ def render_dashboard():
     total_on_track = cases_collection.count_documents({**q_base, "priority": {"$in": ["Medium", "Low"]}, "status": {"$ne": "Closed"}})
 
     # ==========================================================================
-    # 2-COLUMN MASTER GRID (STATUS TILES & SCHEDULE/AGENTS START AT SAME BASELINE)
+    # 2-COLUMN MASTER GRID
     # ==========================================================================
     main_left, main_right = st.columns([2.88, 1.12], gap="large")
 
-    # --------------------------------------------------------------------------
-    # LEFT COLUMN: STATUS TILES + TABLE
-    # --------------------------------------------------------------------------
     with main_left:
-        # Header Row: Title & Segmented Tile (Admin/Agent)
         hd_col1, hd_col2 = st.columns([2.5, 1.5])
         with hd_col1:
-            pass  # Kept clean to maintain exact vertical baseline with right rail
+            pass
         with hd_col2:
             if user_role == "Admin/Agent":
                 st.markdown("<div style='text-align:right; margin-bottom:8px;'>", unsafe_allow_html=True)
@@ -1551,13 +2110,13 @@ def render_dashboard():
                             st.rerun()
                 st.markdown("</div>", unsafe_allow_html=True)
 
-        # 4 Metric Cards Exactly Aligned
+        # 4 Metric Cards Exactly Aligned with Restored Colors & Overflow Protection
         mc1, mc2, mc3, mc4 = st.columns(4)
         with mc1:
             st.markdown(f"""
-            <div class="metric-card-box">
-                <div class="metric-circle-icon" style="background:#EDF5FD; color:#0284C7;">📁</div>
-                <div>
+            <div class="metric-card-box metric-card-box-active">
+                <div class="metric-circle-icon" style="background:#E0F2FE; color:#0284C7;">📁</div>
+                <div style="flex:1; min-width:0; overflow:hidden;">
                     <p class="metric-card-label">{'Active Cases' if is_admin_mode else 'My Active Cases'}</p>
                     <h3 class="metric-card-val">{total_active}</h3>
                     <p class="metric-card-trend" style="color:#0284C7;">↑ +5% <span style="font-weight:400; color:#64748B;">vs last week</span></p>
@@ -1566,9 +2125,9 @@ def render_dashboard():
             """, unsafe_allow_html=True)
         with mc2:
             st.markdown(f"""
-            <div class="metric-card-box">
-                <div class="metric-circle-icon" style="background:#FDF2F2; color:#DC2626;">⚠️</div>
-                <div>
+            <div class="metric-card-box metric-card-box-critical">
+                <div class="metric-circle-icon" style="background:#FEE2E2; color:#DC2626;">⚠️</div>
+                <div style="flex:1; min-width:0; overflow:hidden;">
                     <p class="metric-card-label">{'Critical Cases' if is_admin_mode else 'My Critical Cases'}</p>
                     <h3 class="metric-card-val">{total_critical}</h3>
                     <p class="metric-card-trend" style="color:#DC2626;">↑ +2 <span style="font-weight:400; color:#64748B;">vs last week</span></p>
@@ -1577,9 +2136,9 @@ def render_dashboard():
             """, unsafe_allow_html=True)
         with mc3:
             st.markdown(f"""
-            <div class="metric-card-box">
-                <div class="metric-circle-icon" style="background:#FEF6EC; color:#D97706;">⏰</div>
-                <div>
+            <div class="metric-card-box metric-card-box-duesoon">
+                <div class="metric-circle-icon" style="background:#FEF3C7; color:#D97706;">⏰</div>
+                <div style="flex:1; min-width:0; overflow:hidden;">
                     <p class="metric-card-label">Due Soon</p>
                     <h3 class="metric-card-val">{total_due_soon}</h3>
                     <p class="metric-card-trend" style="color:#D97706;">↑ +3 <span style="font-weight:400; color:#64748B;">vs last week</span></p>
@@ -1588,9 +2147,9 @@ def render_dashboard():
             """, unsafe_allow_html=True)
         with mc4:
             st.markdown(f"""
-            <div class="metric-card-box">
-                <div class="metric-circle-icon" style="background:#EDFAF3; color:#16A34A;">✅</div>
-                <div>
+            <div class="metric-card-box metric-card-box-ontrack">
+                <div class="metric-circle-icon" style="background:#DCFCE7; color:#16A34A;">✅</div>
+                <div style="flex:1; min-width:0; overflow:hidden;">
                     <p class="metric-card-label">On Track</p>
                     <h3 class="metric-card-val">{total_on_track}</h3>
                     <p class="metric-card-trend" style="color:#16A34A;">↑ +10% <span style="font-weight:400; color:#64748B;">vs last week</span></p>
@@ -1630,14 +2189,14 @@ def render_dashboard():
                     if st.button("⟳", key="btn_tb_refresh", help="Refresh Data", use_container_width=True):
                         st.rerun()
 
-        # Filter Strip (With Include Closed Cases Option)[cite: 10, 11]
+        # Filter Strip
         f1, f2, f3, f4 = st.columns([2.5, 1.2, 1.3, 1.5])
         with f1:
             search_val = st.text_input("Search", placeholder="🔍 Search by case #, subject, assignee...", label_visibility="collapsed")
         with f2:
             pri_filter = st.selectbox("Priority", ["All Priorities", "Critical", "High", "Medium", "Low"], label_visibility="collapsed")
         with f3:
-            st_filter = st.selectbox("Filter Status", ["All Statuses", "Open", "In Progress", "Vendor Response", "Waiting Vendor", "Closed"], label_visibility="collapsed")
+            st_filter = st.selectbox("Filter Status", ["All Statuses", "Open", "In Progress", "On Hold", "Vendor Response", "Waiting Vendor", "Closed"], label_visibility="collapsed")
         with f4:
             include_closed = st.checkbox("Include Closed Cases", key="chk_include_closed_cases")
 
@@ -1656,7 +2215,7 @@ def render_dashboard():
                 new_desc = st.text_area("Detailed Problem Description", "Chassis controller PCIe bus disconnect.")
 
                 if st.button("Dispatch Case to Available Roster", type="primary"):
-                    new_num = f"HPE-2026-{1050 + cases_collection.count_documents({'type': 'cases'})}"
+                    new_num = f"HC-2026-{1050 + cases_collection.count_documents({'type': 'cases'})}"
                     new_case_payload = {
                         "type": "cases",
                         "case_number": new_num,
@@ -1668,11 +2227,21 @@ def render_dashboard():
                         "due_date": (get_current_ph_time() + timedelta(hours=4)).strftime("%b %d, %Y %I:%M %p"),
                         "created_at": get_current_ph_time().strftime("%b %d, %Y %I:%M %p"),
                         "last_update": get_current_ph_time().strftime("%b %d, %Y %I:%M %p"),
-                        "elapsed": "Just now",
+                        "case_category": "Hardware",
                         "vendor_name": new_vend,
+                        "vendor_id": "VEND-ABC-019",
+                        "vendor_contact": "Michael Tan",
                         "vendor_email": new_vend_email,
+                        "vendor_phone": "+1 555 123 4567",
+                        "vendor_alt_contact": "Sarah Lim",
+                        "vendor_alt_email": "sarah.lim@abcsoftware.com",
+                        "vendor_address": "123 Innovation Drive, San Jose, CA 95134",
                         "account": "Enterprise Core",
-                        "related_system": "HPE Pointnext"
+                        "client": "Enterprise Core",
+                        "related_system": "HPE Pointnext",
+                        "history": [],
+                        "communications": [],
+                        "attachments": []
                     }
                     success, assigned_agent = auto_assign_new_case(new_case_payload)
                     st.success(f"Case {new_num} registered and auto-assigned to: {assigned_agent}!")
@@ -1684,7 +2253,7 @@ def render_dashboard():
 
         # Table Header
         with st.container(key="dashboard_table_header"):
-            h_chk, h_num, h_sub, h_pri, h_ass, h_due, h_st, h_up, h_opt = st.columns([0.4, 1.6, 2.8, 1.2, 1.8, 1.6, 1.4, 1.8, 0.4])
+            h_chk, h_num, h_sub, h_pri, h_ass, h_due, h_st, h_up, h_opt = st.columns([0.4, 1.6, 2.8, 1.2, 1.8, 1.6, 1.4, 1.8, 0.5])
             with h_chk: st.markdown("**☐**")
             with h_num: st.markdown("**Case #  ⇅**")
             with h_sub: st.markdown("**Subject**")
@@ -1719,6 +2288,7 @@ def render_dashboard():
             
             st_cls_map = {
                 "In Progress": "st-in-progress",
+                "On Hold": "st-on-hold",
                 "Vendor Response": "st-vendor-response",
                 "Waiting Vendor": "st-waiting-vendor",
                 "Open": "st-open",
@@ -1726,8 +2296,9 @@ def render_dashboard():
                 "Closed": "st-closed"
             }
             badge_st = st_cls_map.get(status_val, "st-open")
+            countdown_txt, countdown_color, is_overdue = calculate_countdown(c.get("due_date"))
 
-            rc1, rc2, rc3, rc4, rc5, rc6, rc7, rc8, rc9 = st.columns([0.4, 1.6, 2.8, 1.2, 1.8, 1.6, 1.4, 1.8, 0.4])
+            rc1, rc2, rc3, rc4, rc5, rc6, rc7, rc8, rc9 = st.columns([0.4, 1.6, 2.8, 1.2, 1.8, 1.6, 1.4, 1.8, 0.5])
             with rc1:
                 st.checkbox("", key=f"chk_c_{c['case_number']}_{'adm' if is_admin_mode else 'agt'}", label_visibility="collapsed")
             with rc2:
@@ -1746,7 +2317,7 @@ def render_dashboard():
                 </div>
                 """, unsafe_allow_html=True)
             with rc6:
-                due_color = "#64748B" if status_val == "Closed" else "#DC2626"
+                due_color = "#64748B" if status_val == "Closed" else countdown_color
                 st.markdown(f"<span style='color:{due_color}; font-size:12px; font-weight:600;'>{c.get('due_date')}</span>", unsafe_allow_html=True)
             with rc7:
                 st.markdown(f"<span class='badge-status {badge_st}'>{status_val}</span>", unsafe_allow_html=True)
@@ -1754,12 +2325,49 @@ def render_dashboard():
                 st.markdown(f"""
                 <div style="line-height:1.2;">
                     <span style="font-size:12px; color:#475569;">{c.get('last_update')}</span><br>
-                    <small style="color:#94A3B8; font-size:11px;">{c.get('elapsed', '1h ago')}</small>
+                    <small style="color:{countdown_color}; font-size:11px; font-weight:700;">{countdown_txt}</small>
                 </div>
                 """, unsafe_allow_html=True)
+            
+            # Action Ellipses (⋮) Functional Popover depending on user role
             with rc9:
-                st.markdown("<span style='color:#64748B; font-weight:700; cursor:pointer;'>⋮</span>", unsafe_allow_html=True)
-            st.divider()
+                with st.container(key=f"pop_row_act_{c['case_number']}"):
+                    with st.popover("⋮", help="Case Actions"):
+                        st.markdown(f"**Actions for {c['case_number']}**")
+                        if st.button("📋 View Details", key=f"act_view_{c['case_number']}", use_container_width=True):
+                            render_case_modal(c["case_number"])
+
+                        if is_admin:
+                            roster_doc = collection.find_one({"type": "roster_list"}) or {}
+                            agents = [u["name"] for u in roster_doc.get("Data", []) if u.get("role") in ["Agent", "Admin/Agent"]]
+                            new_agent = st.selectbox("Reassign Case", ["-- Select --"] + agents, key=f"quick_reassign_{c['case_number']}")
+                            if st.button("Apply Reassign", key=f"btn_reassign_row_{c['case_number']}", use_container_width=True):
+                                if new_agent != "-- Select --":
+                                    now_str = get_current_ph_time().strftime("%b %d, %Y %I:%M %p")
+                                    cases_collection.update_one(
+                                        {"type": "cases", "case_number": c["case_number"]},
+                                        {"$set": {"assigned_to": new_agent, "last_update": now_str}}
+                                    )
+                                    st.success(f"Reassigned to {new_agent}!")
+                                    time.sleep(0.5)
+                                    st.rerun()
+                        else:
+                            if st.button("🔄 Request Transfer", key=f"act_trf_{c['case_number']}", use_container_width=True):
+                                st.session_state[f"show_transfer_dialog_{c['case_number']}"] = True
+                                render_case_modal(c["case_number"])
+
+                        q_st = st.selectbox("Quick Status", ["Open", "In Progress", "On Hold", "Closed"], key=f"q_st_{c['case_number']}")
+                        if st.button("Update Status", key=f"btn_qst_{c['case_number']}", use_container_width=True):
+                            now_str = get_current_ph_time().strftime("%b %d, %Y %I:%M %p")
+                            cases_collection.update_one(
+                                {"type": "cases", "case_number": c["case_number"]},
+                                {"$set": {"status": q_st, "last_update": now_str}}
+                            )
+                            st.success(f"Status changed to {q_st}")
+                            time.sleep(0.5)
+                            st.rerun()
+
+            st.markdown('<hr class="case-table-divider">', unsafe_allow_html=True)
 
         # Pagination Footer
         p_info, p_btns = st.columns([1, 1])
@@ -1781,7 +2389,6 @@ def render_dashboard():
     # --------------------------------------------------------------------------
     with main_right:
         if is_admin_mode:
-            # 1. ADMIN RIGHT RAIL: ONLINE AGENTS (12)
             st.markdown('<div class="agents-panel-card">', unsafe_allow_html=True)
             st.markdown("""
             <h3 style="font-size:17px; font-weight:800; color:#0F172A; margin:0 0 2px 0;">Online Agents</h3>
@@ -1827,7 +2434,6 @@ def render_dashboard():
                 render_admin_message_dialog()
 
         else:
-            # 2. AGENT RIGHT RAIL: TODAY'S SCHEDULE + ANNOUNCEMENTS + QUICK ACTIONS
             sc_c1, sc_c2 = st.columns([2, 1])
             with sc_c1:
                 st.markdown("#### 📅 Today's Schedule")
@@ -1913,7 +2519,6 @@ def render_monitoring():
         if table_data:
             kick_agent = st.selectbox("Select Agent to Session Terminate (Kick)", [d["Name"] for d in table_data])
             if st.button("🚫 Terminate Session (Force Logout)", type="secondary"):
-                # Terminate inside type: 'sessions'
                 sess_doc = collection.find_one({"type": "sessions"}) or {}
                 sess_list = sess_doc.get("Data", [])
                 for s in sess_list:
@@ -1922,7 +2527,6 @@ def render_monitoring():
                         s["expires_at"] = "2000-01-01 00:00:00"
                 collection.update_one({"type": "sessions"}, {"$set": {"Data": sess_list}}, upsert=True)
 
-                # Update inside type: 'roster_list'
                 for u in agents:
                     if u.get("name") == kick_agent:
                         u["is_logged_in"] = "false"
@@ -1938,7 +2542,6 @@ def render_monitoring():
 def render_schedule():
     user = st.session_state.get("current_user", {})
     st.markdown("### 📅 Enterprise Workforce Schedule & PTO Tracker")
-    current_ym = get_current_ph_time().strftime("%Y-%m")
     pto_doc = collection.find_one({"type": "Schedule_Monitoring"}) or {"total_allocation": 20, "used_allocation": 4}
 
     rem_pto = pto_doc.get("total_allocation", 20) - pto_doc.get("used_allocation", 0)
@@ -2141,7 +2744,6 @@ def render_auth_page():
                 if user:
                     default_aux = "Admin Work" if user.get("role") in ["Admin", "Admin/Agent"] else "Not Ready - Online"
                     
-                    # Update login status inside type: 'roster_list' Data
                     roster_doc = collection.find_one({"type": "roster_list"}) or {}
                     users = roster_doc.get("Data", [])
                     for u in users:
@@ -2167,7 +2769,6 @@ def render_auth_page():
                 st.rerun()
 
         else:
-            # SIGN UP SCREEN: ALL contained under type: "roster_list" in Team Roster Collection
             st.markdown("## **Create Your Account**")
             st.caption("Sign up to access HPE CaseFlow")
 
@@ -2214,7 +2815,6 @@ def render_auth_page():
                         "updated_at": str(now_str)
                     }
 
-                    # Contained under type: "roster_list" (does not generate multiple documents)
                     existing_users.append(new_user)
                     collection.update_one(
                         {"type": "roster_list"},
@@ -2237,7 +2837,6 @@ def render_auth_page():
 # 16. FIXED BOTTOM NAVIGATION (BIGGER & SPREAD OUT)
 # ==============================================================================
 def render_bottom_navigation():
-    """Renders bottom navigation tabs pinned inside the dark teal bar."""
     user = st.session_state.get("current_user", {})
     is_admin = user.get("role") in ["Admin", "Admin/Agent"]
     
@@ -2272,7 +2871,6 @@ def main():
     if not st.session_state.get("authenticated", False):
         validate_saved_session()
 
-    # Initial showcase auto-auth with Arianne Escabillas (unless manually signed out)
     if not st.session_state.get("authenticated", False) and not st.session_state.get("manual_logout", False):
         roster_doc = collection.find_one({"type": "roster_list"}) or {}
         admin_user = next((u for u in roster_doc.get("Data", []) if u.get("email") == "arianne.escabillas@hpe.com"), None)
