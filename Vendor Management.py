@@ -582,7 +582,7 @@ def init_database():
                     "assigned_to": "Arianne Escabillas",
                     "assigned_employee_id": "HPE12345",
                     "assignee_email": "arianne.escabillas@hpe.com",
-                    "assignee_avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150",
+                    "assignee_avatar": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150",
                     "due_date": "Sep 28, 2026 3:00 PM",
                     "status": "Waiting Vendor",
                     "status_reason": "Waiting for Vendor Response",
@@ -946,29 +946,58 @@ div[class*="st-key-hpe_top_bar_container"] [data-testid="stHorizontalBlock"] {
     gap: 16px !important;
 }
 
+/* Header Profile Pill at Corner - Background Matches Top Margin (#042121) */
 div[class*="st-key-top_profile_pill_btn"] button {
-    background: #FFFFFF !important;
-    color: #0F172A !important;
-    border: 1px solid #CBD5E1 !important;
+    background: #042121 !important;
+    background-color: #042121 !important;
+    color: #FFFFFF !important;
+    border: 1px solid rgba(255, 255, 255, 0.25) !important;
     border-radius: 24px !important;
-    padding: 4px 12px !important;
+    padding: 4px 14px !important;
     font-size: 12px !important;
     font-weight: 700 !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
     gap: 6px !important;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.06) !important;
+    box-shadow: none !important;
 }
 
-/* Notification Bell Popover Button */
-div[class*="st-key-top_bell_popover"] > div > button {
-    background: transparent !important;
-    border: none !important;
+div[class*="st-key-top_profile_pill_btn"] button:hover {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    border-color: #00B388 !important;
     color: #FFFFFF !important;
-    font-size: 20px !important;
-    padding: 2px 6px !important;
+}
+
+div[class*="st-key-top_profile_pill_btn"] button p,
+div[class*="st-key-top_profile_pill_btn"] button span {
+    color: #FFFFFF !important;
+}
+
+/* Notification Bell Popover Button - Background Matches Top Margin (#042121) */
+div[class*="st-key-top_bell_popover"] button,
+div[class*="st-key-top_bell_popover"] [data-testid="stPopoverButton"],
+div[class*="st-key-top_bell_popover"] > div > button {
+    background: #042121 !important;
+    background-color: #042121 !important;
+    color: #FFFFFF !important;
+    border: 1px solid rgba(255, 255, 255, 0.25) !important;
+    border-radius: 20px !important;
+    padding: 4px 12px !important;
     box-shadow: none !important;
+}
+
+div[class*="st-key-top_bell_popover"] button:hover,
+div[class*="st-key-top_bell_popover"] [data-testid="stPopoverButton"]:hover {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    border-color: #00B388 !important;
+    color: #FFFFFF !important;
+}
+
+div[class*="st-key-top_bell_popover"] button p,
+div[class*="st-key-top_bell_popover"] [data-testid="stPopoverButton"] p,
+div[class*="st-key-top_bell_popover"] span {
+    color: #FFFFFF !important;
 }
 
 /* Notification Drawer Container */
@@ -1023,28 +1052,53 @@ div[class*="st-key-profile_aux_wrapper"] div[data-baseweb="select"] {
     border-top: 1px solid #E2E8F0 !important;
 }
 
-/* Segmented View Mode Toggle */
+/* 4. SEGMENTED TILE TOGGLE - SAME COLOR AS TOP MARGIN (#042121) */
 div[class*="st-key-view_mode_segmented_tile"] {
-    background: #E2E8F0 !important;
+    background: #042121 !important;
+    background-color: #042121 !important;
     border-radius: 10px !important;
     padding: 3px !important;
-    border: 1px solid #CBD5E1 !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
     display: inline-flex !important;
+    align-items: center !important;
+}
+
+div[class*="st-key-view_mode_segmented_tile"] [data-testid="stHorizontalBlock"] {
+    gap: 2px !important;
+    align-items: center !important;
 }
 
 div[class*="st-key-view_mode_segmented_tile"] button {
     border-radius: 8px !important;
-    font-size: 13.5px !important;
+    font-size: 13px !important;
     font-weight: 700 !important;
-    padding: 6px 18px !important;
-    height: 38px !important;
+    padding: 6px 16px !important;
+    height: 34px !important;
     border: none !important;
+    transition: all 0.2s ease !important;
+}
+
+div[class*="st-key-view_mode_segmented_tile"] button[kind="secondary"],
+div[class*="st-key-view_mode_segmented_tile"] button[data-testid="baseButton-secondary"] {
+    background-color: transparent !important;
+    color: #94A3B8 !important;
+}
+
+div[class*="st-key-view_mode_segmented_tile"] button[kind="secondary"]:hover,
+div[class*="st-key-view_mode_segmented_tile"] button[data-testid="baseButton-secondary"]:hover {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+    color: #FFFFFF !important;
 }
 
 div[class*="st-key-view_mode_segmented_tile"] button[kind="primary"],
 div[class*="st-key-view_mode_segmented_tile"] button[data-testid="baseButton-primary"] {
-    background-color: #0A385C !important;
+    background-color: #00B388 !important;
     color: #FFFFFF !important;
+    box-shadow: 0 2px 6px rgba(0, 179, 136, 0.35) !important;
+}
+
+div[class*="st-key-view_mode_segmented_tile"] button p {
+    margin: 0 !important;
 }
 
 /* Status Count Metric Tiles */
@@ -1114,15 +1168,27 @@ div[class*="st-key-action_toolbar_container"] button {
     height: 36px !important;
 }
 
-/* Compact Table Formatting */
+/* 3. Case Header Adjusted - No overflow outside box */
 div[class*="st-key-dashboard_table_header"] {
     background-color: #F1F5F9 !important;
     border: 1px solid #E2E8F0 !important;
     border-radius: 8px !important;
-    padding: 6px 10px !important;
-    margin-bottom: 2px !important;
+    padding: 6px 12px !important;
+    margin-bottom: 4px !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
 }
-div[class*="st-key-dashboard_table_header"] p { font-size: 12px !important; font-weight: 700 !important; color: #475569 !important; margin: 0 !important; }
+div[class*="st-key-dashboard_table_header"] p {
+    font-size: 11.5px !important;
+    font-weight: 700 !important;
+    color: #475569 !important;
+    letter-spacing: 0.2px !important;
+    margin: 0 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
 .case-table-divider { margin: 2px 0 4px 0 !important; border: none !important; border-top: 1px solid #F1F5F9 !important; }
 
 div[class*="st-key-btn_case_"] button {
@@ -1136,15 +1202,52 @@ div[class*="st-key-btn_case_"] button {
     color: #0067B9 !important;
 }
 
-/* Ellipses Popover Trigger Button */
-div[class*="st-key-pop_row_act_"] > div > button {
-    padding: 1px 6px !important;
+/* 1. ELLIPSES POPOVER TRIGGER BUTTON - ABSOLUTELY NO BOX / NO BORDER */
+div[class*="st-key-pop_row_act_"] button,
+div[class*="st-key-pop_row_act_"] [data-testid="stPopoverButton"],
+div[class*="st-key-pop_row_act_"] [data-testid="baseButton-secondary"],
+div[class*="st-key-pop_row_act_"] div[data-testid="stPopover"] > button {
+    border: none !important;
+    border-style: none !important;
+    border-width: 0 !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+    min-height: unset !important;
+    height: 24px !important;
+    width: 24px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    color: #64748B !important;
+    cursor: pointer !important;
+}
+
+div[class*="st-key-pop_row_act_"] button:hover,
+div[class*="st-key-pop_row_act_"] button:focus,
+div[class*="st-key-pop_row_act_"] button:active,
+div[class*="st-key-pop_row_act_"] [data-testid="stPopoverButton"]:hover,
+div[class*="st-key-pop_row_act_"] [data-testid="stPopoverButton"]:focus,
+div[class*="st-key-pop_row_act_"] [data-testid="stPopoverButton"]:active {
     border: none !important;
     background: transparent !important;
-    font-size: 16px !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+    color: #0067B9 !important;
+}
+
+div[class*="st-key-pop_row_act_"] button p,
+div[class*="st-key-pop_row_act_"] [data-testid="stPopoverButton"] p {
+    font-size: 19px !important;
     font-weight: 900 !important;
-    color: #64748B !important;
-    height: 28px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 1 !important;
+    color: inherit !important;
 }
 
 /* Bottom Navigation Bar */
@@ -1181,13 +1284,20 @@ div[class*="st-key-hpe_bottom_nav_container"] button[data-testid="baseButton-pri
     font-weight: 700 !important;
 }
 
-/* =============================================================================
-   ENTERPRISE CASE DETAILS MODAL OVERLAY STYLES
-   ============================================================================= */
+/* 3. DIALOG HEADER DESIGN MATCHING "📁 Case Details" */
+div[data-testid="stDialogHeader"] h2,
+div[role="dialog"] h2,
+div[data-testid="stDialog"] h2 {
+    font-size: 22px !important;
+    font-weight: 800 !important;
+    color: #17233C !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Enterprise Case Details Modal Overlay Styles */
 .case-modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
     padding-bottom: 8px;
     border-bottom: 1px solid #D9E2EC;
     margin-bottom: 12px;
@@ -1219,13 +1329,6 @@ div[class*="st-key-hpe_bottom_nav_container"] button[data-testid="baseButton-pri
 }
 .case-meta-col:last-child {
     border-right: none;
-}
-.case-card {
-    background: #FFFFFF;
-    border: 1px solid #DFE7EF;
-    border-radius: 10px;
-    padding: 16px;
-    margin-bottom: 16px;
 }
 .quick-actions-panel {
     background: #F0FDF4;
@@ -1262,9 +1365,9 @@ div[class*="st-key-hpe_bottom_nav_container"] button[data-testid="baseButton-pri
 st.markdown(ENTERPRISE_CSS, unsafe_allow_html=True)
 
 # ==============================================================================
-# 7. CASE DETAILS MODAL OVERLAY (LARGE ENTERPRISE-STYLE SPECIFICATION)
+# 7. CASE DETAILS MODAL OVERLAY (CLEAN UPPER-LEFT HEADER, NO DUPLICATE)
 # ==============================================================================
-@st.dialog("Case Details", width="large")
+@st.dialog("📁 Case Details", width="large")
 def render_case_modal(case_num):
     case = cases_collection.find_one({"type": "cases", "case_number": case_num})
     if not case:
@@ -1275,24 +1378,15 @@ def render_case_modal(case_num):
     user_role = user.get("role", "Agent")
     is_admin = user_role in ["Admin", "Admin/Agent"]
 
-    # 1. Header Section
-    c_h1, c_h2 = st.columns([9, 1])
-    with c_h1:
-        st.markdown("""
-        <div style="line-height:1.2;">
-            <h2 style="font-size:22px; font-weight:800; color:#17233C; margin:0 0 4px 0;">
-                📁 Case Details
-            </h2>
-            <p style="font-size:12.5px; color:#5F6B7A; margin:0;">
-                View and update case information, communicate with vendor, and manage status.
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-    with c_h2:
-        if st.button("✕", key="btn_close_case_modal", help="Close Case Details"):
-            st.rerun()
-
-    st.markdown("<hr style='margin:10px 0 12px 0; border:none; border-top:1px solid #D9E2EC;'>", unsafe_allow_html=True)
+    # 3. Clean Subtitle under Header - Duplicate header and duplicate close button removed
+    st.markdown("""
+    <div style="line-height:1.2; margin-top:-8px; margin-bottom:12px;">
+        <p style="font-size:12.5px; color:#5F6B7A; margin:0;">
+            View and update case information, communicate with vendor, and manage status.
+        </p>
+    </div>
+    <hr style='margin:0 0 14px 0; border:none; border-top:1px solid #D9E2EC;'>
+    """, unsafe_allow_html=True)
 
     # 2. Case Summary Header
     pri = case.get("priority", "Critical")
@@ -1399,9 +1493,8 @@ def render_case_modal(case_num):
     with tab_info:
         col_left, col_center, col_right = st.columns([3.3, 3.0, 3.7], gap="medium")
 
-        # --- LEFT CARD: CASE INFORMATION ---
+        # --- LEFT CARD: CASE INFORMATION (2. Removed empty white box div) ---
         with col_left:
-            st.markdown('<div class="case-card">', unsafe_allow_html=True)
             head_l1, head_l2 = st.columns([3, 1])
             with head_l1:
                 st.markdown("<strong style='font-size:15px; color:#17233C;'>📄 Case Information</strong>", unsafe_allow_html=True)
@@ -1448,11 +1541,9 @@ def render_case_modal(case_num):
                     <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Related System:</span> <strong style="color:#17233C;">{case.get('related_system')}</strong></div>
                 </div>
                 """, unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
 
-        # --- CENTER CARD: VENDOR INFORMATION ---
+        # --- CENTER CARD: VENDOR INFORMATION (2. Removed empty white box div) ---
         with col_center:
-            st.markdown('<div class="case-card">', unsafe_allow_html=True)
             v_head1, v_head2 = st.columns([1.8, 1.2])
             with v_head1:
                 st.markdown("<strong style='font-size:15px; color:#17233C;'>🏢 Vendor Information</strong>", unsafe_allow_html=True)
@@ -1491,7 +1582,6 @@ def render_case_modal(case_num):
                 if st.button("Copy Phone", key=f"btn_cpy_vphone_{case_num}"):
                     st.toast("Vendor phone copied to clipboard!")
             with qa_c3:
-                # Dynamic Excel generation via pandas
                 v_excel_df = pd.DataFrame([{
                     "Case #": case["case_number"],
                     "Vendor": case.get("vendor_name"),
@@ -1510,11 +1600,9 @@ def render_case_modal(case_num):
                         excel_data = v_excel_df.to_csv(index=False).encode("utf-8")
                 st.download_button("View Excel", excel_data, f"{case['case_number']}_Vendor.xlsx", key=f"btn_down_vexc_{case_num}")
             st.markdown('</div>', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
 
-        # --- RIGHT CARD: UPDATE CASE ---
+        # --- RIGHT CARD: UPDATE CASE (2. Removed empty white box div) ---
         with col_right:
-            st.markdown('<div class="case-card">', unsafe_allow_html=True)
             st.markdown("<strong style='font-size:15px; color:#17233C;'>⏱️ Update Case</strong>", unsafe_allow_html=True)
 
             dd_doc = validation_collection.find_one({"type": "Validation_Dropdown"}) or {}
@@ -1645,16 +1733,14 @@ def render_case_modal(case_num):
                     else:
                         st.warning("Please choose an agent to reassign.")
                 st.markdown('</div>', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
 
         # ----------------------------------------------------------------------
         # BOTTOM ROW: CASE HISTORY (LEFT 63%) & BREACH NOTICE EMAIL (RIGHT 37%)
         # ----------------------------------------------------------------------
         col_hist, col_email = st.columns([6.3, 3.7], gap="medium")
 
-        # --- CASE HISTORY CARD ---
+        # --- CASE HISTORY CARD (2. Removed empty white box div) ---
         with col_hist:
-            st.markdown('<div class="case-card">', unsafe_allow_html=True)
             h_top1, h_top2 = st.columns([3, 2])
             with h_top1:
                 st.markdown("<strong style='font-size:15px; color:#17233C;'>🕒 Case History</strong>", unsafe_allow_html=True)
@@ -1693,11 +1779,9 @@ def render_case_modal(case_num):
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
 
-        # --- AUTOMATED BREACH NOTICE EMAIL CARD ---
+        # --- AUTOMATED BREACH NOTICE EMAIL CARD (2. Removed empty white box div) ---
         with col_email:
-            st.markdown('<div class="case-card">', unsafe_allow_html=True)
             st.markdown("<strong style='font-size:15px; color:#17233C;'>✉️ Automated Breach Notice Email</strong>", unsafe_allow_html=True)
 
             use_tmpl = st.toggle("Use Template", value=True, key=f"tgl_tmpl_{case_num}")
@@ -1752,7 +1836,6 @@ HPE Operations Management"""
                         st.rerun()
                     else:
                         st.warning("Please fill in recipient, subject, and body.")
-            st.markdown('</div>', unsafe_allow_html=True)
 
     # --------------------------------------------------------------------------
     # TAB 2: VENDOR INFORMATION (FULL DETAILED PROFILE)
@@ -2064,8 +2147,11 @@ def render_dashboard():
     user = st.session_state.get("current_user", {})
     user_role = user.get("role", "Admin/Agent")
 
+    # Explicitly define is_admin to prevent NameError
+    is_admin = user_role in ["Admin", "Admin/Agent"]
+
     if "view_mode" not in st.session_state:
-        st.session_state["view_mode"] = "Admin" if user_role in ["Admin", "Admin/Agent"] else "Agent"
+        st.session_state["view_mode"] = "Admin" if is_admin else "Agent"
     
     if user_role == "Agent":
         st.session_state["view_mode"] = "Agent"
@@ -2251,9 +2337,9 @@ def render_dashboard():
 
         st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
 
-        # Table Header
+        # Adjusted Table Header columns so all headers fit perfectly inside the box
         with st.container(key="dashboard_table_header"):
-            h_chk, h_num, h_sub, h_pri, h_ass, h_due, h_st, h_up, h_opt = st.columns([0.4, 1.6, 2.8, 1.2, 1.8, 1.6, 1.4, 1.8, 0.5])
+            h_chk, h_num, h_sub, h_pri, h_ass, h_due, h_st, h_up, h_opt = st.columns([0.35, 1.5, 2.6, 1.1, 1.6, 1.6, 1.4, 1.6, 0.85])
             with h_chk: st.markdown("**☐**")
             with h_num: st.markdown("**Case #  ⇅**")
             with h_sub: st.markdown("**Subject**")
@@ -2262,7 +2348,7 @@ def render_dashboard():
             with h_due: st.markdown("**Due Date  ⇅**")
             with h_st: st.markdown("**Current Status  ⇅**")
             with h_up: st.markdown("**Last Update  ⇅**")
-            with h_opt: st.markdown("**Actions**")
+            with h_opt: st.markdown("<div style='text-align:center;'><strong>Actions</strong></div>", unsafe_allow_html=True)
 
         # Query Formulation on Cases_Collection
         q = q_base.copy()
@@ -2298,7 +2384,8 @@ def render_dashboard():
             badge_st = st_cls_map.get(status_val, "st-open")
             countdown_txt, countdown_color, is_overdue = calculate_countdown(c.get("due_date"))
 
-            rc1, rc2, rc3, rc4, rc5, rc6, rc7, rc8, rc9 = st.columns([0.4, 1.6, 2.8, 1.2, 1.8, 1.6, 1.4, 1.8, 0.5])
+            # Consistent column ratios across all case rows
+            rc1, rc2, rc3, rc4, rc5, rc6, rc7, rc8, rc9 = st.columns([0.35, 1.5, 2.6, 1.1, 1.6, 1.6, 1.4, 1.6, 0.85])
             with rc1:
                 st.checkbox("", key=f"chk_c_{c['case_number']}_{'adm' if is_admin_mode else 'agt'}", label_visibility="collapsed")
             with rc2:
@@ -2329,7 +2416,7 @@ def render_dashboard():
                 </div>
                 """, unsafe_allow_html=True)
             
-            # Action Ellipses (⋮) Functional Popover depending on user role
+            # 1. Action Ellipses (⋮) - Pure ellipses button with zero box/border around it
             with rc9:
                 with st.container(key=f"pop_row_act_{c['case_number']}"):
                     with st.popover("⋮", help="Case Actions"):
