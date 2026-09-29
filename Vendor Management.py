@@ -286,10 +286,10 @@ cases_collection = db["Cases_Collection"]
 validation_collection = db["Validation_Dropdown"]
 
 # ==============================================================================
-# 3. INITIAL SEED DATA & DROPDOWNS SETUP
+# 3. INITIAL SEED DATA & DROPDOWNS SETUP (PERFORMANCE OPTIMIZED)
 # ==============================================================================
 def init_database():
-    """Initializes indexes, validation objects, and realistic reference records."""
+    """Initializes indexes, validation objects, and realistic reference records (runs once)."""
     try:
         try:
             existing_indexes = collection.index_information()
@@ -355,7 +355,7 @@ def init_database():
     except Exception:
         pass
 
-    # 3. Default Roster Seed: ALL contained under type: "roster_list" in Team Roster Collection
+    # 3. Default Roster Seed
     try:
         roster_doc = collection.find_one({"type": "roster_list"})
         if not roster_doc or not roster_doc.get("Data"):
@@ -406,21 +406,15 @@ def init_database():
     except Exception:
         pass
 
-    # Ensure single document container for sessions
     try:
         if not collection.find_one({"type": "sessions"}):
             collection.insert_one({"type": "sessions", "Data": []})
-    except Exception:
-        pass
-
-    # Ensure single document container for aux_history
-    try:
         if not collection.find_one({"type": "aux_history"}):
             collection.insert_one({"type": "aux_history", "Data": []})
     except Exception:
         pass
 
-    # 4. Default Seed Cases: ALL contained in Cases_Collection
+    # 4. Default Seed Cases
     try:
         if cases_collection.count_documents({"type": "cases"}) == 0:
             cases_seed = [
@@ -533,15 +527,7 @@ def init_database():
                     "vendor_alt_contact": "Sarah Lim",
                     "vendor_alt_email": "sarah.lim@abcsoftware.com",
                     "vendor_address": "123 Innovation Drive, San Jose, CA 95134",
-                    "history": [
-                        {
-                            "timestamp": "Sep 28, 2026 08:15 AM",
-                            "user": "Mark Santos",
-                            "type": "Status Changes",
-                            "badge": "Status changed to In Progress",
-                            "details": "Waiting for Vendor Response"
-                        }
-                    ],
+                    "history": [],
                     "communications": [],
                     "attachments": []
                 },
@@ -643,7 +629,6 @@ def init_database():
     except Exception:
         pass
 
-    # 5. Seed Notifications: ALL contained under type: "notifications" in Team Roster Collection
     try:
         notif_doc = collection.find_one({"type": "notifications"})
         if not notif_doc or not notif_doc.get("Data"):
@@ -661,16 +646,6 @@ def init_database():
                             "case_number": "HC-2026-1044",
                             "acknowledged": "false",
                             "created_at": "10:22 AM"
-                        },
-                        {
-                            "id": "notif-002",
-                            "target_email": "all",
-                            "title": "Scheduled Portal Maintenance",
-                            "message": "HPE Licensing Gateway will undergo scheduled maintenance on Saturday 02:00 AM.",
-                            "category": "broadcast",
-                            "case_number": "",
-                            "acknowledged": "false",
-                            "created_at": "09:00 AM"
                         }
                     ]
                 }},
@@ -679,7 +654,10 @@ def init_database():
     except Exception:
         pass
 
-init_database()
+# 2. RUN ONCE PER SESSION TO ENSURE ULTRA-FAST AND SMOOTH EXECUTION
+if "db_initialized" not in st.session_state:
+    init_database()
+    st.session_state["db_initialized"] = True
 
 # ==============================================================================
 # 4. SECURITY, PASSWORDS & AUTHENTICATION HELPER ENGINE
@@ -1000,6 +978,17 @@ div[class*="st-key-top_bell_popover"] span {
     color: #FFFFFF !important;
 }
 
+/* 4. REMOVE ARROW DOWN (CHEVRON) IN BELL BUTTON & ELLIPSES */
+div[class*="st-key-top_bell_popover"] [data-testid="stPopoverButton"] svg,
+div[class*="st-key-top_bell_popover"] button svg,
+div[class*="st-key-top_bell_popover"] svg,
+div[class*="st-key-pop_row_act_"] [data-testid="stPopoverButton"] svg,
+div[class*="st-key-pop_row_act_"] button svg,
+div[class*="st-key-pop_row_act_"] svg {
+    display: none !important;
+    visibility: hidden !important;
+}
+
 /* Notification Drawer Container */
 .notif-item-card {
     background: #FFFFFF;
@@ -1052,7 +1041,7 @@ div[class*="st-key-profile_aux_wrapper"] div[data-baseweb="select"] {
     border-top: 1px solid #E2E8F0 !important;
 }
 
-/* 4. SEGMENTED TILE TOGGLE - SAME COLOR AS TOP MARGIN (#042121) */
+/* Segmented View Mode Toggle - Same Color As Top Margin */
 div[class*="st-key-view_mode_segmented_tile"] {
     background: #042121 !important;
     background-color: #042121 !important;
@@ -1094,7 +1083,7 @@ div[class*="st-key-view_mode_segmented_tile"] button[kind="primary"],
 div[class*="st-key-view_mode_segmented_tile"] button[data-testid="baseButton-primary"] {
     background-color: #00B388 !important;
     color: #FFFFFF !important;
-    box-shadow: 0 2px 6px rgba(0, 179, 136, 0.35) !important;
+    box-shadow: 0 2px 6px rgba(10, 56, 92, 0.35) !important;
 }
 
 div[class*="st-key-view_mode_segmented_tile"] button p {
@@ -1168,25 +1157,25 @@ div[class*="st-key-action_toolbar_container"] button {
     height: 36px !important;
 }
 
-/* 3. Case Header Adjusted - No overflow outside box */
+/* 1. CASE HEADER ADJUSTED: FITS PERFECTLY INSIDE ROUNDED BOX (NO OVERFLOW) */
 div[class*="st-key-dashboard_table_header"] {
     background-color: #F1F5F9 !important;
     border: 1px solid #E2E8F0 !important;
     border-radius: 8px !important;
-    padding: 6px 12px !important;
+    padding: 6px 14px 6px 10px !important;
     margin-bottom: 4px !important;
     box-sizing: border-box !important;
+    width: 100% !important;
+    max-width: 100% !important;
     overflow: hidden !important;
 }
 div[class*="st-key-dashboard_table_header"] p {
-    font-size: 11.5px !important;
+    font-size: 11px !important;
     font-weight: 700 !important;
     color: #475569 !important;
     letter-spacing: 0.2px !important;
     margin: 0 !important;
     white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
 }
 
 .case-table-divider { margin: 2px 0 4px 0 !important; border: none !important; border-top: 1px solid #F1F5F9 !important; }
@@ -1202,7 +1191,7 @@ div[class*="st-key-btn_case_"] button {
     color: #0067B9 !important;
 }
 
-/* 1. ELLIPSES POPOVER TRIGGER BUTTON - ABSOLUTELY NO BOX / NO BORDER */
+/* 1. FIX ELLIPSES BUTTON IN CASE TABLE: ZERO BOX / ZERO OUTLINE */
 div[class*="st-key-pop_row_act_"] button,
 div[class*="st-key-pop_row_act_"] [data-testid="stPopoverButton"],
 div[class*="st-key-pop_row_act_"] [data-testid="baseButton-secondary"],
@@ -1228,16 +1217,12 @@ div[class*="st-key-pop_row_act_"] div[data-testid="stPopover"] > button {
 
 div[class*="st-key-pop_row_act_"] button:hover,
 div[class*="st-key-pop_row_act_"] button:focus,
-div[class*="st-key-pop_row_act_"] button:active,
 div[class*="st-key-pop_row_act_"] [data-testid="stPopoverButton"]:hover,
-div[class*="st-key-pop_row_act_"] [data-testid="stPopoverButton"]:focus,
-div[class*="st-key-pop_row_act_"] [data-testid="stPopoverButton"]:active {
+div[class*="st-key-pop_row_act_"] [data-testid="stPopoverButton"]:focus {
     border: none !important;
     background: transparent !important;
-    background-color: transparent !important;
-    box-shadow: none !important;
-    outline: none !important;
     color: #0067B9 !important;
+    box-shadow: none !important;
 }
 
 div[class*="st-key-pop_row_act_"] button p,
@@ -1247,7 +1232,6 @@ div[class*="st-key-pop_row_act_"] [data-testid="stPopoverButton"] p {
     margin: 0 !important;
     padding: 0 !important;
     line-height: 1 !important;
-    color: inherit !important;
 }
 
 /* Bottom Navigation Bar */
@@ -1284,7 +1268,7 @@ div[class*="st-key-hpe_bottom_nav_container"] button[data-testid="baseButton-pri
     font-weight: 700 !important;
 }
 
-/* 3. DIALOG HEADER DESIGN MATCHING "📁 Case Details" */
+/* Dialog Header Styling */
 div[data-testid="stDialogHeader"] h2,
 div[role="dialog"] h2,
 div[data-testid="stDialog"] h2 {
@@ -1296,12 +1280,38 @@ div[data-testid="stDialog"] h2 {
     padding: 0 !important;
 }
 
-/* Enterprise Case Details Modal Overlay Styles */
-.case-modal-header {
-    padding-bottom: 8px;
-    border-bottom: 1px solid #D9E2EC;
-    margin-bottom: 12px;
+/* 5. SOLID WHITE SINGLE-BLOCK BACKGROUND FOR CASE INFORMATION, VENDOR INFO, UPDATE CASE, CASE HISTORY */
+div[class*="st-key-case_info_block_"],
+div[class*="st-key-vendor_info_block_"],
+div[class*="st-key-update_case_block_"],
+div[class*="st-key-case_history_block_"],
+div[class*="st-key-breach_email_block_"] {
+    background: #FFFFFF !important;
+    background-color: #FFFFFF !important;
+    border: 1px solid #DFE7EF !important;
+    border-radius: 10px !important;
+    padding: 16px 18px !important;
+    margin-bottom: 14px !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02) !important;
 }
+
+/* 3. QUICK ACTIONS & REASSIGN CASE BACKGROUNDS (NO EMPTY BOXES) */
+div[class*="st-key-qa_panel_"] {
+    background-color: #F0FDF4 !important;
+    border: 1px solid #BBF7D0 !important;
+    border-radius: 8px !important;
+    padding: 10px 12px !important;
+    margin-top: 12px !important;
+}
+
+div[class*="st-key-reassign_box_"] {
+    background-color: #EEF6FC !important;
+    border: 1px solid #BAE6FD !important;
+    border-radius: 8px !important;
+    padding: 12px !important;
+    margin-top: 12px !important;
+}
+
 .case-summary-box {
     display: flex;
     flex-wrap: wrap;
@@ -1330,20 +1340,6 @@ div[data-testid="stDialog"] h2 {
 .case-meta-col:last-child {
     border-right: none;
 }
-.quick-actions-panel {
-    background: #F0FDF4;
-    border: 1px solid #BBF7D0;
-    border-radius: 8px;
-    padding: 12px;
-    margin-top: 14px;
-}
-.reassign-box {
-    background: #EEF6FC;
-    border: 1px solid #BAE6FD;
-    border-radius: 8px;
-    padding: 12px;
-    margin-top: 14px;
-}
 .timeline-item {
     border-left: 2px solid #D9E2EC;
     padding-left: 14px;
@@ -1365,7 +1361,7 @@ div[data-testid="stDialog"] h2 {
 st.markdown(ENTERPRISE_CSS, unsafe_allow_html=True)
 
 # ==============================================================================
-# 7. CASE DETAILS MODAL OVERLAY (CLEAN UPPER-LEFT HEADER, NO DUPLICATE)
+# 7. CASE DETAILS MODAL OVERLAY (CLEAN SINGLE UPPER-LEFT TITLE)
 # ==============================================================================
 @st.dialog("📁 Case Details", width="large")
 def render_case_modal(case_num):
@@ -1378,7 +1374,7 @@ def render_case_modal(case_num):
     user_role = user.get("role", "Agent")
     is_admin = user_role in ["Admin", "Admin/Agent"]
 
-    # 3. Clean Subtitle under Header - Duplicate header and duplicate close button removed
+    # Clean Subtitle under Header
     st.markdown("""
     <div style="line-height:1.2; margin-top:-8px; margin-bottom:12px;">
         <p style="font-size:12.5px; color:#5F6B7A; margin:0;">
@@ -1479,7 +1475,7 @@ def render_case_modal(case_num):
     </div>
     """, unsafe_allow_html=True)
 
-    # 4. Tab Navigation (Working Tabs)
+    # 4. Tab Navigation
     tab_info, tab_vendor, tab_comm, tab_att = st.tabs([
         "ⓘ Case Information",
         "♧ Vendor Information",
@@ -1493,301 +1489,303 @@ def render_case_modal(case_num):
     with tab_info:
         col_left, col_center, col_right = st.columns([3.3, 3.0, 3.7], gap="medium")
 
-        # --- LEFT CARD: CASE INFORMATION (2. Removed empty white box div) ---
+        # --- LEFT CARD: CASE INFORMATION (Solid White Block Background) ---
         with col_left:
-            head_l1, head_l2 = st.columns([3, 1])
-            with head_l1:
-                st.markdown("<strong style='font-size:15px; color:#17233C;'>📄 Case Information</strong>", unsafe_allow_html=True)
-            with head_l2:
-                edit_mode = st.session_state.get(f"edit_case_{case_num}", False)
-                btn_txt = "Done" if edit_mode else "Edit"
-                if st.button(btn_txt, key=f"btn_toggle_edit_{case_num}"):
-                    st.session_state[f"edit_case_{case_num}"] = not edit_mode
-                    st.rerun()
+            with st.container(key=f"case_info_block_{case_num}"):
+                head_l1, head_l2 = st.columns([3, 1])
+                with head_l1:
+                    st.markdown("<strong style='font-size:15px; color:#17233C;'>📄 Case Information</strong>", unsafe_allow_html=True)
+                with head_l2:
+                    edit_mode = st.session_state.get(f"edit_case_{case_num}", False)
+                    btn_txt = "Done" if edit_mode else "Edit"
+                    if st.button(btn_txt, key=f"btn_toggle_edit_{case_num}"):
+                        st.session_state[f"edit_case_{case_num}"] = not edit_mode
+                        st.rerun()
 
-            if st.session_state.get(f"edit_case_{case_num}", False):
-                new_sub = st.text_input("Subject", value=case.get("subject", ""))
-                new_desc = st.text_area("Description", value=case.get("description", ""), height=90)
-                new_client = st.text_input("Client / Account", value=case.get("account", ""))
-                new_sys = st.text_input("Related System", value=case.get("related_system", ""))
-                new_cat = st.text_input("Category", value=case.get("case_category", ""))
-                if st.button("💾 Save Changes", key=f"btn_save_edit_{case_num}", type="primary"):
-                    now_str = get_current_ph_time().strftime("%b %d, %Y %I:%M %p")
-                    cases_collection.update_one(
-                        {"type": "cases", "case_number": case_num},
-                        {"$set": {
-                            "subject": new_sub, "description": new_desc, "account": new_client,
-                            "client": new_client, "related_system": new_sys, "case_category": new_cat,
-                            "last_update": now_str
-                        }}
-                    )
-                    st.session_state[f"edit_case_{case_num}"] = False
-                    st.success("Case information updated!")
-                    st.rerun()
-            else:
+                if st.session_state.get(f"edit_case_{case_num}", False):
+                    new_sub = st.text_input("Subject", value=case.get("subject", ""))
+                    new_desc = st.text_area("Description", value=case.get("description", ""), height=90)
+                    new_client = st.text_input("Client / Account", value=case.get("account", ""))
+                    new_sys = st.text_input("Related System", value=case.get("related_system", ""))
+                    new_cat = st.text_input("Category", value=case.get("case_category", ""))
+                    if st.button("💾 Save Changes", key=f"btn_save_edit_{case_num}", type="primary"):
+                        now_str = get_current_ph_time().strftime("%b %d, %Y %I:%M %p")
+                        cases_collection.update_one(
+                            {"type": "cases", "case_number": case_num},
+                            {"$set": {
+                                "subject": new_sub, "description": new_desc, "account": new_client,
+                                "client": new_client, "related_system": new_sys, "case_category": new_cat,
+                                "last_update": now_str
+                            }}
+                        )
+                        st.session_state[f"edit_case_{case_num}"] = False
+                        st.success("Case information updated!")
+                        st.rerun()
+                else:
+                    st.markdown(f"""
+                    <div style="font-size:12px; line-height:1.9;">
+                        <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Case #:</span> <strong style="color:#17233C;">{case['case_number']}</strong></div>
+                        <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Subject:</span> <strong style="color:#17233C;">{case.get('subject')}</strong></div>
+                        <div style="margin:4px 0;"><span style="color:#5F6B7A;">Description:</span><br><span style="color:#17233C; font-size:11.5px;">{case.get('description')}</span></div>
+                        <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Priority:</span> <span class="badge {pri_badge_cls}">{pri}</span></div>
+                        <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Assigned To:</span> <strong style="color:#17233C;">{case.get('assigned_to')}</strong></div>
+                        <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Due Date:</span> <strong style="color:{countdown_color};">{case.get('due_date')}</strong></div>
+                        <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Created Date:</span> <strong style="color:#17233C;">{case.get('created_at')}</strong></div>
+                        <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Last Update:</span> <strong style="color:#17233C;">{case.get('last_update')}</strong></div>
+                        <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Current Status:</span> <span class="badge-status st-on-hold">{case.get('status')}</span></div>
+                        <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Case Category:</span> <strong style="color:#17233C;">{case.get('case_category')}</strong></div>
+                        <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Client:</span> <strong style="color:#17233C;">{case.get('account')}</strong></div>
+                        <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Related System:</span> <strong style="color:#17233C;">{case.get('related_system')}</strong></div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+        # --- CENTER CARD: VENDOR INFORMATION (Solid White Block Background) ---
+        with col_center:
+            with st.container(key=f"vendor_info_block_{case_num}"):
+                v_head1, v_head2 = st.columns([1.8, 1.2])
+                with v_head1:
+                    st.markdown("<strong style='font-size:15px; color:#17233C;'>🏢 Vendor Information</strong>", unsafe_allow_html=True)
+                with v_head2:
+                    if st.button("Open Record", key=f"btn_open_vend_{case_num}", help="Open full vendor record"):
+                        st.session_state[f"show_vendor_record_modal_{case_num}"] = True
+
                 st.markdown(f"""
-                <div style="font-size:12px; line-height:1.9;">
-                    <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Case #:</span> <strong style="color:#17233C;">{case['case_number']}</strong></div>
-                    <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Subject:</span> <strong style="color:#17233C;">{case.get('subject')}</strong></div>
-                    <div style="margin:4px 0;"><span style="color:#5F6B7A;">Description:</span><br><span style="color:#17233C; font-size:11.5px;">{case.get('description')}</span></div>
-                    <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Priority:</span> <span class="badge {pri_badge_cls}">{pri}</span></div>
-                    <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Assigned To:</span> <strong style="color:#17233C;">{case.get('assigned_to')}</strong></div>
-                    <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Due Date:</span> <strong style="color:{countdown_color};">{case.get('due_date')}</strong></div>
-                    <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Created Date:</span> <strong style="color:#17233C;">{case.get('created_at')}</strong></div>
-                    <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Last Update:</span> <strong style="color:#17233C;">{case.get('last_update')}</strong></div>
-                    <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Current Status:</span> <span class="badge-status st-on-hold">{case.get('status')}</span></div>
-                    <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Case Category:</span> <strong style="color:#17233C;">{case.get('case_category')}</strong></div>
-                    <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Client:</span> <strong style="color:#17233C;">{case.get('account')}</strong></div>
-                    <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Related System:</span> <strong style="color:#17233C;">{case.get('related_system')}</strong></div>
+                <div style="display:flex; align-items:center; gap:10px; margin:8px 0 10px 0;">
+                    <div style="width:36px; height:36px; border-radius:6px; background:#0067B9; color:white; font-size:13px; font-weight:800; display:flex; align-items:center; justify-content:center;">
+                        ABC
+                    </div>
+                    <div style="line-height:1.15;">
+                        <strong style="font-size:14.5px; color:#17233C;">{case.get('vendor_name', 'ABC Software Inc.')}</strong><br>
+                        <small style="color:#5F6B7A;">ID: {case.get('vendor_id', 'VEND-ABC-019')}</small>
+                    </div>
+                </div>
+                <div style="font-size:12px; line-height:1.75;">
+                    <div><span style="color:#5F6B7A;">Primary Contact:</span> <strong style="color:#17233C;">{case.get('vendor_contact', 'Michael Tan')}</strong></div>
+                    <div><span style="color:#5F6B7A;">Email:</span> <a href="mailto:{case.get('vendor_email', 'support@abcsoftware.com')}" style="color:#0067B9; text-decoration:none;">{case.get('vendor_email', 'support@abcsoftware.com')}</a></div>
+                    <div><span style="color:#5F6B7A;">Phone:</span> <strong style="color:#17233C;">{case.get('vendor_phone', '+1 555 123 4567')}</strong></div>
+                    <div><span style="color:#5F6B7A;">Alternate Contact:</span> <strong style="color:#17233C;">{case.get('vendor_alt_contact', 'Sarah Lim')}</strong></div>
+                    <div><span style="color:#5F6B7A;">Alternate Email:</span> <a href="mailto:{case.get('vendor_alt_email', 'sarah.lim@abcsoftware.com')}" style="color:#0067B9; text-decoration:none;">{case.get('vendor_alt_email', 'sarah.lim@abcsoftware.com')}</a></div>
+                    <div><span style="color:#5F6B7A;">Address:</span> <br><span style="color:#17233C; font-size:11.5px;">{case.get('vendor_address', '123 Innovation Drive, San Jose, CA 95134')}</span></div>
                 </div>
                 """, unsafe_allow_html=True)
 
-        # --- CENTER CARD: VENDOR INFORMATION (2. Removed empty white box div) ---
-        with col_center:
-            v_head1, v_head2 = st.columns([1.8, 1.2])
-            with v_head1:
-                st.markdown("<strong style='font-size:15px; color:#17233C;'>🏢 Vendor Information</strong>", unsafe_allow_html=True)
-            with v_head2:
-                if st.button("Open Record", key=f"btn_open_vend_{case_num}", help="Open full vendor record"):
-                    st.session_state[f"show_vendor_record_modal_{case_num}"] = True
+                # 3. Quick Actions Panel - Light Green Background, No Empty Box on Top
+                with st.container(key=f"qa_panel_{case_num}"):
+                    st.markdown("<strong style='font-size:12px; color:#16855B;'>➕ Quick Actions</strong>", unsafe_allow_html=True)
+                    qa_c1, qa_c2, qa_c3 = st.columns(3)
+                    with qa_c1:
+                        if st.button("Copy Email", key=f"btn_cpy_vemail_{case_num}"):
+                            st.toast("Vendor email copied to clipboard!")
+                    with qa_c2:
+                        if st.button("Copy Phone", key=f"btn_cpy_vphone_{case_num}"):
+                            st.toast("Vendor phone copied to clipboard!")
+                    with qa_c3:
+                        v_excel_df = pd.DataFrame([{
+                            "Case #": case["case_number"],
+                            "Vendor": case.get("vendor_name"),
+                            "Contact": case.get("vendor_contact"),
+                            "Email": case.get("vendor_email"),
+                            "Phone": case.get("vendor_phone"),
+                            "Due Date": case.get("due_date"),
+                            "Status": case.get("status")
+                        }])
+                        buf = io.BytesIO()
+                        with pd.ExcelWriter(buf, engine="openpyxl") if "openpyxl" in sys.modules else io.BytesIO() as writer:
+                            try:
+                                v_excel_df.to_excel(writer, index=False)
+                                excel_data = buf.getvalue()
+                            except Exception:
+                                excel_data = v_excel_df.to_csv(index=False).encode("utf-8")
+                        st.download_button("View Excel", excel_data, f"{case['case_number']}_Vendor.xlsx", key=f"btn_down_vexc_{case_num}")
 
-            st.markdown(f"""
-            <div style="display:flex; align-items:center; gap:10px; margin:8px 0 10px 0;">
-                <div style="width:36px; height:36px; border-radius:6px; background:#0067B9; color:white; font-size:13px; font-weight:800; display:flex; align-items:center; justify-content:center;">
-                    ABC
-                </div>
-                <div style="line-height:1.15;">
-                    <strong style="font-size:14.5px; color:#17233C;">{case.get('vendor_name', 'ABC Software Inc.')}</strong><br>
-                    <small style="color:#5F6B7A;">ID: {case.get('vendor_id', 'VEND-ABC-019')}</small>
-                </div>
-            </div>
-            <div style="font-size:12px; line-height:1.75;">
-                <div><span style="color:#5F6B7A;">Primary Contact:</span> <strong style="color:#17233C;">{case.get('vendor_contact', 'Michael Tan')}</strong></div>
-                <div><span style="color:#5F6B7A;">Email:</span> <a href="mailto:{case.get('vendor_email', 'support@abcsoftware.com')}" style="color:#0067B9; text-decoration:none;">{case.get('vendor_email', 'support@abcsoftware.com')}</a></div>
-                <div><span style="color:#5F6B7A;">Phone:</span> <strong style="color:#17233C;">{case.get('vendor_phone', '+1 555 123 4567')}</strong></div>
-                <div><span style="color:#5F6B7A;">Alternate Contact:</span> <strong style="color:#17233C;">{case.get('vendor_alt_contact', 'Sarah Lim')}</strong></div>
-                <div><span style="color:#5F6B7A;">Alternate Email:</span> <a href="mailto:{case.get('vendor_alt_email', 'sarah.lim@abcsoftware.com')}" style="color:#0067B9; text-decoration:none;">{case.get('vendor_alt_email', 'sarah.lim@abcsoftware.com')}</a></div>
-                <div><span style="color:#5F6B7A;">Address:</span> <br><span style="color:#17233C; font-size:11.5px;">{case.get('vendor_address', '123 Innovation Drive, San Jose, CA 95134')}</span></div>
-            </div>
-            """, unsafe_allow_html=True)
-
-            # Quick Actions Panel
-            st.markdown('<div class="quick-actions-panel">', unsafe_allow_html=True)
-            st.markdown("<strong style='font-size:12px; color:#16855B;'>➕ Quick Actions</strong>", unsafe_allow_html=True)
-            qa_c1, qa_c2, qa_c3 = st.columns(3)
-            with qa_c1:
-                if st.button("Copy Email", key=f"btn_cpy_vemail_{case_num}"):
-                    st.toast("Vendor email copied to clipboard!")
-            with qa_c2:
-                if st.button("Copy Phone", key=f"btn_cpy_vphone_{case_num}"):
-                    st.toast("Vendor phone copied to clipboard!")
-            with qa_c3:
-                v_excel_df = pd.DataFrame([{
-                    "Case #": case["case_number"],
-                    "Vendor": case.get("vendor_name"),
-                    "Contact": case.get("vendor_contact"),
-                    "Email": case.get("vendor_email"),
-                    "Phone": case.get("vendor_phone"),
-                    "Due Date": case.get("due_date"),
-                    "Status": case.get("status")
-                }])
-                buf = io.BytesIO()
-                with pd.ExcelWriter(buf, engine="openpyxl") if "openpyxl" in sys.modules else io.BytesIO() as writer:
-                    try:
-                        v_excel_df.to_excel(writer, index=False)
-                        excel_data = buf.getvalue()
-                    except Exception:
-                        excel_data = v_excel_df.to_csv(index=False).encode("utf-8")
-                st.download_button("View Excel", excel_data, f"{case['case_number']}_Vendor.xlsx", key=f"btn_down_vexc_{case_num}")
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        # --- RIGHT CARD: UPDATE CASE (2. Removed empty white box div) ---
+        # --- RIGHT CARD: UPDATE CASE (Solid White Block Background) ---
         with col_right:
-            st.markdown("<strong style='font-size:15px; color:#17233C;'>⏱️ Update Case</strong>", unsafe_allow_html=True)
+            with st.container(key=f"update_case_block_{case_num}"):
+                st.markdown("<strong style='font-size:15px; color:#17233C;'>⏱️ Update Case</strong>", unsafe_allow_html=True)
 
-            dd_doc = validation_collection.find_one({"type": "Validation_Dropdown"}) or {}
-            statuses = dd_doc.get("Case_Status", ["New", "Open", "In Progress", "On Hold", "Pending Vendor", "Pending Client", "Resolved", "Closed"])
-            reasons = dd_doc.get("Case_Reason", ["Waiting for Vendor Response", "Waiting for Client", "Pending Internal Action", "Investigation", "Other"])
-            closures = dd_doc.get("Closure_Type", ["-- Select Closure Type --", "Resolved", "Completed", "Cancelled", "Duplicate"])
-            breaches = dd_doc.get("Contract_Breach", ["-- Select Breach Reason --", "Vendor Delay", "Client Delay", "Internal Delay", "SLA Missed - Non-Delivery"])
+                dd_doc = validation_collection.find_one({"type": "Validation_Dropdown"}) or {}
+                statuses = dd_doc.get("Case_Status", ["New", "Open", "In Progress", "On Hold", "Pending Vendor", "Pending Client", "Resolved", "Closed"])
+                reasons = dd_doc.get("Case_Reason", ["Waiting for Vendor Response", "Waiting for Client", "Pending Internal Action", "Investigation", "Other"])
+                closures = dd_doc.get("Closure_Type", ["-- Select Closure Type --", "Resolved", "Completed", "Cancelled", "Duplicate"])
+                breaches = dd_doc.get("Contract_Breach", ["-- Select Breach Reason --", "Vendor Delay", "Client Delay", "Internal Delay", "SLA Missed - Non-Delivery"])
 
-            u_c1, u_c2 = st.columns(2)
-            with u_c1:
-                cur_s = case.get("status", "On Hold")
-                s_idx = statuses.index(cur_s) if cur_s in statuses else 0
-                sel_status = st.selectbox("Case Status", statuses, index=s_idx, key=f"sel_st_{case_num}")
-                sel_closure = st.selectbox("Closure Type", closures, key=f"sel_cl_{case_num}")
-            with u_c2:
-                cur_r = case.get("status_reason", "Waiting for Vendor Response")
-                r_idx = reasons.index(cur_r) if cur_r in reasons else 0
-                sel_reason = st.selectbox("Status Reason", reasons, index=r_idx, key=f"sel_rs_{case_num}")
-                sel_breach = st.selectbox("Breach Reason", breaches, key=f"sel_br_{case_num}")
+                u_c1, u_c2 = st.columns(2)
+                with u_c1:
+                    cur_s = case.get("status", "On Hold")
+                    s_idx = statuses.index(cur_s) if cur_s in statuses else 0
+                    sel_status = st.selectbox("Case Status", statuses, index=s_idx, key=f"sel_st_{case_num}")
+                    sel_closure = st.selectbox("Closure Type", closures, key=f"sel_cl_{case_num}")
+                with u_c2:
+                    cur_r = case.get("status_reason", "Waiting for Vendor Response")
+                    r_idx = reasons.index(cur_r) if cur_r in reasons else 0
+                    sel_reason = st.selectbox("Status Reason", reasons, index=r_idx, key=f"sel_rs_{case_num}")
+                    sel_breach = st.selectbox("Breach Reason", breaches, key=f"sel_br_{case_num}")
 
-            remarks_val = st.text_area("Remarks / Update", placeholder="Add update, notes or next steps...", key=f"rem_{case_num}", height=75)
-            st.caption(f"{len(remarks_val)}/1000 characters")
+                remarks_val = st.text_area("Remarks / Update", placeholder="Add update, notes or next steps...", key=f"rem_{case_num}", height=75)
+                st.caption(f"{len(remarks_val)}/1000 characters")
 
-            # Update Action Buttons
-            act_b1, act_b2, act_b3 = st.columns([1.5, 1.2, 1.7])
-            with act_b1:
-                if st.button("✓ Update Case", type="primary", key=f"btn_upd_sub_{case_num}"):
-                    now_str = get_current_ph_time().strftime("%b %d, %Y %I:%M %p")
-                    new_hist_entry = {
-                        "timestamp": now_str,
-                        "user": user.get("name", "User"),
-                        "type": "Status Changes",
-                        "badge": f"Status changed to {sel_status}",
-                        "details": remarks_val or f"Reason: {sel_reason}"
-                    }
-                    cases_collection.update_one(
-                        {"type": "cases", "case_number": case_num},
-                        {
-                            "$set": {
-                                "status": sel_status, "status_reason": sel_reason,
-                                "closure_type": sel_closure if sel_closure != "-- Select Closure Type --" else "",
-                                "breach_reason": sel_breach if sel_breach != "-- Select Breach Reason --" else "",
-                                "last_update": now_str
-                            },
-                            "$push": {"history": {"$each": [new_hist_entry], "$position": 0}}
-                        }
-                    )
-                    st.success("Case successfully updated!")
-                    time.sleep(0.5)
-                    st.rerun()
-
-            with act_b2:
-                if st.button("Add Note", key=f"btn_add_note_{case_num}"):
-                    if remarks_val:
+                act_b1, act_b2, act_b3 = st.columns([1.5, 1.2, 1.7])
+                with act_b1:
+                    if st.button("✓ Update Case", type="primary", key=f"btn_upd_sub_{case_num}"):
                         now_str = get_current_ph_time().strftime("%b %d, %Y %I:%M %p")
-                        note_entry = {
+                        new_hist_entry = {
                             "timestamp": now_str,
                             "user": user.get("name", "User"),
-                            "type": "Notes",
-                            "badge": "Note Added",
-                            "details": remarks_val
-                        }
-                        cases_collection.update_one(
-                            {"type": "cases", "case_number": case_num},
-                            {"$push": {"history": {"$each": [note_entry], "$position": 0}}}
-                        )
-                        st.success("Note logged to Case History!")
-                        time.sleep(0.5)
-                        st.rerun()
-                    else:
-                        st.warning("Please type a note in the remarks box.")
-
-            with act_b3:
-                if st.button("Request Transfer", key=f"btn_trf_req_{case_num}"):
-                    st.session_state[f"show_transfer_dialog_{case_num}"] = True
-
-            # Dedicated Admin-Only Reassignment Section
-            if is_admin:
-                st.markdown('<div class="reassign-box">', unsafe_allow_html=True)
-                st.markdown("<strong style='font-size:12.5px; color:#0067B9;'>🔄 Reassign Case (Admin Only)</strong>", unsafe_allow_html=True)
-                roster_doc = collection.find_one({"type": "roster_list"}) or {}
-                all_agents = [u for u in roster_doc.get("Data", []) if u.get("role") in ["Agent", "Admin/Agent"]]
-                agent_names = ["-- Select Agent --"] + [u["name"] for u in all_agents]
-
-                reassign_to = st.selectbox("Reassign To", agent_names, key=f"sel_reassign_{case_num}", label_visibility="collapsed")
-                send_notif = st.checkbox("Send notification to new assignee", value=True, key=f"chk_reassign_notif_{case_num}")
-
-                if st.button("Reassign Case", key=f"btn_exec_reassign_{case_num}"):
-                    if reassign_to != "-- Select Agent --":
-                        chosen_agent = next((u for u in all_agents if u["name"] == reassign_to), None)
-                        now_str = get_current_ph_time().strftime("%b %d, %Y %I:%M %p")
-                        new_hist = {
-                            "timestamp": now_str,
-                            "user": user.get("name", "Admin"),
-                            "type": "Assignments",
-                            "badge": f"Reassigned to {reassign_to}",
-                            "details": f"Reassigned by {user.get('name')}."
+                            "type": "Status Changes",
+                            "badge": f"Status changed to {sel_status}",
+                            "details": remarks_val or f"Reason: {sel_reason}"
                         }
                         cases_collection.update_one(
                             {"type": "cases", "case_number": case_num},
                             {
                                 "$set": {
-                                    "assigned_to": reassign_to,
-                                    "assigned_employee_id": chosen_agent.get("employee_id", "") if chosen_agent else "",
-                                    "assignee_email": chosen_agent.get("email", "") if chosen_agent else "",
+                                    "status": sel_status, "status_reason": sel_reason,
+                                    "closure_type": sel_closure if sel_closure != "-- Select Closure Type --" else "",
+                                    "breach_reason": sel_breach if sel_breach != "-- Select Breach Reason --" else "",
                                     "last_update": now_str
                                 },
-                                "$push": {"history": {"$each": [new_hist], "$position": 0}}
+                                "$push": {"history": {"$each": [new_hist_entry], "$position": 0}}
                             }
                         )
-                        if send_notif and chosen_agent:
-                            notif_doc = collection.find_one({"type": "notifications"}) or {}
-                            n_list = notif_doc.get("Data", [])
-                            n_list.append({
-                                "id": str(uuid.uuid4()),
-                                "target_email": chosen_agent["email"],
-                                "title": "Case Reassigned To You",
-                                "message": f"{case_num} has been reassigned to you by {user.get('name')}.",
-                                "category": "new_case",
-                                "case_number": case_num,
-                                "acknowledged": "false",
-                                "created_at": get_current_ph_time().strftime("%I:%M %p")
-                            })
-                            collection.update_one({"type": "notifications"}, {"$set": {"Data": n_list}}, upsert=True)
-                        st.success(f"Case {case_num} reassigned to {reassign_to}!")
+                        st.success("Case successfully updated!")
                         time.sleep(0.5)
                         st.rerun()
-                    else:
-                        st.warning("Please choose an agent to reassign.")
-                st.markdown('</div>', unsafe_allow_html=True)
+
+                with act_b2:
+                    if st.button("Add Note", key=f"btn_add_note_{case_num}"):
+                        if remarks_val:
+                            now_str = get_current_ph_time().strftime("%b %d, %Y %I:%M %p")
+                            note_entry = {
+                                "timestamp": now_str,
+                                "user": user.get("name", "User"),
+                                "type": "Notes",
+                                "badge": "Note Added",
+                                "details": remarks_val
+                            }
+                            cases_collection.update_one(
+                                {"type": "cases", "case_number": case_num},
+                                {"$push": {"history": {"$each": [note_entry], "$position": 0}}}
+                            )
+                            st.success("Note logged to Case History!")
+                            time.sleep(0.5)
+                            st.rerun()
+                        else:
+                            st.warning("Please type a note in the remarks box.")
+
+                with act_b3:
+                    if st.button("Request Transfer", key=f"btn_trf_req_{case_num}"):
+                        st.session_state[f"show_transfer_dialog_{case_num}"] = True
+
+                # 3. Dedicated Admin-Only Reassignment Section - Light Blue Background, No Empty Box on Top
+                if is_admin:
+                    with st.container(key=f"reassign_box_{case_num}"):
+                        st.markdown("<strong style='font-size:12.5px; color:#0067B9;'>🔄 Reassign Case (Admin Only)</strong>", unsafe_allow_html=True)
+                        roster_doc = collection.find_one({"type": "roster_list"}) or {}
+                        all_agents = [u for u in roster_doc.get("Data", []) if u.get("role") in ["Agent", "Admin/Agent"]]
+                        agent_names = ["-- Select Agent --"] + [u["name"] for u in all_agents]
+
+                        reassign_to = st.selectbox("Reassign To", agent_names, key=f"sel_reassign_{case_num}", label_visibility="collapsed")
+                        send_notif = st.checkbox("Send notification to new assignee", value=True, key=f"chk_reassign_notif_{case_num}")
+
+                        if st.button("Reassign Case", key=f"btn_exec_reassign_{case_num}"):
+                            if reassign_to != "-- Select Agent --":
+                                chosen_agent = next((u for u in all_agents if u["name"] == reassign_to), None)
+                                now_str = get_current_ph_time().strftime("%b %d, %Y %I:%M %p")
+                                new_hist = {
+                                    "timestamp": now_str,
+                                    "user": user.get("name", "Admin"),
+                                    "type": "Assignments",
+                                    "badge": f"Reassigned to {reassign_to}",
+                                    "details": f"Reassigned by {user.get('name')}."
+                                }
+                                cases_collection.update_one(
+                                    {"type": "cases", "case_number": case_num},
+                                    {
+                                        "$set": {
+                                            "assigned_to": reassign_to,
+                                            "assigned_employee_id": chosen_agent.get("employee_id", "") if chosen_agent else "",
+                                            "assignee_email": chosen_agent.get("email", "") if chosen_agent else "",
+                                            "last_update": now_str
+                                        },
+                                        "$push": {"history": {"$each": [new_hist], "$position": 0}}
+                                    }
+                                )
+                                if send_notif and chosen_agent:
+                                    notif_doc = collection.find_one({"type": "notifications"}) or {}
+                                    n_list = notif_doc.get("Data", [])
+                                    n_list.append({
+                                        "id": str(uuid.uuid4()),
+                                        "target_email": chosen_agent["email"],
+                                        "title": "Case Reassigned To You",
+                                        "message": f"{case_num} has been reassigned to you by {user.get('name')}.",
+                                        "category": "new_case",
+                                        "case_number": case_num,
+                                        "acknowledged": "false",
+                                        "created_at": get_current_ph_time().strftime("%I:%M %p")
+                                    })
+                                    collection.update_one({"type": "notifications"}, {"$set": {"Data": n_list}}, upsert=True)
+                                st.success(f"Case {case_num} reassigned to {reassign_to}!")
+                                time.sleep(0.5)
+                                st.rerun()
+                            else:
+                                st.warning("Please choose an agent to reassign.")
 
         # ----------------------------------------------------------------------
         # BOTTOM ROW: CASE HISTORY (LEFT 63%) & BREACH NOTICE EMAIL (RIGHT 37%)
         # ----------------------------------------------------------------------
         col_hist, col_email = st.columns([6.3, 3.7], gap="medium")
 
-        # --- CASE HISTORY CARD (2. Removed empty white box div) ---
+        # --- CASE HISTORY CARD (Solid White Block Background) ---
         with col_hist:
-            h_top1, h_top2 = st.columns([3, 2])
-            with h_top1:
-                st.markdown("<strong style='font-size:15px; color:#17233C;'>🕒 Case History</strong>", unsafe_allow_html=True)
-            with h_top2:
-                hist_filter = st.selectbox(
-                    "Show",
-                    ["All Activities", "Status Changes", "Notes", "Communications", "Assignments"],
-                    key=f"hist_filter_{case_num}",
-                    label_visibility="collapsed"
-                )
+            with st.container(key=f"case_history_block_{case_num}"):
+                h_top1, h_top2 = st.columns([3, 2])
+                with h_top1:
+                    st.markdown("<strong style='font-size:15px; color:#17233C;'>🕒 Case History</strong>", unsafe_allow_html=True)
+                with h_top2:
+                    hist_filter = st.selectbox(
+                        "Show",
+                        ["All Activities", "Status Changes", "Notes", "Communications", "Assignments"],
+                        key=f"hist_filter_{case_num}",
+                        label_visibility="collapsed"
+                    )
 
-            history_items = case.get("history", [])
-            badge_color_map = {
-                "Status Changes": "#D97706",
-                "Communications": "#0067B9",
-                "Notes": "#00B388",
-                "Assignments": "#7E22CE",
-                "Escalation": "#E31B23"
-            }
+                history_items = case.get("history", [])
+                badge_color_map = {
+                    "Status Changes": "#D97706",
+                    "Communications": "#0067B9",
+                    "Notes": "#00B388",
+                    "Assignments": "#7E22CE",
+                    "Escalation": "#E31B23"
+                }
 
-            if not history_items:
-                st.caption("No history records logged yet.")
-            for h in history_items:
-                h_type = h.get("type", "Status Changes")
-                if hist_filter == "All Activities" or hist_filter == h_type:
-                    badge_color = badge_color_map.get(h_type, "#5F6B7A")
-                    st.markdown(f"""
-                    <div class="timeline-item">
-                        <div class="timeline-dot" style="background:{badge_color};"></div>
-                        <div style="font-size:12px; line-height:1.2;">
-                            <span style="color:#5F6B7A;">{h.get('timestamp')} &bull; <strong>{h.get('user')}</strong></span><br>
-                            <span style="background:{badge_color}18; color:{badge_color}; font-weight:700; font-size:10.5px; padding:2px 8px; border-radius:10px; display:inline-block; margin:3px 0;">
-                                {h.get('badge')}
-                            </span><br>
-                            <span style="color:#17233C; font-size:11.5px;">&gt; {h.get('details')}</span>
+                if not history_items:
+                    st.caption("No history records logged yet.")
+                for h in history_items:
+                    h_type = h.get("type", "Status Changes")
+                    if hist_filter == "All Activities" or hist_filter == h_type:
+                        badge_color = badge_color_map.get(h_type, "#5F6B7A")
+                        st.markdown(f"""
+                        <div class="timeline-item">
+                            <div class="timeline-dot" style="background:{badge_color};"></div>
+                            <div style="font-size:12px; line-height:1.2;">
+                                <span style="color:#5F6B7A;">{h.get('timestamp')} &bull; <strong>{h.get('user')}</strong></span><br>
+                                <span style="background:{badge_color}18; color:{badge_color}; font-weight:700; font-size:10.5px; padding:2px 8px; border-radius:10px; display:inline-block; margin:3px 0;">
+                                    {h.get('badge')}
+                                </span><br>
+                                <span style="color:#17233C; font-size:11.5px;">&gt; {h.get('details')}</span>
+                            </div>
                         </div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                        """, unsafe_allow_html=True)
 
-        # --- AUTOMATED BREACH NOTICE EMAIL CARD (2. Removed empty white box div) ---
+        # --- AUTOMATED BREACH NOTICE EMAIL CARD (Solid White Block Background) ---
         with col_email:
-            st.markdown("<strong style='font-size:15px; color:#17233C;'>✉️ Automated Breach Notice Email</strong>", unsafe_allow_html=True)
+            with st.container(key=f"breach_email_block_{case_num}"):
+                st.markdown("<strong style='font-size:15px; color:#17233C;'>✉️ Automated Breach Notice Email</strong>", unsafe_allow_html=True)
 
-            use_tmpl = st.toggle("Use Template", value=True, key=f"tgl_tmpl_{case_num}")
-            default_to = case.get("vendor_email", "support@abcsoftware.com")
-            default_subj = f"Notice of Contract Breach – {case['case_number']}"
-            default_body = f"""Dear {case.get('vendor_name', 'ABC Software Inc.')},
+                use_tmpl = st.toggle("Use Template", value=True, key=f"tgl_tmpl_{case_num}")
+                default_to = case.get("vendor_email", "support@abcsoftware.com")
+                default_subj = f"Notice of Contract Breach – {case['case_number']}"
+                default_body = f"""Dear {case.get('vendor_name', 'ABC Software Inc.')},
 
 This is to inform you that the following case ({case['case_number']}) is nearing breach due to continued delay in the license renewal. As per our agreement, we have not yet received the required confirmation from your team.
 
@@ -1796,49 +1794,49 @@ Please provide an update at your earliest convenience to avoid contract breach.
 Thank you,
 HPE Operations Management"""
 
-            to_field = st.text_input("To", value=default_to, key=f"em_to_{case_num}")
-            subj_field = st.text_input("Subject", value=default_subj if use_tmpl else "", key=f"em_subj_{case_num}")
-            body_field = st.text_area("Email Body", value=default_body if use_tmpl else "", height=140, key=f"em_body_{case_num}")
+                to_field = st.text_input("To", value=default_to, key=f"em_to_{case_num}")
+                subj_field = st.text_input("Subject", value=default_subj if use_tmpl else "", key=f"em_subj_{case_num}")
+                body_field = st.text_area("Email Body", value=default_body if use_tmpl else "", height=140, key=f"em_body_{case_num}")
 
-            em_b1, em_b2 = st.columns(2)
-            with em_b1:
-                if st.button("✏️ Edit Email", key=f"btn_edit_em_{case_num}"):
-                    st.toast("Email body unlocked for direct editing.")
-            with em_b2:
-                if st.button("📤 Send Email", type="primary", key=f"btn_send_em_{case_num}"):
-                    if to_field and subj_field and body_field:
-                        now_str = get_current_ph_time().strftime("%b %d, %Y %I:%M %p")
-                        comm_entry = {
-                            "timestamp": now_str,
-                            "user": user.get("name", "User"),
-                            "type": "Communications",
-                            "badge": f"Breach notice sent to {to_field}",
-                            "details": f"Subject: {subj_field}"
-                        }
-                        cases_collection.update_one(
-                            {"type": "cases", "case_number": case_num},
-                            {
-                                "$push": {
-                                    "history": {"$each": [comm_entry], "$position": 0},
-                                    "communications": {
-                                        "timestamp": now_str,
-                                        "sender": user.get("name"),
-                                        "recipient": to_field,
-                                        "subject": subj_field,
-                                        "message": body_field,
-                                        "type": "Breach Notice Sent"
+                em_b1, em_b2 = st.columns(2)
+                with em_b1:
+                    if st.button("✏️ Edit Email", key=f"btn_edit_em_{case_num}"):
+                        st.toast("Email body unlocked for direct editing.")
+                with em_b2:
+                    if st.button("📤 Send Email", type="primary", key=f"btn_send_em_{case_num}"):
+                        if to_field and subj_field and body_field:
+                            now_str = get_current_ph_time().strftime("%b %d, %Y %I:%M %p")
+                            comm_entry = {
+                                "timestamp": now_str,
+                                "user": user.get("name", "User"),
+                                "type": "Communications",
+                                "badge": f"Breach notice sent to {to_field}",
+                                "details": f"Subject: {subj_field}"
+                            }
+                            cases_collection.update_one(
+                                {"type": "cases", "case_number": case_num},
+                                {
+                                    "$push": {
+                                        "history": {"$each": [comm_entry], "$position": 0},
+                                        "communications": {
+                                            "timestamp": now_str,
+                                            "sender": user.get("name"),
+                                            "recipient": to_field,
+                                            "subject": subj_field,
+                                            "message": body_field,
+                                            "type": "Breach Notice Sent"
+                                        }
                                     }
                                 }
-                            }
-                        )
-                        st.success(f"Breach notice successfully delivered to {to_field}!")
-                        time.sleep(0.5)
-                        st.rerun()
-                    else:
-                        st.warning("Please fill in recipient, subject, and body.")
+                            )
+                            st.success(f"Breach notice successfully delivered to {to_field}!")
+                            time.sleep(0.5)
+                            st.rerun()
+                        else:
+                            st.warning("Please fill in recipient, subject, and body.")
 
     # --------------------------------------------------------------------------
-    # TAB 2: VENDOR INFORMATION (FULL DETAILED PROFILE)
+    # TAB 2: VENDOR INFORMATION
     # --------------------------------------------------------------------------
     with tab_vendor:
         st.markdown(f"### 🏢 Vendor Profile: {case.get('vendor_name', 'ABC Software Inc.')}")
@@ -1953,7 +1951,6 @@ HPE Operations Management"""
             time.sleep(0.5)
             st.rerun()
 
-    # Sub-dialog for Vendor Record Overlay
     if st.session_state.get(f"show_vendor_record_modal_{case_num}", False):
         st.divider()
         st.markdown(f"#### 🏢 Master Vendor Record: {case.get('vendor_name')}")
@@ -1964,7 +1961,6 @@ HPE Operations Management"""
             st.session_state[f"show_vendor_record_modal_{case_num}"] = False
             st.rerun()
 
-    # Sub-dialog for Transfer Request
     if st.session_state.get(f"show_transfer_dialog_{case_num}", False):
         st.divider()
         st.markdown("#### 🔄 Propose Case Transfer")
@@ -1993,7 +1989,7 @@ HPE Operations Management"""
             st.rerun()
 
 # ==============================================================================
-# 8. TOP HEADER (SWAPPED: PROFILE IS AT FAR-RIGHT, BELL HAS ALERT POPOVER)
+# 8. TOP HEADER (PROFILE AT FAR-RIGHT, NO ARROWS ON BELL)
 # ==============================================================================
 def render_top_header():
     user = st.session_state.get("current_user", {})
@@ -2021,7 +2017,7 @@ def render_top_header():
         with c_search:
             st.text_input("Global Search", placeholder="🔍 Search cases, names, issues...", label_visibility="collapsed")
 
-        # Notification Bell Popover
+        # Notification Bell Popover (Arrow Down Removed in CSS)
         with c_bell:
             with st.container(key="top_bell_popover"):
                 with st.popover(f"🔔 {unread_count}", help="Notifications"):
@@ -2061,7 +2057,6 @@ def render_top_header():
             </div>
             """, unsafe_allow_html=True)
 
-        # Profile Pill at Far-Right Corner
         with c_prof:
             with st.container(key="top_profile_pill_btn"):
                 btn_label = f"👤 {user.get('name', 'Arianne Escabillas')} • {curr_aux} ▾"
@@ -2147,7 +2142,6 @@ def render_dashboard():
     user = st.session_state.get("current_user", {})
     user_role = user.get("role", "Admin/Agent")
 
-    # Explicitly define is_admin to prevent NameError
     is_admin = user_role in ["Admin", "Admin/Agent"]
 
     if "view_mode" not in st.session_state:
@@ -2158,19 +2152,18 @@ def render_dashboard():
 
     is_admin_mode = (st.session_state["view_mode"] == "Admin")
 
-    # Base Query on Cases_Collection
+    # 2. FAST IN-MEMORY AGGREGATION: Single query to eliminate UI lag
     q_base = {"type": "cases"}
     if not is_admin_mode:
         q_base["assignee_email"] = user.get("email")
 
-    total_active = cases_collection.count_documents({**q_base, "status": {"$ne": "Closed"}})
-    total_critical = cases_collection.count_documents({**q_base, "priority": "Critical", "status": {"$ne": "Closed"}})
-    total_due_soon = cases_collection.count_documents({**q_base, "priority": {"$in": ["Critical", "High"]}, "status": {"$ne": "Closed"}})
-    total_on_track = cases_collection.count_documents({**q_base, "priority": {"$in": ["Medium", "Low"]}, "status": {"$ne": "Closed"}})
+    all_base_cases = list(cases_collection.find(q_base))
+    total_active = sum(1 for c in all_base_cases if c.get("status") != "Closed")
+    total_critical = sum(1 for c in all_base_cases if c.get("priority") == "Critical" and c.get("status") != "Closed")
+    total_due_soon = sum(1 for c in all_base_cases if c.get("priority") in ["Critical", "High"] and c.get("status") != "Closed")
+    total_on_track = sum(1 for c in all_base_cases if c.get("priority") in ["Medium", "Low"] and c.get("status") != "Closed")
 
-    # ==========================================================================
     # 2-COLUMN MASTER GRID
-    # ==========================================================================
     main_left, main_right = st.columns([2.88, 1.12], gap="large")
 
     with main_left:
@@ -2267,9 +2260,8 @@ def render_dashboard():
                     st.selectbox("Status", ["Change Status ▾", "In Progress", "Waiting Vendor", "Vendor Response", "Closed"], label_visibility="collapsed")
                 with a4:
                     if st.button("📥 Export", key="btn_tb_export", use_container_width=True):
-                        all_cases = list(cases_collection.find(q_base))
-                        if all_cases:
-                            csv_bytes = pd.DataFrame(all_cases).to_csv(index=False).encode("utf-8")
+                        if all_base_cases:
+                            csv_bytes = pd.DataFrame(all_base_cases).to_csv(index=False).encode("utf-8")
                             st.download_button("Download CSV", csv_bytes, "HPE_Cases_Export.csv", "text/csv")
                 with a5:
                     if st.button("⟳", key="btn_tb_refresh", help="Refresh Data", use_container_width=True):
@@ -2301,7 +2293,7 @@ def render_dashboard():
                 new_desc = st.text_area("Detailed Problem Description", "Chassis controller PCIe bus disconnect.")
 
                 if st.button("Dispatch Case to Available Roster", type="primary"):
-                    new_num = f"HC-2026-{1050 + cases_collection.count_documents({'type': 'cases'})}"
+                    new_num = f"HC-2026-{1050 + len(all_base_cases)}"
                     new_case_payload = {
                         "type": "cases",
                         "case_number": new_num,
@@ -2331,43 +2323,44 @@ def render_dashboard():
                     }
                     success, assigned_agent = auto_assign_new_case(new_case_payload)
                     st.success(f"Case {new_num} registered and auto-assigned to: {assigned_agent}!")
-                    time.sleep(1)
+                    time.sleep(0.5)
                     st.session_state["show_new_case_expander"] = False
                     st.rerun()
 
         st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
 
-        # Adjusted Table Header columns so all headers fit perfectly inside the box
+        # 1. FIXED CASE HEADER: PROPORTIONED TO PREVENT OVERFLOW OUTSIDE BOX
         with st.container(key="dashboard_table_header"):
-            h_chk, h_num, h_sub, h_pri, h_ass, h_due, h_st, h_up, h_opt = st.columns([0.35, 1.5, 2.6, 1.1, 1.6, 1.6, 1.4, 1.6, 0.85])
+            h_chk, h_num, h_sub, h_pri, h_ass, h_due, h_st, h_up, h_opt = st.columns([0.4, 1.5, 2.7, 1.1, 1.5, 1.5, 1.3, 1.4, 0.6], gap="small")
             with h_chk: st.markdown("**☐**")
-            with h_num: st.markdown("**Case #  ⇅**")
+            with h_num: st.markdown("**Case # ⇅**")
             with h_sub: st.markdown("**Subject**")
-            with h_pri: st.markdown("**Priority  ⇅**")
-            with h_ass: st.markdown("**Assigned To  ⇅**")
-            with h_due: st.markdown("**Due Date  ⇅**")
-            with h_st: st.markdown("**Current Status  ⇅**")
-            with h_up: st.markdown("**Last Update  ⇅**")
+            with h_pri: st.markdown("**Priority ⇅**")
+            with h_ass: st.markdown("**Assigned To ⇅**")
+            with h_due: st.markdown("**Due Date ⇅**")
+            with h_st: st.markdown("**Current Status ⇅**")
+            with h_up: st.markdown("**Last Update ⇅**")
             with h_opt: st.markdown("<div style='text-align:center;'><strong>Actions</strong></div>", unsafe_allow_html=True)
 
-        # Query Formulation on Cases_Collection
-        q = q_base.copy()
+        # Filter the in-memory cases list for ultra-fast, smooth table rendering
+        filtered_cases = all_base_cases
         if pri_filter != "All Priorities":
-            q["priority"] = pri_filter
+            filtered_cases = [c for c in filtered_cases if c.get("priority") == pri_filter]
         if st_filter != "All Statuses":
-            q["status"] = st_filter
+            filtered_cases = [c for c in filtered_cases if c.get("status") == st_filter]
         elif not include_closed:
-            q["status"] = {"$ne": "Closed"}
+            filtered_cases = [c for c in filtered_cases if c.get("status") != "Closed"]
 
         if search_val:
-            q["$or"] = [
-                {"case_number": {"$regex": search_val}},
-                {"subject": {"$regex": search_val}},
-                {"assigned_to": {"$regex": search_val}}
+            s_val = search_val.lower()
+            filtered_cases = [
+                c for c in filtered_cases
+                if (s_val in c.get("case_number", "").lower())
+                or (s_val in c.get("subject", "").lower())
+                or (s_val in c.get("assigned_to", "").lower())
             ]
 
-        cases = list(cases_collection.find(q))
-        for c in cases:
+        for c in filtered_cases:
             pri = c.get("priority", "Low")
             badge_pri = f"badge-{pri.lower()}"
             status_val = c.get("status", "Open")
@@ -2384,8 +2377,7 @@ def render_dashboard():
             badge_st = st_cls_map.get(status_val, "st-open")
             countdown_txt, countdown_color, is_overdue = calculate_countdown(c.get("due_date"))
 
-            # Consistent column ratios across all case rows
-            rc1, rc2, rc3, rc4, rc5, rc6, rc7, rc8, rc9 = st.columns([0.35, 1.5, 2.6, 1.1, 1.6, 1.6, 1.4, 1.6, 0.85])
+            rc1, rc2, rc3, rc4, rc5, rc6, rc7, rc8, rc9 = st.columns([0.4, 1.5, 2.7, 1.1, 1.5, 1.5, 1.3, 1.4, 0.6], gap="small")
             with rc1:
                 st.checkbox("", key=f"chk_c_{c['case_number']}_{'adm' if is_admin_mode else 'agt'}", label_visibility="collapsed")
             with rc2:
@@ -2416,7 +2408,7 @@ def render_dashboard():
                 </div>
                 """, unsafe_allow_html=True)
             
-            # 1. Action Ellipses (⋮) - Pure ellipses button with zero box/border around it
+            # 1. & 4. Action Ellipses (⋮) - Pure ellipses button with zero box & arrow down removed
             with rc9:
                 with st.container(key=f"pop_row_act_{c['case_number']}"):
                     with st.popover("⋮", help="Case Actions"):
@@ -2459,7 +2451,7 @@ def render_dashboard():
         # Pagination Footer
         p_info, p_btns = st.columns([1, 1])
         with p_info:
-            st.caption(f"Showing 1 - {len(cases)} of {total_active} cases")
+            st.caption(f"Showing 1 - {len(filtered_cases)} of {total_active} cases")
         with p_btns:
             st.markdown("""
             <div style="display:flex; justify-content:flex-end; gap:6px; align-items:center;">
