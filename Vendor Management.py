@@ -116,6 +116,24 @@ class InMemoryMongoCollection:
                 count += 1
         return type("UpdateResult", (), {"matched_count": count, "modified_count": count})
 
+    def delete_many(self, query):
+        initial = len(self.docs)
+        self.docs = [d for d in self.docs if not self._matches(d, query)]
+        return type("DeleteResult", (), {"deleted_count": initial - len(self.docs)})
+
+    def replace_one(self, query, replacement, upsert=False):
+        for idx, d in enumerate(self.docs):
+            if self._matches(d, query):
+                new_d = replacement.copy()
+                if "_id" not in new_d:
+                    new_d["_id"] = d.get("_id", str(uuid.uuid4()))
+                self.docs[idx] = new_d
+                return type("UpdateResult", (), {"matched_count": 1, "modified_count": 1})
+        if upsert:
+            self.insert_one(replacement)
+            return type("UpdateResult", (), {"matched_count": 0, "modified_count": 1})
+        return type("UpdateResult", (), {"matched_count": 0, "modified_count": 0})
+
     def count_documents(self, query=None):
         return len(self.find(query or {}))
 
@@ -162,20 +180,36 @@ db = client["TeamRoster"]
 collection = db["Team Roster Collection"]
 
 # ==============================================================================
-# 3. INITIAL SEED DATA (SAFE SPARSE INDEXES & OBJECT DATA SCHEMAS)
+# 3. INITIAL SEED DATA (SAFE PARTIAL INDEXES & SCHEMA CONFORMANCE)
 # ==============================================================================
 def init_database():
-    """Initializes indexes with sparse=True and seeds reference data safely."""
+    """Initializes indexes with partialFilterExpression to prevent duplicate key errors."""
     try:
+        # 1. Cleanly drop any conflicting non-partial unique indexes from prior runs
         try:
-            indexes = collection.index_information()
-            if "email_1" in indexes:
-                if not indexes["email_1"].get("sparse"):
-                    collection.drop_index("email_1")
+            existing_indexes = collection.index_information()
+            for idx_name, idx_info in existing_indexes.items():
+                if idx_name not in ["_id_", "_id"]:
+                    if "email" in idx_name or "employee_id" in idx_name:
+                        if not idx_info.get("partialFilterExpression"):
+                            try:
+                                collection.drop_index(idx_name)
+                            except Exception:
+                                pass
         except Exception:
             pass
 
-        collection.create_index([("email", 1)], unique=True, sparse=True)
+        # 2. Recreate unique indexes strictly bounded to roster_list documents
+        collection.create_index(
+            [("email", 1)],
+            unique=True,
+            partialFilterExpression={"type": "roster_list"}
+        )
+        collection.create_index(
+            [("employee_id", 1)],
+            unique=True,
+            partialFilterExpression={"type": "roster_list"}
+        )
         collection.create_index([("case_number", 1)], sparse=True)
         collection.create_index([("type", 1)])
     except Exception:
@@ -227,7 +261,7 @@ def init_database():
     except Exception:
         pass
 
-    # 3. Default Seed Roster (Saved under type: 'roster_list' as an object, all fields as string)
+    # 3. Default Seed Roster (Saved under type: 'roster_list' as an object, all values as strings)
     try:
         if collection.count_documents({"type": "roster_list"}) == 0:
             salt = secrets.token_hex(8)
@@ -587,7 +621,7 @@ def create_session(user_doc, remember_me=False):
     now = get_current_ph_time()
     expiry = now + (timedelta(days=14) if remember_me else timedelta(hours=12))
     
-    # Session logged under 'Session' type as an object and all information under it as strings
+    # Stored under 'Session' type as an object and all information under it as strings
     session_doc = {
         "type": "Session",
         "token": str(token),
@@ -600,7 +634,25 @@ def create_session(user_doc, remember_me=False):
         "expires_at": str(expiry.strftime("%Y-%m-%d %H:%M:%S")),
         "status": "active"
     }
-    collection.insert_one(session_doc)
+
+    # Defensive session insert preventing legacy index conflicts
+    try:
+        collection.delete_many({"type": "Session", "email": str(user_doc["email"])})
+    except Exception:
+        pass
+
+    try:
+        collection.insert_one(session_doc)
+    except Exception:
+        try:
+            collection.replace_one(
+                {"type": "Session", "email": str(user_doc["email"])},
+                session_doc,
+                upsert=True
+            )
+        except Exception:
+            pass
+
     st.session_state["session_token"] = token
     st.session_state["authenticated"] = True
     st.session_state["current_user"] = user_doc
@@ -640,6 +692,7 @@ def logout_user():
     st.session_state["current_user"] = None
     st.session_state["session_token"] = None
     st.session_state["show_profile_flyout"] = False
+    st.session_state["manual_logout"] = True
     st.query_params.clear()
     st.rerun()
 
@@ -887,12 +940,6 @@ div[class*="st-key-view_mode_segmented_tile"] button[kind="secondary"],
 div[class*="st-key-view_mode_segmented_tile"] button[data-testid="baseButton-secondary"] {
     background-color: transparent !important;
     color: #475569 !important;
-}
-
-div[class*="st-key-view_mode_segmented_tile"] button[kind="secondary"]:hover,
-div[class*="st-key-view_mode_segmented_tile"] button[data-testid="baseButton-secondary"]:hover {
-    background-color: rgba(255, 255, 255, 0.5) !important;
-    color: #0F172A !important;
 }
 
 div[class*="st-key-view_mode_segmented_tile"] button[kind="primary"],
@@ -1665,7 +1712,7 @@ def render_settings():
     st.info("Role management, validation dropdowns, and Excel vendor synchronization.")
 
 # ==============================================================================
-# 11. AUTHENTICATION PAGES (SIGN-IN & SIGN-UP W/ STRING VALUES OBJECT SPEC)
+# 11. AUTHENTICATION PAGES (SIGN-IN & SIGN-UP W/ STRING OBJECT SCHEMA)
 # ==============================================================================
 def render_auth_page():
     auth_mode = st.session_state.get("auth_mode", "Sign In")
@@ -1840,28 +1887,31 @@ def main():
     if not st.session_state.get("authenticated", False):
         validate_saved_session()
 
-    # Fallback auto-auth with Arianne Escabillas (Admin/Agent) to immediately display the reference UI
-    if not st.session_state.get("authenticated", False):
+    # Initial showcase auto-auth with Arianne Escabillas (unless manually signed out)
+    if not st.session_state.get("authenticated", False) and not st.session_state.get("manual_logout", False):
         admin_user = collection.find_one({"type": "roster_list", "email": "arianne.escabillas@hpe.com"})
         if admin_user:
             create_session(admin_user, remember_me=True)
             st.rerun()
 
-    render_top_header()
+    if not st.session_state.get("authenticated", False):
+        render_auth_page()
+    else:
+        render_top_header()
 
-    active_tab = st.session_state.get("current_tab", "Dashboard")
-    if active_tab == "Dashboard":
-        render_dashboard()
-    elif active_tab == "Monitoring":
-        render_monitoring()
-    elif active_tab == "Schedule":
-        render_schedule()
-    elif active_tab == "Report":
-        render_report()
-    elif active_tab == "Setting":
-        render_settings()
+        active_tab = st.session_state.get("current_tab", "Dashboard")
+        if active_tab == "Dashboard":
+            render_dashboard()
+        elif active_tab == "Monitoring":
+            render_monitoring()
+        elif active_tab == "Schedule":
+            render_schedule()
+        elif active_tab == "Report":
+            render_report()
+        elif active_tab == "Setting":
+            render_settings()
 
-    render_bottom_navigation()
+        render_bottom_navigation()
 
 if __name__ == "__main__":
     main()
