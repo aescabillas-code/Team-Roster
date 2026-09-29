@@ -527,7 +527,15 @@ def init_database():
                     "vendor_alt_contact": "Sarah Lim",
                     "vendor_alt_email": "sarah.lim@abcsoftware.com",
                     "vendor_address": "123 Innovation Drive, San Jose, CA 95134",
-                    "history": [],
+                    "history": [
+                        {
+                            "timestamp": "Sep 28, 2026 08:15 AM",
+                            "user": "Mark Santos",
+                            "type": "Status Changes",
+                            "badge": "Status changed to In Progress",
+                            "details": "Waiting for Vendor Response"
+                        }
+                    ],
                     "communications": [],
                     "attachments": []
                 },
@@ -879,10 +887,17 @@ def auto_assign_new_case(case_data):
     return True, chosen["name"]
 
 # ==============================================================================
-# 6. ENTERPRISE CSS DESIGN SYSTEM (PIXEL-PERFECT SPECIFICATION)
+# 6. ENTERPRISE CSS DESIGN SYSTEM (INTER FONT & CLEAN UI)
 # ==============================================================================
 ENTERPRISE_CSS = """
 <style>
+/* 2. IMPORT AND APPLY INTER FONT GLOBALLY */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+html, body, [class*="css"], .stApp, .stApp * {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+}
+
 /* Global Reset */
 #MainMenu, header, footer, [data-testid="stToolbar"], [data-testid="stDecoration"] {
     visibility: hidden !important;
@@ -891,7 +906,6 @@ ENTERPRISE_CSS = """
 
 .stApp {
     background-color: #F8FAFC !important;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif !important;
     color: #17233C !important;
 }
 
@@ -963,6 +977,7 @@ div[class*="st-key-top_bell_popover"] > div > button {
     border-radius: 20px !important;
     padding: 4px 12px !important;
     box-shadow: none !important;
+    gap: 0 !important;
 }
 
 div[class*="st-key-top_bell_popover"] button:hover,
@@ -978,15 +993,21 @@ div[class*="st-key-top_bell_popover"] span {
     color: #FFFFFF !important;
 }
 
-/* 4. REMOVE ARROW DOWN (CHEVRON) IN BELL BUTTON & ELLIPSES */
+/* 3. STRICTLY REMOVE ALL ICONS & CHEVRONS BESIDE ELLIPSES & BELL */
 div[class*="st-key-top_bell_popover"] [data-testid="stPopoverButton"] svg,
 div[class*="st-key-top_bell_popover"] button svg,
 div[class*="st-key-top_bell_popover"] svg,
+div[class*="st-key-top_bell_popover"] [data-testid="stIconChevronDown"],
 div[class*="st-key-pop_row_act_"] [data-testid="stPopoverButton"] svg,
 div[class*="st-key-pop_row_act_"] button svg,
-div[class*="st-key-pop_row_act_"] svg {
+div[class*="st-key-pop_row_act_"] svg,
+div[class*="st-key-pop_row_act_"] [data-testid="stIconChevronDown"] {
     display: none !important;
     visibility: hidden !important;
+    width: 0 !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
 }
 
 /* Notification Drawer Container */
@@ -1157,25 +1178,35 @@ div[class*="st-key-action_toolbar_container"] button {
     height: 36px !important;
 }
 
-/* 1. CASE HEADER ADJUSTED: FITS PERFECTLY INSIDE ROUNDED BOX (NO OVERFLOW) */
+/* 1. CASE HEADER BOX: GUARANTEED ZERO OVERFLOW WITH CONTROLLED GAP AND PADDING */
 div[class*="st-key-dashboard_table_header"] {
     background-color: #F1F5F9 !important;
     border: 1px solid #E2E8F0 !important;
     border-radius: 8px !important;
-    padding: 6px 14px 6px 10px !important;
+    padding: 6px 12px !important;
     margin-bottom: 4px !important;
     box-sizing: border-box !important;
     width: 100% !important;
-    max-width: 100% !important;
     overflow: hidden !important;
+}
+div[class*="st-key-dashboard_table_header"] [data-testid="stHorizontalBlock"] {
+    width: 100% !important;
+    gap: 4px !important;
+    align-items: center !important;
+}
+div[class*="st-key-dashboard_table_header"] [data-testid="column"] {
+    min-width: 0 !important;
+    padding: 0 !important;
 }
 div[class*="st-key-dashboard_table_header"] p {
     font-size: 11px !important;
     font-weight: 700 !important;
     color: #475569 !important;
-    letter-spacing: 0.2px !important;
+    letter-spacing: 0.1px !important;
     margin: 0 !important;
     white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
 }
 
 .case-table-divider { margin: 2px 0 4px 0 !important; border: none !important; border-top: 1px solid #F1F5F9 !important; }
@@ -1191,7 +1222,7 @@ div[class*="st-key-btn_case_"] button {
     color: #0067B9 !important;
 }
 
-/* 1. FIX ELLIPSES BUTTON IN CASE TABLE: ZERO BOX / ZERO OUTLINE */
+/* 3. ELLIPSES BUTTON IN CASE TABLE: ZERO BOX / ZERO OUTLINE / NO CHEVRON ARROW */
 div[class*="st-key-pop_row_act_"] button,
 div[class*="st-key-pop_row_act_"] [data-testid="stPopoverButton"],
 div[class*="st-key-pop_row_act_"] [data-testid="baseButton-secondary"],
@@ -1207,12 +1238,14 @@ div[class*="st-key-pop_row_act_"] div[data-testid="stPopover"] > button {
     margin: 0 auto !important;
     min-height: unset !important;
     height: 24px !important;
-    width: 24px !important;
+    width: 20px !important;
+    min-width: 20px !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
     color: #64748B !important;
     cursor: pointer !important;
+    gap: 0 !important;
 }
 
 div[class*="st-key-pop_row_act_"] button:hover,
@@ -1227,7 +1260,7 @@ div[class*="st-key-pop_row_act_"] [data-testid="stPopoverButton"]:focus {
 
 div[class*="st-key-pop_row_act_"] button p,
 div[class*="st-key-pop_row_act_"] [data-testid="stPopoverButton"] p {
-    font-size: 19px !important;
+    font-size: 18px !important;
     font-weight: 900 !important;
     margin: 0 !important;
     padding: 0 !important;
@@ -1275,12 +1308,15 @@ div[data-testid="stDialog"] h2 {
     font-size: 22px !important;
     font-weight: 800 !important;
     color: #17233C !important;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif !important;
     margin: 0 !important;
     padding: 0 !important;
 }
 
-/* 5. SOLID WHITE SINGLE-BLOCK BACKGROUND FOR CASE INFORMATION, VENDOR INFO, UPDATE CASE, CASE HISTORY */
+/* 1. MINIMAL MARGIN BETWEEN CONTAINER BLOCKS */
+div[data-testid="stDialog"] [data-testid="stHorizontalBlock"] {
+    gap: 8px !important;
+}
+
 div[class*="st-key-case_info_block_"],
 div[class*="st-key-vendor_info_block_"],
 div[class*="st-key-update_case_block_"],
@@ -1290,26 +1326,26 @@ div[class*="st-key-breach_email_block_"] {
     background-color: #FFFFFF !important;
     border: 1px solid #DFE7EF !important;
     border-radius: 10px !important;
-    padding: 16px 18px !important;
-    margin-bottom: 14px !important;
+    padding: 12px 14px !important;
+    margin-bottom: 6px !important;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02) !important;
 }
 
-/* 3. QUICK ACTIONS & REASSIGN CASE BACKGROUNDS (NO EMPTY BOXES) */
+/* 3. QUICK ACTIONS & REASSIGN CASE BACKGROUNDS (SOLID LIGHT PANELS, NO EXTRA BOXES) */
 div[class*="st-key-qa_panel_"] {
     background-color: #F0FDF4 !important;
     border: 1px solid #BBF7D0 !important;
     border-radius: 8px !important;
-    padding: 10px 12px !important;
-    margin-top: 12px !important;
+    padding: 8px 10px !important;
+    margin-top: 10px !important;
 }
 
 div[class*="st-key-reassign_box_"] {
     background-color: #EEF6FC !important;
     border: 1px solid #BAE6FD !important;
     border-radius: 8px !important;
-    padding: 12px !important;
-    margin-top: 12px !important;
+    padding: 10px !important;
+    margin-top: 10px !important;
 }
 
 .case-summary-box {
@@ -1329,7 +1365,7 @@ div[class*="st-key-reassign_box_"] {
     border: 1px solid #D9E2EC;
     border-radius: 8px;
     padding: 8px 12px;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
     align-items: center;
 }
 .case-meta-col {
@@ -1376,12 +1412,12 @@ def render_case_modal(case_num):
 
     # Clean Subtitle under Header
     st.markdown("""
-    <div style="line-height:1.2; margin-top:-8px; margin-bottom:12px;">
+    <div style="line-height:1.2; margin-top:-8px; margin-bottom:10px;">
         <p style="font-size:12.5px; color:#5F6B7A; margin:0;">
             View and update case information, communicate with vendor, and manage status.
         </p>
     </div>
-    <hr style='margin:0 0 14px 0; border:none; border-top:1px solid #D9E2EC;'>
+    <hr style='margin:0 0 10px 0; border:none; border-top:1px solid #D9E2EC;'>
     """, unsafe_allow_html=True)
 
     # 2. Case Summary Header
@@ -1390,7 +1426,7 @@ def render_case_modal(case_num):
     countdown_txt, countdown_color, is_overdue = calculate_countdown(case.get("due_date"))
     elapsed_txt = calculate_elapsed(case.get("created_at"))
 
-    sum_col1, sum_col2, sum_col3, sum_col4 = st.columns([3, 2.5, 3.5, 2.5])
+    sum_col1, sum_col2, sum_col3, sum_col4 = st.columns([3, 2.5, 3.5, 2.5], gap="small")
     with sum_col1:
         st.markdown(f"""
         <div style="line-height:1.2;">
@@ -1428,7 +1464,7 @@ def render_case_modal(case_num):
         """, unsafe_allow_html=True)
 
     # 3. Case Metadata Bar (7 columns light blue bar)
-    st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
     assigned_name = case.get("assigned_to", "John Dela Cruz")
     initials = "".join([part[0] for part in assigned_name.split()[:2]]).upper() or "JD"
     status_val = case.get("status", "On Hold")
@@ -1484,12 +1520,12 @@ def render_case_modal(case_num):
     ])
 
     # --------------------------------------------------------------------------
-    # TAB 1: CASE INFORMATION (3-COLUMN LAYOUT)
+    # TAB 1: CASE INFORMATION (1. Minimal Margins Between Blocks)
     # --------------------------------------------------------------------------
     with tab_info:
-        col_left, col_center, col_right = st.columns([3.3, 3.0, 3.7], gap="medium")
+        col_left, col_center, col_right = st.columns([3.3, 3.0, 3.7], gap="small")
 
-        # --- LEFT CARD: CASE INFORMATION (Solid White Block Background) ---
+        # --- LEFT CARD: CASE INFORMATION ---
         with col_left:
             with st.container(key=f"case_info_block_{case_num}"):
                 head_l1, head_l2 = st.columns([3, 1])
@@ -1539,7 +1575,7 @@ def render_case_modal(case_num):
                     </div>
                     """, unsafe_allow_html=True)
 
-        # --- CENTER CARD: VENDOR INFORMATION (Solid White Block Background) ---
+        # --- CENTER CARD: VENDOR INFORMATION ---
         with col_center:
             with st.container(key=f"vendor_info_block_{case_num}"):
                 v_head1, v_head2 = st.columns([1.8, 1.2])
@@ -1569,7 +1605,7 @@ def render_case_modal(case_num):
                 </div>
                 """, unsafe_allow_html=True)
 
-                # 3. Quick Actions Panel - Light Green Background, No Empty Box on Top
+                # Quick Actions Panel - Light Green Background
                 with st.container(key=f"qa_panel_{case_num}"):
                     st.markdown("<strong style='font-size:12px; color:#16855B;'>➕ Quick Actions</strong>", unsafe_allow_html=True)
                     qa_c1, qa_c2, qa_c3 = st.columns(3)
@@ -1598,7 +1634,7 @@ def render_case_modal(case_num):
                                 excel_data = v_excel_df.to_csv(index=False).encode("utf-8")
                         st.download_button("View Excel", excel_data, f"{case['case_number']}_Vendor.xlsx", key=f"btn_down_vexc_{case_num}")
 
-        # --- RIGHT CARD: UPDATE CASE (Solid White Block Background) ---
+        # --- RIGHT CARD: UPDATE CASE ---
         with col_right:
             with st.container(key=f"update_case_block_{case_num}"):
                 st.markdown("<strong style='font-size:15px; color:#17233C;'>⏱️ Update Case</strong>", unsafe_allow_html=True)
@@ -1676,7 +1712,7 @@ def render_case_modal(case_num):
                     if st.button("Request Transfer", key=f"btn_trf_req_{case_num}"):
                         st.session_state[f"show_transfer_dialog_{case_num}"] = True
 
-                # 3. Dedicated Admin-Only Reassignment Section - Light Blue Background, No Empty Box on Top
+                # Dedicated Admin-Only Reassignment Section - Light Blue Background
                 if is_admin:
                     with st.container(key=f"reassign_box_{case_num}"):
                         st.markdown("<strong style='font-size:12.5px; color:#0067B9;'>🔄 Reassign Case (Admin Only)</strong>", unsafe_allow_html=True)
@@ -1733,9 +1769,9 @@ def render_case_modal(case_num):
         # ----------------------------------------------------------------------
         # BOTTOM ROW: CASE HISTORY (LEFT 63%) & BREACH NOTICE EMAIL (RIGHT 37%)
         # ----------------------------------------------------------------------
-        col_hist, col_email = st.columns([6.3, 3.7], gap="medium")
+        col_hist, col_email = st.columns([6.3, 3.7], gap="small")
 
-        # --- CASE HISTORY CARD (Solid White Block Background) ---
+        # --- CASE HISTORY CARD ---
         with col_hist:
             with st.container(key=f"case_history_block_{case_num}"):
                 h_top1, h_top2 = st.columns([3, 2])
@@ -1777,7 +1813,7 @@ def render_case_modal(case_num):
                         </div>
                         """, unsafe_allow_html=True)
 
-        # --- AUTOMATED BREACH NOTICE EMAIL CARD (Solid White Block Background) ---
+        # --- AUTOMATED BREACH NOTICE EMAIL CARD ---
         with col_email:
             with st.container(key=f"breach_email_block_{case_num}"):
                 st.markdown("<strong style='font-size:15px; color:#17233C;'>✉️ Automated Breach Notice Email</strong>", unsafe_allow_html=True)
@@ -2329,9 +2365,9 @@ def render_dashboard():
 
         st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
 
-        # 1. FIXED CASE HEADER: PROPORTIONED TO PREVENT OVERFLOW OUTSIDE BOX
+        # 1. FIXED CASE HEADER: PREVENT EXTENDING OUTSIDE BOX (REFINED PROPORTIONS & GAP)
         with st.container(key="dashboard_table_header"):
-            h_chk, h_num, h_sub, h_pri, h_ass, h_due, h_st, h_up, h_opt = st.columns([0.4, 1.5, 2.7, 1.1, 1.5, 1.5, 1.3, 1.4, 0.6], gap="small")
+            h_chk, h_num, h_sub, h_pri, h_ass, h_due, h_st, h_up, h_opt = st.columns([0.35, 1.4, 2.7, 1.05, 1.5, 1.5, 1.3, 1.4, 0.8], gap="small")
             with h_chk: st.markdown("**☐**")
             with h_num: st.markdown("**Case # ⇅**")
             with h_sub: st.markdown("**Subject**")
@@ -2340,7 +2376,7 @@ def render_dashboard():
             with h_due: st.markdown("**Due Date ⇅**")
             with h_st: st.markdown("**Current Status ⇅**")
             with h_up: st.markdown("**Last Update ⇅**")
-            with h_opt: st.markdown("<div style='text-align:center;'><strong>Actions</strong></div>", unsafe_allow_html=True)
+            with h_opt: st.markdown("<div style='text-align:right; padding-right:4px;'><strong>Actions</strong></div>", unsafe_allow_html=True)
 
         # Filter the in-memory cases list for ultra-fast, smooth table rendering
         filtered_cases = all_base_cases
@@ -2377,7 +2413,7 @@ def render_dashboard():
             badge_st = st_cls_map.get(status_val, "st-open")
             countdown_txt, countdown_color, is_overdue = calculate_countdown(c.get("due_date"))
 
-            rc1, rc2, rc3, rc4, rc5, rc6, rc7, rc8, rc9 = st.columns([0.4, 1.5, 2.7, 1.1, 1.5, 1.5, 1.3, 1.4, 0.6], gap="small")
+            rc1, rc2, rc3, rc4, rc5, rc6, rc7, rc8, rc9 = st.columns([0.35, 1.4, 2.7, 1.05, 1.5, 1.5, 1.3, 1.4, 0.8], gap="small")
             with rc1:
                 st.checkbox("", key=f"chk_c_{c['case_number']}_{'adm' if is_admin_mode else 'agt'}", label_visibility="collapsed")
             with rc2:
@@ -2408,7 +2444,7 @@ def render_dashboard():
                 </div>
                 """, unsafe_allow_html=True)
             
-            # 1. & 4. Action Ellipses (⋮) - Pure ellipses button with zero box & arrow down removed
+            # 3. Action Ellipses (⋮) - Pure ellipses button with zero box & arrow down removed
             with rc9:
                 with st.container(key=f"pop_row_act_{c['case_number']}"):
                     with st.popover("⋮", help="Case Actions"):
