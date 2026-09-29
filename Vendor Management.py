@@ -49,6 +49,21 @@ class InMemoryMongoCollection:
             if k == "$or":
                 if not any(self._matches(doc, cond) for cond in v):
                     return False
+            elif "." in k:
+                parts = k.split(".")
+                curr = doc
+                for p in parts:
+                    if isinstance(curr, dict):
+                        curr = curr.get(p)
+                    else:
+                        curr = None
+                        break
+                if isinstance(v, dict):
+                    if "$in" in v and curr not in v["$in"]: return False
+                    if "$ne" in v and curr == v["$ne"]: return False
+                    if "$regex" in v and not (isinstance(curr, str) and re.search(v["$regex"], curr, re.IGNORECASE)): return False
+                elif curr != v:
+                    return False
             elif isinstance(v, dict):
                 doc_val = doc.get(k)
                 if "$in" in v:
@@ -94,7 +109,15 @@ class InMemoryMongoCollection:
         for idx, d in enumerate(self.docs):
             if self._matches(d, query):
                 if "$set" in update:
-                    self.docs[idx].update(update["$set"])
+                    for sk, sv in update["$set"].items():
+                        if "." in sk:
+                            parts = sk.split(".")
+                            curr = self.docs[idx]
+                            for p in parts[:-1]:
+                                curr = curr.setdefault(p, {})
+                            curr[parts[-1]] = sv
+                        else:
+                            self.docs[idx][sk] = sv
                 if "$inc" in update:
                     for ik, iv in update["$inc"].items():
                         self.docs[idx][ik] = self.docs[idx].get(ik, 0) + iv
@@ -112,7 +135,15 @@ class InMemoryMongoCollection:
         for idx, d in enumerate(self.docs):
             if self._matches(d, query):
                 if "$set" in update:
-                    self.docs[idx].update(update["$set"])
+                    for sk, sv in update["$set"].items():
+                        if "." in sk:
+                            parts = sk.split(".")
+                            curr = self.docs[idx]
+                            for p in parts[:-1]:
+                                curr = curr.setdefault(p, {})
+                            curr[parts[-1]] = sv
+                        else:
+                            self.docs[idx][sk] = sv
                 count += 1
         return type("UpdateResult", (), {"matched_count": count, "modified_count": count})
 
@@ -180,12 +211,11 @@ db = client["TeamRoster"]
 collection = db["Team Roster Collection"]
 
 # ==============================================================================
-# 3. INITIAL SEED DATA (SAFE PARTIAL INDEXES & SCHEMA CONFORMANCE)
+# 3. INITIAL SEED DATA (SAFE PARTIAL INDEXES & EMBEDDED OBJECTS)
 # ==============================================================================
 def init_database():
     """Initializes indexes with partialFilterExpression to prevent duplicate key errors."""
     try:
-        # 1. Cleanly drop any conflicting non-partial unique indexes from prior runs
         try:
             existing_indexes = collection.index_information()
             for idx_name, idx_info in existing_indexes.items():
@@ -199,7 +229,6 @@ def init_database():
         except Exception:
             pass
 
-        # 2. Recreate unique indexes strictly bounded to roster_list documents
         collection.create_index(
             [("email", 1)],
             unique=True,
@@ -261,7 +290,7 @@ def init_database():
     except Exception:
         pass
 
-    # 3. Default Seed Roster (Saved under type: 'roster_list' as an object, all values as strings)
+    # 3. Default Seed Roster (Saved under type: 'roster_list' with Data: Object, all string values)
     try:
         if collection.count_documents({"type": "roster_list"}) == 0:
             salt = secrets.token_hex(8)
@@ -286,8 +315,7 @@ def init_database():
 
             now = get_current_ph_time()
             for fn, ln, eid, email, role, aux, img in team_members:
-                collection.insert_one({
-                    "type": "roster_list",
+                user_dict = {
                     "first_name": str(fn),
                     "last_name": str(ln),
                     "name": str(f"{fn} {ln}"),
@@ -302,6 +330,11 @@ def init_database():
                     "login_time": "08:45 AM",
                     "created_at": str(now.strftime("%Y-%m-%d %H:%M:%S")),
                     "updated_at": str(now.strftime("%Y-%m-%d %H:%M:%S"))
+                }
+                collection.insert_one({
+                    "type": "roster_list",
+                    "Data": user_dict,
+                    **user_dict
                 })
     except Exception:
         pass
@@ -611,9 +644,20 @@ def verify_password(stored_password_hash: str, provided_password: str) -> bool:
         return False
 
 def authenticate_user(email, password):
-    user = collection.find_one({"type": "roster_list", "email": str(email).strip().lower()})
-    if user and verify_password(user.get("password_hash", ""), password):
-        return user
+    user = collection.find_one({
+        "type": "roster_list",
+        "$or": [
+            {"email": str(email).strip().lower()},
+            {"Data.email": str(email).strip().lower()}
+        ]
+    })
+    if user:
+        stored_hash = user.get("password_hash") or user.get("Data", {}).get("password_hash", "")
+        if verify_password(stored_hash, password):
+            # Flatten Data sub-object for uniform top-level access throughout application
+            if "Data" in user and isinstance(user["Data"], dict):
+                user.update(user["Data"])
+            return user
     return None
 
 def create_session(user_doc, remember_me=False):
@@ -621,9 +665,8 @@ def create_session(user_doc, remember_me=False):
     now = get_current_ph_time()
     expiry = now + (timedelta(days=14) if remember_me else timedelta(hours=12))
     
-    # Stored under 'Session' type as an object and all information under it as strings
-    session_doc = {
-        "type": "Session",
+    # Session logged under 'Session' type as an object and all information under it as strings
+    session_data = {
         "token": str(token),
         "email": str(user_doc["email"]),
         "employee_id": str(user_doc.get("employee_id", "")),
@@ -635,9 +678,17 @@ def create_session(user_doc, remember_me=False):
         "status": "active"
     }
 
-    # Defensive session insert preventing legacy index conflicts
+    session_doc = {
+        "type": "Session",
+        "Data": session_data,
+        **session_data
+    }
+
     try:
-        collection.delete_many({"type": "Session", "email": str(user_doc["email"])})
+        collection.delete_many({
+            "type": "Session",
+            "$or": [{"email": str(user_doc["email"])}, {"Data.email": str(user_doc["email"])}]
+        })
     except Exception:
         pass
 
@@ -646,7 +697,7 @@ def create_session(user_doc, remember_me=False):
     except Exception:
         try:
             collection.replace_one(
-                {"type": "Session", "email": str(user_doc["email"])},
+                {"type": "Session", "token": str(token)},
                 session_doc,
                 upsert=True
             )
@@ -667,15 +718,22 @@ def validate_saved_session():
 
     if token:
         sess = collection.find_one({
-            "type": {"$in": ["Session", "sessions"]},
-            "token": str(token),
+            "type": "Session",
+            "$or": [{"token": str(token)}, {"Data.token": str(token)}],
             "status": "active"
         })
         if sess:
-            expiry = datetime.strptime(sess["expires_at"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=MANILA_TZ)
+            expires_at = sess.get("expires_at") or sess.get("Data", {}).get("expires_at")
+            expiry = datetime.strptime(expires_at, "%Y-%m-%d %H:%M:%S").replace(tzinfo=MANILA_TZ)
             if expiry > get_current_ph_time():
-                user = collection.find_one({"type": "roster_list", "email": sess["email"]})
+                email = sess.get("email") or sess.get("Data", {}).get("email")
+                user = collection.find_one({
+                    "type": "roster_list",
+                    "$or": [{"email": email}, {"Data.email": email}]
+                })
                 if user:
+                    if "Data" in user and isinstance(user["Data"], dict):
+                        user.update(user["Data"])
                     st.session_state["authenticated"] = True
                     st.session_state["current_user"] = user
                     return True
@@ -685,8 +743,8 @@ def logout_user():
     token = st.session_state.get("session_token")
     if token:
         collection.update_many(
-            {"type": {"$in": ["Session", "sessions"]}, "token": str(token)},
-            {"$set": {"status": "terminated", "expires_at": "2000-01-01 00:00:00"}}
+            {"type": "Session", "$or": [{"token": str(token)}, {"Data.token": str(token)}]},
+            {"$set": {"status": "terminated", "Data.status": "terminated", "expires_at": "2000-01-01 00:00:00"}}
         )
     st.session_state["authenticated"] = False
     st.session_state["current_user"] = None
@@ -697,12 +755,18 @@ def logout_user():
     st.rerun()
 
 def update_user_aux(email, new_aux):
-    user = collection.find_one({"type": "roster_list", "email": str(email)})
+    user = collection.find_one({
+        "type": "roster_list",
+        "$or": [{"email": str(email)}, {"Data.email": str(email)}]
+    })
     if not user:
         return
-    old_aux = user.get("current_aux", "Available")
+    old_aux = user.get("current_aux") or user.get("Data", {}).get("current_aux", "Available")
     now_str = get_current_ph_time().strftime("%Y-%m-%d %I:%M %p")
-    collection.update_one({"type": "roster_list", "email": str(email)}, {"$set": {"current_aux": str(new_aux)}})
+    collection.update_one(
+        {"type": "roster_list", "$or": [{"email": str(email)}, {"Data.email": str(email)}]},
+        {"$set": {"current_aux": str(new_aux), "Data.current_aux": str(new_aux), "Data.updated_at": str(now_str)}}
+    )
     collection.insert_one({
         "type": "aux_history",
         "email": str(email),
@@ -725,26 +789,30 @@ def auto_assign_new_case(case_data):
     """Fair round-robin & workload-balanced assignment strictly for Available agents."""
     available_agents = collection.find({
         "type": "roster_list",
-        "role": {"$in": ["Agent", "Admin/Agent"]},
-        "current_aux": "Available"
+        "$or": [
+            {"current_aux": "Available", "role": {"$in": ["Agent", "Admin/Agent"]}},
+            {"Data.current_aux": "Available", "Data.role": {"$in": ["Agent", "Admin/Agent"]}}
+        ]
     })
     
-    if not available_agents:
+    agents_list = list(available_agents)
+    if not agents_list:
         case_data["assigned_to"] = "Unassigned (Queue)"
         case_data["assignee_email"] = None
         collection.insert_one(case_data)
         return False, "No agents currently in Available Aux."
 
     candidate_scores = []
-    for agent in available_agents:
+    for agent in agents_list:
+        email = agent.get("email") or agent.get("Data", {}).get("email")
         active_count = collection.count_documents({
             "type": "cases",
-            "assignee_email": agent["email"],
+            "assignee_email": email,
             "status": {"$ne": "Closed"}
         })
         crit_count = collection.count_documents({
             "type": "cases",
-            "assignee_email": agent["email"],
+            "assignee_email": email,
             "priority": "Critical",
             "status": {"$ne": "Closed"}
         })
@@ -760,12 +828,16 @@ def auto_assign_new_case(case_data):
         candidate_scores.sort(key=lambda x: (x["active_count"], x["crit_count"]))
 
     chosen = candidate_scores[0]["agent"]
-    case_data["assigned_to"] = chosen["name"]
-    case_data["assignee_email"] = chosen["email"]
-    case_data["assignee_avatar"] = chosen.get("profile_picture", "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150")
+    chosen_name = chosen.get("name") or chosen.get("Data", {}).get("name")
+    chosen_email = chosen.get("email") or chosen.get("Data", {}).get("email")
+    chosen_avatar = chosen.get("profile_picture") or chosen.get("Data", {}).get("profile_picture", "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150")
+
+    case_data["assigned_to"] = chosen_name
+    case_data["assignee_email"] = chosen_email
+    case_data["assignee_avatar"] = chosen_avatar
     
     collection.insert_one(case_data)
-    return True, chosen["name"]
+    return True, chosen_name
 
 # ==============================================================================
 # 5. ENTERPRISE CSS SPECIFICATION (EXACT REPLICA OF MOCKUPS)
@@ -940,6 +1012,12 @@ div[class*="st-key-view_mode_segmented_tile"] button[kind="secondary"],
 div[class*="st-key-view_mode_segmented_tile"] button[data-testid="baseButton-secondary"] {
     background-color: transparent !important;
     color: #475569 !important;
+}
+
+div[class*="st-key-view_mode_segmented_tile"] button[kind="secondary"]:hover,
+div[class*="st-key-view_mode_segmented_tile"] button[data-testid="baseButton-secondary"]:hover {
+    background-color: rgba(255, 255, 255, 0.5) !important;
+    color: #0F172A !important;
 }
 
 div[class*="st-key-view_mode_segmented_tile"] button[kind="primary"],
@@ -1310,7 +1388,8 @@ def render_case_modal(case_num):
 
         target_agent = None
         if is_admin:
-            agents = [a["name"] for a in collection.find({"type": "roster_list", "role": {"$in": ["Agent", "Admin/Agent"]}})]
+            agents = [a.get("name") or a.get("Data", {}).get("name") for a in collection.find({"type": "roster_list"})]
+            agents = [name for name in agents if name]
             target_agent = st.selectbox("Reassign Case (Admin Only)", ["-- Keep Current Assignee --"] + agents)
 
         if st.button("💾 Update Case", type="primary"):
@@ -1679,17 +1758,22 @@ def render_dashboard():
 # ==============================================================================
 def render_monitoring():
     st.markdown("### 📊 Operational Roster & Telemetry Monitoring")
-    agents = list(collection.find({"type": "roster_list", "role": {"$ne": "Admin"}}))
+    agents = list(collection.find({"type": "roster_list"}))
     table_data = []
     for a in agents:
-        table_data.append({
-            "Name": a["name"],
-            "Role": a["role"],
-            "Aux Status": a.get("current_aux", "Available"),
-            "Login Time": a.get("login_time", "08:45 AM"),
-            "Session Length": "3h 42m",
-            "Email": a["email"]
-        })
+        role = a.get("role") or a.get("Data", {}).get("role", "Agent")
+        if role != "Admin":
+            name = a.get("name") or a.get("Data", {}).get("name")
+            aux = a.get("current_aux") or a.get("Data", {}).get("current_aux", "Available")
+            email = a.get("email") or a.get("Data", {}).get("email")
+            table_data.append({
+                "Name": name,
+                "Role": role,
+                "Aux Status": aux,
+                "Login Time": "08:45 AM",
+                "Session Length": "3h 42m",
+                "Email": email
+            })
     st.dataframe(pd.DataFrame(table_data), use_container_width=True)
 
 def render_schedule():
@@ -1712,7 +1796,7 @@ def render_settings():
     st.info("Role management, validation dropdowns, and Excel vendor synchronization.")
 
 # ==============================================================================
-# 11. AUTHENTICATION PAGES (SIGN-IN & SIGN-UP W/ STRING OBJECT SCHEMA)
+# 11. AUTHENTICATION PAGES (SIGN-IN & SIGN-UP W/ OBJECT DATA STRING SCHEMA)
 # ==============================================================================
 def render_auth_page():
     auth_mode = st.session_state.get("auth_mode", "Sign In")
@@ -1773,8 +1857,8 @@ def render_auth_page():
                 if user:
                     default_aux = "Admin Work" if user.get("role") in ["Admin", "Admin/Agent"] else "Not Ready - Online"
                     collection.update_one(
-                        {"type": "roster_list", "email": str(user["email"])},
-                        {"$set": {"is_logged_in": "true", "current_aux": str(default_aux)}}
+                        {"type": "roster_list", "$or": [{"email": str(user["email"])}, {"Data.email": str(user["email"])}]},
+                        {"$set": {"is_logged_in": "true", "Data.is_logged_in": "true", "current_aux": str(default_aux), "Data.current_aux": str(default_aux)}}
                     )
                     create_session(user, remember_me=rem_me)
                     st.success("Authentication successful! Loading enterprise environment...")
@@ -1793,7 +1877,7 @@ def render_auth_page():
                 st.rerun()
 
         else:
-            # SIGN UP SCREEN: Stored under Team Roster Collection under type : "roster_list" as an object and all info as string
+            # SIGN UP SCREEN: Stored under Team Roster Collection under type : "roster_list" as an object, all info as string
             st.markdown("## **Create Your Account**")
             st.caption("Sign up to access HPE CaseFlow")
 
@@ -1810,17 +1894,16 @@ def render_auth_page():
                     st.error("All registration fields are required.")
                 elif len(su_pw) < 8 or not re.search(r"\d", su_pw) or not re.search(r"[!@#$%^&*(),.?\":{}|<>]", su_pw):
                     st.error("Password does not meet complexity requirements.")
-                elif collection.find_one({"type": "roster_list", "email": str(su_email).strip().lower()}):
+                elif collection.find_one({"type": "roster_list", "$or": [{"email": str(su_email).strip().lower()}, {"Data.email": str(su_email).strip().lower()}]}):
                     st.error("An account with this HPE email already exists.")
-                elif collection.find_one({"type": "roster_list", "employee_id": str(su_eid).strip()}):
+                elif collection.find_one({"type": "roster_list", "$or": [{"employee_id": str(su_eid).strip()}, {"Data.employee_id": str(su_eid).strip()}]}):
                     st.error("An account with this Employee ID already exists.")
                 else:
                     hashed = hash_password(su_pw)
                     now_str = get_current_ph_time().strftime("%Y-%m-%d %H:%M:%S")
                     
-                    # Saving collected data to Team Roster Collection under type : “roster_list” as an object and all information under it as string
-                    new_user_object = {
-                        "type": "roster_list",
+                    # Saving collected data to Team Roster Collection under type: "roster_list" as an object and all information under it as string
+                    new_user_data = {
                         "first_name": str(su_fn).strip(),
                         "last_name": str(su_ln).strip(),
                         "name": str(f"{su_fn} {su_ln}").strip(),
@@ -1835,9 +1918,17 @@ def render_auth_page():
                         "created_at": str(now_str),
                         "updated_at": str(now_str)
                     }
+
+                    new_user_object = {
+                        "type": "roster_list",
+                        "Data": new_user_data,
+                        **new_user_data
+                    }
                     collection.insert_one(new_user_object)
                     
                     new_user = collection.find_one({"type": "roster_list", "email": str(su_email).strip().lower()})
+                    if new_user and "Data" in new_user:
+                        new_user.update(new_user["Data"])
                     create_session(new_user, remember_me=True)
                     st.success("Account successfully created!")
                     time.sleep(0.8)
@@ -1891,6 +1982,8 @@ def main():
     if not st.session_state.get("authenticated", False) and not st.session_state.get("manual_logout", False):
         admin_user = collection.find_one({"type": "roster_list", "email": "arianne.escabillas@hpe.com"})
         if admin_user:
+            if "Data" in admin_user and isinstance(admin_user["Data"], dict):
+                admin_user.update(admin_user["Data"])
             create_session(admin_user, remember_me=True)
             st.rerun()
 
