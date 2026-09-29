@@ -1,11 +1,3 @@
-"""
-================================================================================
-APPLICATION: HPE CaseFlow — Task Monitoring & Management System
-VISUAL SPECIFICATION: Exact reproduction of HPE Enterprise Reference (1000057381_2.png)
-ARCHITECTURE: Single-file production Streamlit application with PyMongo persistence
-================================================================================
-"""
-
 import os
 import sys
 import re
