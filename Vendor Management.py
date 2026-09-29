@@ -286,7 +286,7 @@ cases_collection = db["Cases_Collection"]
 validation_collection = db["Validation_Dropdown"]
 
 # ==============================================================================
-# 3. INITIAL SEED DATA & DROPDOWNS SETUP (RUN ONCE PER LIFECYCLE)
+# 3. INITIAL SEED DATA & AUTO-CLEANUP FOR REAL CASES/ROSTER
 # ==============================================================================
 def init_database():
     try:
@@ -352,13 +352,58 @@ def init_database():
     except Exception:
         pass
 
+    # 2. CREATE DEMO PROFILES & 1. AUTO-REMOVE DEFAULT SEEDS IF REAL ROSTER OR CASES EXIST
     try:
         roster_doc = collection.find_one({"type": "roster_list"})
-        if not roster_doc or not roster_doc.get("Data"):
-            salt = secrets.token_hex(8)
-            hashed_pw = hashlib.sha256((salt + "Hpe@123456").encode()).hexdigest() + ":" + salt
-            
-            team_members = [
+        existing_data = roster_doc.get("Data", []) if roster_doc else []
+        
+        salt = secrets.token_hex(8)
+        hashed_pw = hashlib.sha256((salt + "Hpe@123456").encode()).hexdigest() + ":" + salt
+        
+        demo_profiles = [
+            ("Admin", "Demo", "DEMO901", "admin.demo@internal.test", "Admin", "Admin Work", "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150"),
+            ("Admin/Agent", "Demo", "DEMO902", "adminagent.demo@internal.test", "Admin/Agent", "Available", "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150"),
+            ("Agent", "Demo", "DEMO903", "agent.demo@internal.test", "Agent", "Available", "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150")
+        ]
+
+        now = get_current_ph_time()
+        demo_seed_data = []
+        for fn, ln, eid, email, role, aux, img in demo_profiles:
+            demo_seed_data.append({
+                "first_name": str(fn),
+                "last_name": str(ln),
+                "name": str(f"{fn} {ln}"),
+                "employee_id": str(eid),
+                "email": str(email),
+                "password_hash": str(hashed_pw),
+                "role": str(role),
+                "profile_picture": str(img),
+                "department": "Operations",
+                "current_aux": str(aux),
+                "is_logged_in": "true",
+                "login_time": "08:45 AM",
+                "created_at": str(now.strftime("%Y-%m-%d %H:%M:%S")),
+                "updated_at": str(now.strftime("%Y-%m-%d %H:%M:%S"))
+            })
+
+        default_seed_emails = [
+            "arianne.escabillas@hpe.com", "mark.santos@hpe.com", "chelsea.reyes@hpe.com",
+            "james.delacruz@hpe.com", "mica.tan@hpe.com", "rafael.cruz@hpe.com",
+            "alyssa.ramos@hpe.com", "daniel.lim@hpe.com", "bea.santos@hpe.com",
+            "kevin.navarro@hpe.com", "nicole.garcia@hpe.com", "carlo.mendoza@hpe.com",
+            "lara.cruz@hpe.com", "admin@hpe.com"
+        ]
+
+        # Check if real users exist (custom users not in default seeds and not demo)
+        real_custom_users = [u for u in existing_data if u.get("email") not in default_seed_emails and not u.get("email", "").endswith(".demo@internal.test")]
+
+        if real_custom_users:
+            # Real users available: purge default seed roster, keep real custom users and demo profiles
+            filtered_existing = [u for u in existing_data if u.get("email") not in default_seed_emails and not u.get("email", "").endswith(".demo@internal.test")]
+            final_roster = filtered_existing + demo_seed_data
+        else:
+            # No real custom users yet: load default seed roster plus demo profiles
+            default_team_members = [
                 ("Arianne", "Escabillas", "HPE12345", "arianne.escabillas@hpe.com", "Admin/Agent", "Admin Work", "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150"),
                 ("Mark", "Santos", "HPE10001", "mark.santos@hpe.com", "Admin/Agent", "Available", "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150"),
                 ("Chelsea", "Reyes", "HPE10002", "chelsea.reyes@hpe.com", "Agent", "Available", "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150"),
@@ -374,11 +419,9 @@ def init_database():
                 ("Lara", "Cruz", "HPE10012", "lara.cruz@hpe.com", "Agent", "Break", "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150"),
                 ("Admin", "System", "HPE99999", "admin@hpe.com", "Admin", "Admin Work", "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150")
             ]
-
-            now = get_current_ph_time()
-            seed_data = []
-            for fn, ln, eid, email, role, aux, img in team_members:
-                seed_data.append({
+            final_roster = []
+            for fn, ln, eid, email, role, aux, img in default_team_members:
+                final_roster.append({
                     "first_name": str(fn),
                     "last_name": str(ln),
                     "name": str(f"{fn} {ln}"),
@@ -394,11 +437,13 @@ def init_database():
                     "created_at": str(now.strftime("%Y-%m-%d %H:%M:%S")),
                     "updated_at": str(now.strftime("%Y-%m-%d %H:%M:%S"))
                 })
-            collection.update_one(
-                {"type": "roster_list"},
-                {"$set": {"type": "roster_list", "Data": seed_data}},
-                upsert=True
-            )
+            final_roster.extend(demo_seed_data)
+
+        collection.update_one(
+            {"type": "roster_list"},
+            {"$set": {"type": "roster_list", "Data": final_roster}},
+            upsert=True
+        )
     except Exception:
         pass
 
@@ -410,8 +455,18 @@ def init_database():
     except Exception:
         pass
 
+    # 1. AUTO-REMOVE PSEUDO CASES AS SOON AS REAL CASES ARE AVAILABLE
     try:
-        if cases_collection.count_documents({"type": "cases"}) == 0:
+        all_cases_in_db = list(cases_collection.find({"type": "cases"}))
+        pseudo_case_numbers = ["HC-2026-1044", "HPE-2026-1045", "HPE-2026-1042", "HPE-2026-1038", "HPE-2026-1020"]
+        real_cases = [c for c in all_cases_in_db if c.get("case_number") not in pseudo_case_numbers]
+
+        if real_cases:
+            # Real cases exist: purge pseudo/default seed cases
+            for p_num in pseudo_case_numbers:
+                cases_collection.delete_many({"type": "cases", "case_number": p_num})
+        elif len(all_cases_in_db) == 0:
+            # Database is empty: load default seed cases
             cases_seed = [
                 {
                     "case_number": "HC-2026-1044",
@@ -430,144 +485,12 @@ def init_database():
                     "account": "ABC Enterprise",
                     "client": "ABC Enterprise",
                     "related_system": "HPE Licensing Portal",
-                    "description": "Client is experiencing delay in license renewal. Vendor confirmation is still pending. Need follow up and escalation if no response by EOD.",
+                    "description": "Client is experiencing delay in license renewal. Vendor confirmation is still pending.",
                     "vendor_name": "ABC Software Inc.",
                     "vendor_id": "VEND-ABC-019",
                     "vendor_contact": "Michael Tan",
                     "vendor_email": "support@abcsoftware.com",
                     "vendor_phone": "+1 555 123 4567",
-                    "vendor_alt_contact": "Sarah Lim",
-                    "vendor_alt_email": "sarah.lim@abcsoftware.com",
-                    "vendor_address": "123 Innovation Drive, San Jose, CA 95134",
-                    "history": [
-                        {
-                            "timestamp": "Sep 28, 2026 08:45 AM",
-                            "user": "John Dela Cruz",
-                            "type": "Status Changes",
-                            "badge": "Status changed to On Hold",
-                            "details": "Waiting for Vendor Response"
-                        }
-                    ],
-                    "communications": [],
-                    "attachments": []
-                },
-                {
-                    "case_number": "HPE-2026-1045",
-                    "subject": "License Key Provisioning Delay",
-                    "priority": "Critical",
-                    "assigned_to": "Mark Santos",
-                    "assigned_employee_id": "HPE10001",
-                    "assignee_email": "mark.santos@hpe.com",
-                    "assignee_avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150",
-                    "due_date": "Sep 28, 2026 11:00 AM",
-                    "status": "In Progress",
-                    "status_reason": "Waiting for Vendor Response",
-                    "created_at": "Sep 27, 2026 03:15 PM",
-                    "last_update": "Sep 28, 2026 8:15 AM",
-                    "case_category": "License Renewal",
-                    "account": "ABC Enterprise",
-                    "client": "ABC Enterprise",
-                    "related_system": "HPE Licensing Portal",
-                    "description": "Client is experiencing delay in license provisioning. Escalation raised with ABC Software team.",
-                    "vendor_name": "ABC Software Inc.",
-                    "vendor_id": "VEND-ABC-019",
-                    "vendor_contact": "Michael Tan",
-                    "vendor_email": "support@abcsoftware.com",
-                    "vendor_phone": "+1 555 123 4567",
-                    "vendor_alt_contact": "Sarah Lim",
-                    "vendor_alt_email": "sarah.lim@abcsoftware.com",
-                    "vendor_address": "123 Innovation Drive, San Jose, CA 95134",
-                    "history": [],
-                    "communications": [],
-                    "attachments": []
-                },
-                {
-                    "case_number": "HPE-2026-1042",
-                    "subject": "Portal Access Issue",
-                    "priority": "Critical",
-                    "assigned_to": "Chelsea Reyes",
-                    "assigned_employee_id": "HPE10002",
-                    "assignee_email": "chelsea.reyes@hpe.com",
-                    "assignee_avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
-                    "due_date": "Sep 28, 2026 12:00 PM",
-                    "status": "Vendor Response",
-                    "status_reason": "Under Investigation",
-                    "created_at": "Sep 27, 2026 04:00 PM",
-                    "last_update": "Sep 28, 2026 9:10 AM",
-                    "case_category": "Identity & Access",
-                    "account": "Global FinTech",
-                    "client": "Global FinTech",
-                    "related_system": "SSO Federation Broker",
-                    "description": "Enterprise customer administrator unable to log into provisioning console with SAML SSO.",
-                    "vendor_name": "CloudAuth Corp",
-                    "vendor_id": "VEND-CA-004",
-                    "vendor_contact": "David Miller",
-                    "vendor_email": "support@cloudauth.io",
-                    "vendor_phone": "+1 800 555 0199",
-                    "vendor_alt_contact": "Karen Scott",
-                    "vendor_alt_email": "karen@cloudauth.io",
-                    "vendor_address": "456 Security Blvd, Austin, TX 78701",
-                    "history": [],
-                    "communications": [],
-                    "attachments": []
-                },
-                {
-                    "case_number": "HPE-2026-1038",
-                    "subject": "License Renewal Request",
-                    "priority": "High",
-                    "assigned_to": "Arianne Escabillas",
-                    "assigned_employee_id": "HPE12345",
-                    "assignee_email": "arianne.escabillas@hpe.com",
-                    "assignee_avatar": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150",
-                    "due_date": "Sep 28, 2026 3:00 PM",
-                    "status": "Waiting Vendor",
-                    "status_reason": "Waiting for Vendor Response",
-                    "created_at": "Sep 27, 2026 06:00 PM",
-                    "last_update": "Sep 28, 2026 10:00 AM",
-                    "case_category": "Contracts & Subscriptions",
-                    "account": "Nexus Telecom",
-                    "client": "Nexus Telecom",
-                    "related_system": "HPE GreenLake",
-                    "description": "Annual enterprise license renewal quote confirmation pending validation.",
-                    "vendor_name": "ABC Software Inc.",
-                    "vendor_id": "VEND-ABC-019",
-                    "vendor_contact": "Michael Tan",
-                    "vendor_email": "support@abcsoftware.com",
-                    "vendor_phone": "+1 555 123 4567",
-                    "vendor_alt_contact": "Sarah Lim",
-                    "vendor_alt_email": "sarah.lim@abcsoftware.com",
-                    "vendor_address": "123 Innovation Drive, San Jose, CA 95134",
-                    "history": [],
-                    "communications": [],
-                    "attachments": []
-                },
-                {
-                    "case_number": "HPE-2026-1020",
-                    "subject": "Firmware Patch 4.1.2 Validation",
-                    "priority": "Medium",
-                    "assigned_to": "Arianne Escabillas",
-                    "assigned_employee_id": "HPE12345",
-                    "assignee_email": "arianne.escabillas@hpe.com",
-                    "assignee_avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150",
-                    "due_date": "Sep 27, 2026 11:00 AM",
-                    "status": "Closed",
-                    "status_reason": "Resolved - Contract Complete",
-                    "closure_type": "Resolved",
-                    "created_at": "Sep 25, 2026 09:00 AM",
-                    "last_update": "Sep 27, 2026 2:15 PM",
-                    "case_category": "Firmware",
-                    "account": "Enterprise Core",
-                    "client": "Enterprise Core",
-                    "related_system": "HPE Smart Update",
-                    "description": "Routine security certification validation for rack compute clusters.",
-                    "vendor_name": "ABC Software Inc.",
-                    "vendor_id": "VEND-ABC-019",
-                    "vendor_contact": "Michael Tan",
-                    "vendor_email": "support@abcsoftware.com",
-                    "vendor_phone": "+1 555 123 4567",
-                    "vendor_alt_contact": "Sarah Lim",
-                    "vendor_alt_email": "sarah.lim@abcsoftware.com",
-                    "vendor_address": "123 Innovation Drive, San Jose, CA 95134",
                     "history": [],
                     "communications": [],
                     "attachments": []
@@ -589,7 +512,7 @@ def init_database():
                     "Data": [
                         {
                             "id": "notif-001",
-                            "target_email": "arianne.escabillas@hpe.com",
+                            "target_email": "admin.demo@internal.test",
                             "title": "Critical Case Alert",
                             "message": "HC-2026-1044 is nearing SLA breach (Due in 36 minutes). Immediate follow-up required.",
                             "category": "critical",
@@ -832,14 +755,12 @@ def auto_assign_new_case(case_data):
 # ==============================================================================
 ENTERPRISE_CSS = """
 <style>
-/* 2. CHANGE FONT STYLE FOR THE WHOLE APP TO INTER */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
 html, body, [class*="css"], .stApp, .stApp *, button, input, select, textarea {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
 }
 
-/* Global Reset */
 #MainMenu, header, footer, [data-testid="stToolbar"], [data-testid="stDecoration"] {
     visibility: hidden !important;
     display: none !important;
@@ -908,7 +829,6 @@ div[class*="st-key-top_bell_popover"] > div > button {
     gap: 0 !important;
 }
 
-/* 1. STRICTLY REMOVE EXPAND MORE TEXT, SVG ICONS, AND CHEVRONS BESIDE BELL & ELLIPSES */
 div[class*="st-key-top_bell_popover"] [data-testid="stPopoverButton"] svg,
 div[class*="st-key-top_bell_popover"] [data-testid="stPopoverButton"] span:last-child:not(:first-child),
 div[class*="st-key-top_bell_popover"] [data-testid="stIconChevronDown"],
@@ -1076,7 +996,6 @@ div[class*="st-key-action_toolbar_container"] button {
     height: 36px !important;
 }
 
-/* 2. UNIFIED CASE TABLE HEADER BOX: PERFECT FIT WITH TOP/BOTTOM MARGINS & UNIFORM FONT */
 .table-header-row {
     display: flex !important;
     align-items: center !important;
@@ -1112,7 +1031,6 @@ div[class*="st-key-btn_case_"] button {
     color: #0067B9 !important;
 }
 
-/* 1. ELLIPSES BUTTON IN CASE TABLE: ZERO BOX / ZERO OUTLINE / NO CHEVRON ARROW */
 div[class*="st-key-pop_row_act_"] button,
 div[class*="st-key-pop_row_act_"] [data-testid="stPopoverButton"],
 div[class*="st-key-pop_row_act_"] [data-testid="baseButton-secondary"],
@@ -1190,7 +1108,6 @@ div[class*="st-key-hpe_bottom_nav_container"] button[data-testid="baseButton-pri
     font-weight: 700 !important;
 }
 
-/* 4. SPACE BETWEEN CORNER AND CASE DETAIL HEADER */
 div[data-testid="stDialogHeader"] {
     padding-top: 24px !important;
     padding-left: 28px !important;
@@ -1207,7 +1124,6 @@ div[data-testid="stDialog"] h2 {
     padding: 0 !important;
 }
 
-/* 1. MINIMAL MARGIN & EQUAL HEIGHT ALIGNMENT FOR TOP 3 CARDS */
 div[data-testid="stDialog"] [data-testid="stHorizontalBlock"] {
     gap: 8px !important;
     margin-bottom: 4px !important;
@@ -1263,7 +1179,6 @@ div[class*="st-key-reassign_box_"] {
     margin-top: 10px !important;
 }
 
-/* 3. LIGHT BLUE BACKGROUND IN ENTRY FORMS & DROPDOWNS IN CASE DETAIL */
 div[data-testid="stDialog"] div[data-baseweb="select"] > div,
 div[data-testid="stDialog"] div[data-baseweb="input"] > div,
 div[data-testid="stDialog"] div[data-baseweb="textarea"] > textarea,
@@ -1283,7 +1198,6 @@ div[data-testid="stDialog"] div[data-baseweb="input"] input {
     background-color: transparent !important;
 }
 
-/* 3. EXPLICIT WHITE DROPDOWN INTERFACE FOR SELECT AGENT IN REASSIGN CASE */
 div[class*="st-key-reassign_box_"] div[data-baseweb="select"] > div {
     background-color: #FFFFFF !important;
     border: 1.5px solid #CBD5E1 !important;
@@ -1637,7 +1551,6 @@ def render_case_modal(case_num):
                     if st.button("Request Transfer", key=f"btn_trf_req_{case_num}"):
                         st.session_state[f"show_transfer_dialog_{case_num}"] = True
 
-                # 3. Dedicated Admin-Only Reassignment Section (Solid White Dropdown UI)
                 if is_admin:
                     with st.container(key=f"reassign_box_{case_num}"):
                         st.markdown("<strong style='font-size:12.5px; color:#0067B9;'>🔄 Reassign Case (Admin Only)</strong>", unsafe_allow_html=True)
@@ -1964,7 +1877,7 @@ def render_top_header():
         with c_search:
             st.text_input("Global Search", placeholder="🔍 Search cases, names, issues...", label_visibility="collapsed")
 
-        # 1. Notification Bell Popover (Zero chevrons, icons, or expand_more text)
+        # Notification Bell Popover
         with c_bell:
             with st.container(key="top_bell_popover"):
                 with st.popover(f"🔔 {unread_count}", help="Notifications"):
@@ -2083,7 +1996,7 @@ def render_profile_flyout():
                 logout_user()
 
 # ==============================================================================
-# 10. DASHBOARD: PERFECT HORIZONTAL ALIGNMENT (TILES & SCHEDULE/ROSTER)
+# 10. DASHBOARD ROUTER
 # ==============================================================================
 def render_dashboard():
     user = st.session_state.get("current_user", {})
@@ -2271,7 +2184,6 @@ def render_dashboard():
 
         st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
 
-        # 2. EXACT CASE TABLE HEADER BOX: UNIFORM FONT SIZE, CONTROLLED PADDING/MARGIN (NO OVERFLOW)
         st.markdown("""
         <div class="table-header-row">
             <div style="flex: 0 0 35px; text-align: center;"><span class="th-cell">☐</span></div>
@@ -2351,7 +2263,6 @@ def render_dashboard():
                 </div>
                 """, unsafe_allow_html=True)
             
-            # 1. Action Ellipses (⋮) - Pure ellipses button with zero chevron / expand_more text
             with rc9:
                 with st.container(key=f"pop_row_act_{c['case_number']}"):
                     with st.popover("⋮", help="Case Actions"):
@@ -2505,14 +2416,14 @@ def render_dashboard():
                     st.rerun()
 
 # ==============================================================================
-# 11. MONITORING TAB (ADMIN ONLY)
+# 11. MONITORING TAB
 # ==============================================================================
 def render_monitoring():
     st.markdown("### 📊 Operational Roster & Telemetry Monitoring")
     st.caption("Active shift telemetry, login durations, and case allocation load per agent:")
 
     roster_doc = collection.find_one({"type": "roster_list"}) or {}
-    agents = [u for u in roster_doc.get("Data", []) if u.get("role") != "Admin"]
+    agents = [u for u in roster_doc.get("Data", []) if u.get("role"] != "Admin"]
     table_data = []
     for a in agents:
         assigned_today = cases_collection.count_documents({"type": "cases", "assignee_email": a["email"]})
@@ -2601,7 +2512,7 @@ def render_schedule():
                 st.success(f"Shift swap request dispatched to {colleague} and automatically synced!")
 
 # ==============================================================================
-# 13. REPORT TAB (PLOTLY VISUALIZATIONS)
+# 13. REPORT TAB
 # ==============================================================================
 def render_report():
     user = st.session_state.get("current_user", {})
@@ -2649,7 +2560,7 @@ def render_report():
     a3.metric("SLA Resolution Compliance", "94.8%", "Target: 95.0%")
 
 # ==============================================================================
-# 14. SETTINGS TAB (ADMIN ONLY)
+# 14. SETTINGS TAB
 # ==============================================================================
 def render_settings():
     st.markdown("### ⚙️ Enterprise Configuration & Master Registry")
@@ -2701,7 +2612,7 @@ def render_settings():
                 st.error(f"Error parsing Excel file: {e}")
 
 # ==============================================================================
-# 15. AUTHENTICATION PAGES (SIGN-IN & SIGN-UP)
+# 15. AUTHENTICATION PAGES (SIGN-IN & DEMO BUTTONS)
 # ==============================================================================
 def render_auth_page():
     auth_mode = st.session_state.get("auth_mode", "Sign In")
@@ -2747,6 +2658,30 @@ def render_auth_page():
             st.markdown("## **Welcome Back!**")
             st.caption("Sign in to your HPE CaseFlow account")
 
+            # 2. DEMO PROFILE QUICK BUTTONS (NO EMAIL NEEDED, JUST CLICK)
+            st.markdown("##### 🚀 Quick Demo Profiles (Instant Access)")
+            demo_cols = st.columns(3)
+            with demo_cols[0]:
+                if st.button("👑 Admin Demo", use_container_width=True, help="Instant Login as Admin Demo"):
+                    u = authenticate_user("admin.demo@internal.test", "HPE@123456")
+                    if u:
+                        create_session(u, remember_me=True)
+                        st.rerun()
+            with demo_cols[1]:
+                if st.button("🛡️ Admin/Agent", use_container_width=True, help="Instant Login as Admin/Agent Demo"):
+                    u = authenticate_user("adminagent.demo@internal.test", "HPE@123456")
+                    if u:
+                        create_session(u, remember_me=True)
+                        st.rerun()
+            with demo_cols[2]:
+                if st.button("👤 Agent Demo", use_container_width=True, help="Instant Login as Agent Demo"):
+                    u = authenticate_user("agent.demo@internal.test", "HPE@123456")
+                    if u:
+                        create_session(u, remember_me=True)
+                        st.rerun()
+
+            st.markdown("<div style='text-align:center; color:#94A3B8; margin:12px 0;'>&mdash; or sign in with credentials &mdash;</div>", unsafe_allow_html=True)
+
             email_in = st.text_input("HPE Email Address", placeholder="yourname@hpe.com")
             pw_in = st.text_input("Password", type="password", placeholder="Enter your password")
 
@@ -2776,6 +2711,24 @@ def render_auth_page():
                     st.rerun()
                 else:
                     st.error("Invalid HPE credentials. Please check your email or password.")
+
+            # 2. QUICK ADMIN SIGN-IN WITH PASSWORD ONLY (HPE@123456)
+            st.markdown("<div style='margin-top:10px;'></div>", unsafe_allow_html=True)
+            with st.expander("🔑 Quick Admin Sign-In (Password Only)"):
+                adm_pw_input = st.text_input("Admin Password", type="password", placeholder="Enter HPE@123456", key="quick_adm_pw")
+                if st.button("Sign In as Admin (Password Only)", key="btn_password_only_admin", use_container_width=True):
+                    if adm_pw_input == "HPE@123456":
+                        roster_doc = collection.find_one({"type": "roster_list"}) or {}
+                        adm_user = next((x for x in roster_doc.get("Data", []) if x.get("role") == "Admin" or "admin" in x.get("email", "")), None)
+                        if adm_user:
+                            create_session(adm_user, remember_me=True)
+                            st.success("Signed in as Admin successfully!")
+                            time.sleep(0.4)
+                            st.rerun()
+                        else:
+                            st.error("Admin user profile not found.")
+                    else:
+                        st.error("Incorrect password. Use HPE@123456.")
 
             st.markdown("<div style='text-align:center; color:#94A3B8; margin:16px 0;'>&mdash; or &mdash;</div>", unsafe_allow_html=True)
             if st.button("🟦 Sign in with Microsoft (HPE)", use_container_width=True):
@@ -2891,7 +2844,7 @@ def main():
 
     if not st.session_state.get("authenticated", False) and not st.session_state.get("manual_logout", False):
         roster_doc = collection.find_one({"type": "roster_list"}) or {}
-        admin_user = next((u for u in roster_doc.get("Data", []) if u.get("email") == "arianne.escabillas@hpe.com"), None)
+        admin_user = next((u for u in roster_doc.get("Data", []) if u.get("email") == "admin.demo@internal.test"), None)
         if admin_user:
             create_session(admin_user, remember_me=True)
             st.rerun()
