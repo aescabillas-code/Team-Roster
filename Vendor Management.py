@@ -1,3 +1,11 @@
+"""
+================================================================================
+APPLICATION: HPE CaseFlow — Task Monitoring & Management System
+VISUAL SPECIFICATION: Exact reproduction of HPE Enterprise Reference (1000057381_2.png)
+ARCHITECTURE: Single-file production Streamlit application with PyMongo persistence
+================================================================================
+"""
+
 import os
 import sys
 import re
@@ -662,7 +670,6 @@ def init_database():
     except Exception:
         pass
 
-# 2. RUN ONCE PER SESSION TO ENSURE ULTRA-FAST AND SMOOTH EXECUTION
 if "db_initialized" not in st.session_state:
     init_database()
     st.session_state["db_initialized"] = True
@@ -891,10 +898,10 @@ def auto_assign_new_case(case_data):
 # ==============================================================================
 ENTERPRISE_CSS = """
 <style>
-/* 2. IMPORT AND APPLY INTER FONT GLOBALLY */
+/* 2. CHANGE FONT STYLE FOR THE WHOLE APP TO INTER */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
-html, body, [class*="css"], .stApp, .stApp * {
+html, body, [class*="css"], .stApp, .stApp *, button, input, select, textarea {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
 }
 
@@ -993,7 +1000,7 @@ div[class*="st-key-top_bell_popover"] span {
     color: #FFFFFF !important;
 }
 
-/* 3. STRICTLY REMOVE ALL ICONS & CHEVRONS BESIDE ELLIPSES & BELL */
+/* REMOVE ICONS & CHEVRONS BESIDE ELLIPSES & BELL */
 div[class*="st-key-top_bell_popover"] [data-testid="stPopoverButton"] svg,
 div[class*="st-key-top_bell_popover"] button svg,
 div[class*="st-key-top_bell_popover"] svg,
@@ -1178,7 +1185,7 @@ div[class*="st-key-action_toolbar_container"] button {
     height: 36px !important;
 }
 
-/* 1. CASE HEADER BOX: GUARANTEED ZERO OVERFLOW WITH CONTROLLED GAP AND PADDING */
+/* CASE HEADER BOX */
 div[class*="st-key-dashboard_table_header"] {
     background-color: #F1F5F9 !important;
     border: 1px solid #E2E8F0 !important;
@@ -1222,7 +1229,7 @@ div[class*="st-key-btn_case_"] button {
     color: #0067B9 !important;
 }
 
-/* 3. ELLIPSES BUTTON IN CASE TABLE: ZERO BOX / ZERO OUTLINE / NO CHEVRON ARROW */
+/* ELLIPSES BUTTON IN CASE TABLE: ZERO BOX / ZERO OUTLINE / NO CHEVRON ARROW */
 div[class*="st-key-pop_row_act_"] button,
 div[class*="st-key-pop_row_act_"] [data-testid="stPopoverButton"],
 div[class*="st-key-pop_row_act_"] [data-testid="baseButton-secondary"],
@@ -1301,43 +1308,71 @@ div[class*="st-key-hpe_bottom_nav_container"] button[data-testid="baseButton-pri
     font-weight: 700 !important;
 }
 
-/* Dialog Header Styling */
+/* 4. SPACE BETWEEN CORNER AND CASE DETAIL HEADER */
+div[data-testid="stDialogHeader"] {
+    padding-top: 24px !important;
+    padding-left: 28px !important;
+    padding-right: 28px !important;
+    padding-bottom: 6px !important;
+}
 div[data-testid="stDialogHeader"] h2,
 div[role="dialog"] h2,
 div[data-testid="stDialog"] h2 {
     font-size: 22px !important;
     font-weight: 800 !important;
     color: #17233C !important;
-    margin: 0 !important;
+    margin: 4px 0 0 4px !important;
     padding: 0 !important;
 }
 
-/* 1. MINIMAL MARGIN BETWEEN CONTAINER BLOCKS */
+/* 1. MINIMAL MARGIN & EQUAL HEIGHT ALIGNMENT FOR TOP 3 CARDS */
 div[data-testid="stDialog"] [data-testid="stHorizontalBlock"] {
     gap: 8px !important;
+    margin-bottom: 4px !important;
+    align-items: stretch !important;
 }
 
 div[class*="st-key-case_info_block_"],
 div[class*="st-key-vendor_info_block_"],
-div[class*="st-key-update_case_block_"],
+div[class*="st-key-update_case_block_"] {
+    background: #FFFFFF !important;
+    background-color: #FFFFFF !important;
+    border: 1px solid #DFE7EF !important;
+    border-radius: 10px !important;
+    padding: 14px 16px !important;
+    margin-bottom: 4px !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02) !important;
+    min-height: 520px !important;
+    height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    box-sizing: border-box !important;
+}
+
+/* Minimal Margins for Bottom Cards */
 div[class*="st-key-case_history_block_"],
 div[class*="st-key-breach_email_block_"] {
     background: #FFFFFF !important;
     background-color: #FFFFFF !important;
     border: 1px solid #DFE7EF !important;
     border-radius: 10px !important;
-    padding: 12px 14px !important;
-    margin-bottom: 6px !important;
+    padding: 14px 16px !important;
+    margin-bottom: 4px !important;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02) !important;
+    min-height: 380px !important;
+    height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    box-sizing: border-box !important;
 }
 
-/* 3. QUICK ACTIONS & REASSIGN CASE BACKGROUNDS (SOLID LIGHT PANELS, NO EXTRA BOXES) */
+/* Quick Actions Panel & Reassign Case Panel Styling */
 div[class*="st-key-qa_panel_"] {
     background-color: #F0FDF4 !important;
     border: 1px solid #BBF7D0 !important;
     border-radius: 8px !important;
     padding: 8px 10px !important;
-    margin-top: 10px !important;
+    margin-top: auto !important;
 }
 
 div[class*="st-key-reassign_box_"] {
@@ -1346,6 +1381,32 @@ div[class*="st-key-reassign_box_"] {
     border-radius: 8px !important;
     padding: 10px !important;
     margin-top: 10px !important;
+}
+
+/* 3. LIGHT BLUE BACKGROUND IN ANY ENTRY FORM OR DROPDOWN INITIAL INTERFACE IN CASE DETAIL */
+div[data-testid="stDialog"] div[data-baseweb="select"] > div,
+div[data-testid="stDialog"] div[data-baseweb="input"] > div,
+div[data-testid="stDialog"] div[data-baseweb="textarea"] > textarea,
+div[data-testid="stDialog"] input:not([type="checkbox"]):not([type="radio"]),
+div[data-testid="stDialog"] textarea {
+    background-color: #EEF6FC !important;
+    border: 1px solid #BAE6FD !important;
+    border-radius: 6px !important;
+    color: #17233C !important;
+}
+
+div[data-testid="stDialog"] div[data-baseweb="select"] * {
+    background-color: transparent !important;
+}
+
+div[data-testid="stDialog"] div[data-baseweb="input"] input {
+    background-color: transparent !important;
+}
+
+div[data-testid="stDialog"] div[data-baseweb="select"]:hover,
+div[data-testid="stDialog"] div[data-baseweb="input"]:hover,
+div[data-testid="stDialog"] div[data-baseweb="textarea"]:hover {
+    border-color: #0067B9 !important;
 }
 
 .case-summary-box {
@@ -1410,14 +1471,14 @@ def render_case_modal(case_num):
     user_role = user.get("role", "Agent")
     is_admin = user_role in ["Admin", "Admin/Agent"]
 
-    # Clean Subtitle under Header
+    # 4. Clean Subtitle under Header with controlled spacing from corner
     st.markdown("""
-    <div style="line-height:1.2; margin-top:-8px; margin-bottom:10px;">
+    <div style="line-height:1.2; margin-top:-4px; margin-bottom:12px; padding-left:4px;">
         <p style="font-size:12.5px; color:#5F6B7A; margin:0;">
             View and update case information, communicate with vendor, and manage status.
         </p>
     </div>
-    <hr style='margin:0 0 10px 0; border:none; border-top:1px solid #D9E2EC;'>
+    <hr style='margin:0 0 12px 0; border:none; border-top:1px solid #D9E2EC;'>
     """, unsafe_allow_html=True)
 
     # 2. Case Summary Header
@@ -1520,12 +1581,12 @@ def render_case_modal(case_num):
     ])
 
     # --------------------------------------------------------------------------
-    # TAB 1: CASE INFORMATION (1. Minimal Margins Between Blocks)
+    # TAB 1: CASE INFORMATION (1. Minimal Margins & Equal Heights)
     # --------------------------------------------------------------------------
     with tab_info:
         col_left, col_center, col_right = st.columns([3.3, 3.0, 3.7], gap="small")
 
-        # --- LEFT CARD: CASE INFORMATION ---
+        # --- LEFT CARD: CASE INFORMATION (Equal Height Solid White Block) ---
         with col_left:
             with st.container(key=f"case_info_block_{case_num}"):
                 head_l1, head_l2 = st.columns([3, 1])
@@ -1575,7 +1636,7 @@ def render_case_modal(case_num):
                     </div>
                     """, unsafe_allow_html=True)
 
-        # --- CENTER CARD: VENDOR INFORMATION ---
+        # --- CENTER CARD: VENDOR INFORMATION (Equal Height Solid White Block) ---
         with col_center:
             with st.container(key=f"vendor_info_block_{case_num}"):
                 v_head1, v_head2 = st.columns([1.8, 1.2])
@@ -1634,7 +1695,7 @@ def render_case_modal(case_num):
                                 excel_data = v_excel_df.to_csv(index=False).encode("utf-8")
                         st.download_button("View Excel", excel_data, f"{case['case_number']}_Vendor.xlsx", key=f"btn_down_vexc_{case_num}")
 
-        # --- RIGHT CARD: UPDATE CASE ---
+        # --- RIGHT CARD: UPDATE CASE (Equal Height Solid White Block) ---
         with col_right:
             with st.container(key=f"update_case_block_{case_num}"):
                 st.markdown("<strong style='font-size:15px; color:#17233C;'>⏱️ Update Case</strong>", unsafe_allow_html=True)
@@ -1712,7 +1773,7 @@ def render_case_modal(case_num):
                     if st.button("Request Transfer", key=f"btn_trf_req_{case_num}"):
                         st.session_state[f"show_transfer_dialog_{case_num}"] = True
 
-                # Dedicated Admin-Only Reassignment Section - Light Blue Background
+                # Dedicated Admin-Only Reassignment Section
                 if is_admin:
                     with st.container(key=f"reassign_box_{case_num}"):
                         st.markdown("<strong style='font-size:12.5px; color:#0067B9;'>🔄 Reassign Case (Admin Only)</strong>", unsafe_allow_html=True)
@@ -1771,7 +1832,7 @@ def render_case_modal(case_num):
         # ----------------------------------------------------------------------
         col_hist, col_email = st.columns([6.3, 3.7], gap="small")
 
-        # --- CASE HISTORY CARD ---
+        # --- CASE HISTORY CARD (Solid White Block Background) ---
         with col_hist:
             with st.container(key=f"case_history_block_{case_num}"):
                 h_top1, h_top2 = st.columns([3, 2])
@@ -1813,7 +1874,7 @@ def render_case_modal(case_num):
                         </div>
                         """, unsafe_allow_html=True)
 
-        # --- AUTOMATED BREACH NOTICE EMAIL CARD ---
+        # --- AUTOMATED BREACH NOTICE EMAIL CARD (Solid White Block Background) ---
         with col_email:
             with st.container(key=f"breach_email_block_{case_num}"):
                 st.markdown("<strong style='font-size:15px; color:#17233C;'>✉️ Automated Breach Notice Email</strong>", unsafe_allow_html=True)
@@ -2188,7 +2249,7 @@ def render_dashboard():
 
     is_admin_mode = (st.session_state["view_mode"] == "Admin")
 
-    # 2. FAST IN-MEMORY AGGREGATION: Single query to eliminate UI lag
+    # FAST IN-MEMORY AGGREGATION
     q_base = {"type": "cases"}
     if not is_admin_mode:
         q_base["assignee_email"] = user.get("email")
@@ -2444,7 +2505,7 @@ def render_dashboard():
                 </div>
                 """, unsafe_allow_html=True)
             
-            # 3. Action Ellipses (⋮) - Pure ellipses button with zero box & arrow down removed
+            # Action Ellipses (⋮) - Pure ellipses button with zero box & arrow down removed
             with rc9:
                 with st.container(key=f"pop_row_act_{c['case_number']}"):
                     with st.popover("⋮", help="Case Actions"):
