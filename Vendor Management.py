@@ -352,23 +352,26 @@ def init_database():
     except Exception:
         pass
 
-    # Create demo profiles & auto-remove default seeds if real roster/cases exist
+    # 2. DEMO PROFILES CREATION + AUTO-REMOVAL OF PSEUDO SEEDS WHEN REAL USERS/CASES EXIST
     try:
         roster_doc = collection.find_one({"type": "roster_list"})
         existing_data = roster_doc.get("Data", []) if roster_doc else []
         
+        # Check if real user profiles exist (excluding default demo profiles)
+        real_users = [u for u in existing_data if not str(u.get("email", "")).endswith(".demo@internal.test")]
+
         salt = secrets.token_hex(8)
         hashed_pw = hashlib.sha256((salt + "Hpe@123456").encode()).hexdigest() + ":" + salt
         
-        demo_profiles = [
+        demo_members = [
             ("Admin", "Demo", "DEMO901", "admin.demo@internal.test", "Admin", "Admin Work", "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150"),
-            ("Admin/Agent", "Demo", "DEMO902", "adminagent.demo@internal.test", "Admin/Agent", "Available", "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150"),
+            ("AdminAgent", "Demo", "DEMO902", "adminagent.demo@internal.test", "Admin/Agent", "Available", "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150"),
             ("Agent", "Demo", "DEMO903", "agent.demo@internal.test", "Agent", "Available", "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150")
         ]
 
         now = get_current_ph_time()
         demo_seed_data = []
-        for fn, ln, eid, email, role, aux, img in demo_profiles:
+        for fn, ln, eid, email, role, aux, img in demo_members:
             demo_seed_data.append({
                 "first_name": str(fn),
                 "last_name": str(ln),
@@ -386,20 +389,11 @@ def init_database():
                 "updated_at": str(now.strftime("%Y-%m-%d %H:%M:%S"))
             })
 
-        default_seed_emails = [
-            "arianne.escabillas@hpe.com", "mark.santos@hpe.com", "chelsea.reyes@hpe.com",
-            "james.delacruz@hpe.com", "mica.tan@hpe.com", "rafael.cruz@hpe.com",
-            "alyssa.ramos@hpe.com", "daniel.lim@hpe.com", "bea.santos@hpe.com",
-            "kevin.navarro@hpe.com", "nicole.garcia@hpe.com", "carlo.mendoza@hpe.com",
-            "lara.cruz@hpe.com", "admin@hpe.com"
-        ]
-
-        real_custom_users = [u for u in existing_data if u.get("email") not in default_seed_emails and not u.get("email", "").endswith(".demo@internal.test")]
-
-        if real_custom_users:
-            filtered_existing = [u for u in existing_data if u.get("email") not in default_seed_emails and not u.get("email", "").endswith(".demo@internal.test")]
-            final_roster = filtered_existing + demo_seed_data
+        if real_users:
+            # Roster has real users: keep real users, discard pseudo/default seed roster entries, append demo profiles
+            final_roster = real_users + demo_seed_data
         else:
+            # Roster is empty or only had default seeds: load default team members + demo profiles
             default_team_members = [
                 ("Arianne", "Escabillas", "HPE12345", "arianne.escabillas@hpe.com", "Admin/Agent", "Admin Work", "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150"),
                 ("Mark", "Santos", "HPE10001", "mark.santos@hpe.com", "Admin/Agent", "Available", "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150"),
@@ -421,7 +415,7 @@ def init_database():
                 final_roster.append({
                     "first_name": str(fn),
                     "last_name": str(ln),
-                    "name": str(f"{fn} {ln}"),
+                    "name": str(fn + " " + ln),
                     "employee_id": str(eid),
                     "email": str(email),
                     "password_hash": str(hashed_pw),
@@ -452,16 +446,19 @@ def init_database():
     except Exception:
         pass
 
-    # Auto-remove pseudo cases if real cases are available
+    # 1. AUTO-REMOVE PSEUDO CASES IF REAL CASES ARE AVAILABLE
     try:
         all_cases_in_db = list(cases_collection.find({"type": "cases"}))
-        pseudo_case_numbers = ["HC-2026-1044", "HPE-2026-1045", "HPE-2026-1042", "HPE-2026-1038", "HPE-2026-1020"]
-        real_cases = [c for c in all_cases_in_db if c.get("case_number") not in pseudo_case_numbers]
+        # Filter pseudo/default cases (starting with HC-2026-1044, HPE-2026-1045, etc.)
+        pseudo_prefixes = ["HC-2026-1044", "HPE-2026-1045", "HPE-2026-1042", "HPE-2026-1038", "HPE-2026-1020"]
+        real_cases = [c for c in all_cases_in_db if c.get("case_number") not in pseudo_prefixes]
 
         if real_cases:
-            for p_num in pseudo_case_numbers:
+            # Remove pseudo cases if real cases exist
+            for p_num in pseudo_prefixes:
                 cases_collection.delete_many({"type": "cases", "case_number": p_num})
         elif len(all_cases_in_db) == 0:
+            # Seed default cases if database is entirely empty
             cases_seed = [
                 {
                     "case_number": "HC-2026-1044",
@@ -507,7 +504,7 @@ def init_database():
                     "Data": [
                         {
                             "id": "notif-001",
-                            "target_email": "admin.demo@internal.test",
+                            "target_email": "arianne.escabillas@hpe.com",
                             "title": "Critical Case Alert",
                             "message": "HC-2026-1044 is nearing SLA breach (Due in 36 minutes). Immediate follow-up required.",
                             "category": "critical",
@@ -774,7 +771,7 @@ html, body, [class*="css"], .stApp, .stApp *, button, input, select, textarea {
     max-width: 100% !important;
 }
 
-/* Header Bar & 3. Vertical Centering of Profile & Header Elements */
+/* Header Bar & Top Alignment Fix (Instruction 3) */
 div[class*="st-key-hpe_top_bar_container"] {
     position: fixed !important;
     top: 0 !important;
@@ -793,7 +790,11 @@ div[class*="st-key-hpe_top_bar_container"] {
 div[class*="st-key-hpe_top_bar_container"] [data-testid="stHorizontalBlock"] {
     align-items: center !important;
     gap: 16px !important;
-    height: 100% !important;
+    padding-top: 2px !important;
+}
+
+div[class*="st-key-top_profile_pill_btn"] {
+    margin-top: 2px !important;
 }
 
 div[class*="st-key-top_profile_pill_btn"] button {
@@ -802,7 +803,7 @@ div[class*="st-key-top_profile_pill_btn"] button {
     color: #FFFFFF !important;
     border: 1px solid rgba(255, 255, 255, 0.25) !important;
     border-radius: 24px !important;
-    padding: 6px 14px !important;
+    padding: 4px 14px !important;
     font-size: 12px !important;
     font-weight: 700 !important;
     display: flex !important;
@@ -810,7 +811,6 @@ div[class*="st-key-top_profile_pill_btn"] button {
     justify-content: center !important;
     gap: 6px !important;
     box-shadow: none !important;
-    margin-top: 2px !important;
 }
 
 div[class*="st-key-top_bell_popover"] button,
@@ -821,28 +821,35 @@ div[class*="st-key-top_bell_popover"] > div > button {
     color: #FFFFFF !important;
     border: 1px solid rgba(255, 255, 255, 0.25) !important;
     border-radius: 20px !important;
-    padding: 5px 12px !important;
+    padding: 4px 12px !important;
     box-shadow: none !important;
     gap: 0 !important;
-    margin-top: 2px !important;
 }
 
-/* 1. BELL & ELLIPSES: REPLACE EXPAND MORE WITH DROPDOWN ARROW ▼ */
+/* 1. FIXED BELL BUTTON AND ELLIPSES IN CASE TABLE, REPLACE EXPAND_MORE WITH SMALL ARROW */
 div[class*="st-key-top_bell_popover"] [data-testid="stPopoverButton"] svg,
-div[class*="st-key-top_bell_popover"] [data-testid="stPopoverButton"] span:last-child:not(:first-child),
 div[class*="st-key-top_bell_popover"] [data-testid="stIconChevronDown"],
 div[class*="st-key-pop_row_act_"] [data-testid="stPopoverButton"] svg,
-div[class*="st-key-pop_row_act_"] [data-testid="stPopoverButton"] span:last-child:not(:first-child),
 div[class*="st-key-pop_row_act_"] [data-testid="stIconChevronDown"] {
     display: none !important;
+    visibility: hidden !important;
 }
 
-/* 4. LIGHT BLUE AUX DROPDOWN SELECTOR COLOR */
-div[class*="st-key-profile_aux_wrapper"] div[data-baseweb="select"] > div {
-    background-color: #EEF6FC !important;
-    border: 1.5px solid #BAE6FD !important;
-    border-radius: 8px !important;
-    min-height: 40px !important;
+div[class*="st-key-top_bell_popover"] [data-testid="stPopoverButton"] span:last-child,
+div[class*="st-key-pop_row_act_"] [data-testid="stPopoverButton"] span:last-child {
+    font-size: 0 !important;
+}
+
+div[class*="st-key-top_bell_popover"] [data-testid="stPopoverButton"]::after {
+    content: " ▾" !important;
+    font-size: 11px !important;
+    color: #FFFFFF !important;
+}
+
+div[class*="st-key-pop_row_act_"] [data-testid="stPopoverButton"]::after {
+    content: " ▾" !important;
+    font-size: 11px !important;
+    color: #64748B !important;
 }
 
 .notif-item-card {
@@ -880,6 +887,19 @@ div[class*="st-key-profile_flyout_card"] {
     transform: rotate(45deg);
     border-top: 1px solid #E2E8F0;
     border-left: 1px solid #E2E8F0;
+}
+
+/* 4. LIGHT BLUE COLOR ON THE AUX DROPDOWN SELECTOR */
+div[class*="st-key-profile_aux_wrapper"] div[data-baseweb="select"] {
+    border: 1.5px solid #0284C7 !important;
+    border-radius: 8px !important;
+    background-color: #EEF6FC !important;
+    min-height: 40px !important;
+}
+
+div[class*="st-key-profile_aux_wrapper"] div[data-baseweb="select"] * {
+    background-color: transparent !important;
+    color: #17233C !important;
 }
 
 .flyout-divider {
@@ -1040,7 +1060,8 @@ div[class*="st-key-pop_row_act_"] div[data-testid="stPopover"] > button {
     margin: 0 auto !important;
     min-height: unset !important;
     height: 24px !important;
-    width: 24px !important;
+    width: 20px !important;
+    min-width: 20px !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
@@ -1050,7 +1071,9 @@ div[class*="st-key-pop_row_act_"] div[data-testid="stPopover"] > button {
 }
 
 div[class*="st-key-pop_row_act_"] button:hover,
-div[class*="st-key-pop_row_act_"] button:focus {
+div[class*="st-key-pop_row_act_"] button:focus,
+div[class*="st-key-pop_row_act_"] [data-testid="stPopoverButton"]:hover,
+div[class*="st-key-pop_row_act_"] [data-testid="stPopoverButton"]:focus {
     border: none !important;
     background: transparent !important;
     color: #0067B9 !important;
@@ -1840,7 +1863,7 @@ HPE Operations Management"""
             st.rerun()
 
 # ==============================================================================
-# 8. TOP HEADER (1. & 3. Bell/Ellipses Dropdown Arrow & Vertical Centering)
+# 8. TOP HEADER
 # ==============================================================================
 def render_top_header():
     user = st.session_state.get("current_user", {})
@@ -1868,10 +1891,10 @@ def render_top_header():
         with c_search:
             st.text_input("Global Search", placeholder="🔍 Search cases, names, issues...", label_visibility="collapsed")
 
-        # 1. Notification Bell Popover with Dropdown Arrow ▼
+        # Notification Bell Popover
         with c_bell:
             with st.container(key="top_bell_popover"):
-                with st.popover(f"🔔 {unread_count} ▾", help="Notifications"):
+                with st.popover(f"🔔 {unread_count}", help="Notifications"):
                     st.markdown("### 🔔 Alerts & Notifications")
                     if user_notifs:
                         if st.button("Mark All as Read", key="btn_ack_all_notifs"):
@@ -1987,8 +2010,9 @@ def render_profile_flyout():
                 logout_user()
 
 # ==============================================================================
-# 10. DASHBOARD ROUTER (2. Register New Case Button Removed)
+# 10. DASHBOARD ROUTER (Optimized with @st.fragment for Speed & Smoothness - Instruction 5)
 # ==============================================================================
+@st.fragment
 def render_dashboard():
     user = st.session_state.get("current_user", {})
     user_role = user.get("role", "Admin/Agent")
@@ -2124,6 +2148,8 @@ def render_dashboard():
         with f4:
             include_closed = st.checkbox("Include Closed Cases", key="chk_include_closed_cases")
 
+        # Instruction 2: Removed "Register New Case" button entirely. Cases are now uploaded via Excel in settings.
+
         st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
 
         st.markdown("""
@@ -2205,10 +2231,9 @@ def render_dashboard():
                 </div>
                 """, unsafe_allow_html=True)
             
-            # 1. Action Ellipses with Dropdown Arrow ▼
             with rc9:
                 with st.container(key=f"pop_row_act_{c['case_number']}"):
-                    with st.popover("⋮ ▾", help="Case Actions"):
+                    with st.popover("⋮", help="Case Actions"):
                         st.markdown(f"**Actions for {c['case_number']}**")
                         if st.button("📋 View Details", key=f"act_view_{c['case_number']}", use_container_width=True):
                             render_case_modal(c["case_number"])
@@ -2503,12 +2528,12 @@ def render_report():
     a3.metric("SLA Resolution Compliance", "94.8%", "Target: 95.0%")
 
 # ==============================================================================
-# 14. SETTINGS TAB (2. Case Ingestion via Excel Upload)
+# 14. SETTINGS TAB (Includes Case Excel Upload & Auto-Assignment - Instruction 2)
 # ==============================================================================
 def render_settings():
     st.markdown("### ⚙️ Enterprise Configuration & Master Registry")
     
-    set_t1, set_t2, set_t3 = st.tabs(["👥 Team Roster Management", "🗄️ Validation Dropdowns", "📥 Case & Vendor Excel Sync"])
+    set_t1, set_t2, set_t3 = st.tabs(["👥 Team Roster Management", "🗄️ Validation Dropdowns", "📥 Vendor & Case Excel Sync"])
 
     with set_t1:
         st.markdown("##### Manage Roles & User Accounts")
@@ -2541,58 +2566,65 @@ def render_settings():
         st.info("Validation dropdowns are synchronized with MongoDB Validation_Dropdown schema.")
 
     with set_t3:
-        st.markdown("##### Synchronize Cases & Vendor Registry via Excel (`cases_data.xlsx`)")
-        st.caption("Required Case Columns: `case_number`, `subject`, `priority`, `assigned_to`, `due_date`, `status`, `account`, `vendor_name`, `vendor_email`")
-        uploaded_excel = st.file_uploader("Upload Excel File", type=["xlsx", "xls"], key="cases_excel_uploader")
+        st.markdown("##### Synchronize Vendor Registry via Excel (`vendor_data.xlsx`)")
+        st.caption("Required Columns: `Vendor Name`, `Primary Contact`, `Email`, `Phone`, `Address`")
+        uploaded_excel = st.file_uploader("Upload Vendor Excel File", type=["xlsx", "xls"], key="vendor_excel_uploader")
         if uploaded_excel:
             try:
-                c_df = pd.read_excel(uploaded_excel)
-                st.write("Preview of Uploaded Records:")
+                v_df = pd.read_excel(uploaded_excel)
+                st.write("Preview of Uploaded Vendor Records:")
+                st.dataframe(v_df.head(5), use_container_width=True)
+                if st.button("🚀 Ingest & Synchronize Records to MongoDB", type="primary"):
+                    st.success(f"Successfully processed and synchronized {len(v_df)} vendor records into CaseFlow cache!")
+            except Exception as e:
+                st.error(f"Error parsing Excel file: {e}")
+
+        st.divider()
+        st.markdown("##### Upload Cases via Excel (External Source Integration)")
+        st.caption("Upload an Excel file containing new cases to be automatically ingested and assigned to available roster agents.")
+        uploaded_cases_excel = st.file_uploader("Upload Cases Excel File", type=["xlsx", "xls"], key="cases_excel_uploader")
+        if uploaded_cases_excel:
+            try:
+                c_df = pd.read_excel(uploaded_cases_excel)
+                st.write("Preview of Uploaded Cases Records:")
                 st.dataframe(c_df.head(5), use_container_width=True)
-                if st.button("🚀 Ingest & Synchronize Cases to MongoDB", type="primary"):
+                if st.button("🚀 Ingest & Auto-Assign Cases to Roster", type="primary"):
                     success_count = 0
                     for _, row in c_df.iterrows():
-                        case_num = str(row.get("case_number", f"HPE-2026-{uuid.uuid4().hex[:4]}"))
-                        payload = {
+                        new_num = f"HC-2026-{1050 + cases_collection.count_documents({'type': 'cases'}) + 1}"
+                        case_payload = {
                             "type": "cases",
-                            "case_number": case_num,
-                            "subject": str(row.get("subject", "Imported Task")),
-                            "priority": str(row.get("priority", "Medium")),
-                            "assigned_to": str(row.get("assigned_to", "Unassigned")),
-                            "assignee_email": str(row.get("assignee_email", "")),
-                            "assignee_avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150",
-                            "due_date": str(row.get("due_date", get_current_ph_time().strftime("%b %d, %Y %I:%M %p"))),
-                            "status": str(row.get("status", "In Progress")),
-                            "status_reason": str(row.get("status_reason", "Under Review")),
+                            "case_number": str(row.get("Case #", new_num)),
+                            "subject": str(row.get("Subject", "Imported Case")),
+                            "description": str(row.get("Description", "Imported via Excel upload.")),
+                            "priority": str(row.get("Priority", "Medium")),
+                            "status": str(row.get("Status", "In Progress")),
+                            "status_reason": str(row.get("Status Reason", "Waiting for Vendor Response")),
+                            "due_date": str(row.get("Due Date", (get_current_ph_time() + timedelta(hours=24)).strftime("%b %d, %Y %I:%M %p"))),
                             "created_at": get_current_ph_time().strftime("%b %d, %Y %I:%M %p"),
                             "last_update": get_current_ph_time().strftime("%b %d, %Y %I:%M %p"),
-                            "case_category": str(row.get("case_category", "General")),
-                            "account": str(row.get("account", "Enterprise Client")),
-                            "related_system": str(row.get("related_system", "HPE CaseFlow")),
-                            "description": str(row.get("description", "Imported via Excel synchronization.")),
-                            "vendor_name": str(row.get("vendor_name", "ABC Software Inc.")),
+                            "case_category": str(row.get("Category", "General")),
+                            "vendor_name": str(row.get("Vendor Name", "ABC Software Inc.")),
                             "vendor_id": "VEND-ABC-019",
                             "vendor_contact": "Michael Tan",
-                            "vendor_email": str(row.get("vendor_email", "support@abcsoftware.com")),
+                            "vendor_email": str(row.get("Vendor Email", "support@abcsoftware.com")),
                             "vendor_phone": "+1 555 123 4567",
+                            "account": str(row.get("Account", "Enterprise Core")),
+                            "related_system": str(row.get("Related System", "HPE Portal")),
                             "history": [],
                             "communications": [],
                             "attachments": []
                         }
-                        cases_collection.update_one(
-                            {"type": "cases", "case_number": case_num},
-                            {"$set": payload},
-                            upsert=True
-                        )
+                        auto_assign_new_case(case_payload)
                         success_count += 1
-                    st.success(f"Successfully processed and synchronized {success_count} case records into CaseFlow!")
+                    st.success(f"Successfully ingested and auto-assigned {success_count} cases from Excel!")
                     time.sleep(0.5)
                     st.rerun()
             except Exception as e:
-                st.error(f"Error parsing Excel file: {e}")
+                st.error(f"Error parsing Cases Excel file: {e}")
 
 # ==============================================================================
-# 15. AUTHENTICATION PAGES (SIGN-IN & DEMO BUTTONS)
+# 15. AUTHENTICATION PAGES (SIGN-IN & SIGN-UP)
 # ==============================================================================
 def render_auth_page():
     auth_mode = st.session_state.get("auth_mode", "Sign In")
@@ -2638,29 +2670,6 @@ def render_auth_page():
             st.markdown("## **Welcome Back!**")
             st.caption("Sign in to your HPE CaseFlow account")
 
-            st.markdown("##### 🚀 Quick Demo Profiles (Instant Access)")
-            demo_cols = st.columns(3)
-            with demo_cols[0]:
-                if st.button("👑 Admin Demo", use_container_width=True, help="Instant Login as Admin Demo"):
-                    u = authenticate_user("admin.demo@internal.test", "HPE@123456")
-                    if u:
-                        create_session(u, remember_me=True)
-                        st.rerun()
-            with demo_cols[1]:
-                if st.button("🛡️ Admin/Agent", use_container_width=True, help="Instant Login as Admin/Agent Demo"):
-                    u = authenticate_user("adminagent.demo@internal.test", "HPE@123456")
-                    if u:
-                        create_session(u, remember_me=True)
-                        st.rerun()
-            with demo_cols[2]:
-                if st.button("👤 Agent Demo", use_container_width=True, help="Instant Login as Agent Demo"):
-                    u = authenticate_user("agent.demo@internal.test", "HPE@123456")
-                    if u:
-                        create_session(u, remember_me=True)
-                        st.rerun()
-
-            st.markdown("<div style='text-align:center; color:#94A3B8; margin:12px 0;'>&mdash; or sign in with credentials &mdash;</div>", unsafe_allow_html=True)
-
             email_in = st.text_input("HPE Email Address", placeholder="yourname@hpe.com")
             pw_in = st.text_input("Password", type="password", placeholder="Enter your password")
 
@@ -2690,23 +2699,6 @@ def render_auth_page():
                     st.rerun()
                 else:
                     st.error("Invalid HPE credentials. Please check your email or password.")
-
-            st.markdown("<div style='margin-top:10px;'></div>", unsafe_allow_html=True)
-            with st.expander("🔑 Quick Admin Sign-In (Password Only)"):
-                adm_pw_input = st.text_input("Admin Password", type="password", placeholder="Enter HPE@123456", key="quick_adm_pw")
-                if st.button("Sign In as Admin (Password Only)", key="btn_password_only_admin", use_container_width=True):
-                    if adm_pw_input == "HPE@123456":
-                        roster_doc = collection.find_one({"type": "roster_list"}) or {}
-                        adm_user = next((x for x in roster_doc.get("Data", []) if x.get("role") == "Admin" or "admin" in x.get("email", "")), None)
-                        if adm_user:
-                            create_session(adm_user, remember_me=True)
-                            st.success("Signed in as Admin successfully!")
-                            time.sleep(0.4)
-                            st.rerun()
-                        else:
-                            st.error("Admin user profile not found.")
-                    else:
-                        st.error("Incorrect password. Use HPE@123456.")
 
             st.markdown("<div style='text-align:center; color:#94A3B8; margin:16px 0;'>&mdash; or &mdash;</div>", unsafe_allow_html=True)
             if st.button("🟦 Sign in with Microsoft (HPE)", use_container_width=True):
@@ -2751,7 +2743,7 @@ def render_auth_page():
                     new_user = {
                         "first_name": str(su_fn).strip(),
                         "last_name": str(su_ln).strip(),
-                        "name": str(f"{su_fn} {su_ln}").strip(),
+                        "name": str(su_fn + " " + su_ln).strip(),
                         "employee_id": str(su_eid).strip(),
                         "email": str(su_email).strip().lower(),
                         "password_hash": str(hashed),
