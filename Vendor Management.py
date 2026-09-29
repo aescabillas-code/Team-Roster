@@ -619,27 +619,13 @@ def update_user_aux(email, new_aux):
     if "current_user" in st.session_state and st.session_state["current_user"]["email"] == email:
         st.session_state["current_user"]["current_aux"] = new_aux
 
-# Aux Display Options & Mappings
-AUX_DISPLAY_MAP = {
-    "Available": "🟢 Available",
-    "Admin Work": "🔵 Admin Work",
-    "Not Ready - Online": "🔴 Not Ready - Online",
-    "Coaching": "🟣 Coaching",
-    "Meeting": "🟠 Meeting",
-    "Lunch": "🟡 Lunch",
-    "Break": "⚪ Break",
-    "Unscheduled Break": "⚫ Unscheduled Break"
-}
-AUX_REVERSE_MAP = {v: k for k, v in AUX_DISPLAY_MAP.items()}
-
 def on_aux_dropdown_change():
     """Instantly persists status without needing an apply button."""
-    selected_display = st.session_state.get("flyout_aux_selector")
-    selected_raw = AUX_REVERSE_MAP.get(selected_display, selected_display)
+    selected_aux = st.session_state.get("flyout_aux_selector")
     user = st.session_state.get("current_user")
-    if user and selected_raw:
-        update_user_aux(user["email"], selected_raw)
-        st.toast(f"Status changed to {selected_raw}!", icon="🟢")
+    if user and selected_aux:
+        update_user_aux(user["email"], selected_aux)
+        st.toast(f"Status changed to {selected_aux}!", icon="🟢")
 
 def auto_assign_new_case(case_data):
     """Fair round-robin & workload-balanced assignment strictly for Available agents."""
@@ -757,13 +743,13 @@ div[class*="st-key-profile_flyout_card"] {
     position: fixed !important;
     top: 72px !important;
     right: 28px !important;
-    width: 440px !important;
+    width: 460px !important;
     background: #FFFFFF !important;
     border-radius: 16px !important;
     box-shadow: 0 16px 40px rgba(0, 0, 0, 0.22) !important;
     border: 1px solid #E2E8F0 !important;
     z-index: 99999 !important;
-    padding: 18px 20px !important;
+    padding: 22px 24px !important;
 }
 
 .flyout-pointer {
@@ -778,58 +764,49 @@ div[class*="st-key-profile_flyout_card"] {
     border-left: 1px solid #E2E8F0;
 }
 
-/* REDUCE EXCESSIVE SPACE IN PROFILE FLYOUT */
-div[class*="st-key-profile_flyout_card"] hr {
-    margin: 8px 0 !important;
-    border: none !important;
-    border-top: 1px solid #F1F5F9 !important;
-}
-div[class*="st-key-profile_flyout_card"] .stDivider {
-    margin: 8px 0 !important;
+/* Profile Flyout Aux Selector: Reduced Space, Border & Transparent Teal */
+div[class*="st-key-profile_aux_wrapper"] {
+    margin-top: 4px !important;
+    margin-bottom: 0px !important;
 }
 
-/* TIGHTENED AUX SELECTOR WITH HPE GREEN BORDER & COLORED BACKGROUND */
-div[class*="st-key-flyout_aux_container"] {
-    margin: 4px 0 6px 0 !important;
+div[class*="st-key-profile_aux_wrapper"] [data-testid="stSelectbox"] {
+    margin-bottom: 0px !important;
+    padding-bottom: 0px !important;
 }
-div[class*="st-key-flyout_aux_container"] [data-testid="stSelectbox"] {
-    margin-top: -6px !important;
-}
-div[class*="st-key-flyout_aux_container"] [data-baseweb="select"] > div {
-    border: 1.5px solid #00B388 !important;      /* Iconic HPE Green Border */
+
+div[class*="st-key-profile_aux_wrapper"] div[data-baseweb="select"] > div {
+    background-color: rgba(0, 179, 136, 0.08) !important;
+    border: 1.5px solid #00B388 !important;
     border-radius: 8px !important;
-    background-color: #F0FDF4 !important;      /* Soft Light Green Background */
-    padding: 2px 8px !important;
-    box-shadow: 0 1px 4px rgba(0, 179, 136, 0.12) !important;
-    transition: all 0.2s ease !important;
+    color: #062323 !important;
+    font-weight: 600 !important;
+    min-height: 40px !important;
+    box-shadow: none !important;
+    padding-left: 6px !important;
 }
-div[class*="st-key-flyout_aux_container"] [data-baseweb="select"] > div:hover {
-    border-color: #008765 !important;
-    box-shadow: 0 2px 6px rgba(0, 179, 136, 0.25) !important;
+
+div[class*="st-key-profile_aux_wrapper"] div[data-baseweb="select"] > div:hover,
+div[class*="st-key-profile_aux_wrapper"] div[data-baseweb="select"] > div:focus-within {
+    background-color: rgba(0, 179, 136, 0.12) !important;
+    border-color: #009671 !important;
 }
-div[class*="st-key-flyout_aux_container"] [data-baseweb="select"] * {
-    font-weight: 700 !important;
+
+div[class*="st-key-profile_aux_wrapper"] div[data-baseweb="select"] span {
+    color: #062323 !important;
+    font-weight: 600 !important;
     font-size: 13.5px !important;
-    color: #064E3B !important;
 }
 
-.session-stat-card {
-    background: #F8FAFC;
-    border: 1px solid #E2E8F0;
-    border-radius: 8px;
-    padding: 8px 12px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
+div[class*="st-key-profile_aux_wrapper"] div[data-baseweb="select"] svg {
+    fill: #00B388 !important;
 }
 
-.schedule-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 5px 0;
-    border-bottom: 1px solid #F8FAFC;
-    font-size: 11.5px;
+/* Tight compact divider inside flyout to remove dead space */
+.flyout-divider {
+    margin: 8px 0 12px 0 !important;
+    border: none !important;
+    border-top: 1px solid #E2E8F0 !important;
 }
 
 /* 4. SEGMENTED TILE TOGGLE (MATCHING MOCKUP 1000057253) */
@@ -1109,8 +1086,6 @@ def render_top_header():
 # ==============================================================================
 def render_profile_flyout():
     user = st.session_state.get("current_user", {})
-    user_role = user.get("role", "Admin")
-
     with st.container(key="profile_flyout_card"):
         st.markdown('<div class="flyout-pointer"></div>', unsafe_allow_html=True)
         c1, c2 = st.columns([5, 1])
@@ -1119,100 +1094,60 @@ def render_profile_flyout():
                 st.session_state["show_profile_flyout"] = False
                 st.rerun()
 
-        # User Info Row
         st.markdown(f"""
-        <div style="display:flex; gap:14px; align-items:center; margin-bottom:10px;">
-            <img src="{user.get('profile_picture', 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150')}" style="width:62px; height:62px; border-radius:50%; object-fit:cover; border:2.5px solid #00B388;" />
+        <div style="display:flex; gap:16px; align-items:center; margin-bottom:14px;">
+            <img src="{user.get('profile_picture', 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150')}" style="width:68px; height:68px; border-radius:50%; object-fit:cover; border:2.5px solid #00B388;" />
             <div>
-                <h3 style="margin:0; font-size:17px; font-weight:800; color:#0F172A;">{user.get('name', 'Arianne Escabillas')}</h3>
-                <span style="background:#E6F7F3; color:#00B388; font-size:11px; font-weight:700; padding:2px 8px; border-radius:10px;">{user_role}</span>
-                <p style="margin:2px 0 0 0; font-size:11.5px; color:#64748B;">ID: <strong>{user.get('employee_id', 'HPE12345')}</strong> &bull; {user.get('email', 'arianne.escabillas@hpe.com')}</p>
+                <h3 style="margin:0; font-size:18px; font-weight:800; color:#0F172A;">{user.get('name', 'Arianne Escabillas')}</h3>
+                <span style="background:#E6F7F3; color:#00B388; font-size:11px; font-weight:700; padding:2px 8px; border-radius:10px;">{user.get('role', 'Admin')}</span>
+                <p style="margin:4px 0 0 0; font-size:12px; color:#64748B;">{user.get('email', 'arianne.escabillas@hpe.com')}</p>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-        # Login Time & Current Session
-        s1, s2 = st.columns(2)
-        with s1:
-            st.markdown("""
-            <div class="session-stat-card">
-                <span style="font-size:16px;">⏰</span>
-                <div>
-                    <div style="font-size:9.5px; color:#64748B; font-weight:600;">Login Time</div>
-                    <div style="font-size:12.5px; font-weight:800; color:#0F172A;">08:45 AM</div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-        with s2:
-            st.markdown("""
-            <div class="session-stat-card">
-                <span style="font-size:16px;">💻</span>
-                <div>
-                    <div style="font-size:9.5px; color:#64748B; font-weight:600;">Current Session</div>
-                    <div style="font-size:12.5px; font-weight:800; color:#00B388;">3h 42m</div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        # COMPACT CURRENT STATUS / AUX SELECTOR (TIGHT SPACING + HPE GREEN BORDER & COLOR)
-        st.markdown("""
-        <div style="margin: 8px 0 2px 0;">
-            <label style="font-size:11.5px; font-weight:700; color:#475569; display:block; margin-bottom:3px;">
-                Current Status / Aux (Real-Time Auto-Update)
-            </label>
-        </div>
-        """, unsafe_allow_html=True)
-
-        curr_raw = user.get("current_aux", "Available")
-        curr_display = AUX_DISPLAY_MAP.get(curr_raw, "🟢 Available")
-        display_options = list(AUX_DISPLAY_MAP.values())
-        cur_idx = display_options.index(curr_display) if curr_display in display_options else 0
-
-        with st.container(key="flyout_aux_container"):
+        st.markdown("<label style='font-size:12px; font-weight:700; color:#475569;'>Current Status / Aux (Real-Time Auto-Update)</label>", unsafe_allow_html=True)
+        
+        # Transparent Teal & Border Container for Aux Selector
+        with st.container(key="profile_aux_wrapper"):
+            aux_list = ["Available", "Admin Work", "Not Ready - Online", "Coaching", "Meeting", "Lunch", "Break", "Unscheduled Break"]
+            curr_aux = user.get("current_aux", "Admin Work")
             st.selectbox(
                 "Aux",
-                display_options,
-                index=cur_idx,
+                aux_list,
+                index=aux_list.index(curr_aux) if curr_aux in aux_list else 1,
                 key="flyout_aux_selector",
                 on_change=on_aux_dropdown_change,
                 label_visibility="collapsed"
             )
 
-        # CONDITIONAL SCHEDULE DISPLAY:
-        # Admin does NOT have Today's Schedule plotted; only Agent and Admin/Agent have it.
-        if user_role != "Admin":
-            st.markdown("<hr style='margin: 8px 0; border: none; border-top: 1px solid #F1F5F9;'>", unsafe_allow_html=True)
+        # Reduced space below aux selector using compact divider
+        st.markdown('<hr class="flyout-divider">', unsafe_allow_html=True)
+        
+        # CONDITIONAL TODAY'S SCHEDULE (OMITTED FOR PURE ADMIN AS THEY HAVE NO PLOTTED SHIFTS)
+        if user.get("role") != "Admin":
             sc_h1, sc_h2 = st.columns([1.5, 1])
             with sc_h1:
-                st.markdown("<strong style='font-size:12px; color:#0F172A;'>Today's Schedule</strong>", unsafe_allow_html=True)
+                st.markdown("<strong style='font-size:13px; color:#0F172A;'>Today's Schedule</strong>", unsafe_allow_html=True)
             with sc_h2:
-                st.markdown("<span style='font-size:10.5px; color:#64748B; float:right;'>Monday, Sep 28 📅</span>", unsafe_allow_html=True)
+                st.markdown("<span style='font-size:11px; color:#64748B; float:right;'>Monday, Sep 28, 2026 📅</span>", unsafe_allow_html=True)
 
             st.markdown("""
-            <div style="margin-top:4px;">
-                <div class="schedule-row"><span>🟢 08:00 AM – 10:00 AM</span> <strong style="color:#00B388;">Available</strong></div>
-                <div class="schedule-row"><span>⚪ 10:00 AM – 10:15 AM</span> <strong style="color:#94A3B8;">Break</strong></div>
-                <div class="schedule-row"><span>🟢 10:15 AM – 12:00 PM</span> <strong style="color:#00B388;">Available</strong></div>
-                <div class="schedule-row"><span>🟡 12:00 PM – 01:00 PM</span> <strong style="color:#D97706;">Lunch</strong></div>
-                <div class="schedule-row"><span>🟢 01:00 PM – 03:00 PM</span> <strong style="color:#00B388;">Available</strong></div>
-                <div class="schedule-row"><span>⚪ 03:00 PM – 03:15 PM</span> <strong style="color:#94A3B8;">Break</strong></div>
-                <div class="schedule-row"><span>🟢 03:15 PM – 05:00 PM</span> <strong style="color:#00B388;">Available</strong></div>
+            <div style="margin-top:6px;">
+                <div style="display:flex; justify-content:space-between; padding:5px 0; font-size:12px; border-bottom:1px solid #F8FAFC;"><span>🟢 08:00 AM – 10:00 AM</span> <strong style="color:#00B388;">Available</strong></div>
+                <div style="display:flex; justify-content:space-between; padding:5px 0; font-size:12px; border-bottom:1px solid #F8FAFC;"><span>⚪ 10:00 AM – 10:15 AM</span> <strong style="color:#94A3B8;">Break</strong></div>
+                <div style="display:flex; justify-content:space-between; padding:5px 0; font-size:12px; border-bottom:1px solid #F8FAFC;"><span>🟢 10:15 AM – 12:00 PM</span> <strong style="color:#00B388;">Available</strong></div>
+                <div style="display:flex; justify-content:space-between; padding:5px 0; font-size:12px; border-bottom:1px solid #F8FAFC;"><span>🟡 12:00 PM – 01:00 PM</span> <strong style="color:#D97706;">Lunch</strong></div>
+                <div style="display:flex; justify-content:space-between; padding:5px 0; font-size:12px; border-bottom:1px solid #F8FAFC;"><span>🟢 01:00 PM – 03:00 PM</span> <strong style="color:#00B388;">Available</strong></div>
+                <div style="display:flex; justify-content:space-between; padding:5px 0; font-size:12px; border-bottom:1px solid #F8FAFC;"><span>⚪ 03:00 PM – 03:15 PM</span> <strong style="color:#94A3B8;">Break</strong></div>
+                <div style="display:flex; justify-content:space-between; padding:5px 0; font-size:12px;"><span>🟢 03:15 PM – 05:00 PM</span> <strong style="color:#00B388;">Available</strong></div>
             </div>
             """, unsafe_allow_html=True)
-        else:
-            # Clean Administrator mode indicator (replaces empty schedule space)
-            st.markdown("""
-            <div style="margin: 6px 0 8px 0; font-size: 11px; color: #475569; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 7px 10px;">
-                🛡️ <strong>Admin Account Active</strong> &bull; Schedule plotting managed via the <strong>Schedule & Monitoring</strong> modules.
-            </div>
-            """, unsafe_allow_html=True)
-
-        st.markdown("<hr style='margin: 8px 0; border: none; border-top: 1px solid #F1F5F9;'>", unsafe_allow_html=True)
+            st.markdown('<hr class="flyout-divider">', unsafe_allow_html=True)
 
         act1, act2 = st.columns(2)
         with act1:
             if st.button("🔒 Change Password", key="flyout_change_pw", use_container_width=True):
-                st.info("SSO self-service active via HPE Portal.")
+                st.info("Password self-service active via HPE SSO.")
         with act2:
             if st.button("🚪 Sign Out", key="flyout_logout_btn", type="secondary", use_container_width=True):
                 logout_user()
