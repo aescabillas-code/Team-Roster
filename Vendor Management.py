@@ -352,23 +352,26 @@ def init_database():
     except Exception:
         pass
 
-    # 2. CREATE DEMO PROFILES & 1. AUTO-REMOVE DEFAULT SEEDS IF REAL ROSTER OR CASES EXIST
+    # 2. DEMO PROFILES CREATION + AUTO-REMOVAL OF PSEUDO SEEDS WHEN REAL USERS/CASES EXIST
     try:
         roster_doc = collection.find_one({"type": "roster_list"})
         existing_data = roster_doc.get("Data", []) if roster_doc else []
         
+        # Check if real user profiles exist (excluding default demo profiles)
+        real_users = [u for u in existing_data if not str(u.get("email", "")).endswith(".demo@internal.test")]
+
         salt = secrets.token_hex(8)
         hashed_pw = hashlib.sha256((salt + "Hpe@123456").encode()).hexdigest() + ":" + salt
         
-        demo_profiles = [
+        demo_members = [
             ("Admin", "Demo", "DEMO901", "admin.demo@internal.test", "Admin", "Admin Work", "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150"),
-            ("Admin/Agent", "Demo", "DEMO902", "adminagent.demo@internal.test", "Admin/Agent", "Available", "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150"),
+            ("AdminAgent", "Demo", "DEMO902", "adminagent.demo@internal.test", "Admin/Agent", "Available", "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150"),
             ("Agent", "Demo", "DEMO903", "agent.demo@internal.test", "Agent", "Available", "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150")
         ]
 
         now = get_current_ph_time()
         demo_seed_data = []
-        for fn, ln, eid, email, role, aux, img in demo_profiles:
+        for fn, ln, eid, email, role, aux, img in demo_members:
             demo_seed_data.append({
                 "first_name": str(fn),
                 "last_name": str(ln),
@@ -386,23 +389,11 @@ def init_database():
                 "updated_at": str(now.strftime("%Y-%m-%d %H:%M:%S"))
             })
 
-        default_seed_emails = [
-            "arianne.escabillas@hpe.com", "mark.santos@hpe.com", "chelsea.reyes@hpe.com",
-            "james.delacruz@hpe.com", "mica.tan@hpe.com", "rafael.cruz@hpe.com",
-            "alyssa.ramos@hpe.com", "daniel.lim@hpe.com", "bea.santos@hpe.com",
-            "kevin.navarro@hpe.com", "nicole.garcia@hpe.com", "carlo.mendoza@hpe.com",
-            "lara.cruz@hpe.com", "admin@hpe.com"
-        ]
-
-        # Check if real users exist (custom users not in default seeds and not demo)
-        real_custom_users = [u for u in existing_data if u.get("email") not in default_seed_emails and not u.get("email", "").endswith(".demo@internal.test")]
-
-        if real_custom_users:
-            # Real users available: purge default seed roster, keep real custom users and demo profiles
-            filtered_existing = [u for u in existing_data if u.get("email") not in default_seed_emails and not u.get("email", "").endswith(".demo@internal.test")]
-            final_roster = filtered_existing + demo_seed_data
+        if real_users:
+            # Roster has real users: keep real users, discard pseudo/default seed roster entries, append demo profiles
+            final_roster = real_users + demo_seed_data
         else:
-            # No real custom users yet: load default seed roster plus demo profiles
+            # Roster is empty or only had default seeds: load default team members + demo profiles
             default_team_members = [
                 ("Arianne", "Escabillas", "HPE12345", "arianne.escabillas@hpe.com", "Admin/Agent", "Admin Work", "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150"),
                 ("Mark", "Santos", "HPE10001", "mark.santos@hpe.com", "Admin/Agent", "Available", "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150"),
@@ -455,18 +446,19 @@ def init_database():
     except Exception:
         pass
 
-    # 1. AUTO-REMOVE PSEUDO CASES AS SOON AS REAL CASES ARE AVAILABLE
+    # 1. AUTO-REMOVE PSEUDO CASES IF REAL CASES ARE AVAILABLE
     try:
         all_cases_in_db = list(cases_collection.find({"type": "cases"}))
-        pseudo_case_numbers = ["HC-2026-1044", "HPE-2026-1045", "HPE-2026-1042", "HPE-2026-1038", "HPE-2026-1020"]
-        real_cases = [c for c in all_cases_in_db if c.get("case_number") not in pseudo_case_numbers]
+        # Filter pseudo/default cases (starting with HC-2026-1044, HPE-2026-1045, etc.)
+        pseudo_prefixes = ["HC-2026-1044", "HPE-2026-1045", "HPE-2026-1042", "HPE-2026-1038", "HPE-2026-1020"]
+        real_cases = [c for c in all_cases_in_db if c.get("case_number") not in pseudo_prefixes]
 
         if real_cases:
-            # Real cases exist: purge pseudo/default seed cases
-            for p_num in pseudo_case_numbers:
+            # Remove pseudo cases if real cases exist
+            for p_num in pseudo_prefixes:
                 cases_collection.delete_many({"type": "cases", "case_number": p_num})
-        elif len(all_cases_in_db) == 0:
-            # Database is empty: load default seed cases
+        elif len(all_base_cases := all_cases_in_db) == 0:
+            # Seed default cases if database is entirely empty
             cases_seed = [
                 {
                     "case_number": "HC-2026-1044",
@@ -512,7 +504,7 @@ def init_database():
                     "Data": [
                         {
                             "id": "notif-001",
-                            "target_email": "admin.demo@internal.test",
+                            "target_email": "arianne.escabillas@hpe.com",
                             "title": "Critical Case Alert",
                             "message": "HC-2026-1044 is nearing SLA breach (Due in 36 minutes). Immediate follow-up required.",
                             "category": "critical",
@@ -829,6 +821,7 @@ div[class*="st-key-top_bell_popover"] > div > button {
     gap: 0 !important;
 }
 
+/* 1. STRICTLY REMOVE EXPAND MORE TEXT, SVG ICONS, AND CHEVRONS BESIDE BELL & ELLIPSES */
 div[class*="st-key-top_bell_popover"] [data-testid="stPopoverButton"] svg,
 div[class*="st-key-top_bell_popover"] [data-testid="stPopoverButton"] span:last-child:not(:first-child),
 div[class*="st-key-top_bell_popover"] [data-testid="stIconChevronDown"],
@@ -996,6 +989,7 @@ div[class*="st-key-action_toolbar_container"] button {
     height: 36px !important;
 }
 
+/* 2. UNIFIED CASE TABLE HEADER BOX: PERFECT FIT WITH TOP/BOTTOM MARGINS & UNIFORM FONT */
 .table-header-row {
     display: flex !important;
     align-items: center !important;
@@ -1031,6 +1025,7 @@ div[class*="st-key-btn_case_"] button {
     color: #0067B9 !important;
 }
 
+/* 1. ELLIPSES BUTTON IN CASE TABLE: ZERO BOX / ZERO OUTLINE / NO CHEVRON ARROW */
 div[class*="st-key-pop_row_act_"] button,
 div[class*="st-key-pop_row_act_"] [data-testid="stPopoverButton"],
 div[class*="st-key-pop_row_act_"] [data-testid="baseButton-secondary"],
@@ -1108,6 +1103,7 @@ div[class*="st-key-hpe_bottom_nav_container"] button[data-testid="baseButton-pri
     font-weight: 700 !important;
 }
 
+/* 4. SPACE BETWEEN CORNER AND CASE DETAIL HEADER */
 div[data-testid="stDialogHeader"] {
     padding-top: 24px !important;
     padding-left: 28px !important;
@@ -1124,6 +1120,7 @@ div[data-testid="stDialog"] h2 {
     padding: 0 !important;
 }
 
+/* 1. MINIMAL MARGIN & EQUAL HEIGHT ALIGNMENT FOR TOP 3 CARDS */
 div[data-testid="stDialog"] [data-testid="stHorizontalBlock"] {
     gap: 8px !important;
     margin-bottom: 4px !important;
@@ -1179,6 +1176,7 @@ div[class*="st-key-reassign_box_"] {
     margin-top: 10px !important;
 }
 
+/* LIGHT BLUE BACKGROUND IN ENTRY FORMS & DROPDOWNS IN CASE DETAIL */
 div[data-testid="stDialog"] div[data-baseweb="select"] > div,
 div[data-testid="stDialog"] div[data-baseweb="input"] > div,
 div[data-testid="stDialog"] div[data-baseweb="textarea"] > textarea,
@@ -1198,6 +1196,7 @@ div[data-testid="stDialog"] div[data-baseweb="input"] input {
     background-color: transparent !important;
 }
 
+/* 3. EXPLICIT WHITE DROPDOWN INTERFACE FOR SELECT AGENT IN REASSIGN CASE */
 div[class*="st-key-reassign_box_"] div[data-baseweb="select"] > div {
     background-color: #FFFFFF !important;
     border: 1.5px solid #CBD5E1 !important;
@@ -2612,7 +2611,7 @@ def render_settings():
                 st.error(f"Error parsing Excel file: {e}")
 
 # ==============================================================================
-# 15. AUTHENTICATION PAGES (SIGN-IN & DEMO BUTTONS)
+# 15. AUTHENTICATION PAGES (SIGN-IN & SIGN-UP)
 # ==============================================================================
 def render_auth_page():
     auth_mode = st.session_state.get("auth_mode", "Sign In")
@@ -2658,30 +2657,6 @@ def render_auth_page():
             st.markdown("## **Welcome Back!**")
             st.caption("Sign in to your HPE CaseFlow account")
 
-            # 2. DEMO PROFILE QUICK BUTTONS (NO EMAIL NEEDED, JUST CLICK)
-            st.markdown("##### 🚀 Quick Demo Profiles (Instant Access)")
-            demo_cols = st.columns(3)
-            with demo_cols[0]:
-                if st.button("👑 Admin Demo", use_container_width=True, help="Instant Login as Admin Demo"):
-                    u = authenticate_user("admin.demo@internal.test", "HPE@123456")
-                    if u:
-                        create_session(u, remember_me=True)
-                        st.rerun()
-            with demo_cols[1]:
-                if st.button("🛡️ Admin/Agent", use_container_width=True, help="Instant Login as Admin/Agent Demo"):
-                    u = authenticate_user("adminagent.demo@internal.test", "HPE@123456")
-                    if u:
-                        create_session(u, remember_me=True)
-                        st.rerun()
-            with demo_cols[2]:
-                if st.button("👤 Agent Demo", use_container_width=True, help="Instant Login as Agent Demo"):
-                    u = authenticate_user("agent.demo@internal.test", "HPE@123456")
-                    if u:
-                        create_session(u, remember_me=True)
-                        st.rerun()
-
-            st.markdown("<div style='text-align:center; color:#94A3B8; margin:12px 0;'>&mdash; or sign in with credentials &mdash;</div>", unsafe_allow_html=True)
-
             email_in = st.text_input("HPE Email Address", placeholder="yourname@hpe.com")
             pw_in = st.text_input("Password", type="password", placeholder="Enter your password")
 
@@ -2711,24 +2686,6 @@ def render_auth_page():
                     st.rerun()
                 else:
                     st.error("Invalid HPE credentials. Please check your email or password.")
-
-            # 2. QUICK ADMIN SIGN-IN WITH PASSWORD ONLY (HPE@123456)
-            st.markdown("<div style='margin-top:10px;'></div>", unsafe_allow_html=True)
-            with st.expander("🔑 Quick Admin Sign-In (Password Only)"):
-                adm_pw_input = st.text_input("Admin Password", type="password", placeholder="Enter HPE@123456", key="quick_adm_pw")
-                if st.button("Sign In as Admin (Password Only)", key="btn_password_only_admin", use_container_width=True):
-                    if adm_pw_input == "HPE@123456":
-                        roster_doc = collection.find_one({"type": "roster_list"}) or {}
-                        adm_user = next((x for x in roster_doc.get("Data", []) if x.get("role") == "Admin" or "admin" in x.get("email", "")), None)
-                        if adm_user:
-                            create_session(adm_user, remember_me=True)
-                            st.success("Signed in as Admin successfully!")
-                            time.sleep(0.4)
-                            st.rerun()
-                        else:
-                            st.error("Admin user profile not found.")
-                    else:
-                        st.error("Incorrect password. Use HPE@123456.")
 
             st.markdown("<div style='text-align:center; color:#94A3B8; margin:16px 0;'>&mdash; or &mdash;</div>", unsafe_allow_html=True)
             if st.button("🟦 Sign in with Microsoft (HPE)", use_container_width=True):
