@@ -669,7 +669,7 @@ def auto_assign_new_case(case_data):
     users = roster_doc.get("Data", [])
     available_agents = [
         u for u in users
-        if u.get("role") in ["Agent", "Admin/Agent"] and u.get("current_aux") == "Available"
+        if u.get("role") in ["Agent", "Admin/Agent"] and u.get("current_aux"] == "Available"
     ]
     
     if not available_agents:
@@ -764,7 +764,7 @@ html, body, [class*="css"], .stApp, .stApp *, button, input, select, textarea {
     max-width: 100% !important;
 }
 
-/* Header Bar & Top Alignment Fix (Instruction 3) */
+/* Header Bar & Top Alignment Fix */
 div[class*="st-key-hpe_top_bar_container"] {
     position: fixed !important;
     top: 0 !important;
@@ -819,7 +819,7 @@ div[class*="st-key-top_bell_popover"] > div > button {
     gap: 0 !important;
 }
 
-/* 1. BELL BUTTON & ELLIPSES: REPLACE EXP_MORE WITH SMALL ARROW ▾ */
+/* BELL BUTTON & ELLIPSES: REPLACE EXP_MORE WITH SMALL ARROW ▾ */
 div[class*="st-key-top_bell_popover"] [data-testid="stPopoverButton"] svg,
 div[class*="st-key-top_bell_popover"] [data-testid="stIconChevronDown"],
 div[class*="st-key-pop_row_act_"] [data-testid="stPopoverButton"] svg,
@@ -882,7 +882,7 @@ div[class*="st-key-profile_flyout_card"] {
     border-left: 1px solid #E2E8F0;
 }
 
-/* 4. LIGHT BLUE COLOR ON THE AUX DROPDOWN SELECTOR */
+/* LIGHT BLUE COLOR ON THE AUX DROPDOWN SELECTOR */
 div[class*="st-key-profile_aux_wrapper"] div[data-baseweb="select"] {
     border: 1.5px solid #0284C7 !important;
     border-radius: 8px !important;
@@ -986,15 +986,15 @@ div[class*="st-key-view_mode_segmented_tile"] button[data-testid="baseButton-pri
 .st-pending-info { background-color: #F3E8FF; color: #7E22CE; }
 .st-closed { background-color: #F1F5F9; color: #64748B; }
 
-/* 1. LIGHT BLUE AUX TILE BACKGROUND */
+/* 3. AVAILABLE AUX LIGHT GREEN */
 .aux-badge { padding: 4px 12px; border-radius: 12px; font-size: 11.5px; font-weight: 700; display: inline-block; }
-.aux-avail { background-color: #EEF6FC !important; color: #0067B9 !important; border: 1px solid #BAE6FD !important; }
+.aux-avail { background-color: #DCFCE7 !important; color: #16855B !important; border: 1px solid #BBF7D0 !important; }
 .aux-lunch { background-color: #FEF3C7; color: #D97706; }
 .aux-meeting { background-color: #FEE2E2; color: #E31B23; }
 .aux-not-ready { background-color: #F1F5F9; color: #475569; }
 .aux-break { background-color: #FEF3C7; color: #D97706; }
 
-/* 2. LOGGED IN AGENT VIEW: SIDE-BY-SIDE OPPOSITE ALIGNMENT */
+/* LOGGED IN AGENT VIEW: SIDE-BY-SIDE OPPOSITE ALIGNMENT */
 .agent-row-item {
     display: flex !important;
     align-items: center !important;
@@ -1038,9 +1038,9 @@ div[class*="st-key-action_toolbar_container"] button {
     margin: 2px 0 !important;
 }
 
-/* 3. REMOVE SPACE BELOW CASE ENTRY IN CASE TABLE */
+/* 2. UPDATE MARGIN ON TOP OF CASE ENTRY TO EQUAL BOTTOM */
 .case-table-divider {
-    margin: 0px 0 !important;
+    margin: 4px 0 !important;
     border: none !important;
     border-top: 1px solid #F1F5F9 !important;
 }
@@ -1874,7 +1874,7 @@ HPE Operations Management"""
             st.rerun()
 
 # ==============================================================================
-# 8. TOP HEADER
+# 8. TOP HEADER (1. Avoid refresh or reload when profile is clicked)
 # ==============================================================================
 def render_top_header():
     user = st.session_state.get("current_user", {})
@@ -1947,7 +1947,6 @@ def render_top_header():
                 btn_label = f"👤 {user.get('name', 'Arianne Escabillas')} • {curr_aux} ▾"
                 if st.button(btn_label, key="btn_open_profile_top_right", use_container_width=True):
                     st.session_state["show_profile_flyout"] = not st.session_state.get("show_profile_flyout", False)
-                    st.rerun()
 
     if st.session_state.get("show_profile_flyout", False):
         render_profile_flyout()
