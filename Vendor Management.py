@@ -2256,7 +2256,7 @@ def render_dashboard():
 
     all_base_cases = list(cases_collection.find(q_base))
     total_active = sum(1 for c in all_base_cases if c.get("status") != "Closed")
-    total_critical = sum(1 for c in all_base_cases if c.get("priority"] == "Critical" and c.get("status") != "Closed")
+    total_critical = sum(1 for c in all_base_cases if c.get("priority") == "Critical" and c.get("status") != "Closed")
     total_due_soon = sum(1 for c in all_base_cases if c.get("priority") in ["Critical", "High"] and c.get("status") != "Closed")
     total_on_track = sum(1 for c in all_base_cases if c.get("priority") in ["Medium", "Low"] and c.get("status") != "Closed")
 
