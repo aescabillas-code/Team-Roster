@@ -2398,9 +2398,9 @@ def render_dashboard():
 
         filtered_cases = all_base_cases
         if pri_filter != "All Priorities":
-            filtered_cases = [c for c in filtered_cases if c.get("priority"] == pri_filter]
+            filtered_cases = [c for c in filtered_cases if c.get("priority") == pri_filter]
         if st_filter != "All Statuses":
-            filtered_cases = [c for c in filtered_cases if c.get("status"] == st_filter]
+            filtered_cases = [c for c in filtered_cases if c.get("status") == st_filter]
         elif not include_closed:
             filtered_cases = [c for c in filtered_cases if c.get("status") != "Closed"]
 
