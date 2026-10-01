@@ -2730,7 +2730,7 @@ def render_schedule():
     with sch2:
         st.markdown("#### 🔄 Schedule Swap Request")
         roster_doc = collection.find_one({"type": "roster_list"}) or {}
-        other_agents = [u["name"] for u in roster_doc.get("Data", []) if u.get("email"] != user.get("email")]
+        other_agents = [u["name"] for u in roster_doc.get("Data", []) if u.get("email") != user.get("email")]
         if other_agents:
             colleague = st.selectbox("Select Colleague to Swap Shift With", other_agents)
             swap_date = st.date_input("Your Shift Date", value=get_current_ph_time() + timedelta(days=1))
