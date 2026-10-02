@@ -595,8 +595,152 @@ def init_database():
         pass
 
 
+
+def ensure_demo_mock_cases():
+    """Seed a larger set of temporary demo cases once for a more realistic dashboard.
+
+    The mock records are deliberately marked with ``is_demo_mock=True`` so they can be
+    identified and removed later without touching real cases. Due dates are generated
+    relative to the current Manila time so the dynamic priority engine always places
+    them into the intended dashboard categories.
+    """
+    try:
+        existing = list(cases_collection.find({"type": "cases"}))
+        existing_numbers = {str(c.get("case_number", "")) for c in existing}
+
+        # Do not duplicate the temporary dataset on every Streamlit rerun.
+        if any(c.get("is_demo_mock") is True for c in existing):
+            return
+
+        roster_doc = collection.find_one({"type": "roster_list"}) or {}
+        roster = roster_doc.get("Data", [])
+        demo_users = [
+            u for u in roster
+            if str(u.get("email", "")).endswith(".demo@internal.test")
+        ]
+
+        # Fall back to the seeded names if a demo roster is temporarily unavailable.
+        fallback_agents = [
+            {"name": "AdminAgent Demo", "email": "adminagent.demo@internal.test", "employee_id": "DEMO902"},
+            {"name": "Agent Demo", "email": "agent.demo@internal.test", "employee_id": "DEMO903"},
+        ]
+        if demo_users:
+            assignment_pool = [
+                {
+                    "name": u.get("name", "Demo Agent"),
+                    "email": u.get("email", ""),
+                    "employee_id": u.get("employee_id", ""),
+                    "avatar": u.get("profile_picture", "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150"),
+                }
+                for u in demo_users
+                if u.get("role") in ["Agent", "Admin/Agent"]
+            ] or fallback_agents
+        else:
+            assignment_pool = fallback_agents
+
+        now = get_current_ph_time()
+
+        # Each tuple is:
+        # (case suffix, subject, hours from now, status, category, account, reason)
+        # The time offsets intentionally cover every dashboard priority bucket.
+        mock_blueprints = [
+            # BREACHED
+            ("B01", "Vendor Certificate Expired", -1, "In Progress", "Vendor Management", "Northstar Telecom", "Vendor renewal missed SLA"),
+            ("B02", "License Activation Still Pending", -8, "On Hold", "License Activation", "Acme Global", "Waiting for vendor confirmation"),
+            ("B03", "Portal Access Escalation", -36, "Vendor Response", "Portal Access", "Summit Financial", "Escalated beyond due date"),
+
+            # CRITICAL (< 2 days)
+            ("C01", "ClearPass License Key Issue", 6, "In Progress", "ClearPass Licensing", "Vertex Bank", "License key is nearing SLA"),
+            ("C02", "Support Portal Login Failure", 28, "Open", "Portal Access", "Pacific Retail Group", "Customer cannot access support portal"),
+            ("C03", "Entitlement Mismatch", 40, "Waiting Vendor", "Entitlement", "Orion Manufacturing", "Entitlement requires vendor validation"),
+
+            # HIGH / DUE SOON (< 5 days)
+            ("H01", "Software Contract Renewal", 72, "Open", "License Renewal", "BluePeak Energy", "Renewal documents under review"),
+            ("H02", "Product Entitlement Update", 96, "Vendor Response", "Entitlement", "Metro Health", "Waiting for entitlement update"),
+            ("H03", "Portal Account Provisioning", 108, "In Progress", "Portal Access", "Crestline Systems", "Provisioning request in progress"),
+
+            # MEDIUM / ON TRACK (<= 10 days)
+            ("M01", "License Pool Adjustment", 144, "Open", "License Management", "Harbor Logistics", "License pool adjustment requested"),
+            ("M02", "Serial Number Validation", 192, "On Hold", "Asset Validation", "Evergreen Foods", "Customer documents pending"),
+            ("M03", "Contract Coverage Review", 240, "Waiting Vendor", "Contract Review", "Atlas Data Services", "Coverage confirmation requested"),
+
+            # LOW / ON TRACK (> 10 days)
+            ("L01", "Annual License Audit", 288, "Open", "License Audit", "Silverline Holdings", "Scheduled annual audit"),
+            ("L02", "Portal Profile Cleanup", 480, "In Progress", "Portal Access", "Greenfield Labs", "Non-urgent profile cleanup"),
+            ("L03", "License Inventory Review", 720, "Vendor Response", "License Management", "Summit Industrial", "Inventory review for next cycle"),
+
+            # CLOSED examples for the status filter / Include Closed Cases experience
+            ("X01", "Completed License Transfer", 120, "Closed", "License Transfer", "Westbridge Corp", "Transfer completed successfully"),
+            ("X02", "Resolved Portal Access Issue", 168, "Closed", "Portal Access", "Brightline Media", "Access restored and verified"),
+            ("X03", "Closed Vendor Validation Request", 216, "Closed", "Vendor Validation", "Pioneer Systems", "Validation completed"),
+        ]
+
+        mock_cases = []
+        for index, (suffix, subject, hours_offset, status, category, account, reason) in enumerate(mock_blueprints):
+            case_number = f"DEMO-2026-{suffix}"
+            if case_number in existing_numbers:
+                continue
+
+            due_dt = now + timedelta(hours=hours_offset)
+            created_dt = now - timedelta(hours=max(2, min(72, abs(hours_offset) + 8)))
+            update_dt = now - timedelta(minutes=(15 + (index * 7) % 110))
+            assignee = assignment_pool[index % len(assignment_pool)]
+
+            mock_case = {
+                "type": "cases",
+                "is_demo_mock": True,
+                "case_number": case_number,
+                "subject": subject,
+                # Stored priority is intentionally synchronized with the dynamic engine.
+                "priority": get_dynamic_priority({"due_date": due_dt.strftime("%b %d, %Y %I:%M %p"), "priority": "Low"}),
+                "assigned_to": assignee.get("name", "Demo Agent"),
+                "assigned_employee_id": assignee.get("employee_id", ""),
+                "assignee_email": assignee.get("email", ""),
+                "assignee_avatar": assignee.get("avatar", "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150"),
+                "due_date": due_dt.strftime("%b %d, %Y %I:%M %p"),
+                "status": status,
+                "status_reason": reason,
+                "created_at": created_dt.strftime("%b %d, %Y %I:%M %p"),
+                "last_update": update_dt.strftime("%b %d, %Y %I:%M %p"),
+                "case_category": category,
+                "account": account,
+                "client": account,
+                "related_system": "HPE CaseFlow Demo Environment",
+                "description": (
+                    f"Temporary demo case for the {get_dynamic_priority({'due_date': due_dt.strftime('%b %d, %Y %I:%M %p'), 'priority': 'Low'})} "
+                    "dashboard category. This record is for UI, filtering, assignment, and alert testing."
+                ),
+                "vendor_name": "Demo Vendor Services",
+                "vendor_id": f"DEMO-VEND-{index + 1:03d}",
+                "vendor_contact": "Demo Support Desk",
+                "vendor_email": "demo.vendor@example.com",
+                "vendor_phone": "+1 555 010 2026",
+                "history": [
+                    {
+                        "timestamp": update_dt.strftime("%b %d, %Y %I:%M %p"),
+                        "user": "CaseFlow Demo Engine",
+                        "type": "System",
+                        "badge": "Temporary demo case",
+                        "details": "Created automatically for dashboard and workflow demonstration."
+                    }
+                ],
+                "communications": [],
+                "attachments": []
+            }
+
+            mock_cases.append(mock_case)
+
+        for mock_case in mock_cases:
+            cases_collection.insert_one(mock_case)
+
+    except Exception:
+        # Demo seeding must never prevent the real application from loading.
+        pass
+
+
 if "db_initialized" not in st.session_state:
     init_database()
+    ensure_demo_mock_cases()
     st.session_state["db_initialized"] = True
 
 
@@ -920,6 +1064,24 @@ div[class*="st-key-top_profile_pill_btn"] button {
     justify-content: center !important;
     gap: 6px !important;
     box-shadow: none !important;
+}
+
+/* Profile popover: remove Streamlit's default expand_more icon completely. */
+div[class*="st-key-top_profile_pill_btn"] [data-testid="stPopoverButton"] svg,
+div[class*="st-key-top_profile_pill_btn"] [data-testid="stPopoverButton"] [data-testid="stIconMaterial"],
+div[class*="st-key-top_profile_pill_btn"] [data-testid="stPopoverButton"] span[class*="material-symbols"],
+div[class*="st-key-top_profile_pill_btn"] [data-testid="stPopoverButton"] span[class*="material-icons"] {
+    display: none !important;
+    visibility: hidden !important;
+    width: 0 !important;
+    max-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+div[class*="st-key-top_profile_pill_btn"] [data-testid="stPopoverButton"]::after {
+    content: none !important;
+    display: none !important;
 }
 
 
@@ -1453,52 +1615,183 @@ div[class*="st-key-reassign_box_"] div[data-baseweb="select"] div {
 }
 
 
-/* Alert popup design based on the supplied Agent Alerts reference image */
-.caseflow-alert-popup {
-    border-top: 5px solid var(--alert-accent);
-    background: #FFFFFF;
-    border-radius: 10px;
-    padding: 0;
-    overflow: hidden;
-    box-shadow: 0 12px 30px rgba(15,23,42,0.12);
+/* Alert popup design — the alert card IS the popup. */
+/* Hide Streamlit's outer dialog chrome only for the alert dialog so there is
+   no second "Alert" box/header and no second close button. */
+div[role="dialog"]:has(.caseflow-alert-dialog-marker),
+div[data-testid="stDialog"]:has(.caseflow-alert-dialog-marker) {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    width: min(720px, 92vw) !important;
+    max-width: 720px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
 }
+
+div[role="dialog"]:has(.caseflow-alert-dialog-marker) > div,
+div[data-testid="stDialog"]:has(.caseflow-alert-dialog-marker) > div {
+    width: 100% !important;
+    max-width: 720px !important;
+    margin: 0 auto !important;
+}
+div[role="dialog"]:has(.caseflow-alert-dialog-marker) [data-testid="stDialogHeader"],
+div[data-testid="stDialog"]:has(.caseflow-alert-dialog-marker) [data-testid="stDialogHeader"],
+div[role="dialog"]:has(.caseflow-alert-dialog-marker) button[aria-label="Close"],
+div[data-testid="stDialog"]:has(.caseflow-alert-dialog-marker) button[aria-label="Close"] {
+    display: none !important;
+}
+div[role="dialog"]:has(.caseflow-alert-dialog-marker) > div,
+div[data-testid="stDialog"]:has(.caseflow-alert-dialog-marker) > div {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 720px !important;
+    margin: 0 auto !important;
+}
+
+/* Alert container itself. The accent is applied per alert type below. */
+div[class*="st-key-caseflow_alert_card_"] {
+    width: 100% !important;
+    max-width: 680px !important;
+    margin: 0 auto !important;
+    background: #FFFFFF !important;
+    border: 1px solid #D9E2EC !important;
+    border-top-width: 5px !important;
+    border-radius: 12px !important;
+    padding: 0 0 16px 0 !important;
+    overflow: hidden !important;
+    box-shadow: 0 18px 45px rgba(15,23,42,0.20) !important;
+}
+
+div[class*="st-key-caseflow_alert_card_new_case_assigned"] { border-top-color:#00B388 !important; }
+div[class*="st-key-caseflow_alert_card_case_reassigned_to_you"] { border-top-color:#F59E0B !important; }
+div[class*="st-key-caseflow_alert_card_transfer_request_received"] { border-top-color:#7C3AED !important; }
+div[class*="st-key-caseflow_alert_card_schedule_swap_request_received"] { border-top-color:#2563EB !important; }
+div[class*="st-key-caseflow_alert_card_schedule_swap_approved"] { border-top-color:#16A34A !important; }
+div[class*="st-key-caseflow_alert_card_schedule_swap_declined"] { border-top-color:#EF233C !important; }
+div[class*="st-key-caseflow_alert_card_critical_case_alert"] { border-top-color:#EF233C !important; }
+div[class*="st-key-caseflow_alert_card_critical_case_past_due"] { border-top-color:#EF233C !important; }
+div[class*="st-key-caseflow_alert_card_admin_message"] { border-top-color:#2563EB !important; }
+div[class*="st-key-caseflow_alert_card_generic_alert"] { border-top-color:#00B388 !important; }
+
 .caseflow-alert-head {
     display: flex;
     align-items: flex-start;
-    gap: 12px;
-    padding: 16px 16px 12px 16px;
+    gap: 16px;
+    padding: 18px 18px 12px 18px;
 }
 .caseflow-alert-icon {
-    width: 48px;
-    height: 48px;
-    min-width: 48px;
+    width: 58px;
+    height: 58px;
+    min-width: 58px;
     border-radius: 50%;
     color: #FFFFFF;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 22px;
+    font-size: 27px;
     font-weight: 900;
 }
 .caseflow-alert-title-wrap { flex: 1; min-width: 0; }
-.caseflow-alert-title { font-size: 17px; font-weight: 800; color: #0F172A; margin-bottom: 5px; }
-.caseflow-alert-message { font-size: 12.5px; line-height: 1.45; color: #334155; }
-.caseflow-alert-x { color:#64748B; font-size:20px; line-height:1; }
+.caseflow-alert-title { font-size: 18px; font-weight: 800; color: #0F172A; margin-bottom: 6px; }
+.caseflow-alert-message { font-size: 12px; line-height: 1.5; color: #334155; }
 .caseflow-alert-details {
-    margin: 0 16px 14px 16px;
-    padding: 10px 12px;
+    margin: 0 18px 14px 18px;
+    padding: 11px 13px;
     background: #EEF2F6;
     border-radius: 6px;
 }
 .caseflow-alert-details > div {
     display: flex;
-    gap: 10px;
+    gap: 8px;
     align-items: baseline;
-    margin: 4px 0;
+    margin: 5px 0;
     font-size: 12px;
     color: #334155;
 }
-.caseflow-alert-details strong { color:#0F172A; min-width:110px; }
+.caseflow-alert-details strong { color:#0F172A; min-width:72px; }
+
+/* The one and only close button belongs to the alert card. */
+div[class*="st-key-alert_close_"] button {
+    min-width: 24px !important;
+    width: 24px !important;
+    height: 24px !important;
+    min-height: 24px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    color: #64748B !important;
+    font-size: 18px !important;
+    font-weight: 400 !important;
+    box-shadow: none !important;
+}
+div[class*="st-key-alert_close_"] button:hover {
+    background: #F1F5F9 !important;
+    color: #0F172A !important;
+}
+
+/* Alert action buttons closely match the supplied reference. */
+div[class*="st-key-alert_action_"] button,
+div[class*="st-key-alert_view_"] button,
+div[class*="st-key-alert_ok_"] button {
+    min-height: 38px !important;
+    height: 38px !important;
+    border-radius: 7px !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    padding: 6px 16px !important;
+}
+div[class*="st-key-alert_view_"] button {
+    background: #FFFFFF !important;
+    color: #334155 !important;
+    border: 1px solid #CBD5E1 !important;
+}
+div[class*="st-key-alert_ok_"] button {
+    background: #00B388 !important;
+    color: #FFFFFF !important;
+    border: 1px solid #00B388 !important;
+}
+div[class*="st-key-alert_action_"] button[data-testid="baseButton-primary"],
+div[class*="st-key-alert_action_"] button[kind="primary"] {
+    background: #00B388 !important;
+    color: #FFFFFF !important;
+    border: 1px solid #00B388 !important;
+}
+div[class*="st-key-alert_action_"] button[data-testid="baseButton-secondary"],
+div[class*="st-key-alert_action_"] button[kind="secondary"] {
+    background: #FFFFFF !important;
+    color: #334155 !important;
+    border: 1px solid #CBD5E1 !important;
+}
+
+div[class*="st-key-alert_decline_"] button {
+    background: #FFFFFF !important;
+    color: #DC2626 !important;
+    border: 1px solid #DC2626 !important;
+}
+
+div[class*="st-key-caseflow_alert_card_"] [data-testid="stHorizontalBlock"]:last-child {
+    margin: 0 18px !important;
+    width: calc(100% - 36px) !important;
+}
+
+/* Bell notification action */
+div[class*="st-key-bell_alert_open_"] button {
+    background:#FFFFFF !important;
+    color:#0067B9 !important;
+    border:1px solid #CBD5E1 !important;
+    border-radius:6px !important;
+    font-size:11px !important;
+    font-weight:700 !important;
+    min-height:28px !important;
+    height:28px !important;
+    padding:3px 10px !important;
+}
 
 </style>
 """
@@ -2207,6 +2500,7 @@ def render_top_header():
                             cat = n.get("category", "info")
                             badge_color = "#E31B23" if cat == "critical" else "#0067B9"
                             unread_cls = "unread" if is_unr else ""
+                            notif_id = str(n.get("id", uuid.uuid4()))
                             st.markdown(f"""
                             <div class="notif-item-card {unread_cls}">
                                 <div style="display:flex; justify-content:space-between;">
@@ -2217,13 +2511,19 @@ def render_top_header():
                                 <small style="color:#94A3B8; font-size:10.5px;">{n.get('created_at', 'Today')}</small>
                             </div>
                             """, unsafe_allow_html=True)
+                            if st.button(
+                                "Open Alert",
+                                key=f"bell_alert_open_{notif_id}",
+                                use_container_width=True,
+                            ):
+                                open_notification_alert(n)
                     else:
                         st.info("No notifications received.")
 
 
         with c_prof:
             with st.container(key="top_profile_pill_btn"):
-                btn_label = f"👤 {user.get('name', 'Arianne Escabillas')} • {curr_aux} ▾"
+                btn_label = f"👤 {user.get('name', 'Arianne Escabillas')} • {curr_aux}"
                 with st.popover(btn_label, use_container_width=True):
                     render_profile_flyout()
 
@@ -2454,47 +2754,209 @@ def _alert_icon_color(accent):
     return accent
 
 
-@st.dialog("Alert", width="small")
+def _alert_slug(alert_name):
+    return re.sub(r"[^a-z0-9]+", "_", str(alert_name).lower()).strip("_") or "generic_alert"
+
+
+def _find_case_number_in_alert(alert_data):
+    return next(
+        (str(v) for k, v in alert_data.get("details", []) if str(k).strip().lower() in ["case #:", "case #", "case number"]),
+        None,
+    )
+
+
+def _notification_to_alert_data(notification):
+    """Convert a stored bell notification into the same popup used by demo alerts."""
+    title = str(notification.get("title", "Alert"))
+    template = DEMO_ALERT_TEMPLATES.get(title)
+
+    if template:
+        alert_data = dict(template)
+        alert_data["details"] = list(template.get("details", []))
+        alert_data["actions"] = list(template.get("actions", ["OK"]))
+    else:
+        category = str(notification.get("category", "info")).lower()
+        accent = "#EF233C" if category == "critical" else ("#F59E0B" if category == "new_case" else "#2563EB")
+        alert_data = {
+            "title": title,
+            "message": str(notification.get("message", "")),
+            "icon": "⚠" if category == "critical" else ("📄➕" if category == "new_case" else "✉"),
+            "accent": accent,
+            "category": category,
+            "details": [],
+            "actions": ["OK"],
+        }
+
+    display_case_number = notification.get("case_number") or _find_case_number_in_alert(alert_data)
+    lookup_case_number = notification.get("view_case_number") or display_case_number
+    demo_mapped_case = bool(
+        notification.get("view_case_number")
+        and str(notification.get("view_case_number")) != str(display_case_number)
+    )
+
+    if lookup_case_number:
+        case = cases_collection.find_one({"type": "cases", "case_number": str(lookup_case_number)})
+        if case:
+            if not demo_mapped_case:
+                priority = get_dynamic_priority(case)
+                due_txt = case.get("due_date", "")
+                countdown_txt, _, is_overdue = calculate_countdown(due_txt)
+                if "Past Due" in title or is_overdue:
+                    due_label = "Due Date:"
+                    due_value = str(due_txt)
+                else:
+                    due_label = "Due In:"
+                    due_value = f"{countdown_txt} ({due_txt})"
+
+                # For real notifications, populate the alert with live case values.
+                rebuilt = []
+                for key, value in alert_data.get("details", []):
+                    if key in ["Case #:", "Case #"]:
+                        rebuilt.append((key, case.get("case_number", lookup_case_number)))
+                    elif key == "Subject:":
+                        rebuilt.append((key, case.get("subject", value)))
+                    elif key == "Priority:":
+                        rebuilt.append((key, priority))
+                    elif key in ["Due Date:", "Due In:"]:
+                        rebuilt.append((due_label, due_value))
+                    elif key == "Status:":
+                        rebuilt.append((key, case.get("status", value)))
+                    else:
+                        rebuilt.append((key, value))
+
+                if not any(k in ["Case #:", "Case #"] for k, _ in rebuilt):
+                    rebuilt.insert(0, ("Case #:", case.get("case_number", lookup_case_number)))
+                if not any(k == "Subject:" for k, _ in rebuilt):
+                    rebuilt.insert(1, ("Subject:", case.get("subject", "")))
+                alert_data["details"] = rebuilt
+
+            # View Case always opens the real case record.
+            alert_data["actions"] = ["View Case", "OK"] if "View Case" not in alert_data.get("actions", []) else alert_data["actions"]
+            alert_data["case_number"] = case.get("case_number", lookup_case_number)
+        else:
+            # If the referenced case is not available, keep the alert visible;
+            # View Case will simply have no record to open.
+            alert_data["case_number"] = str(lookup_case_number)
+
+
+    return alert_data
+
+
+def _open_alert_case(alert_data):
+    case_number = alert_data.get("case_number") or _find_case_number_in_alert(alert_data)
+    if case_number:
+        st.session_state["pending_alert"] = None
+        st.session_state["pending_case_modal"] = str(case_number)
+        st.rerun()
+
+
+@st.dialog("", width="medium")
 def render_alert_popup(alert_name, alert_data):
+    """Render one alert card with no second/outer alert card."""
     accent = alert_data.get("accent", "#00B388")
     icon = alert_data.get("icon", "🔔")
     title = alert_data.get("title", "Alert")
     message = alert_data.get("message", "")
     details = alert_data.get("details", [])
     actions = alert_data.get("actions", ["OK"])
+    slug = _alert_slug(alert_name)
 
-    st.markdown(
-        f"""
-        <div class="caseflow-alert-popup" style="--alert-accent:{accent};">
-            <div class="caseflow-alert-head">
-                <div class="caseflow-alert-icon" style="background:{accent};">{icon}</div>
-                <div class="caseflow-alert-title-wrap">
+    # Marker used by CSS to identify this dialog and remove Streamlit's outer chrome.
+    st.markdown('<div class="caseflow-alert-dialog-marker"></div>', unsafe_allow_html=True)
+
+    with st.container(key=f"caseflow_alert_card_{slug}"):
+        head_left, head_mid, head_close = st.columns([0.7, 5.6, 0.35], gap="small")
+        with head_left:
+            st.markdown(
+                f'<div class="caseflow-alert-icon" style="background:{accent};">{icon}</div>',
+                unsafe_allow_html=True,
+            )
+        with head_mid:
+            st.markdown(
+                f"""<div style="padding-top:2px;">
                     <div class="caseflow-alert-title">{title}</div>
-                    <div class="caseflow-alert-message">{message.replace(chr(10), '<br>')}</div>
-                </div>
-                <div class="caseflow-alert-x">×</div>
-            </div>
-            {('<div class="caseflow-alert-details">' + ''.join(f'<div><strong>{k}</strong><span>{v}</span></div>' for k, v in details) + '</div>') if details else ''}
-        </div>
-        """,
-        unsafe_allow_html=True,
+                    <div class="caseflow-alert-message">{str(message).replace(chr(10), '<br>')}</div>
+                </div>""",
+                unsafe_allow_html=True,
+            )
+        with head_close:
+            if st.button("×", key=f"alert_close_{slug}", help="Close alert"):
+                st.session_state["pending_alert"] = None
+                st.rerun()
+
+        if details:
+            detail_html = ''.join(
+                f'<div><strong>{k}</strong><span>{v}</span></div>'
+                for k, v in details
+            )
+            st.markdown(
+                f'<div class="caseflow-alert-details">{detail_html}</div>',
+                unsafe_allow_html=True,
+            )
+
+        # Action buttons remain part of the alert card itself.
+        action_cols = st.columns(len(actions), gap="small")
+        for idx, action in enumerate(actions):
+            with action_cols[idx]:
+                action_slug = _alert_slug(action)
+                key = f"alert_action_{slug}_{idx}"
+                if action == "View Case":
+                    clicked = st.button(
+                        action,
+                        key=key,
+                        use_container_width=True,
+                    )
+                elif action == "Decline":
+                    clicked = st.button(
+                        action,
+                        key=key,
+                        use_container_width=True,
+                    )
+                else:
+                    clicked = st.button(
+                        action,
+                        key=key,
+                        type="primary",
+                        use_container_width=True,
+                    )
+
+                if clicked:
+                    if action == "View Case" or action == "View Details":
+                        _open_alert_case(alert_data)
+                    elif action == "Approve":
+                        st.session_state["pending_alert"] = None
+                        st.toast("Request approved.", icon="✅")
+                        st.rerun()
+                    elif action == "Decline":
+                        st.session_state["pending_alert"] = None
+                        st.toast("Request declined.", icon="❌")
+                        st.rerun()
+                    else:
+                        st.session_state["pending_alert"] = None
+                        st.rerun()
+
+
+def open_notification_alert(notification):
+    """Open the exact alert popup represented by a bell notification."""
+    alert_name = str(notification.get("title", "Alert"))
+    alert_data = _notification_to_alert_data(notification)
+
+    # Opening an alert also marks that notification as read.
+    notif_doc = collection.find_one({"type": "notifications"}) or {}
+    notif_list = notif_doc.get("Data", [])
+    target_id = str(notification.get("id", ""))
+    for item in notif_list:
+        if target_id and str(item.get("id", "")) == target_id:
+            item["acknowledged"] = "true"
+            break
+    collection.update_one(
+        {"type": "notifications"},
+        {"$set": {"type": "notifications", "Data": notif_list}},
+        upsert=True,
     )
 
-    button_cols = st.columns(len(actions))
-    for idx, action in enumerate(actions):
-        with button_cols[idx]:
-            key = f"alert_action_{alert_name}_{idx}".replace(" ", "_").replace("/", "_")
-            kind = "primary" if action in ["OK", "Approve"] else "secondary"
-            if action == "Decline":
-                kind = "secondary"
-            if st.button(action, key=key, type=kind, use_container_width=True):
-                if action == "View Case":
-                    st.session_state["pending_alert"] = None
-                    st.session_state["pending_case_modal"] = details[0][1] if details and details[0][0] == "Case #:" else None
-                    st.rerun()
-                else:
-                    st.session_state["pending_alert"] = None
-                    st.rerun()
+    st.session_state["pending_alert"] = {"name": alert_name, "data": alert_data}
+    st.rerun()
 
 
 def render_pending_alert():
@@ -2504,7 +2966,6 @@ def render_pending_alert():
         alert_data = pending.get("data")
         if alert_name and alert_data:
             render_alert_popup(alert_name, alert_data)
-
 
 def simulate_demo_alert(alert_name):
     user = st.session_state.get("current_user", {})
@@ -2522,6 +2983,9 @@ def simulate_demo_alert(alert_name):
         "message": alert_data["message"].replace("\n", " "),
         "category": alert_data["category"],
         "case_number": next((v for k, v in alert_data["details"] if k == "Case #:"), None),
+        # The demo alert keeps the reference-image case number, while View Case
+        # opens the real seeded case available in the demo database.
+        "view_case_number": "HC-2026-1044",
         "acknowledged": "false",
         "created_at": get_current_ph_time().strftime("%I:%M %p"),
     })
@@ -2631,10 +3095,10 @@ def render_dashboard():
 
         tile_defs = [
             ("Active", "📁", total_active, "↑ +5% vs last week", "status_tile_active"),
+            ("Breached", "🚨", total_breached, "Past due date/time", "status_tile_breached"),
             ("Critical", "⚠️", total_critical, "↑ +2 vs last week", "status_tile_critical"),
             ("Due Soon", "⏰", total_due_soon, "Critical + High", "status_tile_due_soon"),
             ("On Track", "✅", total_on_track, "Medium + Low", "status_tile_on_track"),
-            ("Breached", "🚨", total_breached, "Past due date/time", "status_tile_breached"),
         ]
         tile_cols = st.columns(5)
         for tile_col, (tile_name, tile_icon, tile_value, tile_trend, tile_key) in zip(tile_cols, tile_defs):
