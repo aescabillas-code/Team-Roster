@@ -2454,7 +2454,7 @@ def _alert_icon_color(accent):
     return accent
 
 
-@st.dialog("", width="small")
+@st.dialog("Alert", width="small")
 def render_alert_popup(alert_name, alert_data):
     accent = alert_data.get("accent", "#00B388")
     icon = alert_data.get("icon", "🔔")
