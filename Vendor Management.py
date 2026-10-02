@@ -88,18 +88,18 @@ def calculate_countdown(due_date_str):
 
 
 def get_dynamic_priority(case):
-    """Return the current case priority from its due date/time.
+    """Return one of the four dashboard priority states from the current due date/time.
 
-    Passed due date -> Breached
-    < 2 days -> Critical
-    < 5 days -> High
-    < 7 days -> Medium
-    7-10 days -> Medium (the requested thresholds leave this range unspecified)
-    > 10 days -> Low
+    Breached = due date/time has passed
+    Critical = less than 2 days remaining
+    Medium   = 2 to 7 days remaining
+    Low      = more than 7 days remaining
+
+    There is intentionally no High priority in CaseFlow.
     """
     due_dt = parse_case_datetime(case.get("due_date"))
     if not due_dt:
-        return str(case.get("priority", "Low"))
+        return str(case.get("priority", "Low")) if str(case.get("priority", "Low")) in {"Breached", "Critical", "Medium", "Low"} else "Low"
 
     diff_seconds = (due_dt - get_current_ph_time()).total_seconds()
     if diff_seconds < 0:
@@ -108,9 +108,7 @@ def get_dynamic_priority(case):
     days_remaining = diff_seconds / 86400.0
     if days_remaining < 2:
         return "Critical"
-    if days_remaining < 5:
-        return "High"
-    if days_remaining <= 10:
+    if days_remaining <= 7:
         return "Medium"
     return "Low"
 
@@ -124,7 +122,7 @@ def get_case_tile_category(case):
         return "Breached"
     if priority == "Critical":
         return "Critical"
-    if priority == "High":
+    if priority == "Medium":
         return "Due Soon"
     return "On Track"
 
@@ -597,151 +595,106 @@ def init_database():
 
 
 def ensure_demo_mock_cases():
-    """Seed a larger set of temporary demo cases once for a more realistic dashboard.
+    """Keep exactly three temporary demo cases in each priority state.
 
-    The mock records are deliberately marked with ``is_demo_mock=True`` so they can be
-    identified and removed later without touching real cases. Due dates are generated
-    relative to the current Manila time so the dynamic priority engine always places
-    them into the intended dashboard categories.
+    Demo due dates are recalculated once per Manila calendar day so the mock
+    dashboard continues to show three Breached, three Critical, three Medium
+    (Due Soon), and three Low (On Track) cases without creating duplicates.
     """
     try:
-        existing = list(cases_collection.find({"type": "cases"}))
-        existing_numbers = {str(c.get("case_number", "")) for c in existing}
-
-        # Do not duplicate the temporary dataset on every Streamlit rerun.
-        if any(c.get("is_demo_mock") is True for c in existing):
+        today_key = get_current_ph_time().strftime("%Y-%m-%d")
+        if st.session_state.get("demo_mock_sync_day") == today_key:
             return
+
+        existing_demo = list(cases_collection.find({"type": "cases", "is_demo_mock": True}))
+        schema_version = max([int(c.get("demo_mock_schema", 0) or 0) for c in existing_demo] or [0])
+
+        # Replace the older mock set once so the new four-state model is clean.
+        if schema_version < 2:
+            if existing_demo:
+                cases_collection.delete_many({"type": "cases", "is_demo_mock": True})
+            existing_demo = []
 
         roster_doc = collection.find_one({"type": "roster_list"}) or {}
         roster = roster_doc.get("Data", [])
-        demo_users = [
-            u for u in roster
-            if str(u.get("email", "")).endswith(".demo@internal.test")
-        ]
-
-        # Fall back to the seeded names if a demo roster is temporarily unavailable.
         fallback_agents = [
             {"name": "AdminAgent Demo", "email": "adminagent.demo@internal.test", "employee_id": "DEMO902"},
             {"name": "Agent Demo", "email": "agent.demo@internal.test", "employee_id": "DEMO903"},
         ]
-        if demo_users:
-            assignment_pool = [
-                {
-                    "name": u.get("name", "Demo Agent"),
-                    "email": u.get("email", ""),
-                    "employee_id": u.get("employee_id", ""),
-                    "avatar": u.get("profile_picture", "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150"),
-                }
-                for u in demo_users
-                if u.get("role") in ["Agent", "Admin/Agent"]
-            ] or fallback_agents
-        else:
-            assignment_pool = fallback_agents
+        demo_users = [u for u in roster if str(u.get("email", "")).lower().endswith(".demo@internal.test")]
+        assignment_pool = [
+            {
+                "name": u.get("name", "Demo Agent"),
+                "email": u.get("email", ""),
+                "employee_id": u.get("employee_id", ""),
+                "avatar": u.get("profile_picture", "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150"),
+            }
+            for u in demo_users if u.get("role") in ["Agent", "Admin/Agent"]
+        ] or fallback_agents
 
         now = get_current_ph_time()
-
-        # Each tuple is:
-        # (case suffix, subject, hours from now, status, category, account, reason)
-        # The time offsets intentionally cover every dashboard priority bucket.
-        mock_blueprints = [
-            # BREACHED
-            ("B01", "Vendor Certificate Expired", -1, "In Progress", "Vendor Management", "Northstar Telecom", "Vendor renewal missed SLA"),
-            ("B02", "License Activation Still Pending", -8, "On Hold", "License Activation", "Acme Global", "Waiting for vendor confirmation"),
-            ("B03", "Portal Access Escalation", -36, "Vendor Response", "Portal Access", "Summit Financial", "Escalated beyond due date"),
-
-            # CRITICAL (< 2 days)
-            ("C01", "ClearPass License Key Issue", 6, "In Progress", "ClearPass Licensing", "Vertex Bank", "License key is nearing SLA"),
-            ("C02", "Support Portal Login Failure", 28, "Open", "Portal Access", "Pacific Retail Group", "Customer cannot access support portal"),
-            ("C03", "Entitlement Mismatch", 40, "Waiting Vendor", "Entitlement", "Orion Manufacturing", "Entitlement requires vendor validation"),
-
-            # HIGH / DUE SOON (< 5 days)
-            ("H01", "Software Contract Renewal", 72, "Open", "License Renewal", "BluePeak Energy", "Renewal documents under review"),
-            ("H02", "Product Entitlement Update", 96, "Vendor Response", "Entitlement", "Metro Health", "Waiting for entitlement update"),
-            ("H03", "Portal Account Provisioning", 108, "In Progress", "Portal Access", "Crestline Systems", "Provisioning request in progress"),
-
-            # MEDIUM / ON TRACK (<= 10 days)
-            ("M01", "License Pool Adjustment", 144, "Open", "License Management", "Harbor Logistics", "License pool adjustment requested"),
-            ("M02", "Serial Number Validation", 192, "On Hold", "Asset Validation", "Evergreen Foods", "Customer documents pending"),
-            ("M03", "Contract Coverage Review", 240, "Waiting Vendor", "Contract Review", "Atlas Data Services", "Coverage confirmation requested"),
-
-            # LOW / ON TRACK (> 10 days)
-            ("L01", "Annual License Audit", 288, "Open", "License Audit", "Silverline Holdings", "Scheduled annual audit"),
-            ("L02", "Portal Profile Cleanup", 480, "In Progress", "Portal Access", "Greenfield Labs", "Non-urgent profile cleanup"),
-            ("L03", "License Inventory Review", 720, "Vendor Response", "License Management", "Summit Industrial", "Inventory review for next cycle"),
-
-            # CLOSED examples for the status filter / Include Closed Cases experience
-            ("X01", "Completed License Transfer", 120, "Closed", "License Transfer", "Westbridge Corp", "Transfer completed successfully"),
-            ("X02", "Resolved Portal Access Issue", 168, "Closed", "Portal Access", "Brightline Media", "Access restored and verified"),
-            ("X03", "Closed Vendor Validation Request", 216, "Closed", "Vendor Validation", "Pioneer Systems", "Validation completed"),
+        # Exactly 3 cases per dashboard state. These offsets are recalculated daily.
+        blueprints = [
+            ("B01", "Vendor Certificate Expired", -2, "In Progress", "Vendor Management", "Northstar Telecom", "Vendor renewal missed SLA", "Breached"),
+            ("B02", "License Activation Still Pending", -10, "On Hold", "License Activation", "Acme Global", "Waiting for vendor confirmation", "Breached"),
+            ("B03", "Portal Access Escalation", -24, "Vendor Response", "Portal Access", "Summit Financial", "Escalated beyond due date", "Breached"),
+            ("C01", "ClearPass License Key Issue", 6, "In Progress", "ClearPass Licensing", "Vertex Bank", "License key is nearing SLA", "Critical"),
+            ("C02", "Support Portal Login Failure", 24, "Open", "Portal Access", "Pacific Retail Group", "Customer cannot access support portal", "Critical"),
+            ("C03", "Entitlement Mismatch", 42, "Waiting Vendor", "Entitlement", "Orion Manufacturing", "Entitlement requires vendor validation", "Critical"),
+            ("M01", "License Pool Adjustment", 72, "Open", "License Management", "Harbor Logistics", "License pool adjustment requested", "Medium"),
+            ("M02", "Serial Number Validation", 120, "On Hold", "Asset Validation", "Evergreen Foods", "Customer documents pending", "Medium"),
+            ("M03", "Contract Coverage Review", 168, "Waiting Vendor", "Contract Review", "Atlas Data Services", "Coverage confirmation requested", "Medium"),
+            ("L01", "Annual License Audit", 264, "Open", "License Audit", "Silverline Holdings", "Scheduled annual audit", "Low"),
+            ("L02", "Portal Profile Cleanup", 360, "In Progress", "Portal Access", "Greenfield Labs", "Non-urgent profile cleanup", "Low"),
+            ("L03", "License Inventory Review", 504, "Vendor Response", "License Management", "Summit Industrial", "Inventory review for next cycle", "Low"),
         ]
 
-        mock_cases = []
-        for index, (suffix, subject, hours_offset, status, category, account, reason) in enumerate(mock_blueprints):
-            case_number = f"DEMO-2026-{suffix}"
-            if case_number in existing_numbers:
-                continue
-
+        existing_by_suffix = {str(c.get("case_number", "")).split("-")[-1]: c for c in existing_demo}
+        for index, (suffix, subject, hours_offset, status, category, account, reason, expected_priority) in enumerate(blueprints):
             due_dt = now + timedelta(hours=hours_offset)
-            created_dt = now - timedelta(hours=max(2, min(72, abs(hours_offset) + 8)))
-            update_dt = now - timedelta(minutes=(15 + (index * 7) % 110))
+            created_dt = now - timedelta(hours=8 + (index * 2))
+            update_dt = now - timedelta(minutes=12 + (index * 6))
             assignee = assignment_pool[index % len(assignment_pool)]
-
-            mock_case = {
-                "type": "cases",
-                "is_demo_mock": True,
-                "case_number": case_number,
-                "subject": subject,
-                # Stored priority is intentionally synchronized with the dynamic engine.
-                "priority": get_dynamic_priority({"due_date": due_dt.strftime("%b %d, %Y %I:%M %p"), "priority": "Low"}),
-                "assigned_to": assignee.get("name", "Demo Agent"),
-                "assigned_employee_id": assignee.get("employee_id", ""),
+            case_number = f"DEMO-2026-{suffix}"
+            values = {
+                "type": "cases", "is_demo_mock": True, "demo_mock_schema": 2,
+                "case_number": case_number, "subject": subject, "priority": expected_priority,
+                "assigned_to": assignee.get("name", "Demo Agent"), "assigned_employee_id": assignee.get("employee_id", ""),
                 "assignee_email": assignee.get("email", ""),
                 "assignee_avatar": assignee.get("avatar", "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150"),
-                "due_date": due_dt.strftime("%b %d, %Y %I:%M %p"),
-                "status": status,
-                "status_reason": reason,
-                "created_at": created_dt.strftime("%b %d, %Y %I:%M %p"),
-                "last_update": update_dt.strftime("%b %d, %Y %I:%M %p"),
-                "case_category": category,
-                "account": account,
-                "client": account,
+                "due_date": due_dt.strftime("%b %d, %Y %I:%M %p"), "status": status, "status_reason": reason,
+                "created_at": created_dt.strftime("%b %d, %Y %I:%M %p"), "last_update": update_dt.strftime("%b %d, %Y %I:%M %p"),
+                "case_category": category, "account": account, "client": account,
                 "related_system": "HPE CaseFlow Demo Environment",
-                "description": (
-                    f"Temporary demo case for the {get_dynamic_priority({'due_date': due_dt.strftime('%b %d, %Y %I:%M %p'), 'priority': 'Low'})} "
-                    "dashboard category. This record is for UI, filtering, assignment, and alert testing."
-                ),
-                "vendor_name": "Demo Vendor Services",
-                "vendor_id": f"DEMO-VEND-{index + 1:03d}",
-                "vendor_contact": "Demo Support Desk",
-                "vendor_email": "demo.vendor@example.com",
-                "vendor_phone": "+1 555 010 2026",
-                "history": [
-                    {
-                        "timestamp": update_dt.strftime("%b %d, %Y %I:%M %p"),
-                        "user": "CaseFlow Demo Engine",
-                        "type": "System",
-                        "badge": "Temporary demo case",
-                        "details": "Created automatically for dashboard and workflow demonstration."
-                    }
-                ],
-                "communications": [],
-                "attachments": []
+                "description": f"Temporary demo case for the {expected_priority} dashboard category. This record is automatically refreshed daily for UI and workflow testing.",
+                "vendor_name": "Demo Vendor Services", "vendor_id": f"DEMO-VEND-{index + 1:03d}",
+                "vendor_contact": "Demo Support Desk", "vendor_email": "demo.vendor@example.com", "vendor_phone": "+1 555 010 2026",
+                "history": [{"timestamp": update_dt.strftime("%b %d, %Y %I:%M %p"), "user": "CaseFlow Demo Engine", "type": "System", "badge": "Temporary demo case", "details": "Daily demo refresh."}],
+                "communications": [], "attachments": [],
             }
+            cases_collection.update_one({"type": "cases", "case_number": case_number}, {"$set": values}, upsert=True)
 
-            mock_cases.append(mock_case)
+        # Remove any obsolete temporary cases left by an earlier mock set.
+        keep_numbers = {f"DEMO-2026-{b[0]}" for b in blueprints}
+        for old_case in existing_demo:
+            old_num = str(old_case.get("case_number", ""))
+            if old_num and old_num not in keep_numbers:
+                cases_collection.delete_one({"_id": old_case.get("_id")})
 
-        for mock_case in mock_cases:
-            cases_collection.insert_one(mock_case)
-
+        st.session_state["demo_mock_sync_day"] = today_key
     except Exception:
-        # Demo seeding must never prevent the real application from loading.
-        pass
+        # Demo data must never prevent the real application from loading.
+        st.session_state["demo_mock_sync_day"] = today_key if "today_key" in locals() else None
+
 
 
 if "db_initialized" not in st.session_state:
     init_database()
-    ensure_demo_mock_cases()
     st.session_state["db_initialized"] = True
+
+# Fast session-level guard inside the function prevents repeated DB writes while
+# still allowing the temporary cases to refresh once per new Manila calendar day.
+ensure_demo_mock_cases()
 
 
 # ==============================================================================
@@ -1296,7 +1249,6 @@ div[class*="st-key-status_tile_breached"] button { background:#FFF1F2 !important
 
 .badge { display: inline-block; padding: 3px 12px; border-radius: 20px; font-size: 11.5px; font-weight: 700; }
 .badge-critical { background-color: #FEE2E2; color: #E31B23; }
-.badge-high { background-color: #FFEDD5; color: #EA580C; }
 .badge-medium { background-color: #FEF3C7; color: #D97706; }
 .badge-low { background-color: #DCFCE7; color: #16855B; }
 .badge-breached { background-color: #FEE2E2; color: #B91C1C; }
@@ -1620,20 +1572,31 @@ div[class*="st-key-reassign_box_"] div[data-baseweb="select"] div {
    no second "Alert" box/header and no second close button. */
 div[role="dialog"]:has(.caseflow-alert-dialog-marker),
 div[data-testid="stDialog"]:has(.caseflow-alert-dialog-marker) {
+    position: fixed !important;
+    inset: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
-    padding: 0 !important;
-    width: min(720px, 92vw) !important;
-    max-width: 720px !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
+    padding: 24px !important;
+    width: 100vw !important;
+    max-width: none !important;
+    margin: 0 !important;
+}
+
+div[role="dialog"]:has(.caseflow-alert-dialog-marker) > div,
+div[data-testid="stDialog"]:has(.caseflow-alert-dialog-marker) > div {
+    width: min(920px, 94vw) !important;
+    max-width: 920px !important;
+    margin: 0 auto !important;
 }
 
 div[role="dialog"]:has(.caseflow-alert-dialog-marker) > div,
 div[data-testid="stDialog"]:has(.caseflow-alert-dialog-marker) > div {
     width: 100% !important;
-    max-width: 720px !important;
+    max-width: 920px !important;
     margin: 0 auto !important;
 }
 div[role="dialog"]:has(.caseflow-alert-dialog-marker) [data-testid="stDialogHeader"],
@@ -1649,14 +1612,14 @@ div[data-testid="stDialog"]:has(.caseflow-alert-dialog-marker) > div {
     box-shadow: none !important;
     padding: 0 !important;
     width: 100% !important;
-    max-width: 720px !important;
+    max-width: 920px !important;
     margin: 0 auto !important;
 }
 
 /* Alert container itself. The accent is applied per alert type below. */
 div[class*="st-key-caseflow_alert_card_"] {
     width: 100% !important;
-    max-width: 680px !important;
+    max-width: 840px !important;
     margin: 0 auto !important;
     background: #FFFFFF !important;
     border: 1px solid #D9E2EC !important;
@@ -1682,26 +1645,26 @@ div[class*="st-key-caseflow_alert_card_generic_alert"] { border-top-color:#00B38
     display: flex;
     align-items: flex-start;
     gap: 16px;
-    padding: 18px 18px 12px 18px;
+    padding: 22px 24px 16px 24px;
 }
 .caseflow-alert-icon {
-    width: 58px;
-    height: 58px;
-    min-width: 58px;
+    width: 72px;
+    height: 72px;
+    min-width: 72px;
     border-radius: 50%;
     color: #FFFFFF;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 27px;
+    font-size: 34px;
     font-weight: 900;
 }
 .caseflow-alert-title-wrap { flex: 1; min-width: 0; }
-.caseflow-alert-title { font-size: 18px; font-weight: 800; color: #0F172A; margin-bottom: 6px; }
-.caseflow-alert-message { font-size: 12px; line-height: 1.5; color: #334155; }
+.caseflow-alert-title { font-size: 22px; font-weight: 800; color: #0F172A; margin-bottom: 6px; }
+.caseflow-alert-message { font-size: 14px; line-height: 1.5; color: #334155; }
 .caseflow-alert-details {
-    margin: 0 18px 14px 18px;
-    padding: 11px 13px;
+    margin: 0 24px 18px 24px;
+    padding: 16px 18px;
     background: #EEF2F6;
     border-radius: 6px;
 }
@@ -1710,7 +1673,7 @@ div[class*="st-key-caseflow_alert_card_generic_alert"] { border-top-color:#00B38
     gap: 8px;
     align-items: baseline;
     margin: 5px 0;
-    font-size: 12px;
+    font-size: 14px;
     color: #334155;
 }
 .caseflow-alert-details strong { color:#0F172A; min-width:72px; }
@@ -2450,6 +2413,7 @@ HPE Operations Management"""
 # ==============================================================================
 # 8. TOP HEADER (1. Avoid refresh or reload when profile is clicked)
 # ==============================================================================
+@st.fragment
 def render_top_header():
     user = st.session_state.get("current_user", {})
     curr_aux = user.get("current_aux", "Admin Work")
@@ -2458,6 +2422,7 @@ def render_top_header():
     notif_doc = collection.find_one({"type": "notifications"}) or {}
     notifs = notif_doc.get("Data", [])
     user_notifs = [n for n in notifs if n.get("target_email") in [user.get("email"), "all"]]
+    user_notifs = user_notifs[-12:]
     unread_count = sum(1 for n in user_notifs if str(n.get("acknowledged", "false")).lower() in ["false", "0"])
 
 
@@ -2481,19 +2446,26 @@ def render_top_header():
             st.text_input("Global Search", placeholder="🔍 Search cases, names, issues...", label_visibility="collapsed")
 
 
-        # Notification Bell Popover
+        # Notification Bell Popover -- kept inside the header fragment for fast, isolated interaction.
         with c_bell:
             with st.container(key="top_bell_popover"):
                 with st.popover(f"🔔 {unread_count}", help="Notifications"):
                     st.markdown("### 🔔 Alerts & Notifications")
                     if user_notifs:
-                        if st.button("Mark All as Read", key="btn_ack_all_notifs"):
-                            for n in notifs:
-                                if n.get("target_email") in [user.get("email"), "all"]:
-                                    n["acknowledged"] = "true"
-                            collection.update_one({"type": "notifications"}, {"$set": {"Data": notifs}}, upsert=True)
-                            st.rerun()
-
+                        action_c1, action_c2 = st.columns(2, gap="small")
+                        with action_c1:
+                            if st.button("✓ Mark All as Read", key="btn_ack_all_notifs", use_container_width=True):
+                                for n in notifs:
+                                    if n.get("target_email") in [user.get("email"), "all"]:
+                                        n["acknowledged"] = "true"
+                                collection.update_one({"type": "notifications"}, {"$set": {"Data": notifs}}, upsert=True)
+                                st.rerun(scope="fragment")
+                        with action_c2:
+                            if st.button("🗑 Delete All", key="btn_delete_all_notifs", use_container_width=True):
+                                remaining = [n for n in notifs if n.get("target_email") not in [user.get("email"), "all"]]
+                                collection.update_one({"type": "notifications"}, {"$set": {"Data": remaining}}, upsert=True)
+                                st.session_state["pending_alert"] = None
+                                st.rerun(scope="fragment")
 
                         for n in reversed(user_notifs):
                             is_unr = str(n.get("acknowledged", "false")).lower() in ["false", "0"]
@@ -2511,12 +2483,15 @@ def render_top_header():
                                 <small style="color:#94A3B8; font-size:10.5px;">{n.get('created_at', 'Today')}</small>
                             </div>
                             """, unsafe_allow_html=True)
-                            if st.button(
-                                "Open Alert",
-                                key=f"bell_alert_open_{notif_id}",
-                                use_container_width=True,
-                            ):
-                                open_notification_alert(n)
+                            n1, n2 = st.columns([3, 1], gap="small")
+                            with n1:
+                                if st.button("Open Alert", key=f"bell_alert_open_{notif_id}", use_container_width=True):
+                                    open_notification_alert(n)
+                            with n2:
+                                if st.button("🗑", key=f"bell_alert_delete_{notif_id}", help="Delete this alert", use_container_width=True):
+                                    updated = [item for item in notifs if str(item.get("id", "")) != notif_id]
+                                    collection.update_one({"type": "notifications"}, {"$set": {"Data": updated}}, upsert=True)
+                                    st.rerun(scope="fragment")
                     else:
                         st.info("No notifications received.")
 
@@ -2526,6 +2501,10 @@ def render_top_header():
                 btn_label = f"👤 {user.get('name', 'Arianne Escabillas')} • {curr_aux}"
                 with st.popover(btn_label, use_container_width=True):
                     render_profile_flyout()
+
+
+        # Alerts are rendered inside the header fragment so bell interactions do not reload the dashboard.
+        render_pending_alert()
 
 
 # ==============================================================================
@@ -2637,7 +2616,7 @@ DEMO_ALERT_TEMPLATES = {
         "details": [
             ("Case #:", "CAS-2026-0918-0045"),
             ("Subject:", "Vendor API Access Issue"),
-            ("Priority:", "High"),
+            ("Priority:", "Medium"),
             ("Due Date:", "Sep 18, 2026 04:00 PM"),
         ],
         "actions": ["View Case", "OK"],
@@ -2933,7 +2912,7 @@ def render_alert_popup(alert_name, alert_data):
                         st.rerun()
                     else:
                         st.session_state["pending_alert"] = None
-                        st.rerun()
+                        st.rerun(scope="fragment")
 
 
 def open_notification_alert(notification):
@@ -2941,22 +2920,25 @@ def open_notification_alert(notification):
     alert_name = str(notification.get("title", "Alert"))
     alert_data = _notification_to_alert_data(notification)
 
-    # Opening an alert also marks that notification as read.
-    notif_doc = collection.find_one({"type": "notifications"}) or {}
-    notif_list = notif_doc.get("Data", [])
+    # Mark as read in memory first so the alert opens immediately. Persisting the
+    # acknowledgement is intentionally deferred until the next lightweight header refresh.
     target_id = str(notification.get("id", ""))
-    for item in notif_list:
-        if target_id and str(item.get("id", "")) == target_id:
-            item["acknowledged"] = "true"
-            break
-    collection.update_one(
-        {"type": "notifications"},
-        {"$set": {"type": "notifications", "Data": notif_list}},
-        upsert=True,
-    )
+    notification["acknowledged"] = "true"
+    read_ids = st.session_state.setdefault("notification_read_ids", set())
+    if target_id:
+        read_ids.add(target_id)
 
-    st.session_state["pending_alert"] = {"name": alert_name, "data": alert_data}
-    st.rerun()
+    if target_id:
+        try:
+            collection.update_one(
+                {"type": "notifications", "Data.id": target_id},
+                {"$set": {"Data.$.acknowledged": "true"}},
+            )
+        except Exception:
+            pass
+
+    st.session_state["pending_alert"] = {"name": alert_name, "data": alert_data, "notification_id": target_id}
+    st.rerun(scope="fragment")
 
 
 def render_pending_alert():
@@ -2995,7 +2977,7 @@ def simulate_demo_alert(alert_name):
         upsert=True,
     )
     st.session_state["pending_alert"] = {"name": alert_name, "data": alert_data}
-    st.rerun()
+    st.rerun(scope="fragment")
 
 
 def render_demo_alert_simulator():
@@ -3031,6 +3013,15 @@ def render_demo_alert_simulator():
 # ==============================================================================
 # 11. DASHBOARD ROUTER (Optimized with @st.fragment for Speed & Smoothness)
 # ==============================================================================
+@st.cache_data(ttl=3, show_spinner=False)
+def load_dashboard_cases(user_email, is_admin_mode, day_key):
+    """Short-lived read cache so dashboard interactions do not repeatedly hit MongoDB."""
+    q_base = {"type": "cases"}
+    if not is_admin_mode:
+        q_base["assignee_email"] = user_email
+    return list(cases_collection.find(q_base))
+
+
 @st.fragment
 def render_dashboard():
     user = st.session_state.get("current_user", {})
@@ -3050,17 +3041,16 @@ def render_dashboard():
     is_admin_mode = (st.session_state["view_mode"] == "Admin")
 
 
-    q_base = {"type": "cases"}
-    if not is_admin_mode:
-        q_base["assignee_email"] = user.get("email")
-
-
-    all_base_cases = list(cases_collection.find(q_base))
+    all_base_cases = load_dashboard_cases(
+        user.get("email", ""),
+        is_admin_mode,
+        get_current_ph_time().strftime("%Y-%m-%d")
+    )
     total_active = sum(1 for c in all_base_cases if c.get("status") != "Closed")
     total_breached = sum(1 for c in all_base_cases if get_dynamic_priority(c) == "Breached")
     total_critical = sum(1 for c in all_base_cases if get_dynamic_priority(c) == "Critical")
-    total_due_soon = sum(1 for c in all_base_cases if get_dynamic_priority(c) in ["Critical", "High"])
-    total_on_track = sum(1 for c in all_base_cases if get_dynamic_priority(c) in ["Medium", "Low"])
+    total_due_soon = sum(1 for c in all_base_cases if get_dynamic_priority(c) == "Medium")
+    total_on_track = sum(1 for c in all_base_cases if get_dynamic_priority(c) == "Low")
 
 
     main_left, main_right = st.columns([2.88, 1.12], gap="large")
@@ -3097,8 +3087,8 @@ def render_dashboard():
             ("Active", "📁", total_active, "↑ +5% vs last week", "status_tile_active"),
             ("Breached", "🚨", total_breached, "Past due date/time", "status_tile_breached"),
             ("Critical", "⚠️", total_critical, "↑ +2 vs last week", "status_tile_critical"),
-            ("Due Soon", "⏰", total_due_soon, "Critical + High", "status_tile_due_soon"),
-            ("On Track", "✅", total_on_track, "Medium + Low", "status_tile_on_track"),
+            ("Due Soon", "⏰", total_due_soon, "Medium priority", "status_tile_due_soon"),
+            ("On Track", "✅", total_on_track, "Low priority", "status_tile_on_track"),
         ]
         tile_cols = st.columns(5)
         for tile_col, (tile_name, tile_icon, tile_value, tile_trend, tile_key) in zip(tile_cols, tile_defs):
@@ -3139,6 +3129,7 @@ def render_dashboard():
                             st.download_button("Download CSV", csv_bytes, "HPE_Cases_Export.csv", "text/csv")
                 with a5:
                     if st.button("⟳", key="btn_tb_refresh", help="Refresh Data", use_container_width=True):
+                        load_dashboard_cases.clear()
                         st.rerun()
 
 
@@ -3146,7 +3137,7 @@ def render_dashboard():
         with f1:
             search_val = st.text_input("Search", placeholder="🔍 Search by case #, subject, assignee...", label_visibility="collapsed")
         with f2:
-            pri_filter = st.selectbox("Priority", ["All Priorities", "Critical", "High", "Medium", "Low", "Breached"], label_visibility="collapsed")
+            pri_filter = st.selectbox("Priority", ["All Priorities", "Breached", "Critical", "Medium", "Low"], label_visibility="collapsed")
         with f3:
             st_filter = st.selectbox("Filter Status", ["All Statuses", "Open", "In Progress", "On Hold", "Vendor Response", "Waiting Vendor", "Closed"], label_visibility="collapsed")
         with f4:
@@ -3174,9 +3165,9 @@ def render_dashboard():
         elif tile_filter == "Critical":
             filtered_cases = [c for c in filtered_cases if get_dynamic_priority(c) == "Critical"]
         elif tile_filter == "Due Soon":
-            filtered_cases = [c for c in filtered_cases if get_dynamic_priority(c) in ["Critical", "High"]]
+            filtered_cases = [c for c in filtered_cases if get_dynamic_priority(c) == "Medium"]
         elif tile_filter == "On Track":
-            filtered_cases = [c for c in filtered_cases if get_dynamic_priority(c) in ["Medium", "Low"]]
+            filtered_cases = [c for c in filtered_cases if get_dynamic_priority(c) == "Low"]
         elif tile_filter == "Breached":
             filtered_cases = [c for c in filtered_cases if get_dynamic_priority(c) == "Breached"]
 
@@ -3554,7 +3545,7 @@ def render_report():
         fig_pri = px.pie(
             df, names="priority", title="Cases by Priority Distribution",
             color="priority",
-            color_discrete_map={"Critical": "#DC2626", "High": "#EA580C", "Medium": "#D97706", "Low": "#16A34A"},
+            color_discrete_map={"Breached": "#B91C1C", "Critical": "#DC2626", "Medium": "#D97706", "Low": "#16A34A"},
             hole=0.45
         )
         fig_pri.update_layout(margin=dict(t=40, b=20, l=20, r=20))
@@ -3673,6 +3664,10 @@ def render_settings():
                         }
                         case_payload["priority"] = get_dynamic_priority(case_payload)
                         auto_assign_new_case(case_payload)
+                        try:
+                            load_dashboard_cases.clear()
+                        except Exception:
+                            pass
                         success_count += 1
                     st.success(f"Successfully ingested and auto-assigned {success_count} cases from Excel!")
                     time.sleep(0.5)
@@ -3903,7 +3898,6 @@ def main():
         render_auth_page()
     else:
         render_top_header()
-        render_pending_alert()
 
         pending_case_modal = st.session_state.pop("pending_case_modal", None)
         if pending_case_modal:
