@@ -2850,7 +2850,7 @@ def _open_alert_case(alert_data):
         st.rerun()
 
 
-@st.dialog("", width="medium")
+@st.dialog("Alert", width="large")
 def render_alert_popup(alert_name, alert_data):
     """Render one alert card with no second/outer alert card."""
     accent = alert_data.get("accent", "#00B388")
