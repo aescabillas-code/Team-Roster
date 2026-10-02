@@ -1439,7 +1439,7 @@ def render_case_modal(case_num):
                         <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Case #:</span> <strong style="color:#17233C;">{case['case_number']}</strong></div>
                         <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Subject:</span> <strong style="color:#17233C;">{case.get('subject')}</strong></div>
                         <div style="margin:4px 0;"><span style="color:#5F6B7A;">Description:</span><br><span style="color:#17233C; font-size:11.5px;">{case.get('description')}</span></div>
-                        <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Priority:</span> <span class="badge {pri_badge_cls}">{pri}</span></div>
+                        <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Case Priority:</span> <span class="badge {pri_badge_cls}">{pri}</span></div>
                         <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Assigned To:</span> <strong style="color:#17233C;">{case.get('assigned_to')}</strong></div>
                         <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Due Date:</span> <strong style="color:{countdown_color};">{case.get('due_date')}</strong></div>
                         <div style="display:flex; justify-content:space-between;"><span style="color:#5F6B7A;">Created Date:</span> <strong style="color:#17233C;">{case.get('created_at')}</strong></div>
