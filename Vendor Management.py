@@ -3,10 +3,6 @@ import sys
 import re
 import io
 import time
-import base64
-import math
-import struct
-import wave
 import json
 import uuid
 import hmac
@@ -19,7 +15,6 @@ from datetime import datetime, timedelta, timezone
 
 
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -1572,34 +1567,6 @@ div[class*="st-key-reassign_box_"] div[data-baseweb="select"] div {
 }
 
 
-/* Critical alert attention state: pulsing red card/icon. */
-@keyframes caseflowCriticalPulse {
-    0%, 100% {
-        border-top-color: #DC2626 !important;
-        box-shadow: 0 18px 45px rgba(15,23,42,0.20), 0 0 0 0 rgba(220,38,38,0.28), 0 0 0 2px rgba(220,38,38,0.85) !important;
-    }
-    50% {
-        border-top-color: #EF4444 !important;
-        box-shadow: 0 18px 45px rgba(15,23,42,0.20), 0 0 0 9px rgba(220,38,38,0), 0 0 26px rgba(220,38,38,0.48) !important;
-    }
-}
-@keyframes caseflowCriticalIconPulse {
-    0%, 100% { transform: scale(1); opacity: 1; }
-    50% { transform: scale(1.08); opacity: 0.72; }
-}
-div[class*="st-key-caseflow_alert_card_"]:has(.caseflow-critical-alert-marker) {
-    animation: caseflowCriticalPulse 1.15s ease-in-out infinite !important;
-}
-div[class*="st-key-caseflow_alert_card_"]:has(.caseflow-critical-alert-marker) .caseflow-alert-icon {
-    animation: caseflowCriticalIconPulse 0.85s ease-in-out infinite !important;
-}
-@media (prefers-reduced-motion: reduce) {
-    div[class*="st-key-caseflow_alert_card_"]:has(.caseflow-critical-alert-marker),
-    div[class*="st-key-caseflow_alert_card_"]:has(.caseflow-critical-alert-marker) .caseflow-alert-icon {
-        animation: none !important;
-    }
-}
-
 /* Alert popup design — the alert card IS the popup. */
 /* Hide Streamlit's outer dialog chrome only for the alert dialog so there is
    no second "Alert" box/header and no second close button. */
@@ -2854,80 +2821,10 @@ def _notification_to_alert_data(notification):
     return alert_data
 
 
-@st.cache_data(show_spinner=False)
-def _critical_alert_sound_data_uri():
-    """Create a short two-tone critical-alert sound once and return it as a data URI."""
-    sample_rate = 22050
-    duration = 0.58
-    frames = bytearray()
-    total = int(sample_rate * duration)
-
-    for i in range(total):
-        t = i / sample_rate
-        # Two short tones create a recognizable alert without being excessively loud.
-        freq = 880.0 if t < 0.27 else 660.0
-        local_t = t if t < 0.27 else t - 0.27
-        tone_duration = 0.27 if t < 0.27 else 0.31
-
-        attack = min(1.0, local_t / 0.018)
-        release = min(1.0, max(0.0, (tone_duration - local_t) / 0.055))
-        envelope = max(0.0, min(1.0, attack * release))
-        sample = int(32767 * 0.28 * envelope * math.sin(2.0 * math.pi * freq * t))
-        frames.extend(struct.pack("<h", sample))
-
-    buffer = io.BytesIO()
-    with wave.open(buffer, "wb") as wav_file:
-        wav_file.setnchannels(1)
-        wav_file.setsampwidth(2)
-        wav_file.setframerate(sample_rate)
-        wav_file.writeframes(bytes(frames))
-
-    encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
-    return f"data:audio/wav;base64,{encoded}"
-
-
-def _play_critical_alert_sound(sound_token):
-    """Play the critical sound once for the currently opened alert."""
-    if not sound_token:
-        return
-
-    last_token = st.session_state.get("critical_alert_sound_token")
-    if last_token == sound_token:
-        return
-
-    st.session_state["critical_alert_sound_token"] = sound_token
-    sound_uri = _critical_alert_sound_data_uri()
-
-    components.html(
-        f"""
-        <audio id="caseflow-critical-alert-sound" autoplay preload="auto">
-            <source src="{sound_uri}" type="audio/wav">
-        </audio>
-        <script>
-        (() => {{
-            const audio = document.getElementById('caseflow-critical-alert-sound');
-            if (!audio) return;
-            audio.volume = 0.65;
-            const playNow = () => audio.play().catch(() => {{
-                // Browsers may block autoplay. Retry on the next interaction inside
-                // this component so the user can still hear the alert.
-                const retry = () => audio.play().catch(() => {{}});
-                document.addEventListener('click', retry, {{ once: true }});
-            }});
-            playNow();
-        }})();
-        </script>
-        """,
-        height=1,
-        scrolling=False,
-    )
-
-
 def _open_alert_case(alert_data):
     case_number = alert_data.get("case_number") or _find_case_number_in_alert(alert_data)
     if case_number:
         st.session_state["pending_alert"] = None
-        st.session_state.pop("critical_alert_sound_token", None)
         st.session_state["pending_case_modal"] = str(case_number)
         st.rerun()
 
@@ -2941,23 +2838,10 @@ def render_alert_popup(alert_name, alert_data):
     message = alert_data.get("message", "")
     details = alert_data.get("details", [])
     actions = alert_data.get("actions", ["OK"])
-    category = str(alert_data.get("category", "info")).lower()
     slug = _alert_slug(alert_name)
 
-    # Critical alerts pulse and play one short alert tone when first opened.
-    if category == "critical":
-        sound_token = str(
-            st.session_state.get("pending_alert", {}).get("notification_id")
-            or alert_data.get("case_number")
-            or f"{alert_name}:{_find_case_number_in_alert(alert_data) or ''}"
-        )
-        _play_critical_alert_sound(sound_token)
-
     # Marker used by CSS to identify this dialog and remove Streamlit's outer chrome.
-    if category == "critical":
-        st.markdown('<div class="caseflow-alert-dialog-marker caseflow-critical-alert-marker"></div>', unsafe_allow_html=True)
-    else:
-        st.markdown('<div class="caseflow-alert-dialog-marker"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="caseflow-alert-dialog-marker"></div>', unsafe_allow_html=True)
 
     with st.container(key=f"caseflow_alert_card_{slug}"):
         head_left, head_mid, head_close = st.columns([0.7, 5.6, 0.35], gap="small")
@@ -3027,11 +2911,8 @@ def render_alert_popup(alert_name, alert_data):
                         st.toast("Request declined.", icon="❌")
                         st.rerun()
                     else:
-                        # OK (and any simple acknowledgement action) must clear the
-                        # active alert before rerunning so the dialog closes immediately.
                         st.session_state["pending_alert"] = None
-                        st.session_state.pop("critical_alert_sound_token", None)
-                        st.rerun()
+                        st.rerun(scope="fragment")
 
 
 def open_notification_alert(notification):
@@ -3056,10 +2937,6 @@ def open_notification_alert(notification):
         except Exception:
             pass
 
-    previous_pending = st.session_state.get("pending_alert") or {}
-    previous_id = str(previous_pending.get("notification_id", ""))
-    if previous_id != target_id:
-        st.session_state.pop("critical_alert_sound_token", None)
     st.session_state["pending_alert"] = {"name": alert_name, "data": alert_data, "notification_id": target_id}
     st.rerun(scope="fragment")
 
@@ -3099,8 +2976,7 @@ def simulate_demo_alert(alert_name):
         {"$set": {"type": "notifications", "Data": notif_list}},
         upsert=True,
     )
-    st.session_state.pop("critical_alert_sound_token", None)
-    st.session_state["pending_alert"] = {"name": alert_name, "data": alert_data, "notification_id": "demo-" + str(uuid.uuid4())}
+    st.session_state["pending_alert"] = {"name": alert_name, "data": alert_data}
     st.rerun(scope="fragment")
 
 
