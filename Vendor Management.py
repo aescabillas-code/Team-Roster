@@ -503,6 +503,31 @@ def init_database():
     except Exception:
         pass
 
+    try:
+        notif_doc = collection.find_one({"type": "notifications"})
+        if not notif_doc or not notif_doc.get("Data"):
+            collection.update_one(
+                {"type": "notifications"},
+                {"$set": {
+                    "type": "notifications",
+                    "Data": [
+                        {
+                            "id": "notif-001",
+                            "target_email": "arianne.escabillas@hpe.com",
+                            "title": "Critical Case Alert",
+                            "message": "HC-2026-1044 is nearing SLA breach (Due in 36 minutes). Immediate follow-up required.",
+                            "category": "critical",
+                            "case_number": "HC-2026-1044",
+                            "acknowledged": "false",
+                            "created_at": "10:22 AM"
+                        }
+                    ]
+                }},
+                upsert=True
+            )
+    except Exception:
+        pass
+
 if "db_initialized" not in st.session_state:
     init_database()
     st.session_state["db_initialized"] = True
@@ -927,7 +952,7 @@ div[class*="st-key-view_mode_segmented_tile"] button[data-testid="baseButton-pri
     box-shadow: 0 2px 6px rgba(10, 56, 92, 0.35) !important;
 }
 
-/* CLICKABLE TILES CSS (Instruction 7) */
+/* CLICKABLE TILES CSS */
 div[class*="st-key-card_col_"] {
     position: relative;
     cursor: pointer;
@@ -959,8 +984,8 @@ div[class*="st-key-card_col_"] div[data-testid="stButton"] button {
     overflow: hidden;
 }
 
-/* ALL-SIDE BORDERS (Instruction 8) */
 .metric-card-box-active { background-color: #F0F9FF !important; border: 2px solid #0284C7 !important; }
+.metric-card-box-breached { background-color: #FEF2F2 !important; border: 2px solid #7F1D1D !important; }
 .metric-card-box-critical { background-color: #FEF2F2 !important; border: 2px solid #DC2626 !important; }
 .metric-card-box-duesoon { background-color: #FFFBEB !important; border: 2px solid #D97706 !important; }
 .metric-card-box-ontrack { background-color: #F0FDF4 !important; border: 2px solid #16A34A !important; }
@@ -1024,7 +1049,6 @@ div[class*="st-key-action_toolbar_container"] button {
     height: 36px !important;
 }
 
-/* CASE TABLE HEADER CONTAINER STYLING (Instruction 1) */
 div[class*="st-key-table_header_container"] {
     background-color: #F1F5F9 !important;
     border: 1px solid #E2E8F0 !important;
@@ -1046,9 +1070,21 @@ div[class*="st-key-table_header_container"] p {
     text-overflow: ellipsis !important;
 }
 
-/* EQUAL MARGIN ON ROW DIVIDER (Instruction 2) */
+.table-header-row {
+    display: flex !important;
+    align-items: center !important;
+    width: 100% !important;
+    background-color: #F1F5F9 !important;
+    border: 1px solid #E2E8F0 !important;
+    border-radius: 8px !important;
+    padding: 7px 10px !important;
+    margin-top: 8px !important;
+    margin-bottom: 8px !important;
+    box-sizing: border-box !important;
+}
+
 .case-table-divider {
-    margin: 6px 0 !important;
+    margin: 8px 0 !important;
     border: none !important;
     border-top: 1px solid #F1F5F9 !important;
 }
@@ -1280,8 +1316,21 @@ div[class*="st-key-reassign_box_"] div[data-baseweb="select"] div {
 st.markdown(ENTERPRISE_CSS, unsafe_allow_html=True)
 
 # ==============================================================================
-# 7. CASE DETAILS MODAL OVERLAY
+# 7. CASE DETAILS MODAL OVERLAY & POPUPS
 # ==============================================================================
+@st.dialog("📋 Related Cases", width="large")
+def show_cases_popup(title, case_list):
+    st.markdown(f"#### {title}")
+    if not case_list:
+        st.info("No cases match this status.")
+        return
+    
+    df = pd.DataFrame(case_list)
+    df_display = df[["case_number", "subject", "priority", "status", "assigned_to", "due_date"]].copy()
+    df_display.columns = ["Case #", "Subject", "Case Priority", "Status", "Assigned To", "Due Date"]
+    st.dataframe(df_display, use_container_width=True, hide_index=True)
+
+
 @st.dialog("📁 Case Details", width="large")
 def render_case_modal(case_num):
     case = cases_collection.find_one({"type": "cases", "case_number": case_num})
@@ -1365,7 +1414,7 @@ def render_case_modal(case_num):
             </div>
         </div>
         <div class="case-meta-col">
-            <small style="color:#5F6B7A; font-size:10px;">Priority</small><br>
+            <small style="color:#5F6B7A; font-size:10px;">Case Priority</small><br>
             <span class="badge {pri_badge_cls}" style="padding:2px 8px; font-size:11px;">{pri}</span>
         </div>
         <div class="case-meta-col">
@@ -1883,7 +1932,7 @@ HPE Operations Management"""
             st.rerun()
 
 # ==============================================================================
-# 8. TOP HEADER (1. Avoid refresh or reload when profile is clicked)
+# 8. TOP HEADER (Popover prevents rerun upon profile click)
 # ==============================================================================
 def render_top_header():
     user = st.session_state.get("current_user", {})
@@ -1895,7 +1944,7 @@ def render_top_header():
     unread_count = sum(1 for n in user_notifs if str(n.get("acknowledged", "false")).lower() in ["false", "0"])
 
     with st.container(key="hpe_top_bar_container"):
-        c_brand, c_search, c_bell, c_time, c_prof = st.columns([3.0, 4.0, 0.6, 1.8, 2.6])
+        c_brand, c_search, c_bell, c_prof = st.columns([3.0, 5.8, 0.6, 2.6])
 
         with c_brand:
             st.markdown("""
@@ -1911,7 +1960,6 @@ def render_top_header():
         with c_search:
             st.text_input("Global Search", placeholder="🔍 Search cases, names, issues...", label_visibility="collapsed")
 
-        # Notification Bell Popover
         with c_bell:
             with st.container(key="top_bell_popover"):
                 with st.popover(f"🔔 {unread_count}", help="Notifications"):
@@ -1942,84 +1990,72 @@ def render_top_header():
                     else:
                         st.info("No notifications received.")
 
-        with c_time:
-            pass # Removed date and time as instructed
-
         with c_prof:
             with st.container(key="top_profile_pill_btn"):
-                btn_label = f"👤 {user.get('name', 'Arianne Escabillas')} • {curr_aux} ▾"
-                if st.button(btn_label, key="btn_open_profile_top_right", use_container_width=True):
-                    st.session_state["show_profile_flyout"] = not st.session_state.get("show_profile_flyout", False)
-
-    if st.session_state.get("show_profile_flyout", False):
-        render_profile_flyout()
+                btn_label = f"👤 {user.get('name', 'Arianne')} • {curr_aux}"
+                with st.popover(btn_label, use_container_width=True):
+                    render_profile_flyout()
 
 # ==============================================================================
 # 9. PROFILE FLYOUT DROPDOWN
 # ==============================================================================
 def render_profile_flyout():
     user = st.session_state.get("current_user", {})
-    with st.container(key="profile_flyout_card"):
-        st.markdown('<div class="flyout-pointer"></div>', unsafe_allow_html=True)
-        c1, c2 = st.columns([5, 1])
-        with c2:
-            if st.button("✕", key="btn_close_prof_flyout"):
-                st.session_state["show_profile_flyout"] = False
+    
+    st.markdown(f"""
+    <div style="display:flex; gap:16px; align-items:center; margin-bottom:14px;">
+        <img src="{user.get('profile_picture', 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150')}" style="width:68px; height:68px; border-radius:50%; object-fit:cover; border:2.5px solid #00B388;" />
+        <div>
+            <h3 style="margin:0; font-size:18px; font-weight:800; color:#0F172A;">{user.get('name', 'Arianne Escabillas')}</h3>
+            <span style="background:#E6F7F3; color:#00B388; font-size:11px; font-weight:700; padding:2px 8px; border-radius:10px;">{user.get('role', 'Admin')}</span>
+            <p style="margin:4px 0 0 0; font-size:12px; color:#64748B;">{user.get('email', 'arianne.escabillas@hpe.com')}</p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-        st.markdown(f"""
-        <div style="display:flex; gap:16px; align-items:center; margin-bottom:14px;">
-            <img src="{user.get('profile_picture', 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150')}" style="width:68px; height:68px; border-radius:50%; object-fit:cover; border:2.5px solid #00B388;" />
-            <div>
-                <h3 style="margin:0; font-size:18px; font-weight:800; color:#0F172A;">{user.get('name', 'Arianne Escabillas')}</h3>
-                <span style="background:#E6F7F3; color:#00B388; font-size:11px; font-weight:700; padding:2px 8px; border-radius:10px;">{user.get('role', 'Admin')}</span>
-                <p style="margin:4px 0 0 0; font-size:12px; color:#64748B;">{user.get('email', 'arianne.escabillas@hpe.com')}</p>
-            </div>
+    st.markdown("<label style='font-size:12px; font-weight:700; color:#475569;'>Current Status / Aux (Real-Time Auto-Update)</label>", unsafe_allow_html=True)
+    
+    with st.container(key="profile_aux_wrapper"):
+        aux_list = ["Available", "Admin Work", "Not Ready - Online", "Coaching", "Meeting", "Lunch", "Break", "Unscheduled Break"]
+        curr_aux = user.get("current_aux", "Admin Work")
+        st.selectbox(
+            "Aux",
+            aux_list,
+            index=aux_list.index(curr_aux) if curr_aux in aux_list else 1,
+            key="flyout_aux_selector",
+            on_change=on_aux_dropdown_change,
+            label_visibility="collapsed"
+        )
+
+    st.markdown('<hr class="flyout-divider">', unsafe_allow_html=True)
+    
+    if user.get("role") != "Admin":
+        sc_h1, sc_h2 = st.columns([1.5, 1])
+        with sc_h1:
+            st.markdown("<strong style='font-size:13px; color:#0F172A;'>Today's Schedule</strong>", unsafe_allow_html=True)
+        with sc_h2:
+            st.markdown("<span style='font-size:11px; color:#64748B; float:right;'>Monday, Sep 28, 2026 📅</span>", unsafe_allow_html=True)
+
+        st.markdown("""
+        <div style="margin-top:6px;">
+            <div style="display:flex; justify-content:space-between; padding:5px 0; font-size:12px; border-bottom:1px solid #F8FAFC;"><span>🟢 08:00 AM – 10:00 AM</span> <strong style="color:#00B388;">Available</strong></div>
+            <div style="display:flex; justify-content:space-between; padding:5px 0; font-size:12px; border-bottom:1px solid #F8FAFC;"><span>⚪ 10:00 AM – 10:15 AM</span> <strong style="color:#94A3B8;">Break</strong></div>
+            <div style="display:flex; justify-content:space-between; padding:5px 0; font-size:12px; border-bottom:1px solid #F8FAFC;"><span>🟢 10:15 AM – 12:00 PM</span> <strong style="color:#00B388;">Available</strong></div>
+            <div style="display:flex; justify-content:space-between; padding:5px 0; font-size:12px; border-bottom:1px solid #F8FAFC;"><span>🟡 12:00 PM – 01:00 PM</span> <strong style="color:#D97706;">Lunch</strong></div>
+            <div style="display:flex; justify-content:space-between; padding:5px 0; font-size:12px; border-bottom:1px solid #F8FAFC;"><span>🟢 01:00 PM – 03:00 PM</span> <strong style="color:#00B388;">Available</strong></div>
+            <div style="display:flex; justify-content:space-between; padding:5px 0; font-size:12px; border-bottom:1px solid #F8FAFC;"><span>⚪ 03:00 PM – 03:15 PM</span> <strong style="color:#94A3B8;">Break</strong></div>
+            <div style="display:flex; justify-content:space-between; padding:5px 0; font-size:12px;"><span>🟢 03:15 PM – 05:00 PM</span> <strong style="color:#00B388;">Available</strong></div>
         </div>
         """, unsafe_allow_html=True)
-
-        st.markdown("<label style='font-size:12px; font-weight:700; color:#475569;'>Current Status / Aux (Real-Time Auto-Update)</label>", unsafe_allow_html=True)
-        
-        with st.container(key="profile_aux_wrapper"):
-            aux_list = ["Available", "Admin Work", "Not Ready - Online", "Coaching", "Meeting", "Lunch", "Break", "Unscheduled Break"]
-            curr_aux = user.get("current_aux", "Admin Work")
-            st.selectbox(
-                "Aux",
-                aux_list,
-                index=aux_list.index(curr_aux) if curr_aux in aux_list else 1,
-                key="flyout_aux_selector",
-                on_change=on_aux_dropdown_change,
-                label_visibility="collapsed"
-            )
-
         st.markdown('<hr class="flyout-divider">', unsafe_allow_html=True)
-        
-        if user.get("role") != "Admin":
-            sc_h1, sc_h2 = st.columns([1.5, 1])
-            with sc_h1:
-                st.markdown("<strong style='font-size:13px; color:#0F172A;'>Today's Schedule</strong>", unsafe_allow_html=True)
-            with sc_h2:
-                st.markdown("<span style='font-size:11px; color:#64748B; float:right;'>Monday, Sep 28, 2026 📅</span>", unsafe_allow_html=True)
 
-            st.markdown("""
-            <div style="margin-top:6px;">
-                <div style="display:flex; justify-content:space-between; padding:5px 0; font-size:12px; border-bottom:1px solid #F8FAFC;"><span>🟢 08:00 AM – 10:00 AM</span> <strong style="color:#00B388;">Available</strong></div>
-                <div style="display:flex; justify-content:space-between; padding:5px 0; font-size:12px; border-bottom:1px solid #F8FAFC;"><span>⚪ 10:00 AM – 10:15 AM</span> <strong style="color:#94A3B8;">Break</strong></div>
-                <div style="display:flex; justify-content:space-between; padding:5px 0; font-size:12px; border-bottom:1px solid #F8FAFC;"><span>🟢 10:15 AM – 12:00 PM</span> <strong style="color:#00B388;">Available</strong></div>
-                <div style="display:flex; justify-content:space-between; padding:5px 0; font-size:12px; border-bottom:1px solid #F8FAFC;"><span>🟡 12:00 PM – 01:00 PM</span> <strong style="color:#D97706;">Lunch</strong></div>
-                <div style="display:flex; justify-content:space-between; padding:5px 0; font-size:12px; border-bottom:1px solid #F8FAFC;"><span>🟢 01:00 PM – 03:00 PM</span> <strong style="color:#00B388;">Available</strong></div>
-                <div style="display:flex; justify-content:space-between; padding:5px 0; font-size:12px; border-bottom:1px solid #F8FAFC;"><span>⚪ 03:00 PM – 03:15 PM</span> <strong style="color:#94A3B8;">Break</strong></div>
-                <div style="display:flex; justify-content:space-between; padding:5px 0; font-size:12px;"><span>🟢 03:15 PM – 05:00 PM</span> <strong style="color:#00B388;">Available</strong></div>
-            </div>
-            """, unsafe_allow_html=True)
-            st.markdown('<hr class="flyout-divider">', unsafe_allow_html=True)
-
-        act1, act2 = st.columns(2)
-        with act1:
-            if st.button("🔒 Change Password", key="flyout_change_pw", use_container_width=True):
-                st.info("Password self-service active via HPE SSO.")
-        with act2:
-            if st.button("🚪 Sign Out", key="flyout_logout_btn", type="secondary", use_container_width=True):
-                logout_user()
+    act1, act2 = st.columns(2)
+    with act1:
+        if st.button("🔒 Change Password", key="flyout_change_pw", use_container_width=True):
+            st.info("Password self-service active via HPE SSO.")
+    with act2:
+        if st.button("🚪 Sign Out", key="flyout_logout_btn", type="secondary", use_container_width=True):
+            logout_user()
 
 # ==============================================================================
 # 10. ADMIN BROADCAST DIALOG
@@ -2048,7 +2084,7 @@ def render_admin_message_dialog():
         st.rerun()
 
 # ==============================================================================
-# 11. DASHBOARD ROUTER (Optimized with @st.fragment for Speed & Smoothness)
+# 11. DASHBOARD ROUTER
 # ==============================================================================
 @st.fragment
 def render_dashboard():
@@ -2070,13 +2106,14 @@ def render_dashboard():
         q_base["assignee_email"] = user.get("email")
 
     all_base_cases = list(cases_collection.find(q_base))
-    for c in all_base_cases:
-        c["priority"] = calculate_dynamic_priority(c.get("due_date"))
 
-    dashboard_filter = st.session_state.get("dashboard_filter", "Active")
+    for c in all_base_cases:
+        if c.get("status") != "Closed":
+            c["priority"] = calculate_dynamic_priority(c.get("due_date"))
 
     total_active = sum(1 for c in all_base_cases if c.get("status") != "Closed")
-    total_critical = sum(1 for c in all_base_cases if c.get("priority") in ["Critical", "Breached"] and c.get("status") != "Closed")
+    total_breached = sum(1 for c in all_base_cases if c.get("priority") == "Breached" and c.get("status") != "Closed")
+    total_critical = sum(1 for c in all_base_cases if c.get("priority") == "Critical" and c.get("status") != "Closed")
     total_due_soon = sum(1 for c in all_base_cases if c.get("priority") == "High" and c.get("status") != "Closed")
     total_on_track = sum(1 for c in all_base_cases if c.get("priority") in ["Medium", "Low"] and c.get("status") != "Closed")
 
@@ -2096,78 +2133,102 @@ def render_dashboard():
                         btn_kind_adm = "primary" if is_adm_active else "secondary"
                         if st.button("Admin View", key="btn_tile_admin_view", type=btn_kind_adm, use_container_width=True):
                             st.session_state["view_mode"] = "Admin"
+                            st.rerun()
                     with t_col2:
                         is_agt_active = (st.session_state["view_mode"] == "Agent")
                         btn_kind_agt = "primary" if is_agt_active else "secondary"
                         if st.button("Agent View", key="btn_tile_agent_view", type=btn_kind_agt, use_container_width=True):
                             st.session_state["view_mode"] = "Agent"
+                            st.rerun()
                 st.markdown("</div>", unsafe_allow_html=True)
 
-        mc1, mc2, mc3, mc4 = st.columns(4)
+        mc1, mc2, mc3, mc4, mc5 = st.columns(5)
+        
         with mc1:
-            with st.container(key="card_col_1"):
-                st.markdown(f"""
-                <div class="metric-card-box metric-card-box-active">
-                    <div class="metric-circle-icon" style="background:#E0F2FE; color:#0284C7;">📁</div>
-                    <div style="flex:1; min-width:0; overflow:hidden;">
-                        <p class="metric-card-label">{'Active Cases' if is_admin_mode else 'My Active Cases'}</p>
-                        <h3 class="metric-card-val">{total_active}</h3>
-                        <p class="metric-card-trend" style="color:#0284C7;">↑ +5% <span style="font-weight:400; color:#64748B;">vs last week</span></p>
-                    </div>
+            st.markdown('<div class="tile-btn-wrapper">', unsafe_allow_html=True)
+            if st.button(" ", key="btn_tile_active"):
+                show_cases_popup("Active Cases", [c for c in all_base_cases if c.get("status") != "Closed"])
+            st.markdown(f"""
+            <div class="metric-card-box metric-card-box-active">
+                <div class="metric-circle-icon" style="background:#E0F2FE; color:#0284C7;">📁</div>
+                <div style="flex:1; min-width:0; overflow:hidden;">
+                    <p class="metric-card-label">Active</p>
+                    <h3 class="metric-card-val">{total_active}</h3>
+                    <p class="metric-card-trend" style="color:#0284C7;">↑ +5% <span style="font-weight:400; color:#64748B;">vs last week</span></p>
                 </div>
-                """, unsafe_allow_html=True)
-                if st.button("tile_active", key="btn_tile_active", help="Filter by Active Cases"):
-                    st.session_state["dashboard_filter"] = "Active"
+            </div>
+            """, unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
         with mc2:
-            with st.container(key="card_col_2"):
-                st.markdown(f"""
-                <div class="metric-card-box metric-card-box-critical">
-                    <div class="metric-circle-icon" style="background:#FEE2E2; color:#DC2626;">⚠️</div>
-                    <div style="flex:1; min-width:0; overflow:hidden;">
-                        <p class="metric-card-label">{'Critical Cases' if is_admin_mode else 'My Critical Cases'}</p>
-                        <h3 class="metric-card-val">{total_critical}</h3>
-                        <p class="metric-card-trend" style="color:#DC2626;">↑ +2 <span style="font-weight:400; color:#64748B;">vs last week</span></p>
-                    </div>
+            st.markdown('<div class="tile-btn-wrapper">', unsafe_allow_html=True)
+            if st.button(" ", key="btn_tile_breached"):
+                show_cases_popup("Breached Cases", [c for c in all_base_cases if c.get("priority") == "Breached" and c.get("status") != "Closed"])
+            st.markdown(f"""
+            <div class="metric-card-box metric-card-box-breached">
+                <div class="metric-circle-icon" style="background:#7F1D1D20; color:#7F1D1D;">❌</div>
+                <div style="flex:1; min-width:0; overflow:hidden;">
+                    <p class="metric-card-label">Breached</p>
+                    <h3 class="metric-card-val" style="color:#7F1D1D;">{total_breached}</h3>
+                    <p class="metric-card-trend" style="color:#7F1D1D;">↑ +1 <span style="font-weight:400; color:#64748B;">vs last week</span></p>
                 </div>
-                """, unsafe_allow_html=True)
-                if st.button("tile_critical", key="btn_tile_critical", help="Filter by Critical Cases"):
-                    st.session_state["dashboard_filter"] = "Critical"
+            </div>
+            """, unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
         with mc3:
-            with st.container(key="card_col_3"):
-                st.markdown(f"""
-                <div class="metric-card-box metric-card-box-duesoon">
-                    <div class="metric-circle-icon" style="background:#FEF3C7; color:#D97706;">⏰</div>
-                    <div style="flex:1; min-width:0; overflow:hidden;">
-                        <p class="metric-card-label">Due Soon</p>
-                        <h3 class="metric-card-val">{total_due_soon}</h3>
-                        <p class="metric-card-trend" style="color:#D97706;">↑ +3 <span style="font-weight:400; color:#64748B;">vs last week</span></p>
-                    </div>
+            st.markdown('<div class="tile-btn-wrapper">', unsafe_allow_html=True)
+            if st.button(" ", key="btn_tile_critical"):
+                show_cases_popup("Critical Cases", [c for c in all_base_cases if c.get("priority") == "Critical" and c.get("status") != "Closed"])
+            st.markdown(f"""
+            <div class="metric-card-box metric-card-box-critical">
+                <div class="metric-circle-icon" style="background:#FEE2E2; color:#DC2626;">⚠️</div>
+                <div style="flex:1; min-width:0; overflow:hidden;">
+                    <p class="metric-card-label">Critical</p>
+                    <h3 class="metric-card-val">{total_critical}</h3>
+                    <p class="metric-card-trend" style="color:#DC2626;">↑ +2 <span style="font-weight:400; color:#64748B;">vs last week</span></p>
                 </div>
-                """, unsafe_allow_html=True)
-                if st.button("tile_duesoon", key="btn_tile_duesoon", help="Filter by Due Soon"):
-                    st.session_state["dashboard_filter"] = "Due Soon"
+            </div>
+            """, unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
         with mc4:
-            with st.container(key="card_col_4"):
-                st.markdown(f"""
-                <div class="metric-card-box metric-card-box-ontrack">
-                    <div class="metric-circle-icon" style="background:#DCFCE7; color:#16A34A;">✅</div>
-                    <div style="flex:1; min-width:0; overflow:hidden;">
-                        <p class="metric-card-label">On Track</p>
-                        <h3 class="metric-card-val">{total_on_track}</h3>
-                        <p class="metric-card-trend" style="color:#16A34A;">↑ +10% <span style="font-weight:400; color:#64748B;">vs last week</span></p>
-                    </div>
+            st.markdown('<div class="tile-btn-wrapper">', unsafe_allow_html=True)
+            if st.button(" ", key="btn_tile_duesoon"):
+                show_cases_popup("Due Soon Cases", [c for c in all_base_cases if c.get("priority") == "High" and c.get("status") != "Closed"])
+            st.markdown(f"""
+            <div class="metric-card-box metric-card-box-duesoon">
+                <div class="metric-circle-icon" style="background:#FEF3C7; color:#D97706;">⏰</div>
+                <div style="flex:1; min-width:0; overflow:hidden;">
+                    <p class="metric-card-label">Due Soon</p>
+                    <h3 class="metric-card-val">{total_due_soon}</h3>
+                    <p class="metric-card-trend" style="color:#D97706;">↑ +3 <span style="font-weight:400; color:#64748B;">vs last week</span></p>
                 </div>
-                """, unsafe_allow_html=True)
-                if st.button("tile_ontrack", key="btn_tile_ontrack", help="Filter by On Track"):
-                    st.session_state["dashboard_filter"] = "On Track"
+            </div>
+            """, unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        with mc5:
+            st.markdown('<div class="tile-btn-wrapper">', unsafe_allow_html=True)
+            if st.button(" ", key="btn_tile_ontrack"):
+                show_cases_popup("On Track Cases", [c for c in all_base_cases if c.get("priority") in ["Medium", "Low"] and c.get("status") != "Closed"])
+            st.markdown(f"""
+            <div class="metric-card-box metric-card-box-ontrack">
+                <div class="metric-circle-icon" style="background:#DCFCE7; color:#16A34A;">✅</div>
+                <div style="flex:1; min-width:0; overflow:hidden;">
+                    <p class="metric-card-label">On Track</p>
+                    <h3 class="metric-card-val">{total_on_track}</h3>
+                    <p class="metric-card-trend" style="color:#16A34A;">↑ +10% <span style="font-weight:400; color:#64748B;">vs last week</span></p>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
 
         st.markdown("<div style='height:14px;'></div>", unsafe_allow_html=True)
 
         t_head, t_act = st.columns([1.5, 2.5])
         with t_head:
             heading = "Active Cases" if is_admin_mode else "My Cases"
-            if dashboard_filter != "Active": heading = f"{dashboard_filter} Cases"
-            
             st.markdown(f"""
             <div style="display:flex; align-items:center; gap:10px; margin-top:4px;">
                 <h2 style="font-size:22px; font-weight:800; color:#0F172A; margin:0;">{heading}</h2>
@@ -2177,7 +2238,7 @@ def render_dashboard():
             with st.container(key="action_toolbar_container"):
                 a1, a2, a3, a4, a5 = st.columns([1.1, 1.2, 1.5, 1.1, 0.5])
                 with a1:
-                    st.checkbox("Select All", key="chk_sel_all")
+                    st.markdown('<div style="padding-top:6px;"><label style="font-size:14px; font-weight:500; color:#17233C; display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" style="cursor:pointer; transform:scale(1.1);"> Select All</label></div>', unsafe_allow_html=True)
                 with a2:
                     if st.button("🔄 Reassign", key="btn_tb_reassign", use_container_width=True):
                         st.toast("Multi-case reassignment enabled.")
@@ -2204,26 +2265,20 @@ def render_dashboard():
 
         st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
 
-        with st.container(key="table_header_container"):
-            hc1, hc2, hc3, hc4, hc5, hc6, hc7, hc8, hc9 = st.columns([0.35, 1.4, 2.7, 1.05, 1.5, 1.5, 1.3, 1.4, 0.8], gap="small")
-            with hc1: st.markdown("<span class='th-cell'>☐</span>", unsafe_allow_html=True)
-            with hc2: st.markdown("<span class='th-cell'>Case # ⇅</span>", unsafe_allow_html=True)
-            with hc3: st.markdown("<span class='th-cell'>Subject</span>", unsafe_allow_html=True)
-            with hc4: st.markdown("<span class='th-cell'>Priority ⇅</span>", unsafe_allow_html=True)
-            with hc5: st.markdown("<span class='th-cell'>Assigned To ⇅</span>", unsafe_allow_html=True)
-            with hc6: st.markdown("<span class='th-cell'>Due Date ⇅</span>", unsafe_allow_html=True)
-            with hc7: st.markdown("<span class='th-cell'>Current Status ⇅</span>", unsafe_allow_html=True)
-            with hc8: st.markdown("<span class='th-cell'>Last Update ⇅</span>", unsafe_allow_html=True)
-            with hc9: st.markdown("<span class='th-cell'>Actions</span>", unsafe_allow_html=True)
+        st.markdown('<div class="table-header-wrapper">', unsafe_allow_html=True)
+        hc1, hc2, hc3, hc4, hc5, hc6, hc7, hc8, hc9 = st.columns([0.35, 1.4, 2.7, 1.05, 1.5, 1.5, 1.3, 1.4, 0.8], gap="small")
+        with hc1: st.markdown('<span class="th-cell" style="display:flex; justify-content:center;">☐</span>', unsafe_allow_html=True)
+        with hc2: st.markdown('<span class="th-cell">Case # ⇅</span>', unsafe_allow_html=True)
+        with hc3: st.markdown('<span class="th-cell">Subject</span>', unsafe_allow_html=True)
+        with hc4: st.markdown('<span class="th-cell">Case Priority ⇅</span>', unsafe_allow_html=True)
+        with hc5: st.markdown('<span class="th-cell">Assigned To ⇅</span>', unsafe_allow_html=True)
+        with hc6: st.markdown('<span class="th-cell">Due Date ⇅</span>', unsafe_allow_html=True)
+        with hc7: st.markdown('<span class="th-cell">Current Status ⇅</span>', unsafe_allow_html=True)
+        with hc8: st.markdown('<span class="th-cell">Last Update ⇅</span>', unsafe_allow_html=True)
+        with hc9: st.markdown('<span class="th-cell" style="display:flex; justify-content:center;">Actions</span>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
         filtered_cases = all_base_cases
-        
-        if dashboard_filter == "Critical":
-            filtered_cases = [c for c in filtered_cases if c.get("priority") in ["Critical", "Breached"]]
-        elif dashboard_filter == "Due Soon":
-            filtered_cases = [c for c in filtered_cases if c.get("priority") == "High"]
-        elif dashboard_filter == "On Track":
-            filtered_cases = [c for c in filtered_cases if c.get("priority") in ["Medium", "Low"]]
             
         if pri_filter != "All Priorities":
             filtered_cases = [c for c in filtered_cases if c.get("priority") == pri_filter]
@@ -2261,7 +2316,7 @@ def render_dashboard():
 
             rc1, rc2, rc3, rc4, rc5, rc6, rc7, rc8, rc9 = st.columns([0.35, 1.4, 2.7, 1.05, 1.5, 1.5, 1.3, 1.4, 0.8], gap="small")
             with rc1:
-                st.checkbox("", key=f"chk_c_{c['case_number']}_{'adm' if is_admin_mode else 'agt'}", label_visibility="collapsed")
+                st.markdown(f'<div style="text-align:center; padding-top:4px;"><input type="checkbox" style="cursor:pointer; transform:scale(1.2);"></div>', unsafe_allow_html=True)
             with rc2:
                 if st.button(f"{c['case_number']}", key=f"btn_case_{c['case_number']}_{'adm' if is_admin_mode else 'agt'}"):
                     render_case_modal(c["case_number"])
@@ -2331,7 +2386,7 @@ def render_dashboard():
 
         p_info, p_btns = st.columns([1, 1])
         with p_info:
-            st.caption(f"Showing 1 - {len(filtered_cases)} of {len(filtered_cases)} cases")
+            st.caption(f"Showing 1 - {len(filtered_cases)} of {total_active} cases")
         with p_btns:
             st.markdown("""
             <div style="display:flex; justify-content:flex-end; gap:6px; align-items:center;">
@@ -2595,6 +2650,59 @@ def render_report():
 def render_settings():
     st.markdown("### ⚙️ Enterprise Configuration & Master Registry")
     
+    user = st.session_state.get("current_user", {})
+    if "demo" in user.get("email", "").lower():
+        st.markdown("#### 🚀 Demo Account Tools (Simulations)")
+        d_col1, d_col2 = st.columns(2)
+        with d_col1:
+            if st.button("🔔 Trigger Demo Alert Simulation", type="primary", use_container_width=True):
+                notif_doc = collection.find_one({"type": "notifications"}) or {}
+                n_list = notif_doc.get("Data", [])
+                n_list.append({
+                    "id": str(uuid.uuid4()),
+                    "target_email": user.get("email"),
+                    "title": "Simulated Alert Notice",
+                    "message": "This is a manually triggered simulation alert for demo purposes.",
+                    "category": "critical",
+                    "acknowledged": "false",
+                    "created_at": get_current_ph_time().strftime("%I:%M %p")
+                })
+                collection.update_one({"type": "notifications"}, {"$set": {"Data": n_list}}, upsert=True)
+                st.success("Alert simulation triggered successfully!")
+                time.sleep(0.5)
+                st.rerun()
+
+        with d_col2:
+            if st.button("📥 Trigger Auto Case Assignment Simulation", type="primary", use_container_width=True):
+                new_num = f"SIM-{uuid.uuid4().hex[:4].upper()}"
+                sim_case = {
+                    "type": "cases",
+                    "case_number": new_num,
+                    "subject": "Manual Triggered Simulation Case",
+                    "priority": "Critical",
+                    "status": "In Progress",
+                    "status_reason": "Investigation",
+                    "due_date": (get_current_ph_time() + timedelta(hours=12)).strftime("%b %d, %Y %I:%M %p"),
+                    "created_at": get_current_ph_time().strftime("%b %d, %Y %I:%M %p"),
+                    "last_update": get_current_ph_time().strftime("%b %d, %Y %I:%M %p"),
+                    "case_category": "Hardware",
+                    "vendor_name": "ABC Software Inc.",
+                    "vendor_id": "VEND-ABC-019",
+                    "vendor_contact": "Michael Tan",
+                    "vendor_email": "support@abcsoftware.com",
+                    "vendor_phone": "+1 555 123 4567",
+                    "account": "Enterprise Demo",
+                    "related_system": "HPE Pointnext",
+                    "history": [],
+                    "communications": [],
+                    "attachments": []
+                }
+                auto_assign_new_case(sim_case)
+                st.success("Case assignment simulation triggered successfully!")
+                time.sleep(0.5)
+                st.rerun()
+        st.divider()
+    
     set_t1, set_t2, set_t3 = st.tabs(["👥 Team Roster Management", "🗄️ Validation Dropdowns", "📥 Vendor & Case Excel Sync"])
 
     with set_t1:
@@ -2686,7 +2794,7 @@ def render_settings():
                 st.error(f"Error parsing Cases Excel file: {e}")
 
 # ==============================================================================
-# 15. AUTHENTICATION PAGES (SIGN-IN & SIGN-UP) - WITH DEMO ACCOUNT SIMULATION
+# 15. AUTHENTICATION PAGES (SIGN-IN & SIGN-UP)
 # ==============================================================================
 def render_auth_page():
     auth_mode = st.session_state.get("auth_mode", "Sign In")
