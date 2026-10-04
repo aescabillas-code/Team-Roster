@@ -2472,7 +2472,7 @@ def dashboard_fragment():
                     # the widget interaction.
                     st.session_state["selected_station"] = station
                     selected = station
-                    st.rerun(scope="fragment")
+                    st.rerun()
 
     st.markdown(
         "<div style='height:10px'></div>",
