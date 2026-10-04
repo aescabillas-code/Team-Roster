@@ -31,7 +31,7 @@ Required secrets:
     ADMIN_PIN = "..."
 
 Optional:
-    APP_NAME = "Tasks Monitoring Tracker"
+    APP_NAME = "HPE Caseflow"
 
 Install:
     pip install streamlit pymongo pandas openpyxl
@@ -56,7 +56,7 @@ from pymongo.errors import PyMongoError
 # ============================================================
 
 st.set_page_config(
-    page_title="Tasks Monitoring Tracker",
+    page_title="HPE Caseflow",
     page_icon="⏱️",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -69,7 +69,7 @@ st.set_page_config(
 
 APP_NAME = st.secrets.get(
     "APP_NAME",
-    "Tasks Monitoring Tracker",
+    "HPE Caseflow",
 )
 
 DB_NAME = "TeamRoster"
@@ -370,7 +370,7 @@ def access_gate():
 
         <div class="access-wrap">
             <div class="access-mark">▣</div>
-            <div class="access-title">Tasks Monitoring Tracker</div>
+            <div class="access-title">HPE Caseflow</div>
             <div class="access-sub">
                 Enter the one-time access code to continue.
             </div>
@@ -570,31 +570,45 @@ st.markdown(
         border:1px solid transparent;
     }
 
-    /* Buttons become the clickable tile surface. */
+    /* Click layer: the visual HTML card remains the tile.
+       The Streamlit button is absolutely positioned over it so
+       there is NO extra button box underneath the tile. */
+    [class*="st-key-station_wrap_"] {
+        position:relative !important;
+        min-height:145px !important;
+    }
 
-    .station-btn button {
-        width:100%;
-        min-height:145px;
+    [class*="st-key-station_wrap_"] .stButton {
+        position:absolute !important;
+        inset:0 !important;
+        z-index:20 !important;
+        margin:0 !important;
+        padding:0 !important;
+        height:145px !important;
+    }
+
+    [class*="st-key-station_wrap_"] .stButton > button {
+        width:100% !important;
+        height:145px !important;
+        min-height:145px !important;
+        margin:0 !important;
+        padding:0 !important;
+        border:0 !important;
         border-radius:13px !important;
-        border:1px solid #e1e6ee !important;
-        background:#fff !important;
-        color:#132541 !important;
+        background:transparent !important;
+        color:transparent !important;
         box-shadow:none !important;
-        text-align:left !important;
-        white-space:pre-wrap !important;
-        font-size:15px !important;
-        font-weight:700 !important;
-        padding:18px !important;
+        opacity:0 !important;
+        cursor:pointer !important;
     }
 
-    .station-btn button:hover {
-        border-color:#8c98aa !important;
-        transform:translateY(-1px);
-    }
-
-    .station-critical button {
-        border:2px solid #ef334f !important;
-        animation:stationFlash .85s infinite alternate;
+    [class*="st-key-station_wrap_"] .stButton > button:hover,
+    [class*="st-key-station_wrap_"] .stButton > button:focus {
+        border:0 !important;
+        box-shadow:none !important;
+        background:transparent !important;
+        color:transparent !important;
+        outline:none !important;
     }
 
     @keyframes stationFlash {
@@ -740,6 +754,8 @@ st.markdown(
     .station-card-visual.supply { background:linear-gradient(135deg,#f7f0ff,#eee5ff); }
     .station-card-visual.onsite { background:linear-gradient(135deg,#fff9e8,#fff3cf); }
     .station-card-visual.critical { animation:stationFlash .85s infinite alternate; }
+    .station-card-visual { cursor:pointer; transition:transform .12s ease, box-shadow .12s ease; }
+    .station-card-visual:hover { transform:translateY(-1px); box-shadow:0 7px 18px rgba(29,55,96,.08); }
     .station-icon-circle { width:68px;height:68px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:31px;position:absolute;left:22px;top:18px; }
     .care .station-icon-circle { background:#ffd9df;color:#df1737; }
     .arch .station-icon-circle { background:#bfeaff;color:#0877bf; }
@@ -757,7 +773,47 @@ st.markdown(
     .station-sla-ref strong { color:#152645;font-size:13px; }
     .station-warning { position:absolute;left:18px;bottom:17px;color:#df1737;font-weight:800;font-size:12px; }
     .station-warning + .station-sla-ref { bottom:0; }
-    .station-click button { height:145px !important;min-height:145px !important;width:100% !important;margin-top:-145px !important;opacity:0 !important;border:0 !important;background:transparent !important;box-shadow:none !important;cursor:pointer !important;position:relative !important;z-index:5 !important; }
+    /* Invisible click target layered over each visual station card.
+       The visual card itself remains pure HTML/CSS, so Streamlit does not
+       replace it with a text button. */
+    [class*="st-key-station_wrap_"] {
+        position:relative !important;
+        min-height:145px !important;
+    }
+    [class*="st-key-station_wrap_"] .stButton,
+    [class*="st-key-station_wrap_"] [data-testid="stButton"] {
+        position:absolute !important;
+        inset:0 !important;
+        height:145px !important;
+        min-height:145px !important;
+        z-index:20 !important;
+        margin:0 !important;
+        padding:0 !important;
+    }
+    [class*="st-key-station_wrap_"] .stButton > button,
+    [class*="st-key-station_wrap_"] [data-testid="stButton"] button {
+        width:100% !important;
+        height:145px !important;
+        min-height:145px !important;
+        margin:0 !important;
+        padding:0 !important;
+        opacity:0 !important;
+        border:0 !important;
+        background:transparent !important;
+        box-shadow:none !important;
+        color:transparent !important;
+        cursor:pointer !important;
+    }
+    [class*="st-key-station_wrap_"] .stButton > button:hover,
+    [class*="st-key-station_wrap_"] .stButton > button:focus,
+    [class*="st-key-station_wrap_"] .stButton > button:active,
+    [class*="st-key-station_wrap_"] [data-testid="stButton"] button:hover,
+    [class*="st-key-station_wrap_"] [data-testid="stButton"] button:focus,
+    [class*="st-key-station_wrap_"] [data-testid="stButton"] button:active {
+        border:0 !important;
+        background:transparent !important;
+        box-shadow:none !important;
+    }
 
     /* REFERENCE TABLE PANEL */
     .cases-panel { background:#fff;border-radius:18px;padding:16px 12px 18px;box-shadow:0 3px 18px rgba(29,55,96,.05); }
@@ -1025,13 +1081,55 @@ MOCK_ACCOUNTS = [
     "Acme Corporation",
 ]
 
+# Increment this when the structure/timing of demonstration cases changes.
+MOCK_DATA_VERSION = 2
+
 
 def seed_mock_cases(force=False):
     existing = col(TASKS_COLLECTION).count_documents(
         {"is_mock": True}
     )
 
+    # One-time migration for mock data created by an earlier version.
+    # This resets demonstration durations to 00:00:00 without doing so
+    # again on every normal Streamlit rerun.
     if existing and not force:
+        needs_reset = col(TASKS_COLLECTION).count_documents({
+            "is_mock": True,
+            "mock_data_version": {"$ne": MOCK_DATA_VERSION},
+            "case_number": {"$not": {"$regex": "^SIM-"}},
+        })
+
+        if needs_reset:
+            reset_now = utc_now()
+            reset_docs = col(TASKS_COLLECTION).find({
+                "is_mock": True,
+                "mock_data_version": {"$ne": MOCK_DATA_VERSION},
+                "case_number": {"$not": {"$regex": "^SIM-"}},
+            })
+
+            for old_task in reset_docs:
+                department = station_name(
+                    old_task.get("department")
+                )
+                sla_minutes = STATIONS.get(
+                    department,
+                    STATIONS["CARE"],
+                )["sla_minutes"]
+
+                col(TASKS_COLLECTION).update_one(
+                    {"_id": old_task["_id"]},
+                    {"$set": {
+                        "created_at": reset_now,
+                        "station_started_at": reset_now,
+                        "due_date": reset_now + timedelta(
+                            minutes=sla_minutes
+                        ),
+                        "last_update": reset_now,
+                        "mock_data_version": MOCK_DATA_VERSION,
+                    }},
+                )
+
         return existing
 
     if force:
@@ -1047,54 +1145,27 @@ def seed_mock_cases(force=False):
     for station, config in STATIONS.items():
 
         subjects = MOCK_SUBJECTS[station]
+        target_count = {
+            "CARE": 12,
+            "ARCH": 8,
+            "PET": 6,
+            "SUPPLY CHAIN": 5,
+            "ONSITE": 4,
+        }[station]
 
-        for i in range(5):
+        for i in range(target_count):
 
-            subject = subjects[i]
-            account = MOCK_ACCOUNTS[i]
+            subject = subjects[i % len(subjects)]
+            account = MOCK_ACCOUNTS[i % len(MOCK_ACCOUNTS)]
 
-            # Deliberately varied durations:
-            # row 1 = critical/nearing due
-            # row 2 = medium
-            # row 3 = low
-            # row 4 = low
-            # row 5 = priority account
-            if i == 0:
-                elapsed_minutes = max(
-                    1,
-                    config["sla_minutes"] * 0.88
-                )
-            elif i == 1:
-                elapsed_minutes = max(
-                    1,
-                    config["sla_minutes"] * 0.58
-                )
-            elif i == 2:
-                elapsed_minutes = max(
-                    1,
-                    config["sla_minutes"] * 0.30
-                )
-            elif i == 3:
-                elapsed_minutes = max(
-                    1,
-                    config["sla_minutes"] * 0.10
-                )
-            else:
-                elapsed_minutes = max(
-                    1,
-                    config["sla_minutes"] * 0.20
-                )
-
+            # Mock cases intentionally start at zero duration.
+            # The browser timer then increments from 00:00:00.
+            # Priority-account behavior is still preserved for alert/status testing.
             priority_account = (
-                i == 4
+                i == 0
             )
 
-            started = (
-                now -
-                timedelta(
-                    minutes=elapsed_minutes
-                )
-            )
+            started = now
 
             due = (
                 started +
@@ -1122,7 +1193,7 @@ def seed_mock_cases(force=False):
                     else "No"
                 ),
                 "assigned_to": MOCK_NAMES[
-                    i
+                    i % len(MOCK_NAMES)
                 ],
                 "department": station,
                 "account_name": account,
@@ -1148,6 +1219,7 @@ def seed_mock_cases(force=False):
                 "notes": "Mock demonstration case.",
                 "active": True,
                 "is_mock": True,
+                "mock_data_version": MOCK_DATA_VERSION,
                 "history": [
                     {
                         "action": (
@@ -1493,7 +1565,7 @@ with header_cols[0]:
                     <path d="M6 25v9l18 10 18-10v-9L24 35 6 25Z" fill="#4a30cf"/>
                 </svg>
             </div>
-            <div class="brand-name">Tasks Monitoring Tracker</div>
+            <div class="brand-name">HPE Caseflow</div>
             <div class="brand-divider"></div>
             <div class="top-nav">
                 <span>Track</span><span>•</span><span>Manage</span><span>•</span><span>Resolve</span>
@@ -2342,28 +2414,31 @@ def dashboard_fragment():
             warning_html = f'<div class="station-warning">◷ &nbsp; {nearing} nearing due</div>' if nearing else ""
             sla_bottom = "bottom:0px;" if nearing else "bottom:15px;"
             critical_class = "critical" if critical else ""
-            st.markdown(
-                f"""
-                <div class="station-card-visual {slug} {critical_class}">
-                    <div class="station-icon-circle">{html.escape(icon)}</div>
-                    <div class="station-copy">
-                        <div class="station-card-title">{html.escape(station)}</div>
-                        <div class="station-count-line"><span class="station-count">{len(station_tasks)}</span><span class="station-active">Active Cases</span></div>
+
+            # Keep the visual card and its invisible Streamlit click target
+            # inside the same keyed container. This prevents Streamlit from
+            # rendering a plain text button in place of the card.
+            with st.container(key=f"station_wrap_{slug}"):
+                st.markdown(
+                    f"""
+                    <div class="station-card-visual {slug} {critical_class}">
+                        <div class="station-icon-circle">{html.escape(icon)}</div>
+                        <div class="station-copy">
+                            <div class="station-card-title">{html.escape(station)}</div>
+                            <div class="station-count-line"><span class="station-count">{len(station_tasks)}</span><span class="station-active">Active Cases</span></div>
+                        </div>
+                        <div class="station-arrow">›</div>
+                        {warning_html}
+                        <div class="station-sla-ref" style="{sla_bottom}">◷ &nbsp; Max Timeframe: <strong>{sla_text}</strong></div>
                     </div>
-                    <div class="station-arrow">›</div>
-                    {warning_html}
-                    <div class="station-sla-ref" style="{sla_bottom}">◷ &nbsp; Max Timeframe: <strong>{sla_text}</strong></div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            st.markdown('<div class="station-click">', unsafe_allow_html=True)
-            if st.button(" ", key=f"station_{station}", use_container_width=True):
-                if critical:
-                    acknowledge_station_alerts(station)
-                st.session_state["selected_station"] = station
-                st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
+                    """,
+                    unsafe_allow_html=True,
+                )
+                if st.button("", key=f"station_{station}", use_container_width=True):
+                    if critical:
+                        acknowledge_station_alerts(station)
+                    st.session_state["selected_station"] = station
+                    st.rerun()
 
     st.markdown(
         "<div style='height:10px'></div>",
