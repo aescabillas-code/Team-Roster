@@ -69,7 +69,7 @@ st.set_page_config(
 
 APP_NAME = st.secrets.get(
     "APP_NAME",
-    "Tasks Monitoring Tracker",
+    "HPE Caseflow",
 )
 
 DB_NAME = "TeamRoster"
@@ -575,8 +575,9 @@ st.markdown(
     .supply .station-count { color:#5d2ac9; }
     .onsite .station-count { color:#c98700; }
     .station-arrow { position:absolute; right:20px; top:31px; font-size:29px; font-weight:300; color:#30466b; }
-    .station-warning { position:absolute; left:24px; bottom:39px; font-size:14px; font-weight:750; color:#d33a4e; }
-    .arch .station-warning, .pet .station-warning, .supply .station-warning, .onsite .station-warning { color:#53637f; }
+    .station-warning { position:absolute; left:24px; bottom:39px; font-size:14px; font-weight:750; color:#53637f; }
+    .station-warning.active { color:#d33a4e; }
+    .arch .station-warning.active, .pet .station-warning.active, .supply .station-warning.active, .onsite .station-warning.active { color:#53637f; }
     .station-sla-ref { position:absolute; left:24px; bottom:17px; font-size:14px; color:#53637f; }
     .station-sla-ref strong { color:#102041; }
     /* Make the real button transparent and stretch it over the card. */
@@ -656,6 +657,45 @@ st.markdown(
     .case-button button:hover {
         color:#6c4cff !important;
         text-decoration:underline;
+    }
+
+    /* Case number is a compact cell button that stays inside its table row. */
+    [class*="st-key-case_cell_"] {
+        min-width:0 !important;
+        width:100% !important;
+        min-height:30px !important;
+        height:30px !important;
+        display:flex !important;
+        align-items:center !important;
+    }
+    [class*="st-key-case_cell_"] > div {
+        width:100% !important;
+        min-width:0 !important;
+    }
+    [class*="st-key-case_cell_"] button {
+        width:100% !important;
+        min-width:0 !important;
+        max-width:100% !important;
+        height:30px !important;
+        min-height:30px !important;
+        padding:4px 8px !important;
+        margin:0 !important;
+        border:1px solid #d3dbe7 !important;
+        border-radius:7px !important;
+        background:#fff !important;
+        box-shadow:none !important;
+        color:#31435f !important;
+        font-size:10px !important;
+        font-weight:500 !important;
+        line-height:1.1 !important;
+        white-space:nowrap !important;
+        overflow:hidden !important;
+        text-overflow:ellipsis !important;
+    }
+    [class*="st-key-case_cell_"] button:hover {
+        border-color:#b7c4d7 !important;
+        color:#5d42e8 !important;
+        background:#fafbfe !important;
     }
 
     .agent-cell {
@@ -1049,7 +1089,7 @@ MOCK_ACCOUNTS = [
 ]
 
 # Increment this when the structure/timing of demonstration cases changes.
-MOCK_DATA_VERSION = 5
+MOCK_DATA_VERSION = 6
 
 
 def seed_mock_cases(force=False):
@@ -1518,7 +1558,7 @@ header_cols = st.columns(
 with header_cols[0]:
 
     st.markdown(
-        """
+        f"""
         <div class="brand-row">
             <div class="brand-mark" aria-hidden="true">
                 <svg viewBox="0 0 48 48" width="48" height="48">
@@ -2354,14 +2394,27 @@ def dashboard_fragment():
             for t in station_tasks
         ]
 
-        critical = any(
-            state["critical"]
+        # A tile flashes only when there is an actual attention condition:
+        # (a) a high-priority account, or
+        # (b) a normal case that is genuinely nearing its SLA deadline.
+        # A freshly-created normal case is NOT considered nearing due simply
+        # because it is critical for another reason.
+        priority_count = sum(
+            state["priority_account"]
             for state in station_states
         )
-
         nearing = sum(
-            state["critical"]
+            1
             for state in station_states
+            if (
+                state["critical"]
+                and not state["priority_account"]
+                and not state["breached"]
+            )
+        )
+        flash_tile = (
+            priority_count > 0
+            or nearing > 0
         )
 
         config = STATIONS[
@@ -2379,7 +2432,7 @@ def dashboard_fragment():
             icon = config.get("icon", "•")
             sla = config["sla_minutes"]
             sla_text = f"{sla} mins" if sla < 60 else f"{sla // 60} hour" + ("s" if sla != 60 else "")
-            critical_class = " critical" if critical else ""
+            critical_class = " critical" if flash_tile else ""
             selected_class = " selected" if selected == station else ""
 
             # Visual card + a real Streamlit button layered over the whole card.
@@ -2398,7 +2451,7 @@ def dashboard_fragment():
                             </div>
                         </div>
                         <div class="station-arrow">›</div>
-                        <div class="station-warning">◷ &nbsp; {nearing} nearing due</div>
+                        <div class="station-warning{' active' if nearing or priority_count else ''}">◷ &nbsp; {nearing} nearing due</div>
                         <div class="station-sla-ref">◷ &nbsp; Max Timeframe: <strong>{html.escape(sla_text)}</strong></div>
                     </div>
                     """,
@@ -2409,9 +2462,17 @@ def dashboard_fragment():
                     key=f"station_{station}",
                     use_container_width=True,
                 ):
-                    if critical:
+                    if flash_tile:
                         acknowledge_station_alerts(station)
+
+                    # Update the local value immediately so the current
+                    # fragment has the correct selection, then rerun only
+                    # this fragment. This removes the former "click twice"
+                    # behavior caused by reading selected_station before
+                    # the widget interaction.
                     st.session_state["selected_station"] = station
+                    selected = station
+                    st.rerun(scope="fragment")
 
     st.markdown(
         "<div style='height:10px'></div>",
@@ -2598,24 +2659,15 @@ def dashboard_fragment():
 
         with row[0]:
 
-            st.markdown(
-                '<div class="case-button">',
-                unsafe_allow_html=True,
-            )
-
-            if st.button(
-                text(task.get("case_number")),
-                key=f"case_{task_id}",
-                use_container_width=True,
-            ):
-                # Open the dialog directly from the user's click.
-                # There is no periodic dashboard rerun.
-                case_details(task_id)
-
-            st.markdown(
-                "</div>",
-                unsafe_allow_html=True,
-            )
+            with st.container(key=f"case_cell_{task_id}"):
+                if st.button(
+                    text(task.get("case_number")),
+                    key=f"case_{task_id}",
+                    use_container_width=True,
+                ):
+                    # Open the dialog directly from the user's click.
+                    # There is no periodic dashboard rerun.
+                    case_details(task_id)
 
         with row[1]:
 
