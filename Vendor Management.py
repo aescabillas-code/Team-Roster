@@ -28,6 +28,7 @@ Additional collections:
 Required secrets:
     MONGODB_URI = "mongodb+srv://..."
     ACCESS_CODE = "..."
+    TOKEN_SECRET = "long-random-secret"
     ADMIN_PIN = "..."
 
 Optional:
@@ -40,6 +41,7 @@ Install:
 import hashlib
 import hmac
 import html
+import json
 import secrets
 import os
 import time
@@ -92,8 +94,10 @@ VENDOR_COLLECTION = "Vendor_Collection"
 ACCESS_COLLECTION = "Access_Collection"
 ALERT_COLLECTION = "Alert_Collection"
 
-# Performance tuning: short cache keeps station switches responsive while preserving near-real-time data.
-TASK_CACHE_TTL = 1.0
+# Performance tuning: short-lived cache + throttled alert scanning keep station switches responsive.
+# Duration/SLA visuals are handled in the browser and do not cause Streamlit reruns.
+TASK_CACHE_TTL = 2.0
+ALERT_SCAN_INTERVAL = 5.0
 
 STATIONS = {
     "CARE": {
@@ -1100,10 +1104,24 @@ st.markdown(
         min-height:24px;
         white-space:nowrap;
     }
-    /* The duration itself flashes when its case is nearing the end of SLA. */
-    .duration-warning-wrap.duration-warning-active {
-        color:#ef1738 !important;
+    /* Duration color tracks SLA progress continuously in the browser:
+       green = first half, yellow = 50-80%, red = final 20% and past due. */
+    .duration-warning-wrap {
+        transition:color .18s linear, text-shadow .18s linear;
+    }
+    .duration-warning-wrap.duration-green {
+        color:#168a45 !important;
+        font-weight:800 !important;
+    }
+    .duration-warning-wrap.duration-yellow {
+        color:#c58a00 !important;
+        font-weight:850 !important;
+    }
+    .duration-warning-wrap.duration-red {
+        color:#e51c3a !important;
         font-weight:900 !important;
+    }
+    .duration-warning-wrap.duration-warning-active {
         animation:durationTextFlash .65s ease-in-out infinite alternate;
         text-shadow:0 0 8px rgba(239,23,56,.30);
     }
@@ -1430,29 +1448,49 @@ st.markdown(
 # TASK ENGINE
 # ============================================================
 
-def task_projection():
-    return {
-        "_id": 1,
-        "case_number": 1,
-        "subject": 1,
-        "priority": 1,
-        "account_priority": 1,
-        "assigned_to": 1,
-        "due_date": 1,
-        "created_at": 1,
-        "station_started_at": 1,
-        "department": 1,
-        "status": 1,
-        "last_update": 1,
-        "account_name": 1,
-        "vendor": 1,
-        "issue": 1,
-        "description": 1,
-        "notes": 1,
-        "history": 1,
-        "active": 1,
-        "is_mock": 1,
-    }
+# Dashboard only needs lightweight fields. Full case details are fetched
+# only when a user opens a case. This reduces MongoDB payload size and
+# Streamlit serialization/rendering work during station switches.
+DASHBOARD_PROJECTION = {
+    "_id": 1,
+    "case_number": 1,
+    "subject": 1,
+    "priority": 1,
+    "account_priority": 1,
+    "assigned_to": 1,
+    "due_date": 1,
+    "created_at": 1,
+    "station_started_at": 1,
+    "department": 1,
+    "status": 1,
+    "last_update": 1,
+    "account_name": 1,
+    "active": 1,
+    "is_mock": 1,
+}
+
+FULL_TASK_PROJECTION = {
+    "_id": 1,
+    "case_number": 1,
+    "subject": 1,
+    "priority": 1,
+    "account_priority": 1,
+    "assigned_to": 1,
+    "due_date": 1,
+    "created_at": 1,
+    "station_started_at": 1,
+    "department": 1,
+    "status": 1,
+    "last_update": 1,
+    "account_name": 1,
+    "vendor": 1,
+    "issue": 1,
+    "description": 1,
+    "notes": 1,
+    "history": 1,
+    "active": 1,
+    "is_mock": 1,
+}
 
 
 @st.cache_data(ttl=TASK_CACHE_TTL, show_spinner=False)
@@ -1483,7 +1521,7 @@ def fetch_tasks(
     try:
         return list(
             col(TASKS_COLLECTION)
-            .find(query, task_projection())
+            .find(query, DASHBOARD_PROJECTION)
             .sort([
                 ("station_started_at", ASCENDING),
             ])
@@ -1891,11 +1929,18 @@ def acknowledge_station_alerts(station):
 
 
 def scan_alerts(tasks):
-    """Create missing alerts with minimal MongoDB round trips.
+    """Create missing alerts with minimal and throttled MongoDB round trips.
 
-    State calculation remains in Python, but existing unacknowledged alerts
-    are loaded in one query instead of performing one find() per task.
+    Alert creation does not need to run on every station-tab fragment rerun.
+    Duration and SLA visuals are browser-side, so scanning every 5 seconds is
+    sufficient while making station switching much lighter.
     """
+    now_epoch = time.time()
+    last_scan = float(st.session_state.get("last_alert_scan", 0.0) or 0.0)
+    if now_epoch - last_scan < ALERT_SCAN_INTERVAL:
+        return
+    st.session_state["last_alert_scan"] = now_epoch
+
     now = utc_now()
     candidates = []
 
@@ -2536,9 +2581,10 @@ def case_details(task_id):
 
         task = col(
             TASKS_COLLECTION
-        ).find_one({
-            "_id": ObjectId(task_id)
-        })
+        ).find_one(
+            {"_id": ObjectId(task_id)},
+            FULL_TASK_PROJECTION,
+        )
 
     except Exception:
         task = None
@@ -3053,9 +3099,29 @@ def dashboard_fragment():
                 # Keep this HTML as one physical markdown line. Streamlit's
                 # Markdown parser can otherwise interpret indented multiline
                 # HTML as a code block and expose the raw tags.
+                # Send only the tiny timing payload needed by browser-side
+                # station warning/count updates. This lets tiles change from
+                # LOW -> NEARING DUE -> PAST DUE without a Streamlit rerun.
+                station_timer_payload = []
+                for _task in station_tasks:
+                    _started = as_utc(
+                        _task.get("station_started_at")
+                        or _task.get("created_at")
+                    )
+                    if _started:
+                        station_timer_payload.append({
+                            "start": _started.isoformat(),
+                        })
+                station_timer_json = html.escape(
+                    json.dumps(station_timer_payload, separators=(",", ":")),
+                    quote=True,
+                )
+
                 station_html = (
                     f'<div class="station-card-visual {slug}{critical_class}{selected_class}" '
                     f'data-station="{html.escape(station)}" '
+                    f'data-sla-seconds="{sla_seconds}" '
+                    f'data-case-timers="{station_timer_json}" '
                     f'data-warning-stop="{ack_until if ack_until > time.time() else 0:.3f}">'
                     f'{alert_icon}'
                     f'<div class="station-icon-circle">{html.escape(icon)}</div>'
@@ -3464,10 +3530,8 @@ def dashboard_fragment():
             st.markdown(
                 f"""
                 <div class="case-row"
-                     style="font-weight:700;
-                            color:{'#e51c3a' if state['critical'] else '#53637f'};
-                            padding-top:4px;">
-                    <div class="duration-warning-wrap"
+                     style="font-weight:700; padding-top:4px;">
+                    <div class="duration-warning-wrap duration-green"
                          data-warning-threshold="{warning_threshold_seconds:.3f}"
                          data-sla-seconds="{sla_for_case:.3f}"
                          data-warning-stop="{case_ack_until:.3f}"
@@ -3552,6 +3616,78 @@ def dashboard_fragment():
             function updateWarningAnimations() {
                 const nowMs = Date.now();
 
+                /* Update every station tile from its own current-station SLA.
+                   No Python rerun is required for the warning count. */
+                document.querySelectorAll(
+                    '.station-card-visual[data-case-timers]'
+                ).forEach(function (card) {
+                    let timers = [];
+                    try {
+                        timers = JSON.parse(
+                            card.getAttribute("data-case-timers") || "[]"
+                        );
+                    } catch (e) {
+                        timers = [];
+                    }
+
+                    const sla = Number(
+                        card.getAttribute("data-sla-seconds") || "0"
+                    );
+                    if (!sla) return;
+
+                    let nearingCount = 0;
+                    let pastDueCount = 0;
+
+                    timers.forEach(function (item) {
+                        const started = new Date(item.start || "");
+                        if (isNaN(started.getTime())) return;
+
+                        const elapsed =
+                            Math.max(0, (nowMs - started.getTime()) / 1000);
+
+                        if (elapsed >= sla) {
+                            pastDueCount += 1;
+                        } else if (elapsed >= sla * 0.80) {
+                            nearingCount += 1;
+                        }
+                    });
+
+                    const warning = card.querySelector(".station-warning");
+                    if (warning) {
+                        warning.classList.toggle("active", nearingCount > 0);
+                        warning.textContent =
+                            "◷  " + nearingCount + " nearing due" +
+                            (pastDueCount
+                                ? "  •  " + pastDueCount + " past due"
+                                : "");
+                    }
+
+                    const silenced =
+                        card.classList.contains("warning-muted");
+
+                    /* Past-due cases do not make the tile blink. The tile
+                       animation is reserved for genuinely nearing-due cases. */
+                    const shouldFlash = nearingCount > 0 && !silenced;
+
+                    if (shouldFlash) {
+                        card.classList.add("critical");
+                    } else {
+                        card.classList.remove("critical");
+                    }
+
+                    /* A selected/clicked tile remains visually quiet until
+                       its current nearing-due condition clears. */
+                    if (nearingCount === 0) {
+                        card.classList.remove("warning-muted");
+                        const icon = card.querySelector(".station-alert-icon");
+                        if (icon) {
+                            icon.style.animation = "";
+                            icon.style.opacity = "";
+                        }
+                    }
+                });
+
+                /* Keep the server-side acknowledgement behavior intact. */
                 document.querySelectorAll(
                     '.station-card-visual[data-warning-stop]'
                 ).forEach(function (card) {
@@ -3561,28 +3697,20 @@ def dashboard_fragment():
 
                     if (stopAt > 0 && nowMs >= stopAt) {
                         card.classList.remove("critical");
-
-                        const icon = card.querySelector(
-                            ".station-alert-icon"
-                        );
-                        if (icon) {
-                            icon.classList.add("warning-muted");
-                        }
+                        card.classList.add("warning-muted");
                     }
                 });
 
+                /* Duration color: green -> yellow -> red as SLA is consumed. */
                 document.querySelectorAll(
                     '.duration-warning-wrap[data-warning-threshold]'
                 ).forEach(function (wrap) {
-                    const startedRaw = wrap.getAttribute("data-duration-start") || "";
-                    const threshold = Number(
-                        wrap.getAttribute("data-warning-threshold") || "0"
-                    );
-                    const ackStop = Number(
-                        wrap.getAttribute("data-warning-stop") || "0"
-                    ) * 1000;
+                    const startedRaw =
+                        wrap.getAttribute("data-duration-start") || "";
+                    const sla =
+                        Number(wrap.getAttribute("data-sla-seconds") || "0");
 
-                    if (!startedRaw || !threshold) return;
+                    if (!startedRaw || !sla) return;
 
                     const started = new Date(startedRaw);
                     if (isNaN(started.getTime())) return;
@@ -3592,18 +3720,41 @@ def dashboard_fragment():
                         Math.floor((nowMs - started.getTime()) / 1000)
                     );
 
-                    /* Nearing warning is final 20% BEFORE breach only. */
-                    const nearing = elapsed >= threshold && elapsed < (
-                        threshold +
-                        Number(wrap.getAttribute("data-sla-seconds") || "0") * 0.20
+                    const h = Math.floor(elapsed / 3600);
+                    let remainder = elapsed % 3600;
+                    const m = Math.floor(remainder / 60);
+                    const sec = remainder % 60;
+
+                    const node = wrap.querySelector(
+                        '[data-duration-live="1"]'
+                    );
+                    if (node) {
+                        node.textContent =
+                            String(h).padStart(2, "0") + ":" +
+                            String(m).padStart(2, "0") + ":" +
+                            String(sec).padStart(2, "0");
+                    }
+
+                    wrap.classList.remove(
+                        "duration-green",
+                        "duration-yellow",
+                        "duration-red",
+                        "duration-warning-active"
                     );
 
-                    /* Tile warning acknowledgement is handled immediately
-                       on pointerdown. Duration warning remains independent. */
-                    if (nearing) {
-                        wrap.classList.add("duration-warning-active");
+                    const ratio = elapsed / sla;
+
+                    if (ratio < 0.50) {
+                        wrap.classList.add("duration-green");
+                    } else if (ratio < 0.80) {
+                        wrap.classList.add("duration-yellow");
                     } else {
-                        wrap.classList.remove("duration-warning-active");
+                        wrap.classList.add("duration-red");
+                    }
+
+                    /* Final 20% = red + subtle flash. Past due remains solid red. */
+                    if (ratio >= 0.80 && ratio < 1.0) {
+                        wrap.classList.add("duration-warning-active");
                     }
                 });
 
@@ -3663,14 +3814,12 @@ def dashboard_fragment():
                 });
             }
 
-            updateDurations();
             updateWarningAnimations();
 
             if (!window.__taskTrackerDurationTimer) {
                 window.__taskTrackerDurationTimer =
                     setInterval(
                         function () {
-                            updateDurations();
                             updateWarningAnimations();
                         },
                         1000
