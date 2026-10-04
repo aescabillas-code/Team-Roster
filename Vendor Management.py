@@ -821,38 +821,16 @@ st.markdown(
         display:none !important;
     }
 
-    /* Remove Streamlit's native top header so Caseflow owns the full top edge. */
     header {
-        display:none !important;
+        background:transparent !important;
     }
 
-    /* Pull the application content to the absolute top of the browser viewport. */
-    .block-container,
-    [data-testid="stMainBlockContainer"],
-    section[data-testid="stMain"] > div,
-    section.main > div,
-    [data-testid="stAppViewContainer"] > .main > div {
+    .block-container {
         max-width:1500px;
-        padding-top:0 !important;
-        margin-top:0 !important;
+        padding-top:18px;
         padding-left:20px;
         padding-right:20px;
         padding-bottom:30px;
-    }
-
-    /* Streamlit can reserve a top inset even when its header is hidden. */
-    [data-testid="stAppViewContainer"] > .main,
-    section[data-testid="stMain"],
-    section.main {
-        padding-top:0 !important;
-        margin-top:0 !important;
-        top:0 !important;
-    }
-
-    /* Let the Caseflow header itself touch the viewport's top edge. */
-    .caseflow-header-shell,
-    [class*="st-key-caseflow_header_shell"] {
-        margin-top:0 !important;
     }
 
     body,
@@ -882,12 +860,9 @@ st.markdown(
         position:relative !important;
         height:62px !important;
         min-height:62px !important;
-        width:calc(100% + 40px) !important;
-        margin-left:-20px !important;
-        margin-right:-20px !important;
+        width:100% !important;
         padding:0 !important;
-        margin-top:0 !important;
-        margin-bottom:18px !important;
+        margin:0 0 18px 0 !important;
         overflow:hidden !important;
         border:1px solid #8aa4a3 !important;
         border-radius:1px !important;
@@ -1669,14 +1644,8 @@ st.markdown(
 
     /* MOBILE LAYOUT — header, station cards and case table remain usable on phones. */
     @media(max-width:700px) {
-        .block-container,
-        [data-testid="stMainBlockContainer"],
-        section[data-testid="stMain"] > div,
-        section.main > div {
-            padding-top:0 !important;
-            padding-left:10px;
-            padding-right:10px;
-            padding-bottom:24px;
+        .block-container {
+            padding:10px 10px 24px !important;
         }
 
         .caseflow-header-shell,
@@ -2061,8 +2030,52 @@ MOCK_ACCOUNTS = [
 ]
 
 # Increment this when the structure/timing of demonstration cases changes.
-# Version 10 resets existing demonstration cases to 00:00:00 on first load.
-MOCK_DATA_VERSION = 10
+# Version 11 resets existing demonstration cases to 00:00:00 on first load.
+MOCK_DATA_VERSION = 11
+
+
+def reset_mock_case_durations():
+    """Reset every seeded mock case to zero elapsed duration.
+
+    The reset is persisted in MongoDB so the browser-side live timer starts
+    from 00:00:00 for every mock case after the next dashboard refresh.
+    """
+    reset_now = utc_now()
+
+    result = col(TASKS_COLLECTION).update_many(
+        {
+            "is_mock": True,
+            "case_number": {"$not": {"$regex": "^SIM-"}},
+        },
+        {
+            "$set": {
+                "created_at": reset_now,
+                "station_started_at": reset_now,
+                "last_update": reset_now,
+                "mock_data_version": MOCK_DATA_VERSION,
+            }
+        },
+    )
+
+    # Give each station a fresh SLA window.
+    for station, config in STATIONS.items():
+        col(TASKS_COLLECTION).update_many(
+            {
+                "is_mock": True,
+                "case_number": {"$not": {"$regex": "^SIM-"}},
+                "department": station,
+            },
+            {
+                "$set": {
+                    "due_date": reset_now + timedelta(
+                        minutes=config["sla_minutes"]
+                    ),
+                }
+            },
+        )
+
+    clear_task_cache()
+    return result.modified_count
 
 
 @st.cache_resource(show_spinner=False)
@@ -2810,7 +2823,6 @@ if st.session_state["show_settings"]:
             tabs = st.tabs([
                 "Cases",
                 "External Sync",
-                "Alerts",
                 "Access Control",
                 "Simulation",
             ])
@@ -2918,47 +2930,10 @@ if st.session_state["show_settings"]:
                             st.error(msg)
 
             # -----------------------------------------------
-            # ALERTS
-            # -----------------------------------------------
-
-            with tabs[2]:
-
-                st.markdown(
-                    "### Alert Management"
-                )
-
-                alerts = active_alerts()
-
-                st.write(
-                    f"Active alerts: **{len(alerts)}**"
-                )
-
-                if st.button(
-                    "Acknowledge All Alerts",
-                    use_container_width=True,
-                ):
-
-                    col(
-                        ALERT_COLLECTION
-                    ).update_many(
-                        {"acknowledged": False},
-                        {
-                            "$set": {
-                                "acknowledged": True,
-                                "acknowledged_at": utc_now(),
-                            }
-                        },
-                    )
-
-                    st.success(
-                        "All alerts acknowledged."
-                    )
-
-            # -----------------------------------------------
             # ACCESS CONTROL
             # -----------------------------------------------
 
-            with tabs[3]:
+            with tabs[2]:
 
                 st.markdown(
                     "### One-Time Access"
@@ -2985,7 +2960,7 @@ if st.session_state["show_settings"]:
             # SIMULATION
             # -----------------------------------------------
 
-            with tabs[4]:
+            with tabs[3]:
 
                 st.markdown(
                     "### Alert Simulation"
@@ -2995,6 +2970,22 @@ if st.session_state["show_settings"]:
                     "Creates a temporary CARE case with approximately 5 seconds remaining. "
                     "Use this to demonstrate flashing, critical status and the central alert."
                 )
+
+                if st.button(
+                    "↻ Reset Mock Case Durations to 00:00:00",
+                    type="secondary",
+                    use_container_width=True,
+                    key="reset_mock_case_durations",
+                    help="Reset all seeded mock cases to zero elapsed duration and restart their station SLA timers.",
+                ):
+                    reset_count = reset_mock_case_durations()
+                    st.session_state["simulation_until"] = 0.0
+                    st.session_state["simulation_case_id"] = None
+                    st.success(
+                        f"{reset_count} mock case(s) reset to 00:00:00."
+                    )
+
+                st.markdown("---")
 
                 if st.button(
                     "▶ Simulate Critical Alert",
