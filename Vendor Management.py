@@ -826,13 +826,33 @@ st.markdown(
         display:none !important;
     }
 
-    /* Pull the application content to the very top of the browser viewport. */
-    .block-container {
+    /* Pull the application content to the absolute top of the browser viewport. */
+    .block-container,
+    [data-testid="stMainBlockContainer"],
+    section[data-testid="stMain"] > div,
+    section.main > div,
+    [data-testid="stAppViewContainer"] > .main > div {
         max-width:1500px;
         padding-top:0 !important;
+        margin-top:0 !important;
         padding-left:20px;
         padding-right:20px;
         padding-bottom:30px;
+    }
+
+    /* Streamlit can reserve a top inset even when its header is hidden. */
+    [data-testid="stAppViewContainer"] > .main,
+    section[data-testid="stMain"],
+    section.main {
+        padding-top:0 !important;
+        margin-top:0 !important;
+        top:0 !important;
+    }
+
+    /* Let the Caseflow header itself touch the viewport's top edge. */
+    .caseflow-header-shell,
+    [class*="st-key-caseflow_header_shell"] {
+        margin-top:0 !important;
     }
 
     body,
@@ -1649,8 +1669,14 @@ st.markdown(
 
     /* MOBILE LAYOUT — header, station cards and case table remain usable on phones. */
     @media(max-width:700px) {
-        .block-container {
-            padding:10px 10px 24px !important;
+        .block-container,
+        [data-testid="stMainBlockContainer"],
+        section[data-testid="stMain"] > div,
+        section.main > div {
+            padding-top:0 !important;
+            padding-left:10px;
+            padding-right:10px;
+            padding-bottom:24px;
         }
 
         .caseflow-header-shell,
