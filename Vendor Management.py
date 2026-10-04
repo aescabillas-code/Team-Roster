@@ -2453,7 +2453,7 @@ def dashboard_fragment():
                             </div>
                         </div>
                         <div class="station-arrow">›</div>
-                        <div class="station-warning{' active' if nearing or priority_count else ''}">◷ &nbsp; {nearing} nearing due</div>
+                        <div class="station-warning{' active' if nearing > 0 else ''}">◷ &nbsp; {nearing} nearing due</div>
                         <div class="station-sla-ref">◷ &nbsp; Max Timeframe: <strong>{html.escape(sla_text)}</strong></div>
                     </div>
                     """,
