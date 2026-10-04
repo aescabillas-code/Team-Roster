@@ -428,6 +428,9 @@ defaults = {
     # Station warning acknowledgement deadlines. Clicking a warning tile
     # keeps its warning visible for five seconds before the flashing stops.
     "station_warning_ack_until": {},
+    # Stations silenced after the user clicks their active warning tile.
+    # The station stays silenced until the current warning condition clears.
+    "station_warning_silenced": set(),
 }
 
 for k, v in defaults.items():
@@ -716,20 +719,17 @@ st.markdown(
         white-space:nowrap;
     }
     .duration-warning-icon {
-        width:16px;
-        height:16px;
-        min-width:16px;
-        border-radius:50%;
-        background:#ef1738;
-        color:#fff;
+        width:12px;
+        min-width:12px;
         display:inline-flex;
         align-items:center;
         justify-content:center;
-        font-size:11px;
+        color:#ef1738;
+        font-size:15px;
         line-height:1;
-        font-weight:900;
+        font-weight:950;
         animation:durationWarningFlash .55s ease-in-out infinite alternate;
-        box-shadow:0 0 0 2px rgba(239,23,56,.12), 0 0 9px rgba(239,23,56,.45);
+        text-shadow:0 0 7px rgba(239,23,56,.55);
     }
     @keyframes durationWarningFlash {
         from { transform:scale(.82); opacity:.58; }
@@ -2581,20 +2581,29 @@ def dashboard_fragment():
             {},
         )
 
+        warning_silenced = st.session_state.setdefault(
+            "station_warning_silenced",
+            set(),
+        )
+
         if nearing == 0:
             warning_ack_until.pop(station, None)
+            warning_silenced.discard(station)
 
         ack_until = float(
             warning_ack_until.get(station, 0.0) or 0.0
         )
+        now_epoch = time.time()
 
-        # Keep the warning active for five seconds after the tile is clicked.
-        # JavaScript stops the animation at the deadline without a timed rerun.
+        # Before the user clicks the warning tile, the tile flashes normally.
+        # After the click, it continues flashing for exactly five seconds.
+        # Once those five seconds expire, it stays silent until the current
+        # nearing-due condition clears and a new warning cycle begins.
         flash_tile = (
             nearing > 0
             and (
-                station not in warning_ack_until
-                or time.time() < ack_until
+                station not in warning_silenced
+                or now_epoch < ack_until
             )
         )
 
@@ -2650,8 +2659,11 @@ def dashboard_fragment():
                     use_container_width=True,
                 ):
                     if nearing > 0:
-                        # Acknowledge for exactly five seconds.
+                        # Keep the warning visible for exactly five seconds,
+                        # then silence this warning cycle until the case(s)
+                        # leave the nearing-due window.
                         warning_ack_until[station] = time.time() + 5.0
+                        warning_silenced.add(station)
                         acknowledge_station_alerts(station)
 
                     # A single click changes the filter and reruns ONLY
@@ -3022,22 +3034,35 @@ def dashboard_fragment():
                 and state["remaining"] <= sla_for_case * 0.20
             )
 
+            warning_ack_map = st.session_state.get(
+                "station_warning_ack_until",
+                {},
+            )
+            warning_silenced_set = st.session_state.get(
+                "station_warning_silenced",
+                set(),
+            )
+            case_ack_until = float(
+                warning_ack_map.get(case_station, 0.0) or 0.0
+            )
+            case_warning_visual_active = (
+                case_causes_tile_warning
+                and (
+                    case_station not in warning_silenced_set
+                    or time.time() < case_ack_until
+                )
+            )
+
             warning_icon_html = (
                 '<span class="duration-warning-icon" '
                 'data-case-warning="1" aria-label="SLA warning">!</span>'
-                if case_causes_tile_warning
+                if case_warning_visual_active
                 else ""
             )
 
             warning_stop_for_case = (
-                float(
-                    st.session_state.get(
-                        "station_warning_ack_until",
-                        {},
-                    ).get(case_station, 0.0)
-                    or 0.0
-                )
-                if case_causes_tile_warning
+                case_ack_until
+                if case_warning_visual_active and case_ack_until > time.time()
                 else 0.0
             )
 
