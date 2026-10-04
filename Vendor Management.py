@@ -424,6 +424,10 @@ defaults = {
     "simulation_until": 0.0,
     "simulation_case_id": None,
     "search": "",
+    # Stations whose current SLA warning has been acknowledged by clicking
+    # the tile. The warning can reappear only after the station is no longer
+    # in the warning window and later enters it again.
+    "acknowledged_flash_stations": set(),
 }
 
 for k, v in defaults.items():
@@ -599,8 +603,52 @@ st.markdown(
         color:transparent !important; font-size:1px !important; opacity:0 !important;
         cursor:pointer !important; z-index:30 !important;
     }
-    .station-card-visual.critical { animation:stationFlash .85s infinite alternate; }
-    @keyframes stationFlash { from { box-shadow:0 0 0 rgba(239,51,79,0); } to { box-shadow:0 0 22px rgba(239,51,79,.30); } }
+    /* ACTIVE SLA WARNING: intentionally strong and unmistakable. */
+    .station-card-visual.critical {
+        border:2px solid #ef334f !important;
+        animation:stationCardFlash .55s ease-in-out infinite alternate;
+    }
+    .station-alert-icon {
+        position:absolute;
+        right:54px;
+        top:22px;
+        width:34px;
+        height:34px;
+        border-radius:50%;
+        background:#ef1738;
+        color:#fff;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        font-size:22px;
+        line-height:1;
+        font-weight:950;
+        box-shadow:0 0 0 3px rgba(239,23,56,.16), 0 5px 16px rgba(239,23,56,.28);
+        z-index:4;
+        animation:stationAlertIconFlash .42s ease-in-out infinite alternate;
+    }
+    @keyframes stationCardFlash {
+        from {
+            box-shadow:0 0 0 0 rgba(239,23,56,.12), 0 0 0 rgba(239,23,56,0);
+            filter:saturate(1);
+        }
+        to {
+            box-shadow:0 0 0 5px rgba(239,23,56,.16), 0 0 30px rgba(239,23,56,.48);
+            filter:saturate(1.18);
+        }
+    }
+    @keyframes stationAlertIconFlash {
+        from {
+            transform:scale(.86);
+            opacity:.58;
+            box-shadow:0 0 0 3px rgba(239,23,56,.12), 0 4px 10px rgba(239,23,56,.18);
+        }
+        to {
+            transform:scale(1.14);
+            opacity:1;
+            box-shadow:0 0 0 7px rgba(239,23,56,.24), 0 0 24px rgba(239,23,56,.72);
+        }
+    }
 
     /* TABLE */
 
@@ -695,7 +743,31 @@ st.markdown(
     [class*="st-key-case_cell_"] button:hover {
         border-color:#b7c4d7 !important;
         color:#5d42e8 !important;
-        background:#fafbfe !important;
+    }
+
+    /* Case-number cells inherit the pastel color of their current station. */
+    [class*="st-key-case_cell_care_"] button {
+        background:#fff0f2 !important;
+        border-color:#f3a4b0 !important;
+    }
+    [class*="st-key-case_cell_arch_"] button {
+        background:#eaf7ff !important;
+        border-color:#9bd7f5 !important;
+    }
+    [class*="st-key-case_cell_pet_"] button {
+        background:#ecfbf4 !important;
+        border-color:#9cdec6 !important;
+    }
+    [class*="st-key-case_cell_supply_"] button {
+        background:#f2edff !important;
+        border-color:#c8b5f3 !important;
+    }
+    [class*="st-key-case_cell_onsite_"] button {
+        background:#fff8df !important;
+        border-color:#ecd28c !important;
+    }
+    [class*="st-key-case_cell_"] button:hover {
+        filter:brightness(.985);
     }
 
     .agent-cell {
@@ -819,8 +891,6 @@ st.markdown(
         font-weight:850;
     }
 
-    /* STATION TILE FLASH */
-    .station-card-visual.critical { animation:stationFlash .85s infinite alternate; }
 
     /* REFERENCE TABLE PANEL */
     .cases-panel { background:#fff;border-radius:18px;padding:16px 12px 18px;box-shadow:0 3px 18px rgba(29,55,96,.05); }
@@ -1092,7 +1162,7 @@ MOCK_ACCOUNTS = [
 ]
 
 # Increment this when the structure/timing of demonstration cases changes.
-MOCK_DATA_VERSION = 6
+MOCK_DATA_VERSION = 7
 
 
 def seed_mock_cases(force=False):
@@ -2417,7 +2487,23 @@ def dashboard_fragment():
                 and state["remaining"] <= sla_seconds * 0.20
             )
         )
-        flash_tile = nearing > 0
+        # A tile flashes ONLY while at least one case is in the final
+        # 20% of this station's SLA. Priority-account status alone does not
+        # trigger the tile animation.
+        acknowledged_stations = st.session_state.setdefault(
+            "acknowledged_flash_stations",
+            set(),
+        )
+
+        # Once the station leaves the warning window, clear its acknowledgement
+        # so a future warning cycle can flash again.
+        if nearing == 0:
+            acknowledged_stations.discard(station)
+
+        flash_tile = (
+            nearing > 0
+            and station not in acknowledged_stations
+        )
 
         config = STATIONS[
             station
@@ -2436,14 +2522,19 @@ def dashboard_fragment():
             sla_text = f"{sla} mins" if sla < 60 else f"{sla // 60} hour" + ("s" if sla != 60 else "")
             critical_class = " critical" if flash_tile else ""
             selected_class = " selected" if selected == station else ""
+            alert_icon = (
+                '<div class="station-alert-icon" aria-label="SLA warning">!</div>'
+                if flash_tile else ""
+            )
 
-            # Visual card + a real Streamlit button layered over the whole card.
-            # The overlay is the only clickable element, so the filter is
-            # reliable while the visual remains faithful to the reference.
+            # The visual card remains the reference design. A transparent
+            # Streamlit button is layered over the entire card so ONE click
+            # anywhere on the tile changes the station filter.
             with st.container(key=f"station_wrap_{slug}"):
                 st.markdown(
                     f"""
                     <div class="station-card-visual {slug}{critical_class}{selected_class}">
+                        {alert_icon}
                         <div class="station-icon-circle">{html.escape(icon)}</div>
                         <div class="station-copy">
                             <div class="station-card-title">{html.escape(station)}</div>
@@ -2465,15 +2556,14 @@ def dashboard_fragment():
                     use_container_width=True,
                 ):
                     if flash_tile:
+                        # Clicking the flashing tile immediately silences
+                        # the visual warning for this current warning cycle.
+                        acknowledged_stations.add(station)
                         acknowledge_station_alerts(station)
 
-                    # Update the local value immediately so the current
-                    # fragment has the correct selection, then rerun only
-                    # this fragment. This removes the former "click twice"
-                    # behavior caused by reading selected_station before
-                    # the widget interaction.
+                    # A single click changes the filter and a single normal
+                    # rerun renders the selected station's cases.
                     st.session_state["selected_station"] = station
-                    selected = station
                     st.rerun()
 
     st.markdown(
@@ -2661,7 +2751,16 @@ def dashboard_fragment():
 
         with row[0]:
 
-            with st.container(key=f"case_cell_{task_id}"):
+            case_station = station_name(task.get("department"))
+            case_slug = {
+                "CARE": "care",
+                "ARCH": "arch",
+                "PET": "pet",
+                "SUPPLY CHAIN": "supply",
+                "ONSITE": "onsite",
+            }.get(case_station, "care")
+
+            with st.container(key=f"case_cell_{case_slug}_{task_id}"):
                 if st.button(
                     text(task.get("case_number")),
                     key=f"case_{task_id}",
