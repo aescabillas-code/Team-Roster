@@ -94,7 +94,7 @@ ACCESS_COLLECTION = "Access_Collection"
 ALERT_COLLECTION = "Alert_Collection"
 
 # Performance tuning: short cache keeps station switches responsive while preserving near-real-time data.
-TASK_CACHE_TTL = 1.0
+TASK_CACHE_TTL = 0.5
 # Alert scans are lightweight and run in a dedicated 1-second fragment.
 # Duration itself remains browser-side, while Alert_Collection is kept near real time.
 ALERT_SCAN_MIN_INTERVAL = 1.0
@@ -3496,11 +3496,12 @@ def case_details(task_id):
 # ============================================================
 # DASHBOARD
 # ============================================================
-# IMPORTANT: This dashboard intentionally has NO periodic Streamlit
-# rerun. The only continuously updating value is Duration, which is
-# handled entirely by browser-side JavaScript below.
+# REAL-TIME DASHBOARD
+# The dashboard fragment refreshes once per second so MongoDB changes are
+# reflected on the visible tiles/table without refreshing the entire app.
+# Duration still updates browser-side every second for smooth per-second timing.
 
-@st.fragment
+@st.fragment(run_every="1s")
 def dashboard_fragment():
 
     selected = st.session_state[
@@ -3515,9 +3516,8 @@ def dashboard_fragment():
         limit=300,
     )
 
-    # Alerts are evaluated only when the dashboard itself renders
-    # (initial load or a user action). There is deliberately no
-    # background polling/rerun.
+    # Alerts are evaluated during the same lightweight 1-second fragment
+    # refresh, keeping the visible dashboard and Alert_Collection synchronized.
     scan_alerts(tasks)
 
     now = utc_now()
@@ -4203,23 +4203,6 @@ def dashboard_fragment():
 
 
 # ============================================================
-# REAL-TIME ALERT MONITOR
-# ============================================================
-# Duration is calculated in the browser every second. This lightweight
-# fragment independently evaluates the same SLA state on the server so
-# MongoDB Alert_Collection is updated in near real time without rerunning
-# the full dashboard or interrupting station switching.
-@st.fragment(run_every="1s")
-def realtime_alert_monitor():
-    try:
-        all_tasks = fetch_tasks(search="", station=None, limit=300)
-        scan_alerts(all_tasks)
-    except Exception:
-        # Monitoring must never interfere with the main dashboard.
-        pass
-
-
-# ============================================================
 # INITIAL MOCK DATA
 # ============================================================
 
@@ -4231,12 +4214,9 @@ def realtime_alert_monitor():
 seed_mock_cases()
 
 
-# Render the dashboard once. No run_every / autorefresh is used on the main dashboard.
+# Render the live dashboard. The fragment itself refreshes every second,
+# while the rest of the application remains untouched.
 dashboard_fragment()
-
-# Start the independent one-second alert monitor after mock data and the
-# initial dashboard are ready. It does not rerender the main dashboard.
-realtime_alert_monitor()
 
 
 # ============================================================
