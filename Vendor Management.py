@@ -292,48 +292,23 @@ def issue_access_token():
     st.session_state["access_token"] = raw_token
     st.session_state["access_code_hash"] = current_access_secret_hash()
 
-    # Persist the issued session token across browser refreshes.
-    # The token itself is only a random capability; the access code is never
-    # placed in the URL.
-    try:
-        st.query_params["caseflow_token"] = raw_token
-    except Exception:
-        pass
-
 
 def access_is_valid():
     raw_token = st.session_state.get("access_token")
 
     if not raw_token:
-        try:
-            raw_token = st.query_params.get("caseflow_token")
-        except Exception:
-            raw_token = None
-
-        if raw_token:
-            st.session_state["access_token"] = raw_token
-
-    if not raw_token:
         return False
 
-    current_hash = current_access_secret_hash()
-
-    # Detect ACCESS_CODE changes even when the Streamlit session was recreated.
-    stored_secret_hash = st.session_state.get("access_code_hash")
-    if stored_secret_hash and stored_secret_hash != current_hash:
+    if st.session_state.get(
+        "access_code_hash"
+    ) != current_access_secret_hash():
         return False
 
-    record = col(ACCESS_COLLECTION).find_one({
+    return col(ACCESS_COLLECTION).find_one({
         "token_hash": sha256(raw_token),
-        "access_code_hash": current_hash,
+        "access_code_hash": current_access_secret_hash(),
         "active": True,
-    })
-
-    if record is None:
-        return False
-
-    st.session_state["access_code_hash"] = current_hash
-    return True
+    }) is not None
 
 
 def clear_token_access():
@@ -349,10 +324,6 @@ def clear_token_access():
 
     st.session_state.pop("access_token", None)
     st.session_state.pop("access_code_hash", None)
-    try:
-        st.query_params.pop("caseflow_token", None)
-    except Exception:
-        pass
 
 
 def access_gate():
@@ -448,6 +419,7 @@ defaults = {
     "selected_station": "CARE",
     "selected_case_id": None,
     "show_case": False,
+    "show_alerts": False,
     "show_settings": False,
     "admin_unlocked": False,
     "simulation_until": 0.0,
@@ -457,6 +429,8 @@ defaults = {
     # the tile. The warning can reappear only after the station is no longer
     # in the warning window and later enters it again.
     "acknowledged_flash_stations": set(),
+    # Case IDs whose individual SLA warning has been explicitly clicked.
+    "acknowledged_warning_cases": set(),
 }
 
 for k, v in defaults.items():
@@ -525,39 +499,29 @@ st.markdown(
     .brand-row {
         display:flex;
         align-items:center;
-        gap:9px;
-        height:56px;
-        min-width:0;
-        max-width:100%;
-        overflow:hidden;
-        white-space:nowrap;
+        gap:14px;
+        height:64px;
     }
 
     .brand-mark {
-        width:40px;
-        height:40px;
-        flex:0 0 40px;
-        border-radius:0;
-        background:transparent !important;
+        width:48px;
+        height:48px;
+        border-radius:11px;
+        background:linear-gradient(145deg,#7051ff,#3723c6);
+        color:#fff;
         display:flex;
         align-items:center;
-        justify-content:flex-start;
-        overflow:visible;
-    }
-    .hpe-element-logo {
-        display:block;
-        width:34px;
-        height:34px;
-        object-fit:contain;
+        justify-content:center;
+        font-size:27px;
+        font-weight:900;
+        box-shadow:0 7px 16px rgba(68,42,202,.20);
     }
 
     .brand-name {
         color:#102041;
-        font-size:21px;
+        font-size:25px;
         font-weight:850;
-        letter-spacing:-.6px;
-        white-space:nowrap;
-        flex:0 0 auto;
+        letter-spacing:-.7px;
     }
 
     .brand-divider {
@@ -569,23 +533,20 @@ st.markdown(
 
     .top-nav {
         color:#53637f;
-        font-size:12px;
-        white-space:nowrap;
-        flex:0 0 auto;
+        font-size:14px;
     }
 
     .top-nav span {
-        margin-right:10px;
+        margin-right:15px;
     }
 
-    [data-testid="stHorizontalBlock"] > [data-testid="column"] {
-        min-width:0 !important;
-    }
+    .brand-mark { background:transparent !important; box-shadow:none !important; border-radius:0 !important; width:48px;height:48px; }
+    .brand-mark svg { display:block; }
 
     /* SEARCH */
 
     div[data-testid="stTextInput"] input {
-        height:46px !important;
+        height:50px !important;
         border:1px solid #dce3ed !important;
         border-radius:12px !important;
         background:#fff !important;
@@ -601,8 +562,8 @@ st.markdown(
     /* TOP ICON BUTTONS */
 
     .top-icon button {
-        height:46px !important;
-        min-height:46px !important;
+        height:50px !important;
+        min-height:50px !important;
         border:1px solid #dce3ed !important;
         background:#fff !important;
         border-radius:12px !important;
@@ -613,9 +574,9 @@ st.markdown(
     /* STATION TILES — reference visual + reliable full-card click target */
     [class*="st-key-station_wrap_care"], [class*="st-key-station_wrap_arch"],
     [class*="st-key-station_wrap_pet"], [class*="st-key-station_wrap_supply"],
-    [class*="st-key-station_wrap_onsite"] { position:relative !important; min-height:166px !important; overflow:visible !important; }
+    [class*="st-key-station_wrap_onsite"] { position:relative !important; min-height:184px !important; overflow:visible !important; }
     .station-card-visual {
-        position:relative; z-index:1; height:166px; min-height:166px; box-sizing:border-box;
+        position:relative; z-index:1; height:184px; min-height:184px; box-sizing:border-box;
         border-radius:13px; padding:18px 24px; overflow:hidden;
         color:#102041;
     }
@@ -647,8 +608,8 @@ st.markdown(
     .station-card-visual.supply.selected { border:3px solid #a07de2 !important; }
     .station-card-visual.onsite.selected { border:3px solid #e0b94f !important; }
     .station-icon-circle {
-        width:62px; height:62px; border-radius:50%; display:flex; align-items:center; justify-content:center;
-        font-size:30px; font-weight:900; position:absolute; left:20px; top:16px;
+        width:64px; height:64px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+        font-size:30px; font-weight:900; position:absolute; left:24px; top:18px;
         background:rgba(255,255,255,.48);
     }
     .care .station-icon-circle { color:#e51c3a; background:#ffd7df; }
@@ -656,9 +617,9 @@ st.markdown(
     .pet .station-icon-circle { color:#087b58; background:#bff1df; }
     .supply .station-icon-circle { color:#5d2ac9; background:#dfceff; }
     .onsite .station-icon-circle { color:#c98700; background:#ffe5a8; }
-    .station-copy { position:absolute; left:98px; top:25px; }
-    .station-card-title { font-size:18px; font-weight:850; line-height:1.1; letter-spacing:-.25px; }
-    .station-count-line { display:flex; align-items:baseline; gap:6px; margin-top:7px; }
+    .station-copy { position:absolute; left:104px; top:29px; }
+    .station-card-title { font-size:18px; font-weight:850; line-height:1.1; letter-spacing:-.3px; }
+    .station-count-line { display:flex; align-items:baseline; gap:6px; margin-top:8px; }
     .station-count { font-size:32px; line-height:1; font-weight:900; }
     .station-active { font-size:12px; color:#53637f; }
     .care .station-count { color:#e51c3a; }
@@ -666,11 +627,11 @@ st.markdown(
     .pet .station-count { color:#087b58; }
     .supply .station-count { color:#5d2ac9; }
     .onsite .station-count { color:#c98700; }
-    .station-arrow { position:absolute; right:16px; top:27px; font-size:25px; font-weight:300; color:#30466b; }
-    .station-warning { position:absolute; left:20px; bottom:34px; font-size:12px; font-weight:750; color:#53637f; }
+    .station-arrow { position:absolute; right:20px; top:31px; font-size:25px; font-weight:300; color:#30466b; }
+    .station-warning { position:absolute; left:24px; bottom:39px; font-size:12px; font-weight:750; color:#53637f; }
     .station-warning.active { color:#d33a4e; }
     .arch .station-warning.active, .pet .station-warning.active, .supply .station-warning.active, .onsite .station-warning.active { color:#53637f; }
-    .station-sla-ref { position:absolute; left:20px; bottom:14px; font-size:12px; color:#53637f; }
+    .station-sla-ref { position:absolute; left:24px; bottom:17px; font-size:12px; color:#53637f; }
     .station-sla-ref strong { color:#102041; }
     /* Make the real button transparent and stretch it over the card. */
     [class*="st-key-station_wrap_care"] [class*="st-key-station_CARE"],
@@ -679,14 +640,14 @@ st.markdown(
     [class*="st-key-station_wrap_supply"] [class*="st-key-station_SUPPLY"],
     [class*="st-key-station_wrap_onsite"] [class*="st-key-station_ONSITE"] {
         position:absolute !important; inset:0 !important; z-index:50 !important;
-        width:100% !important; height:166px !important;
+        width:100% !important; height:184px !important;
     }
     [class*="st-key-station_wrap_care"] [class*="st-key-station_CARE"] button,
     [class*="st-key-station_wrap_arch"] [class*="st-key-station_ARCH"] button,
     [class*="st-key-station_wrap_pet"] [class*="st-key-station_PET"] button,
     [class*="st-key-station_wrap_supply"] [class*="st-key-station_SUPPLY"] button,
     [class*="st-key-station_wrap_onsite"] [class*="st-key-station_ONSITE"] button {
-        position:absolute !important; inset:0 !important; width:100% !important; height:166px !important;
+        position:absolute !important; inset:0 !important; width:100% !important; height:184px !important;
         background:transparent !important; border:0 !important; box-shadow:none !important;
         color:transparent !important; font-size:1px !important; opacity:0.001 !important;
         cursor:pointer !important; z-index:30 !important; pointer-events:auto !important;
@@ -752,13 +713,12 @@ st.markdown(
 
     .station-pill {
         display:inline-block;
-        padding:6px 12px;
+        padding:6px 13px;
         border-radius:18px;
         font-weight:800;
-        font-size:12px;
+        font-size:13px;
         margin-left:10px;
         vertical-align:middle;
-        border:1px solid transparent;
     }
 
     .case-head {
@@ -811,17 +771,6 @@ st.markdown(
         width:100% !important;
         min-width:0 !important;
     }
-    [class*="st-key-case_cell_"] button,
-    [class*="st-key-case_cell_"] button *,
-    [class*="st-key-case_cell_"] button p,
-    [class*="st-key-case_cell_"] button div,
-    [class*="st-key-case_cell_"] button span,
-    [class*="st-key-case_cell_"] button label {
-        font-family:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
-        font-size:10px !important;
-        font-weight:500 !important;
-        line-height:1.1 !important;
-    }
     [class*="st-key-case_cell_"] button {
         width:100% !important;
         min-width:0 !important;
@@ -835,6 +784,9 @@ st.markdown(
         background:#fff !important;
         box-shadow:none !important;
         color:#31435f !important;
+        font-size:10px !important;
+        font-weight:500 !important;
+        line-height:1.1 !important;
         white-space:nowrap !important;
         overflow:hidden !important;
         text-overflow:ellipsis !important;
@@ -988,6 +940,66 @@ st.markdown(
     .duration-critical {
         color:#e51c3a;
         font-weight:850;
+    }
+
+    /* Individual SLA warning indicator beside the live duration.
+       It blinks until the user explicitly clicks the ! button. */
+    .case-warning-wrap {
+        display:flex;
+        align-items:center;
+        gap:7px;
+        min-height:30px;
+        border-bottom:1px solid #edf0f5;
+        font-size:10px;
+        padding:3px 6px;
+        box-sizing:border-box;
+    }
+
+    [class*="st-key-ack_case_warning_"] button {
+        width:22px !important;
+        height:22px !important;
+        min-width:22px !important;
+        min-height:22px !important;
+        padding:0 !important;
+        margin:0 !important;
+        border:0 !important;
+        border-radius:50% !important;
+        background:#ef1738 !important;
+        color:#ffffff !important;
+        font-size:13px !important;
+        line-height:22px !important;
+        font-weight:950 !important;
+        box-shadow:0 0 0 2px rgba(239,23,56,.14), 0 3px 10px rgba(239,23,56,.22) !important;
+        animation:caseWarningFlash .55s ease-in-out infinite alternate !important;
+        cursor:pointer !important;
+    }
+
+    [class*="st-key-ack_case_warning_"] button p,
+    [class*="st-key-ack_case_warning_"] button div,
+    [class*="st-key-ack_case_warning_"] button span {
+        font-size:13px !important;
+        line-height:22px !important;
+        font-weight:950 !important;
+        padding:0 !important;
+        margin:0 !important;
+    }
+
+    [class*="st-key-ack_case_warning_"] button:hover {
+        transform:scale(1.06);
+        background:#c9122f !important;
+    }
+
+    @keyframes caseWarningFlash {
+        from {
+            transform:scale(.86);
+            opacity:.55;
+            box-shadow:0 0 0 2px rgba(239,23,56,.10), 0 2px 8px rgba(239,23,56,.18);
+        }
+        to {
+            transform:scale(1.12);
+            opacity:1;
+            box-shadow:0 0 0 5px rgba(239,23,56,.24), 0 0 18px rgba(239,23,56,.55);
+        }
     }
 
 
@@ -1501,6 +1513,24 @@ def acknowledge_station_alerts(station):
     )
 
 
+def acknowledge_alerts_for_task(task_id):
+    try:
+        col(ALERT_COLLECTION).update_many(
+            {
+                "task_id": str(task_id),
+                "acknowledged": False,
+            },
+            {
+                "$set": {
+                    "acknowledged": True,
+                    "acknowledged_at": utc_now(),
+                }
+            },
+        )
+    except Exception:
+        pass
+
+
 def scan_alerts(tasks):
     now = utc_now()
 
@@ -1723,18 +1753,21 @@ def transfer_case(task, destination):
 # HEADER
 # ============================================================
 
-header_cols = st.columns([3.9, 5.4, 0.7], gap="small")
+header_cols = st.columns(
+    [4.3, 5.4, 0.6]
+)
 
 with header_cols[0]:
+
     st.markdown(
         f"""
         <div class="brand-row">
             <div class="brand-mark" aria-hidden="true">
-                <img
-                    src="https://raw.githubusercontent.com/hpe-design/logos/master/HPE%20Element%20-%20SVG/hpe-element-black.svg"
-                    alt="HPE"
-                    class="hpe-element-logo"
-                />
+                <svg viewBox="0 0 48 48" width="48" height="48">
+                    <path d="M24 4 42 14 24 24 6 14 24 4Z" fill="#8068ff"/>
+                    <path d="M6 14v9l18 10 18-10v-9L24 24 6 14Z" fill="#5d42e8"/>
+                    <path d="M6 25v9l18 10 18-10v-9L24 35 6 25Z" fill="#4a30cf"/>
+                </svg>
             </div>
             <div class="brand-name">{html.escape(APP_NAME)}</div>
             <div class="brand-divider"></div>
@@ -1747,22 +1780,29 @@ with header_cols[0]:
     )
 
 with header_cols[1]:
+
     search = st.text_input(
         "Search",
         value=st.session_state["search"],
-        placeholder="Search case number, subject, name, or issue...",
+        placeholder=(
+            "Search case number, subject, name, or issue..."
+        ),
         key="header_search",
         label_visibility="collapsed",
     )
+
     st.session_state["search"] = search
 
 with header_cols[2]:
+
     if st.button(
         "⚙",
         key="open_settings",
         use_container_width=True,
     ):
-        st.session_state["show_settings"] = True
+        st.session_state[
+            "show_settings"
+        ] = True
 
 
 # ============================================================
@@ -2519,6 +2559,31 @@ def dashboard_fragment():
             now,
         )
 
+    # Clear per-case acknowledgement after the case is no longer in the
+    # warning window, so a later warning cycle can notify the user again.
+    acknowledged_warning_cases = st.session_state.setdefault(
+        "acknowledged_warning_cases",
+        set(),
+    )
+    active_task_ids = set()
+    for task in tasks:
+        task_id = str(task["_id"])
+        active_task_ids.add(task_id)
+        case_state = states[task_id]
+        station_config = STATIONS.get(
+            station_name(task.get("department")),
+            STATIONS["CARE"],
+        )
+        in_warning_window = (
+            case_state["remaining"] > 0
+            and case_state["remaining"] <= station_config["sla_minutes"] * 60 * 0.20
+        )
+        if not in_warning_window:
+            acknowledged_warning_cases.discard(task_id)
+
+    # Remove stale IDs for cases that are no longer active.
+    acknowledged_warning_cases.intersection_update(active_task_ids)
+
     # --------------------------------------------------------
     # STATION TILES
     # --------------------------------------------------------
@@ -2562,23 +2627,25 @@ def dashboard_fragment():
                 and state["remaining"] <= sla_seconds * 0.20
             )
         )
-        # A tile flashes ONLY while at least one case is in the final
-        # 20% of this station's SLA. Priority-account status alone does not
-        # trigger the tile animation.
-        acknowledged_stations = st.session_state.setdefault(
-            "acknowledged_flash_stations",
+        # A tile flashes when it contains at least one case in the final
+        # 20% of its SLA whose individual warning has NOT been acknowledged.
+        # Clicking the station tile itself never dismisses the warning.
+        acknowledged_warning_cases = st.session_state.setdefault(
+            "acknowledged_warning_cases",
             set(),
         )
 
-        # Once the station leaves the warning window, clear its acknowledgement
-        # so a future warning cycle can flash again.
-        if nearing == 0:
-            acknowledged_stations.discard(station)
-
-        flash_tile = (
-            nearing > 0
-            and station not in acknowledged_stations
+        unacknowledged_warning_count = sum(
+            1
+            for task in station_tasks
+            if (
+                states[str(task["_id"])]["remaining"] > 0
+                and states[str(task["_id"])]["remaining"] <= sla_seconds * 0.20
+                and str(task["_id"]) not in acknowledged_warning_cases
+            )
         )
+
+        flash_tile = unacknowledged_warning_count > 0
 
         config = STATIONS[
             station
@@ -2630,15 +2697,9 @@ def dashboard_fragment():
                     key=f"station_{station}",
                     use_container_width=True,
                 ):
-                    if flash_tile:
-                        # Clicking the flashing tile immediately silences
-                        # the visual warning for this current warning cycle.
-                        acknowledged_stations.add(station)
-                        acknowledge_station_alerts(station)
-
-                    # A single click changes the filter and reruns ONLY
-                    # the dashboard fragment. This keeps station switching
-                    # fast without refreshing the rest of the application.
+                    # Selecting a station never acknowledges its warnings.
+                    # Individual SLA warnings are dismissed only by clicking
+                    # the red ! beside the affected case duration.
                     st.session_state["selected_station"] = station
                     st.rerun(scope="fragment")
 
@@ -2684,11 +2745,10 @@ def dashboard_fragment():
             <span class="cases-title">
                 Active Cases
             </span>
-            <span class="station-pill" style="
-                background:{STATIONS[selected]["soft"]};
-                color:{STATIONS[selected]["accent"]};
-                border-color:{STATIONS[selected]["accent"]}55;
-            ">
+            <span class="station-pill"
+                  style="background:{STATIONS.get(selected, STATIONS["CARE"])["soft"]};
+                         color:{STATIONS.get(selected, STATIONS["CARE"])["accent"]};
+                         border:1px solid {STATIONS.get(selected, STATIONS["CARE"])["accent"]}33;">
                 {html.escape(selected)}
             </span>
             """,
@@ -2991,25 +3051,64 @@ def dashboard_fragment():
                 or task.get("created_at")
             )
 
-            # Browser-side timer:
-            # duration changes every second according to
-            # the user's own PC/browser clock and does not
-            # require a Streamlit rerun.
-            st.markdown(
-                f"""
-                <div class="case-row"
-                     style="font-weight:700;
-                            color:{'#e51c3a' if state['critical'] else '#53637f'};
-                            padding-top:8px;">
-                    <span
-                        data-duration-start="{html.escape(started)}"
-                        data-duration-live="1">
-                        {duration_string(state['elapsed'])}
-                    </span>
-                </div>
-                """,
-                unsafe_allow_html=True,
+            # A tile warning is triggered by the same final-20%-of-SLA
+            # condition used for the station tile. The individual ! remains
+            # visible and blinking until THIS case's warning is clicked.
+            station_config = STATIONS.get(
+                case_station,
+                STATIONS["CARE"],
             )
+            warning_active = (
+                state["remaining"] > 0
+                and state["remaining"] <= station_config["sla_minutes"] * 60 * 0.20
+                and task_id not in st.session_state["acknowledged_warning_cases"]
+            )
+
+            if warning_active:
+                warning_cols = st.columns([0.26, 1.74], gap="small")
+
+                with warning_cols[0]:
+                    if st.button(
+                        "!",
+                        key=f"ack_case_warning_{task_id}",
+                        help="Acknowledge this SLA warning",
+                    ):
+                        st.session_state["acknowledged_warning_cases"].add(task_id)
+                        acknowledge_alerts_for_task(task_id)
+                        st.rerun(scope="fragment")
+
+                with warning_cols[1]:
+                    st.markdown(
+                        f"""
+                        <div class="case-warning-wrap"
+                             style="font-weight:700;color:#e51c3a;padding-left:0;">
+                            <span
+                                data-duration-start="{html.escape(started)}"
+                                data-duration-live="1">
+                                {duration_string(state['elapsed'])}
+                            </span>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+            else:
+                # Browser-side timer: duration changes every second according
+                # to the user's own PC/browser clock without a Streamlit rerun.
+                st.markdown(
+                    f"""
+                    <div class="case-row"
+                         style="font-weight:700;
+                                color:{'#e51c3a' if state['critical'] else '#53637f'};
+                                padding-top:8px;">
+                        <span
+                            data-duration-start="{html.escape(started)}"
+                            data-duration-live="1">
+                            {duration_string(state['elapsed'])}
+                        </span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
 
     # --------------------------------------------------------
     # CLIENT-SIDE REAL-TIME DURATION
