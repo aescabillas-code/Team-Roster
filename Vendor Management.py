@@ -508,6 +508,9 @@ st.markdown(
         margin-right:15px;
     }
 
+    .brand-mark { background:transparent !important; box-shadow:none !important; border-radius:0 !important; width:48px;height:48px; }
+    .brand-mark svg { display:block; }
+
     /* SEARCH */
 
     div[data-testid="stTextInput"] input {
@@ -638,9 +641,8 @@ st.markdown(
         font-size:13px;
     }
 
-    .case-row:hover {
-        background:#fbfcfe;
-    }
+    .case-row:hover { background:#fbfcfe; }
+    .case-selected { background:#fff0f3 !important; }
 
     .case-button button {
         border:none !important;
@@ -725,6 +727,46 @@ st.markdown(
         color:#e51c3a;
         font-weight:850;
     }
+
+    /* REFERENCE-IMAGE STATION CARDS */
+    .station-card-visual {
+        position:relative; height:145px; border-radius:13px;
+        padding:18px; box-sizing:border-box; overflow:hidden;
+        border:1px solid transparent;
+    }
+    .station-card-visual.care { background:linear-gradient(135deg,#fff4f6,#ffe8ec); border-color:#f24a61; }
+    .station-card-visual.arch { background:linear-gradient(135deg,#eaf8ff,#d9f1fc); }
+    .station-card-visual.pet { background:linear-gradient(135deg,#ecfff9,#dcf7ee); }
+    .station-card-visual.supply { background:linear-gradient(135deg,#f7f0ff,#eee5ff); }
+    .station-card-visual.onsite { background:linear-gradient(135deg,#fff9e8,#fff3cf); }
+    .station-card-visual.critical { animation:stationFlash .85s infinite alternate; }
+    .station-icon-circle { width:68px;height:68px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:31px;position:absolute;left:22px;top:18px; }
+    .care .station-icon-circle { background:#ffd9df;color:#df1737; }
+    .arch .station-icon-circle { background:#bfeaff;color:#0877bf; }
+    .pet .station-icon-circle { background:#bdeedc;color:#0a8a5a; }
+    .supply .station-icon-circle { background:#ddc9ff;color:#5a2dc9; }
+    .onsite .station-icon-circle { background:#ffe0a2;color:#c78300; }
+    .station-copy { margin-left:90px; }
+    .station-card-title { font-size:20px;font-weight:850;color:#102041;line-height:1.1;padding-top:12px; }
+    .station-count-line { margin-top:7px;display:flex;align-items:baseline;gap:8px; }
+    .station-count { font-size:40px;font-weight:850;line-height:1;color:#102041; }
+    .care .station-count { color:#e11d35; }.arch .station-count { color:#0877bf; }.pet .station-count { color:#0a8a5a; }.supply .station-count { color:#5a2dc9; }.onsite .station-count { color:#c78300; }
+    .station-active { font-size:12px;color:#50617c; }
+    .station-arrow { position:absolute;right:18px;top:37px;font-size:25px;color:#273b5e; }
+    .station-sla-ref { position:absolute;left:18px;bottom:15px;font-size:12px;color:#52627c; }
+    .station-sla-ref strong { color:#152645;font-size:13px; }
+    .station-warning { position:absolute;left:18px;bottom:17px;color:#df1737;font-weight:800;font-size:12px; }
+    .station-warning + .station-sla-ref { bottom:0; }
+    .station-click button { height:145px !important;min-height:145px !important;width:100% !important;margin-top:-145px !important;opacity:0 !important;border:0 !important;background:transparent !important;box-shadow:none !important;cursor:pointer !important;position:relative !important;z-index:5 !important; }
+
+    /* REFERENCE TABLE PANEL */
+    .cases-panel { background:#fff;border-radius:18px;padding:16px 12px 18px;box-shadow:0 3px 18px rgba(29,55,96,.05); }
+
+    /* RIGHT-SIDE CASE DRAWER, matching the uploaded reference */
+    div[data-testid="stDialog"] > div { position:fixed !important;top:278px !important;right:14px !important;left:auto !important;transform:none !important;width:min(494px,calc(100vw - 28px)) !important;max-width:min(494px,calc(100vw - 28px)) !important;height:calc(100vh - 294px) !important;max-height:calc(100vh - 294px) !important;margin:0 !important;border-radius:18px !important;box-shadow:0 12px 36px rgba(25,42,76,.16) !important;overflow:hidden !important; }
+    div[data-testid="stDialog"] [data-testid="stDialogContent"] { padding-top:0 !important; }
+    div[data-testid="stDialog"] header { border-bottom:1px solid #edf0f5 !important; }
+    div[data-testid="stDialog"] > div > div { overflow-y:auto !important; }
 
     /* DIALOG */
 
@@ -1444,17 +1486,17 @@ with header_cols[0]:
     st.markdown(
         """
         <div class="brand-row">
-            <div class="brand-mark">▣</div>
-            <div class="brand-name">
-                Tasks Monitoring Tracker
+            <div class="brand-mark" aria-hidden="true">
+                <svg viewBox="0 0 48 48" width="48" height="48">
+                    <path d="M24 4 42 14 24 24 6 14 24 4Z" fill="#8068ff"/>
+                    <path d="M6 14v9l18 10 18-10v-9L24 24 6 14Z" fill="#5d42e8"/>
+                    <path d="M6 25v9l18 10 18-10v-9L24 35 6 25Z" fill="#4a30cf"/>
+                </svg>
             </div>
+            <div class="brand-name">Tasks Monitoring Tracker</div>
             <div class="brand-divider"></div>
             <div class="top-nav">
-                <span>Track</span>
-                <span>•</span>
-                <span>Manage</span>
-                <span>•</span>
-                <span>Resolve</span>
+                <span>Track</span><span>•</span><span>Manage</span><span>•</span><span>Resolve</span>
             </div>
         </div>
         """,
@@ -2293,56 +2335,35 @@ def dashboard_fragment():
         ]
 
         with station_cols[index]:
-
-            css_class = (
-                "station-btn station-critical"
-                if critical
-                else "station-btn"
-            )
-
+            slug = {"CARE":"care","ARCH":"arch","PET":"pet","SUPPLY CHAIN":"supply","ONSITE":"onsite"}[station]
+            icon = config.get("icon", "•")
+            sla = config["sla_minutes"]
+            sla_text = f"{sla} mins" if sla < 60 else f"{sla // 60} hour" + ("s" if sla != 60 else "")
+            warning_html = f'<div class="station-warning">◷ &nbsp; {nearing} nearing due</div>' if nearing else ""
+            sla_bottom = "bottom:0px;" if nearing else "bottom:15px;"
+            critical_class = "critical" if critical else ""
             st.markdown(
-                f'<div class="{css_class}">',
+                f"""
+                <div class="station-card-visual {slug} {critical_class}">
+                    <div class="station-icon-circle">{html.escape(icon)}</div>
+                    <div class="station-copy">
+                        <div class="station-card-title">{html.escape(station)}</div>
+                        <div class="station-count-line"><span class="station-count">{len(station_tasks)}</span><span class="station-active">Active Cases</span></div>
+                    </div>
+                    <div class="station-arrow">›</div>
+                    {warning_html}
+                    <div class="station-sla-ref" style="{sla_bottom}">◷ &nbsp; Max Timeframe: <strong>{sla_text}</strong></div>
+                </div>
+                """,
                 unsafe_allow_html=True,
             )
-
-            # Button text intentionally uses multiline layout
-            # to keep the tile visually close to the reference.
-            label = (
-                f"{config['icon']}   {station}\n\n"
-                f"{len(station_tasks)}  Active Cases\n\n"
-                f"◷  Max Timeframe: "
-                f"{config['sla_minutes'] if config['sla_minutes'] < 60 else config['sla_minutes'] // 60}"
-                f"{' mins' if config['sla_minutes'] < 60 else ' hour' + ('s' if config['sla_minutes'] != 60 else '')}"
-            )
-
-            if st.button(
-                label,
-                key=f"station_{station}",
-                use_container_width=True,
-            ):
-
-                # Clicking the flashing station stops the
-                # flashing/alert for that station.
+            st.markdown('<div class="station-click">', unsafe_allow_html=True)
+            if st.button(" ", key=f"station_{station}", use_container_width=True):
                 if critical:
-                    acknowledge_station_alerts(
-                        station
-                    )
-
-                st.session_state[
-                    "selected_station"
-                ] = station
-
+                    acknowledge_station_alerts(station)
+                st.session_state["selected_station"] = station
                 st.rerun()
-
-            st.markdown(
-                "</div>",
-                unsafe_allow_html=True,
-            )
-
-            if nearing:
-                st.caption(
-                    f"⚠ {nearing} nearing due"
-                )
+            st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown(
         "<div style='height:10px'></div>",
