@@ -1304,7 +1304,8 @@ st.markdown(
     .station-card-visual.warning-muted .station-alert-icon {
         animation:none !important;
         transform:none !important;
-        opacity:1 !important;
+        opacity:0 !important;
+        display:none !important;
     }
     .duration-warning-wrap {
         display:inline-flex;
@@ -4262,15 +4263,21 @@ def dashboard_fragment():
                     );
 
                     if (icon) {
+                        /*
+                         * The red exclamation is part of the active warning.
+                         * Once the user clicks the tile, the warning is
+                         * acknowledged immediately: stop the animation AND
+                         * hide the exclamation.
+                         */
                         icon.style.display =
-                            warningExists ? "flex" : "none";
+                            shouldFlash ? "flex" : "none";
 
                         if (shouldFlash) {
                             icon.style.animation = "";
                             icon.style.opacity = "";
                         } else {
                             icon.style.animation = "none";
-                            icon.style.opacity = "1";
+                            icon.style.opacity = "0";
                         }
                     }
 
@@ -4385,8 +4392,14 @@ def dashboard_fragment():
                                         '[data-station-alert-icon="1"]'
                                     );
                                     if (icon) {
+                                        /*
+                                         * Stop the red exclamation immediately
+                                         * on pointerdown. Do not wait for the
+                                         * Streamlit fragment rerun.
+                                         */
                                         icon.style.animation = "none";
-                                        icon.style.opacity = "1";
+                                        icon.style.opacity = "0";
+                                        icon.style.display = "none";
                                     }
                                 }
                             });
