@@ -11,6 +11,7 @@ UI is designed to closely match the supplied dashboard reference:
 - Borderless active-case table
 - Right-side case-detail dialog
 - Settings control only (no alert bell / no profile)
+- Admin Settings supports Excel case import and vendor synchronization
 - Real-time duration using the user's browser clock
 - Fragment-only monitoring refreshes so the entire page does not refresh
 
@@ -59,7 +60,7 @@ except Exception:
 
 import pandas as pd
 import streamlit as st
-from pymongo import MongoClient, ASCENDING, DESCENDING
+from pymongo import MongoClient, ASCENDING, DESCENDING, ReplaceOne
 from pymongo.errors import PyMongoError
 
 
@@ -857,8 +858,8 @@ st.markdown(
     .caseflow-header-shell,
     [class*="st-key-caseflow_header_shell"] {
         position:relative !important;
-        height:43px !important;
-        min-height:43px !important;
+        height:62px !important;
+        min-height:62px !important;
         width:100% !important;
         padding:0 !important;
         margin:0 0 18px 0 !important;
@@ -879,10 +880,10 @@ st.markdown(
         content:"" !important;
         position:absolute !important;
         z-index:0 !important;
-        top:-12px !important;
+        top:-18px !important;
         right:-3% !important;
         width:49% !important;
-        height:70px !important;
+        height:95px !important;
         background:
             linear-gradient(132deg,
                 transparent 0%,
@@ -902,7 +903,7 @@ st.markdown(
         right:2% !important;
         top:-7px !important;
         width:40% !important;
-        height:58px !important;
+        height:82px !important;
         background:
             repeating-linear-gradient(
                 154deg,
@@ -924,8 +925,8 @@ st.markdown(
         position:absolute !important;
         inset:0 !important;
         width:100% !important;
-        height:43px !important;
-        min-height:43px !important;
+        height:62px !important;
+        min-height:62px !important;
         margin:0 !important;
         padding:0 !important;
         display:block !important;
@@ -935,8 +936,8 @@ st.markdown(
     [class*="st-key-caseflow_header_shell"] .caseflow-brand {
         position:absolute !important;
         left:12px !important;
-        top:4px !important;
-        height:35px !important;
+        top:7px !important;
+        height:48px !important;
         display:flex !important;
         align-items:center !important;
         gap:6px !important;
@@ -975,16 +976,16 @@ st.markdown(
     }
 
     .caseflow-hpe-word {
-        font-size:13px !important;
-        line-height:12px !important;
+        font-size:18px !important;
+        line-height:16px !important;
         font-weight:800 !important;
         letter-spacing:-.3px !important;
         color:#fff !important;
     }
 
     .caseflow-hpe-tagline {
-        margin-top:3px !important;
-        font-size:4.6px !important;
+        margin-top:4px !important;
+        font-size:6px !important;
         line-height:5px !important;
         font-weight:500 !important;
         color:rgba(255,255,255,.84) !important;
@@ -993,14 +994,14 @@ st.markdown(
 
     .caseflow-divider {
         width:1px !important;
-        height:25px !important;
-        margin-left:5px !important;
+        height:36px !important;
+        margin-left:8px !important;
         background:rgba(255,255,255,.72) !important;
     }
 
     .caseflow-title {
-        font-size:13px !important;
-        line-height:16px !important;
+        font-size:18px !important;
+        line-height:21px !important;
         font-weight:750 !important;
         color:#fff !important;
         letter-spacing:-.2px !important;
@@ -1012,7 +1013,7 @@ st.markdown(
         left:0 !important;
         top:0 !important;
         width:31% !important;
-        height:43px !important;
+        height:62px !important;
         padding:0 !important;
         margin:0 !important;
         min-width:0 !important;
@@ -1021,7 +1022,7 @@ st.markdown(
     [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(2) {
         position:absolute !important;
         left:34.2% !important;
-        top:9px !important;
+        top:13px !important;
         width:44% !important;
         max-width:360px !important;
         min-width:220px !important;
@@ -1032,8 +1033,8 @@ st.markdown(
     [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(3) {
         position:absolute !important;
         right:1.1% !important;
-        top:3px !important;
-        width:34px !important;
+        top:7px !important;
+        width:48px !important;
         max-width:34px !important;
         min-width:34px !important;
         height:37px !important;
@@ -1056,29 +1057,29 @@ st.markdown(
 
     [class*="st-key-caseflow_header_shell"] div[data-testid="stTextInput"] input {
         width:100% !important;
-        height:25px !important;
-        min-height:25px !important;
+        height:36px !important;
+        min-height:36px !important;
         box-sizing:border-box !important;
         border:0 !important;
         outline:none !important;
-        border-radius:6px !important;
+        border-radius:8px !important;
         background:#fff !important;
         color:#244a55 !important;
-        font-size:8px !important;
+        font-size:11px !important;
         font-weight:500 !important;
-        line-height:25px !important;
-        padding:0 9px 0 23px !important;
+        line-height:36px !important;
+        padding:0 12px 0 30px !important;
         box-shadow:0 1px 4px rgba(0,0,0,.12) !important;
         background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='%23728a98' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-4-4'/%3E%3C/svg%3E") !important;
-        background-position:7px center !important;
+        background-position:10px center !important;
         background-repeat:no-repeat !important;
-        background-size:11px 11px !important;
+        background-size:15px 15px !important;
     }
 
     [class*="st-key-caseflow_header_shell"] div[data-testid="stTextInput"] input::placeholder {
         color:#748a98 !important;
         opacity:1 !important;
-        font-size:8px !important;
+        font-size:11px !important;
     }
 
     [class*="st-key-caseflow_header_shell"] div[data-testid="stTextInput"] input:focus {
@@ -1086,13 +1087,13 @@ st.markdown(
     }
 
     [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(3) button {
-        width:34px !important;
-        height:34px !important;
+        width:48px !important;
+        height:48px !important;
         min-height:34px !important;
         padding:0 !important;
         margin:0 !important;
         border:1px solid rgba(255,255,255,.60) !important;
-        border-radius:7px !important;
+        border-radius:9px !important;
         background:rgba(0,53,57,.28) !important;
         box-shadow:none !important;
         color:transparent !important;
@@ -1109,7 +1110,7 @@ st.markdown(
         align-items:center !important;
         justify-content:center !important;
         color:#fff !important;
-        font-size:16px !important;
+        font-size:21px !important;
         line-height:1 !important;
     }
 
@@ -1420,7 +1421,7 @@ st.markdown(
         padding:4px 8px !important;
         margin:0 !important;
         border:1px solid #d3dbe7 !important;
-        border-radius:7px !important;
+        border-radius:9px !important;
         background:#fff !important;
         box-shadow:none !important;
         color:#31435f !important;
@@ -1637,6 +1638,166 @@ st.markdown(
 
         .top-nav {
             display:none;
+        }
+    }
+
+
+    /* MOBILE LAYOUT — header, station cards and case table remain usable on phones. */
+    @media(max-width:700px) {
+        .block-container {
+            padding:10px 10px 24px !important;
+        }
+
+        .caseflow-header-shell,
+        [class*="st-key-caseflow_header_shell"] {
+            height:94px !important;
+            min-height:94px !important;
+            margin-bottom:12px !important;
+        }
+
+        [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] {
+            height:94px !important;
+            min-height:94px !important;
+        }
+
+        [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(1) {
+            left:0 !important;
+            top:0 !important;
+            width:72% !important;
+            height:48px !important;
+        }
+
+        [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(2) {
+            left:10px !important;
+            top:52px !important;
+            width:calc(100% - 70px) !important;
+            max-width:none !important;
+            min-width:0 !important;
+        }
+
+        [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(3) {
+            right:8px !important;
+            top:6px !important;
+            width:48px !important;
+            max-width:48px !important;
+            min-width:48px !important;
+            height:48px !important;
+        }
+
+        [class*="st-key-caseflow_header_shell"] .caseflow-brand {
+            left:10px !important;
+            top:5px !important;
+            height:42px !important;
+        }
+
+        .caseflow-hpe-symbol {
+            width:27px !important;
+            height:27px !important;
+            flex-basis:27px !important;
+        }
+
+        .caseflow-hpe-symbol::before,
+        .caseflow-hpe-symbol::after {
+            width:25px !important;
+        }
+
+        .caseflow-hpe-word { font-size:16px !important; line-height:15px !important; }
+        .caseflow-hpe-tagline { font-size:5px !important; line-height:6px !important; }
+        .caseflow-divider { height:30px !important; margin-left:5px !important; }
+        .caseflow-title { font-size:17px !important; line-height:20px !important; }
+
+        [class*="st-key-caseflow_header_shell"] div[data-testid="stTextInput"] input {
+            height:34px !important;
+            min-height:34px !important;
+            font-size:11px !important;
+            line-height:34px !important;
+        }
+
+        /* Turn the five station columns into a compact two-column mobile grid. */
+        [data-testid="stHorizontalBlock"]:has([class*="st-key-station_wrap_care"]) {
+            display:grid !important;
+            grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+            gap:9px !important;
+        }
+
+        [data-testid="stHorizontalBlock"]:has([class*="st-key-station_wrap_care"]) > div {
+            width:auto !important;
+            flex:unset !important;
+            min-width:0 !important;
+        }
+
+        [class*="st-key-station_wrap_care"],
+        [class*="st-key-station_wrap_arch"],
+        [class*="st-key-station_wrap_pet"],
+        [class*="st-key-station_wrap_supply"],
+        [class*="st-key-station_wrap_onsite"] {
+            min-height:145px !important;
+        }
+
+        .station-card-visual {
+            height:145px !important;
+            min-height:145px !important;
+            padding:12px !important;
+            border-radius:12px !important;
+        }
+
+        .station-icon-circle {
+            width:46px !important;
+            height:46px !important;
+            left:12px !important;
+            top:12px !important;
+            font-size:22px !important;
+        }
+
+        .station-copy {
+            left:70px !important;
+            top:18px !important;
+        }
+
+        .station-card-title { font-size:14px !important; }
+        .station-count { font-size:25px !important; }
+        .station-active { font-size:10px !important; }
+        .station-arrow { right:10px !important; top:17px !important; font-size:20px !important; }
+        .station-warning { left:12px !important; bottom:32px !important; font-size:9px !important; }
+        .station-sla-ref { left:12px !important; bottom:13px !important; font-size:9px !important; }
+        .station-alert-icon { right:10px !important; top:64px !important; width:27px !important; height:27px !important; font-size:17px !important; }
+
+        .cases-title { font-size:18px !important; }
+        .station-pill { font-size:11px !important; padding:5px 10px !important; }
+
+        /* Keep the essential case fields visible and prevent the table from
+           becoming unusably narrow. Secondary fields are hidden on phones. */
+        [data-testid="stHorizontalBlock"]:has([class*="st-key-case_cell_"]) > div:nth-child(4),
+        [data-testid="stHorizontalBlock"]:has([class*="st-key-case_cell_"]) > div:nth-child(5) {
+            display:none !important;
+        }
+
+        [data-testid="stHorizontalBlock"]:has([class*="st-key-case_cell_"]) {
+            display:grid !important;
+            grid-template-columns:1.2fr 2.1fr 1.15fr 1.05fr !important;
+            gap:4px !important;
+        }
+
+        [data-testid="stHorizontalBlock"]:has([class*="st-key-case_cell_"]) > div {
+            min-width:0 !important;
+            width:auto !important;
+            flex:unset !important;
+        }
+
+        .case-head, .case-row { font-size:9px !important; }
+        [class*="st-key-case_cell_"] button { font-size:9px !important; padding:3px 5px !important; }
+        .priority-pill { font-size:8px !important; padding:4px 5px !important; }
+        .duration-warning-wrap { font-size:9px !important; }
+
+        div[data-testid="stDialog"] > div {
+            top:8px !important;
+            right:8px !important;
+            left:8px !important;
+            width:calc(100vw - 16px) !important;
+            max-width:calc(100vw - 16px) !important;
+            height:calc(100vh - 16px) !important;
+            max-height:calc(100vh - 16px) !important;
+            border-radius:14px !important;
         }
     }
 
@@ -2271,6 +2432,166 @@ def sync_vendor_excel(uploaded_file):
         return False, str(exc)
 
 
+def import_cases_excel(uploaded_file, replace_existing_excel=False):
+    """Import case records from an Excel workbook into Tasks_Collection.
+
+    The workbook mirrors the case fields used by the dashboard. Existing records
+    with the same Case # are updated, while new Case # values are inserted.
+    Imported rows are tagged source_type='excel' so they can be replaced safely.
+    """
+    try:
+        df = pd.read_excel(uploaded_file)
+
+        if df.empty:
+            return False, "The Excel file is empty.", 0
+
+        def normalize_column(value):
+            return (
+                text(value).lower().strip()
+                .replace("#", "number")
+                .replace("/", "_")
+                .replace("-", "_")
+                .replace(" ", "_")
+            )
+
+        df.columns = [normalize_column(c) for c in df.columns]
+
+        aliases = {
+            "case": "case_number",
+            "case_no": "case_number",
+            "case_no.": "case_number",
+            "case_number": "case_number",
+            "case_number_": "case_number",
+            "caseid": "case_number",
+            "case_id": "case_number",
+            "account": "account_name",
+            "accountname": "account_name",
+            "department": "department",
+            "station": "department",
+            "assigned": "assigned_to",
+            "assignedto": "assigned_to",
+            "accountpriority": "account_priority",
+            "account_priority": "account_priority",
+            "created": "created_at",
+            "created_date": "created_at",
+            "created_datetime": "created_at",
+            "station_started": "station_started_at",
+            "station_start": "station_started_at",
+            "due": "due_date",
+            "due_datetime": "due_date",
+            "last_update_date": "last_update",
+            "isactive": "active",
+        }
+        df = df.rename(columns=aliases)
+
+        required = {"case_number", "subject", "department"}
+        missing = sorted(required - set(df.columns))
+        if missing:
+            return (
+                False,
+                "Missing required column(s): " + ", ".join(missing),
+                0,
+            )
+
+        def parse_datetime(value, fallback=None):
+            if value is None or (isinstance(value, float) and pd.isna(value)):
+                return fallback
+            parsed = pd.to_datetime(value, errors="coerce", utc=True)
+            if pd.isna(parsed):
+                return fallback
+            return parsed.to_pydatetime()
+
+        def parse_bool(value, default=True):
+            if value is None or (isinstance(value, float) and pd.isna(value)):
+                return default
+            return text(value).lower() in {
+                "true", "yes", "y", "1", "active", "open"
+            }
+
+        now = utc_now()
+        operations = []
+        skipped = 0
+
+        if replace_existing_excel:
+            col(TASKS_COLLECTION).delete_many({"source_type": "excel"})
+
+        for _, row in df.iterrows():
+            case_number = text(row.get("case_number"))
+            subject = text(row.get("subject"))
+
+            if not case_number or not subject:
+                skipped += 1
+                continue
+
+            station = station_name(row.get("department"))
+            if station not in STATIONS:
+                skipped += 1
+                continue
+
+            created_at = parse_datetime(row.get("created_at"), now)
+            started_at = parse_datetime(row.get("station_started_at"), created_at)
+            due_default = started_at + timedelta(
+                minutes=STATIONS[station]["sla_minutes"]
+            )
+            due_date = parse_datetime(row.get("due_date"), due_default)
+            last_update = parse_datetime(row.get("last_update"), now)
+
+            priority = text(row.get("priority")) or "Low"
+            account_priority = (
+                "Yes" if is_priority(row.get("account_priority")) else "No"
+            )
+
+            active = parse_bool(row.get("active"), True)
+            raw_is_mock = parse_bool(row.get("is_mock"), False)
+
+            doc = {
+                "case_number": case_number,
+                "subject": subject,
+                "priority": priority,
+                "account_priority": account_priority,
+                "assigned_to": text(row.get("assigned_to")) or "Unassigned",
+                "department": station,
+                "account_name": text(row.get("account_name")),
+                "vendor": text(row.get("vendor")),
+                "issue": text(row.get("issue")) or subject,
+                "description": text(row.get("description")),
+                "status": text(row.get("status")) or "Open",
+                "created_at": created_at,
+                "station_started_at": started_at,
+                "due_date": due_date,
+                "last_update": last_update,
+                "notes": text(row.get("notes")),
+                "active": active,
+                "is_mock": raw_is_mock,
+                "source_type": "excel",
+                "history": [{
+                    "action": f"Case imported into {station}",
+                    "timestamp": now,
+                }],
+            }
+
+            operations.append(
+                ReplaceOne(
+                    {"case_number": case_number},
+                    doc,
+                    upsert=True,
+                )
+            )
+
+        if operations:
+            col(TASKS_COLLECTION).bulk_write(operations, ordered=False)
+            clear_task_cache()
+
+        imported = len(operations)
+        return True, (
+            f"{imported} case record(s) imported successfully"
+            + (f"; {skipped} row(s) skipped." if skipped else ".")
+        ), imported
+
+    except Exception as exc:
+        return False, f"Unable to import cases: {exc}", 0
+
+
 def find_vendor(task):
     keys = [
         text(task.get("vendor")).lower(),
@@ -2456,6 +2777,7 @@ if st.session_state["show_settings"]:
         else:
 
             tabs = st.tabs([
+                "Cases",
                 "External Sync",
                 "Alerts",
                 "Access Control",
@@ -2463,10 +2785,70 @@ if st.session_state["show_settings"]:
             ])
 
             # -----------------------------------------------
-            # EXTERNAL SYNC
+            # CASE EXCEL IMPORT
             # -----------------------------------------------
 
             with tabs[0]:
+                st.markdown("### Case Data")
+                st.caption(
+                    "Upload the Excel case file using the same columns as the "
+                    "dashboard case records. Case #, Subject and Department are required."
+                )
+
+                case_file = st.file_uploader(
+                    "Cases Excel",
+                    type=["xlsx", "xls"],
+                    key="case_excel_upload",
+                    help="Import active cases into Tasks_Collection.",
+                )
+
+                replace_excel = st.checkbox(
+                    "Replace previously imported Excel cases",
+                    value=False,
+                    help="Removes only records previously tagged as source_type='excel' before importing this workbook.",
+                )
+
+                if case_file is not None:
+                    try:
+                        preview_df = pd.read_excel(case_file)
+                        st.dataframe(
+                            preview_df.head(8),
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+                    except Exception as exc:
+                        st.error(f"Unable to preview the Excel file: {exc}")
+
+                    if st.button(
+                        "Import Cases",
+                        type="primary",
+                        use_container_width=True,
+                        key="import_cases_excel",
+                    ):
+                        with st.spinner("Importing case data..."):
+                            ok, msg, imported_count = import_cases_excel(
+                                case_file,
+                                replace_existing_excel=replace_excel,
+                            )
+
+                        if ok:
+                            st.success(msg)
+                            st.session_state["selected_station"] = "CARE"
+                            st.rerun()
+                        else:
+                            st.error(msg)
+
+                st.info(
+                    "Recommended columns: Case #, Subject, Priority, Account Priority, "
+                    "Assigned To, Department, Account Name, Vendor, Issue, Description, "
+                    "Status, Created At, Station Started At, Due Date, Last Update, Notes, Active, Is Mock."
+                )
+
+            # -----------------------------------------------
+            # EXTERNAL SYNC
+            # -----------------------------------------------
+
+            with tabs[1]:
 
                 st.markdown(
                     "### Vendor Information"
@@ -2508,7 +2890,7 @@ if st.session_state["show_settings"]:
             # ALERTS
             # -----------------------------------------------
 
-            with tabs[1]:
+            with tabs[2]:
 
                 st.markdown(
                     "### Alert Management"
@@ -2545,7 +2927,7 @@ if st.session_state["show_settings"]:
             # ACCESS CONTROL
             # -----------------------------------------------
 
-            with tabs[2]:
+            with tabs[3]:
 
                 st.markdown(
                     "### One-Time Access"
@@ -2572,7 +2954,7 @@ if st.session_state["show_settings"]:
             # SIMULATION
             # -----------------------------------------------
 
-            with tabs[3]:
+            with tabs[4]:
 
                 st.markdown(
                     "### Alert Simulation"
