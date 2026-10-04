@@ -5,7 +5,7 @@ Single-file Streamlit application.
 UI is designed to closely match the supplied dashboard reference:
 - White/light gray background
 - Dark navy typography
-- Uploaded HPE logo mark
+- Purple app mark
 - Large search bar
 - Five pastel station tiles
 - Borderless active-case table
@@ -711,22 +711,6 @@ def access_gate():
             box-shadow:0 24px 70px rgba(20,38,70,.10);
         }
 
-        .access-mark {
-            width:82px;
-            height:52px;
-            border-radius:0;
-            background:transparent;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            margin:auto;
-        }
-        .access-mark img {
-            width:82px;
-            height:52px;
-            object-fit:contain;
-        }
-
         .access-title {
             text-align:center;
             color:#102041;
@@ -743,7 +727,6 @@ def access_gate():
         </style>
 
         <div class="access-wrap">
-            <div class="access-mark"><img src="data:image/png;base64,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" alt="HPE logo"></div>
             <div class="access-title">HPE Caseflow</div>
             <div class="access-sub">
                 Enter the one-time access code to continue.
@@ -822,20 +805,11 @@ st.markdown(
     <style>
     @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
 
-    /* =========================================================
-       GLOBAL TYPOGRAPHY — INTER EVERYWHERE
-       ========================================================= */
-    html, body, #root, .stApp,
-    .stApp *, [class*="css"], [data-testid],
-    button, input, textarea, select,
-    [role="button"], [role="combobox"], [role="dialog"],
-    [role="tab"], [role="tablist"], [role="alert"],
-    [contenteditable="true"], .stMarkdown, .stCaption {
+    html, body, [class*="css"], .stApp, .stApp * {
         font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
-        font-synthesis: none !important;
     }
 
-    input::placeholder, textarea::placeholder {
+    button, input, textarea, select, [role="button"], [role="combobox"] {
         font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
     }
 
@@ -852,7 +826,7 @@ st.markdown(
 
     .block-container {
         max-width:1500px;
-        padding-top:6px;
+        padding-top:18px;
         padding-left:20px;
         padding-right:20px;
         padding-bottom:30px;
@@ -882,83 +856,14 @@ st.markdown(
     .brand-row {
         display:flex;
         align-items:center;
-        gap:12px;
-        height:52px;
-        min-height:52px;
-        box-sizing:border-box;
-        /* Give HPE Caseflow breathing room above and below. */
-        margin:8px 0 10px 0;
-        padding:4px 0;
-        line-height:1.2;
-    }
-
-    .brand-mark {
-        width:58px;
-        height:38px;
-        flex:0 0 58px;
-        border-radius:0;
-        background:transparent !important;
-        display:flex;
-        align-items:center;
-        justify-content:flex-start;
-        overflow:hidden;
-    }
-    .brand-logo-image {
-        display:block;
-        width:58px;
-        height:38px;
-        object-fit:contain;
-        object-position:left center;
-    }
-
-    .brand-name {
-        color:#102041;
-        font-family:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
-        font-size:22px;
-        font-weight:850;
-        letter-spacing:-.7px;
-        line-height:1.2;
-        margin:3px 0;
-        white-space:nowrap;
-    }
-
-    .brand-divider {
-        height:28px;
-        width:1px;
-        background:#dce2eb;
-        margin-left:2px;
-    }
-
-    .top-nav {
-        color:#53637f;
-        font-size:14px;
-    }
-
-    .top-nav span {
-        margin-right:15px;
-    }
-
-    .brand-mark { background:transparent !important; box-shadow:none !important; border-radius:0 !important; }
-
-    /* Keep native Streamlit text/widgets on the same Inter stack. */
-    [data-testid="stText"],
-    [data-testid="stMarkdownContainer"],
-    [data-testid="stMarkdownContainer"] *,
-    [data-testid="stTextInput"] *,
-    [data-testid="stButton"] *,
-    [data-testid="stSelectbox"] *,
-    [data-testid="stNumberInput"] *,
-    [data-testid="stDateInput"] *,
-    [data-testid="stFileUploader"] *,
-    [data-testid="stDialog"] *,
-    [data-testid="stDataFrame"] * {
-        font-family:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+        gap:14px;
+        height:64px;
     }
 
     /* SEARCH */
 
     div[data-testid="stTextInput"] input {
-        height:44px !important;
+        height:50px !important;
         border:1px solid #dce3ed !important;
         border-radius:12px !important;
         background:#fff !important;
@@ -974,8 +879,8 @@ st.markdown(
     /* TOP ICON BUTTONS */
 
     .top-icon button {
-        height:44px !important;
-        min-height:44px !important;
+        height:50px !important;
+        min-height:50px !important;
         border:1px solid #dce3ed !important;
         background:#fff !important;
         border-radius:12px !important;
@@ -1702,11 +1607,12 @@ MOCK_ACCOUNTS = [
 ]
 
 # Increment this when the structure/timing of demonstration cases changes.
+# Version 10 resets existing demonstration cases to 00:00:00 on first load.
 MOCK_DATA_VERSION = 10
 
 
 @st.cache_resource(show_spinner=False)
-def seed_mock_cases(version=MOCK_DATA_VERSION, force=False):
+def seed_mock_cases(force=False):
     existing = col(TASKS_COLLECTION).count_documents(
         {"is_mock": True}
     )
@@ -1715,39 +1621,28 @@ def seed_mock_cases(version=MOCK_DATA_VERSION, force=False):
     # This resets demonstration durations to 00:00:00 without doing so
     # again on every normal Streamlit rerun.
     if existing and not force:
-        needs_reset = col(TASKS_COLLECTION).count_documents({
+        reset_filter = {
             "is_mock": True,
-            "mock_data_version": {"$ne": version},
+            "mock_data_version": {"$ne": MOCK_DATA_VERSION},
             "case_number": {"$not": {"$regex": "^SIM-"}},
-        })
+        }
+        needs_reset = col(TASKS_COLLECTION).count_documents(reset_filter)
 
         if needs_reset:
+            # Reset every demonstration case from one common timestamp.
+            # update_many is substantially faster than one database write per case.
             reset_now = utc_now()
-            reset_docs = col(TASKS_COLLECTION).find({
-                "is_mock": True,
-                "mock_data_version": {"$ne": version},
-                "case_number": {"$not": {"$regex": "^SIM-"}},
-            })
-
-            for old_task in reset_docs:
-                department = station_name(
-                    old_task.get("department")
-                )
-                sla_minutes = STATIONS.get(
-                    department,
-                    STATIONS["CARE"],
-                )["sla_minutes"]
-
-                col(TASKS_COLLECTION).update_one(
-                    {"_id": old_task["_id"]},
-                    {"$set": {
-                        "created_at": reset_now,
-                        "station_started_at": reset_now,
-                        "due_date": reset_now + timedelta(days=2),
-                        "last_update": reset_now,
-                        "mock_data_version": version,
-                    }},
-                )
+            col(TASKS_COLLECTION).update_many(
+                reset_filter,
+                {"$set": {
+                    "created_at": reset_now,
+                    "station_started_at": reset_now,
+                    "due_date": reset_now + timedelta(days=2),
+                    "last_update": reset_now,
+                    "mock_data_version": MOCK_DATA_VERSION,
+                }},
+            )
+            clear_task_cache()
 
         return existing
 
@@ -1835,7 +1730,7 @@ def seed_mock_cases(version=MOCK_DATA_VERSION, force=False):
                 "notes": "Mock demonstration case.",
                 "active": True,
                 "is_mock": True,
-                "mock_data_version": version,
+                "mock_data_version": MOCK_DATA_VERSION,
                 "history": [
                     {
                         "action": (
@@ -2204,11 +2099,6 @@ with header_cols[0]:
     st.markdown(
         f"""
         <div class="brand-row">
-            <div class="brand-mark" aria-hidden="true">
-                <img class="brand-logo-image"
-                     src="data:image/png;base64,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"
-                     alt="HPE logo">
-            </div>
             <div class="brand-name">{html.escape(APP_NAME)}</div>
             <div class="brand-divider"></div>
             <div class="top-nav">
@@ -3678,7 +3568,7 @@ def dashboard_fragment():
 # and does not create a background refresh loop.
 # Seed/mock migration is cached as a resource so normal fragment reruns
 # do not repeatedly query MongoDB for the mock-data count.
-seed_mock_cases(MOCK_DATA_VERSION)
+seed_mock_cases()
 
 
 # Render the dashboard once. No run_every / autorefresh is used.
