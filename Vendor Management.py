@@ -822,11 +822,20 @@ st.markdown(
     <style>
     @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
 
-    html, body, [class*="css"], .stApp, .stApp * {
+    /* =========================================================
+       GLOBAL TYPOGRAPHY — INTER EVERYWHERE
+       ========================================================= */
+    html, body, #root, .stApp,
+    .stApp *, [class*="css"], [data-testid],
+    button, input, textarea, select,
+    [role="button"], [role="combobox"], [role="dialog"],
+    [role="tab"], [role="tablist"], [role="alert"],
+    [contenteditable="true"], .stMarkdown, .stCaption {
         font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+        font-synthesis: none !important;
     }
 
-    button, input, textarea, select, [role="button"], [role="combobox"] {
+    input::placeholder, textarea::placeholder {
         font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
     }
 
@@ -874,7 +883,13 @@ st.markdown(
         display:flex;
         align-items:center;
         gap:12px;
-        height:48px;
+        height:52px;
+        min-height:52px;
+        box-sizing:border-box;
+        /* Give HPE Caseflow breathing room above and below. */
+        margin:8px 0 10px 0;
+        padding:4px 0;
+        line-height:1.2;
     }
 
     .brand-mark {
@@ -898,9 +913,13 @@ st.markdown(
 
     .brand-name {
         color:#102041;
+        font-family:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
         font-size:22px;
         font-weight:850;
         letter-spacing:-.7px;
+        line-height:1.2;
+        margin:3px 0;
+        white-space:nowrap;
     }
 
     .brand-divider {
@@ -920,6 +939,21 @@ st.markdown(
     }
 
     .brand-mark { background:transparent !important; box-shadow:none !important; border-radius:0 !important; }
+
+    /* Keep native Streamlit text/widgets on the same Inter stack. */
+    [data-testid="stText"],
+    [data-testid="stMarkdownContainer"],
+    [data-testid="stMarkdownContainer"] *,
+    [data-testid="stTextInput"] *,
+    [data-testid="stButton"] *,
+    [data-testid="stSelectbox"] *,
+    [data-testid="stNumberInput"] *,
+    [data-testid="stDateInput"] *,
+    [data-testid="stFileUploader"] *,
+    [data-testid="stDialog"] *,
+    [data-testid="stDataFrame"] * {
+        font-family:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+    }
 
     /* SEARCH */
 
