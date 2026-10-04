@@ -5,7 +5,7 @@ Single-file Streamlit application.
 UI is designed to closely match the supplied dashboard reference:
 - White/light gray background
 - Dark navy typography
-- Purple app mark
+- Uploaded HPE logo mark
 - Large search bar
 - Five pastel station tiles
 - Borderless active-case table
@@ -712,17 +712,19 @@ def access_gate():
         }
 
         .access-mark {
-            width:62px;
-            height:62px;
-            border-radius:15px;
-            background:linear-gradient(145deg,#6947ff,#3921c9);
-            color:white;
+            width:82px;
+            height:52px;
+            border-radius:0;
+            background:transparent;
             display:flex;
             align-items:center;
             justify-content:center;
-            font-size:34px;
-            font-weight:900;
             margin:auto;
+        }
+        .access-mark img {
+            width:82px;
+            height:52px;
+            object-fit:contain;
         }
 
         .access-title {
@@ -741,7 +743,7 @@ def access_gate():
         </style>
 
         <div class="access-wrap">
-            <div class="access-mark">▣</div>
+            <div class="access-mark"><img src="data:image/png;base64,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" alt="HPE logo"></div>
             <div class="access-title">HPE Caseflow</div>
             <div class="access-sub">
                 Enter the one-time access code to continue.
@@ -841,7 +843,7 @@ st.markdown(
 
     .block-container {
         max-width:1500px;
-        padding-top:18px;
+        padding-top:6px;
         padding-left:20px;
         padding-right:20px;
         padding-bottom:30px;
@@ -871,27 +873,32 @@ st.markdown(
     .brand-row {
         display:flex;
         align-items:center;
-        gap:14px;
-        height:64px;
+        gap:12px;
+        height:48px;
     }
 
     .brand-mark {
-        width:48px;
-        height:48px;
-        border-radius:11px;
-        background:linear-gradient(145deg,#7051ff,#3723c6);
-        color:#fff;
+        width:58px;
+        height:38px;
+        flex:0 0 58px;
+        border-radius:0;
+        background:transparent !important;
         display:flex;
         align-items:center;
-        justify-content:center;
-        font-size:27px;
-        font-weight:900;
-        box-shadow:0 7px 16px rgba(68,42,202,.20);
+        justify-content:flex-start;
+        overflow:hidden;
+    }
+    .brand-logo-image {
+        display:block;
+        width:58px;
+        height:38px;
+        object-fit:contain;
+        object-position:left center;
     }
 
     .brand-name {
         color:#102041;
-        font-size:25px;
+        font-size:22px;
         font-weight:850;
         letter-spacing:-.7px;
     }
@@ -912,13 +919,12 @@ st.markdown(
         margin-right:15px;
     }
 
-    .brand-mark { background:transparent !important; box-shadow:none !important; border-radius:0 !important; width:48px;height:48px; }
-    .brand-mark svg { display:block; }
+    .brand-mark { background:transparent !important; box-shadow:none !important; border-radius:0 !important; }
 
     /* SEARCH */
 
     div[data-testid="stTextInput"] input {
-        height:50px !important;
+        height:44px !important;
         border:1px solid #dce3ed !important;
         border-radius:12px !important;
         background:#fff !important;
@@ -934,8 +940,8 @@ st.markdown(
     /* TOP ICON BUTTONS */
 
     .top-icon button {
-        height:50px !important;
-        min-height:50px !important;
+        height:44px !important;
+        min-height:44px !important;
         border:1px solid #dce3ed !important;
         background:#fff !important;
         border-radius:12px !important;
@@ -1662,11 +1668,11 @@ MOCK_ACCOUNTS = [
 ]
 
 # Increment this when the structure/timing of demonstration cases changes.
-MOCK_DATA_VERSION = 9
+MOCK_DATA_VERSION = 10
 
 
 @st.cache_resource(show_spinner=False)
-def seed_mock_cases(force=False):
+def seed_mock_cases(version=MOCK_DATA_VERSION, force=False):
     existing = col(TASKS_COLLECTION).count_documents(
         {"is_mock": True}
     )
@@ -1677,7 +1683,7 @@ def seed_mock_cases(force=False):
     if existing and not force:
         needs_reset = col(TASKS_COLLECTION).count_documents({
             "is_mock": True,
-            "mock_data_version": {"$ne": MOCK_DATA_VERSION},
+            "mock_data_version": {"$ne": version},
             "case_number": {"$not": {"$regex": "^SIM-"}},
         })
 
@@ -1685,7 +1691,7 @@ def seed_mock_cases(force=False):
             reset_now = utc_now()
             reset_docs = col(TASKS_COLLECTION).find({
                 "is_mock": True,
-                "mock_data_version": {"$ne": MOCK_DATA_VERSION},
+                "mock_data_version": {"$ne": version},
                 "case_number": {"$not": {"$regex": "^SIM-"}},
             })
 
@@ -1705,7 +1711,7 @@ def seed_mock_cases(force=False):
                         "station_started_at": reset_now,
                         "due_date": reset_now + timedelta(days=2),
                         "last_update": reset_now,
-                        "mock_data_version": MOCK_DATA_VERSION,
+                        "mock_data_version": version,
                     }},
                 )
 
@@ -1795,7 +1801,7 @@ def seed_mock_cases(force=False):
                 "notes": "Mock demonstration case.",
                 "active": True,
                 "is_mock": True,
-                "mock_data_version": MOCK_DATA_VERSION,
+                "mock_data_version": version,
                 "history": [
                     {
                         "action": (
@@ -2165,11 +2171,9 @@ with header_cols[0]:
         f"""
         <div class="brand-row">
             <div class="brand-mark" aria-hidden="true">
-                <svg viewBox="0 0 48 48" width="48" height="48">
-                    <path d="M24 4 42 14 24 24 6 14 24 4Z" fill="#8068ff"/>
-                    <path d="M6 14v9l18 10 18-10v-9L24 24 6 14Z" fill="#5d42e8"/>
-                    <path d="M6 25v9l18 10 18-10v-9L24 35 6 25Z" fill="#4a30cf"/>
-                </svg>
+                <img class="brand-logo-image"
+                     src="data:image/png;base64,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"
+                     alt="HPE logo">
             </div>
             <div class="brand-name">{html.escape(APP_NAME)}</div>
             <div class="brand-divider"></div>
@@ -3640,7 +3644,7 @@ def dashboard_fragment():
 # and does not create a background refresh loop.
 # Seed/mock migration is cached as a resource so normal fragment reruns
 # do not repeatedly query MongoDB for the mock-data count.
-seed_mock_cases()
+seed_mock_cases(MOCK_DATA_VERSION)
 
 
 # Render the dashboard once. No run_every / autorefresh is used.
