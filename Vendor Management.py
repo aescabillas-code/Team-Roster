@@ -41,7 +41,6 @@ Install:
 import hashlib
 import hmac
 import html
-import json
 import secrets
 import os
 import time
@@ -1304,8 +1303,7 @@ st.markdown(
     .station-card-visual.warning-muted .station-alert-icon {
         animation:none !important;
         transform:none !important;
-        opacity:0 !important;
-        display:none !important;
+        opacity:1 !important;
     }
     .duration-warning-wrap {
         display:inline-flex;
@@ -3498,9 +3496,9 @@ def case_details(task_id):
 # ============================================================
 # DASHBOARD
 # ============================================================
-# IMPORTANT: Duration and station warning visuals update continuously in
-# the browser. The dashboard itself does not need a tab switch or a periodic
-# full rerun to cross SLA thresholds.
+# IMPORTANT: This dashboard intentionally has NO periodic Streamlit
+# rerun. The only continuously updating value is Duration, which is
+# handled entirely by browser-side JavaScript below.
 
 @st.fragment
 def dashboard_fragment():
@@ -3517,8 +3515,9 @@ def dashboard_fragment():
         limit=300,
     )
 
-    # Alert_Collection is maintained by the independent 1-second monitor
-    # below. Duration/tile visuals are handled locally in the browser.
+    # Alerts are evaluated only when the dashboard itself renders
+    # (initial load or a user action). There is deliberately no
+    # background polling/rerun.
     scan_alerts(tasks)
 
     now = utc_now()
@@ -3623,26 +3622,9 @@ def dashboard_fragment():
             sla_text = f"{sla} mins" if sla < 60 else f"{sla // 60} hour" + ("s" if sla != 60 else "")
             critical_class = " critical" if flash_tile else ""
             selected_class = " selected" if selected == station else ""
-            # Browser-side monitoring receives every station case start time.
-            # This lets the tile cross the 80% SLA threshold immediately from
-            # the user's clock without waiting for a Streamlit rerun.
-            station_starts = []
-            for _task in station_tasks:
-                _started = as_utc(
-                    _task.get("station_started_at")
-                    or _task.get("created_at")
-                )
-                if _started:
-                    station_starts.append(_started.isoformat())
-
-            station_starts_json = html.escape(
-                json.dumps(station_starts),
-                quote=True,
-            )
-
             alert_icon = (
-                '<div class="station-alert-icon" aria-label="SLA warning" '
-                'data-station-alert-icon="1">!</div>'
+                '<div class="station-alert-icon" aria-label="SLA warning">!</div>'
+                if flash_tile else ""
             )
 
             # The visual card remains the reference design. A transparent
@@ -3655,10 +3637,7 @@ def dashboard_fragment():
                 station_html = (
                     f'<div class="station-card-visual {slug}{critical_class}{selected_class}" '
                     f'data-station="{html.escape(station)}" '
-                    f'data-warning-stop="{ack_until if ack_until > time.time() else 0:.3f}" '
-                    f'data-warning-silenced="{"1" if station in warning_silenced else "0"}" '
-                    f'data-sla-seconds="{sla_seconds:.3f}" '
-                    f'data-duration-starts="{station_starts_json}">'
+                    f'data-warning-stop="{ack_until if ack_until > time.time() else 0:.3f}">'
                     f'{alert_icon}'
                     f'<div class="station-icon-circle">{html.escape(icon)}</div>'
                     f'<div class="station-copy">'
@@ -3668,11 +3647,7 @@ def dashboard_fragment():
                     f'<span class="station-active">Active Cases</span>'
                     f'</div></div>'
                     f'<div class="station-arrow">›</div>'
-                    f'<div class="station-warning{" active" if nearing > 0 else ""}" '
-                    f'data-station-warning-count="1">◷ &nbsp; '
-                    f'<span data-nearing-count="1">{nearing}</span> nearing due'
-                    f'<span data-past-due-label="1">{"  •  " + str(past_due) + " past due" if past_due else ""}</span>'
-                    f'</div>'
+                    f'<div class="station-warning{" active" if nearing > 0 else ""}">◷ &nbsp; {nearing} nearing due{("  •  " + str(past_due) + " past due") if past_due else ""}</div>'
                     f'<div class="station-sla-ref">◷ &nbsp; Max Timeframe: <strong>{html.escape(sla_text)}</strong></div>'
                     f'</div>'
                 )
@@ -4103,351 +4078,120 @@ def dashboard_fragment():
         """
         <script>
         (function () {
-            /*
-             * REAL-TIME BROWSER MONITOR
-             * --------------------------------------------
-             * Duration, station warning thresholds, tile counts,
-             * flashing state and the red ! icon are calculated locally.
-             * No tab switch and no Streamlit rerun are required.
-             */
-
-            function formatDuration(totalSeconds) {
-                const seconds = Math.max(0, Math.floor(totalSeconds));
-                const h = Math.floor(seconds / 3600);
-                const m = Math.floor((seconds % 3600) / 60);
-                const s = seconds % 60;
-
-                return String(h).padStart(2, "0") + ":" +
-                       String(m).padStart(2, "0") + ":" +
-                       String(s).padStart(2, "0");
-            }
 
             function updateDurations() {
-                const nodes = document.querySelectorAll(
-                    '[data-duration-live="1"]'
-                );
+                const nodes = document.querySelectorAll('[data-duration-live="1"]');
                 const nowMs = Date.now();
 
                 nodes.forEach(function (node) {
-                    const wrap = node.closest(
-                        '.duration-warning-wrap'
-                    );
-                    const raw = node.getAttribute(
-                        "data-duration-start"
-                    );
+                    const wrap = node.closest('.duration-warning-wrap');
+                    const raw = node.getAttribute("data-duration-start");
                     if (!raw || !wrap) return;
 
                     const startedMs = Date.parse(raw);
                     if (!Number.isFinite(startedMs)) return;
 
-                    const elapsed = Math.max(
-                        0,
-                        Math.floor((nowMs - startedMs) / 1000)
-                    );
-                    const sla = Number(
-                        wrap.getAttribute("data-sla-seconds") || "0"
-                    );
+                    const elapsed = Math.max(0, Math.floor((nowMs - startedMs) / 1000));
+                    const sla = Number(wrap.getAttribute("data-sla-seconds") || "0");
                     if (!sla) return;
 
-                    node.textContent = formatDuration(elapsed);
+                    const h = Math.floor(elapsed / 3600);
+                    const m = Math.floor((elapsed % 3600) / 60);
+                    const sec = elapsed % 60;
+
+                    node.textContent =
+                        String(h).padStart(2, "0") + ":" +
+                        String(m).padStart(2, "0") + ":" +
+                        String(sec).padStart(2, "0");
 
                     const ratio = elapsed / sla;
-                    const breached = ratio >= 1;
-                    const warning = ratio >= 0.80;
-
-                    wrap.classList.toggle(
-                        "duration-green",
-                        ratio < 0.50
-                    );
-                    wrap.classList.toggle(
-                        "duration-yellow",
-                        ratio >= 0.50 && ratio < 0.80
-                    );
-                    wrap.classList.toggle(
-                        "duration-red",
-                        ratio >= 0.80
-                    );
-                    wrap.classList.toggle(
-                        "duration-warning-active",
-                        warning
-                    );
-
-                    /* Keep the duration visibly red through breach. */
-                    if (breached) {
-                        wrap.classList.add("duration-breached");
-                    } else {
-                        wrap.classList.remove("duration-breached");
-                    }
+                    wrap.classList.toggle("duration-green", ratio < 0.50);
+                    wrap.classList.toggle("duration-yellow", ratio >= 0.50 && ratio < 0.80);
+                    wrap.classList.toggle("duration-red", ratio >= 0.80);
+                    wrap.classList.toggle("duration-warning-active", ratio >= 0.80 && ratio < 1.0);
                 });
             }
 
-            function updateStationTiles() {
+            function updateWarningAnimations() {
                 const nowMs = Date.now();
 
-                document.querySelectorAll(
-                    '.station-card-visual[data-duration-starts]'
-                ).forEach(function (card) {
-                    const sla = Number(
-                        card.getAttribute("data-sla-seconds") || "0"
-                    );
-                    if (!sla) return;
-
-                    let starts = [];
-                    try {
-                        starts = JSON.parse(
-                            card.getAttribute("data-duration-starts") || "[]"
-                        );
-                    } catch (e) {
-                        starts = [];
+                document.querySelectorAll('.station-card-visual[data-warning-stop]').forEach(function (card) {
+                    const stopAt = Number(card.getAttribute("data-warning-stop") || "0") * 1000;
+                    if (stopAt > 0 && nowMs >= stopAt) {
+                        card.classList.remove("critical");
+                        const icon = card.querySelector(".station-alert-icon");
+                        if (icon) icon.classList.add("warning-muted");
                     }
-
-                    let nearingCount = 0;
-                    let pastDueCount = 0;
-
-                    starts.forEach(function (raw) {
-                        const startedMs = Date.parse(raw);
-                        if (!Number.isFinite(startedMs)) return;
-
-                        const elapsed = Math.max(
-                            0,
-                            (nowMs - startedMs) / 1000
-                        );
-                        const ratio = elapsed / sla;
-
-                        if (ratio >= 0.80 && ratio < 1) {
-                            nearingCount += 1;
-                        } else if (ratio >= 1) {
-                            pastDueCount += 1;
-                        }
-                    });
-
-                    const warningExists =
-                        nearingCount > 0 || pastDueCount > 0;
-
-                    const silenced =
-                        card.getAttribute(
-                            "data-warning-silenced"
-                        ) === "1";
-
-                    /*
-                     * Once the current warning condition has cleared,
-                     * automatically arm the station for the next warning.
-                     * This is what allows a later case to trigger the tile
-                     * again without a tab switch.
-                     */
-                    if (!warningExists) {
-                        card.setAttribute(
-                            "data-warning-silenced",
-                            "0"
-                        );
-                    }
-
-                    const shouldFlash =
-                        warningExists &&
-                        card.getAttribute(
-                            "data-warning-silenced"
-                        ) !== "1";
-
-                    card.classList.toggle(
-                        "critical",
-                        shouldFlash
-                    );
-
-                    card.classList.toggle(
-                        "warning-muted",
-                        warningExists && !shouldFlash
-                    );
-
-                    const icon = card.querySelector(
-                        '[data-station-alert-icon="1"]'
-                    );
-
-                    if (icon) {
-                        /*
-                         * The red exclamation is part of the active warning.
-                         * Once the user clicks the tile, the warning is
-                         * acknowledged immediately: stop the animation AND
-                         * hide the exclamation.
-                         */
-                        icon.style.display =
-                            shouldFlash ? "flex" : "none";
-
-                        if (shouldFlash) {
-                            icon.style.animation = "";
-                            icon.style.opacity = "";
-                        } else {
-                            icon.style.animation = "none";
-                            icon.style.opacity = "0";
-                        }
-                    }
-
-                    const countNode = card.querySelector(
-                        '[data-nearing-count="1"]'
-                    );
-                    if (countNode) {
-                        countNode.textContent = String(
-                            nearingCount
-                        );
-                    }
-
-                    const label = card.querySelector(
-                        '[data-past-due-label="1"]'
-                    );
-                    if (label) {
-                        label.textContent =
-                            pastDueCount > 0
-                                ? "  •  " + pastDueCount + " past due"
-                                : "";
-                    }
-
-                    const warningLine = card.querySelector(
-                        '[data-station-warning-count="1"]'
-                    );
-                    if (warningLine) {
-                        warningLine.classList.toggle(
-                            "active",
-                            nearingCount > 0
-                        );
-                    }
-                });
-
-                /*
-                 * Server-rendered Streamlit status/spinner elements can
-                 * briefly appear during unrelated fragment work. Hide them
-                 * without affecting the actual dashboard content.
-                 */
-                document.querySelectorAll(
-                    '[data-testid="stStatusWidget"], ' +
-                    '[data-testid="stSpinner"], ' +
-                    '.stSpinner'
-                ).forEach(function (el) {
-                    el.style.opacity = "0";
-                    el.style.pointerEvents = "none";
                 });
             }
 
-            function bindStationClicks() {
+            /* Make the selected station respond visually BEFORE the
+                   Streamlit fragment finishes rerendering. */
                 document.querySelectorAll(
                     '[class*="st-key-station_"] button'
                 ).forEach(function (button) {
                     if (button.__fastStationBound) return;
-
                     button.__fastStationBound = true;
+                    button.addEventListener("pointerdown", function () {
+                        const keyHost = button.closest('[class*="st-key-station_"]');
+                        if (!keyHost) return;
+                        const match = keyHost.className.match(/st-key-station_([^ ]+)/);
+                        const stationMap = {
+                            CARE:"CARE", ARCH:"ARCH", PET:"PET",
+                            SUPPLY:"SUPPLY CHAIN", ONSITE:"ONSITE"
+                        };
+                        const station = match ? stationMap[match[1].toUpperCase()] : null;
+                        if (!station) return;
+                        document.querySelectorAll(
+                            ".station-card-visual[data-station]"
+                        ).forEach(function (card) {
+                            const isSelected =
+                                card.getAttribute("data-station") === station;
 
-                    button.addEventListener(
-                        "pointerdown",
-                        function () {
-                            const keyHost = button.closest(
-                                '[class*="st-key-station_"]'
-                            );
-                            if (!keyHost) return;
+                            card.classList.toggle("selected", isSelected);
 
-                            const match = keyHost.className.match(
-                                /st-key-station_([^ ]+)/
-                            );
+                            /* Stop flashing immediately — do not wait for the
+                               fragment rerender. */
+                            if (isSelected) {
+                                card.classList.remove("critical");
+                                card.classList.add("warning-muted");
+                                const icon = card.querySelector(".station-alert-icon");
+                                if (icon) {
+                                    icon.style.animation = "none";
+                                    icon.style.opacity = "1";
+                                }
+                                card.style.animation = "none";
+                            }
+                        });
 
-                            const stationMap = {
-                                CARE: "CARE",
-                                ARCH: "ARCH",
-                                PET: "PET",
-                                SUPPLY: "SUPPLY CHAIN",
-                                ONSITE: "ONSITE"
-                            };
-
-                            const station = match
-                                ? stationMap[
-                                    match[1].toUpperCase()
-                                  ]
-                                : null;
-
-                            if (!station) return;
-
+                        /* Give the browser one paint before Streamlit starts
+                           replacing the fragment. This makes the visual tile
+                           switch feel immediate instead of waiting on Python. */
+                        requestAnimationFrame(function () {
                             document.querySelectorAll(
-                                ".station-card-visual[data-station]"
-                            ).forEach(function (card) {
-                                const isSelected =
-                                    card.getAttribute(
-                                        "data-station"
-                                    ) === station;
-
-                                card.classList.toggle(
-                                    "selected",
-                                    isSelected
-                                );
-
-                                if (isSelected) {
-                                    /*
-                                     * Acknowledge the warning immediately.
-                                     * The browser monitor will keep it muted
-                                     * until the current warning condition clears.
-                                     */
-                                    card.setAttribute(
-                                        "data-warning-silenced",
-                                        "1"
-                                    );
-                                    card.classList.remove("critical");
-                                    card.classList.add("warning-muted");
-
-                                    const icon = card.querySelector(
-                                        '[data-station-alert-icon="1"]'
-                                    );
-                                    if (icon) {
-                                        /*
-                                         * Stop the red exclamation immediately
-                                         * on pointerdown. Do not wait for the
-                                         * Streamlit fragment rerun.
-                                         */
-                                        icon.style.animation = "none";
-                                        icon.style.opacity = "0";
-                                        icon.style.display = "none";
-                                    }
-                                }
+                                '[data-testid="stStatusWidget"], ' +
+                                '[data-testid="stSpinner"], ' +
+                                '.stSpinner'
+                            ).forEach(function (el) {
+                                el.style.opacity = "0";
+                                el.style.pointerEvents = "none";
                             });
-
-                            requestAnimationFrame(
-                                function () {
-                                    updateStationTiles();
-                                }
-                            );
-                        },
-                        {passive: true}
-                    );
+                        });
+                    }, {passive:true});
                 });
             }
 
-            /*
-             * Streamlit may replace DOM nodes after a fragment rerun.
-             * Re-bind buttons and recalculate the new nodes every second.
-             * The browser clock itself is independent of Streamlit.
-             */
             updateDurations();
-            updateStationTiles();
-            bindStationClicks();
+            updateWarningAnimations();
 
-            if (!window.__taskTrackerRealtimeTimer) {
-                window.__taskTrackerRealtimeTimer =
+            if (!window.__taskTrackerDurationTimer) {
+                window.__taskTrackerDurationTimer =
                     setInterval(
                         function () {
                             updateDurations();
-                            updateStationTiles();
-                            bindStationClicks();
+                            updateWarningAnimations();
                         },
                         1000
-                    );
-            }
-
-            /*
-             * A 250ms visual tick gives the warning animation a prompt
-             * threshold transition while the duration text still changes
-             * once per second. No server request is made by this timer.
-             */
-            if (!window.__taskTrackerVisualTimer) {
-                window.__taskTrackerVisualTimer =
-                    setInterval(
-                        function () {
-                            updateStationTiles();
-                        },
-                        250
                     );
             }
 
@@ -4487,8 +4231,7 @@ def realtime_alert_monitor():
 seed_mock_cases()
 
 
-# Render the dashboard once. No periodic rerun is used on the main dashboard;
-# browser-side monitoring keeps duration and tile warnings current.
+# Render the dashboard once. No run_every / autorefresh is used on the main dashboard.
 dashboard_fragment()
 
 # Start the independent one-second alert monitor after mock data and the
