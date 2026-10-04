@@ -279,49 +279,18 @@ def current_access_secret_hash():
     return sha256(access_code())
 
 
-def restore_access_token_from_browser():
-    """Restore the already-issued access token after a browser refresh.
-
-    Streamlit session_state belongs to the current websocket session, so a
-    hard refresh/new websocket does not retain it. The token is also stored
-    in the URL query string so the browser can re-present it to the server.
-    The database remains the source of truth; the raw access code is never
-    stored in the URL or database.
-    """
-    if st.session_state.get("access_token"):
-        return
-
-    try:
-        token = text(st.query_params.get("access_token", ""))
-    except Exception:
-        token = ""
-
-    if token:
-        st.session_state["access_token"] = token
-        st.session_state["access_code_hash"] = current_access_secret_hash()
-
-
 def issue_access_token():
     raw_token = secrets.token_urlsafe(32)
-    secret_hash = current_access_secret_hash()
 
     col(ACCESS_COLLECTION).insert_one({
         "token_hash": sha256(raw_token),
-        "access_code_hash": secret_hash,
+        "access_code_hash": current_access_secret_hash(),
         "created_at": utc_now(),
         "active": True,
     })
 
     st.session_state["access_token"] = raw_token
-    st.session_state["access_code_hash"] = secret_hash
-
-    # Persist the issued token across browser refreshes/new Streamlit
-    # websocket sessions. Only the random token is exposed; the access code
-    # itself is never exposed.
-    try:
-        st.query_params["access_token"] = raw_token
-    except Exception:
-        pass
+    st.session_state["access_code_hash"] = current_access_secret_hash()
 
 
 def access_is_valid():
@@ -330,33 +299,16 @@ def access_is_valid():
     if not raw_token:
         return False
 
-    current_hash = current_access_secret_hash()
-
     if st.session_state.get(
         "access_code_hash"
-    ) != current_hash:
+    ) != current_access_secret_hash():
         return False
 
-    try:
-        valid = col(ACCESS_COLLECTION).find_one({
-            "token_hash": sha256(raw_token),
-            "access_code_hash": current_hash,
-            "active": True,
-        }) is not None
-    except PyMongoError:
-        return False
-
-    if not valid:
-        # Remove stale/cleared tokens from the browser URL so the user does
-        # not get trapped in a repeated invalid-token state.
-        try:
-            st.query_params.pop("access_token", None)
-        except Exception:
-            pass
-        st.session_state.pop("access_token", None)
-        st.session_state.pop("access_code_hash", None)
-
-    return valid
+    return col(ACCESS_COLLECTION).find_one({
+        "token_hash": sha256(raw_token),
+        "access_code_hash": current_access_secret_hash(),
+        "active": True,
+    }) is not None
 
 
 def clear_token_access():
@@ -373,16 +325,8 @@ def clear_token_access():
     st.session_state.pop("access_token", None)
     st.session_state.pop("access_code_hash", None)
 
-    try:
-        st.query_params.pop("access_token", None)
-    except Exception:
-        pass
-
 
 def access_gate():
-    # Rehydrate the previously issued one-time token before checking access.
-    restore_access_token_from_browser()
-
     if access_is_valid():
         return True
 
@@ -522,21 +466,14 @@ st.markdown(
 
     .block-container {
         max-width:1500px;
-        padding-top:8px;
+        padding-top:18px;
         padding-left:20px;
         padding-right:20px;
         padding-bottom:30px;
     }
 
     body {
-        background:#ffffff !important;
-    }
-
-    .stApp,
-    [data-testid="stAppViewContainer"],
-    [data-testid="stAppViewContainer"] > .main,
-    [data-testid="stHeader"] {
-        background:#ffffff !important;
+        background:#f7f9fc;
     }
 
     .block-container,
@@ -556,72 +493,54 @@ st.markdown(
     .brand-row {
         display:flex;
         align-items:center;
-        gap:8px;
-        height:46px;
-        width:100%;
-        min-width:0;
-        max-width:100%;
-        white-space:nowrap;
-        overflow:hidden;
-        box-sizing:border-box;
+        gap:14px;
+        height:64px;
     }
 
     .brand-mark {
-        width:38px;
-        min-width:38px;
-        height:30px;
-        border-radius:0;
-        background:transparent;
+        width:48px;
+        height:48px;
+        border-radius:11px;
+        background:linear-gradient(145deg,#7051ff,#3723c6);
+        color:#fff;
         display:flex;
         align-items:center;
-        justify-content:flex-start;
-        overflow:visible;
-    }
-
-    .hpe-primary-logo {
-        display:block;
-        width:36px;
-        height:auto;
-        max-height:30px;
-        object-fit:contain;
+        justify-content:center;
+        font-size:27px;
+        font-weight:900;
+        box-shadow:0 7px 16px rgba(68,42,202,.20);
     }
 
     .brand-name {
         color:#102041;
-        font-size:19px;
+        font-size:25px;
         font-weight:850;
-        letter-spacing:-.55px;
-        flex:0 0 auto;
+        letter-spacing:-.7px;
     }
 
     .brand-divider {
-        height:24px;
+        height:28px;
         width:1px;
-        flex:0 0 1px;
         background:#dce2eb;
-        margin-left:1px;
+        margin-left:2px;
     }
 
     .top-nav {
         color:#53637f;
-        font-size:12px;
-        line-height:1;
-        flex:0 0 auto;
-        min-width:0;
+        font-size:14px;
     }
 
     .top-nav span {
-        margin-right:11px;
+        margin-right:15px;
     }
 
-    .brand-mark { background:transparent !important; box-shadow:none !important; border-radius:0 !important; width:38px; min-width:38px; height:30px; }
+    .brand-mark { background:transparent !important; box-shadow:none !important; border-radius:0 !important; width:48px;height:48px; }
     .brand-mark svg { display:block; }
-    .brand-mark img { display:block; width:36px; height:auto; max-height:30px; }
 
     /* SEARCH */
 
     div[data-testid="stTextInput"] input {
-        height:42px !important;
+        height:50px !important;
         border:1px solid #dce3ed !important;
         border-radius:12px !important;
         background:#fff !important;
@@ -636,23 +555,9 @@ st.markdown(
 
     /* TOP ICON BUTTONS */
 
-    /* Keep the header inside its grid column; never clip the brand/search row. */
-    [data-testid="column"] { min-width:0 !important; }
-    div[data-testid="stTextInput"] { width:100% !important; min-width:0 !important; }
-    div[data-testid="stTextInput"] > div { width:100% !important; min-width:0 !important; }
-    [class*="st-key-open_settings"] button {
-        height:42px !important;
-        min-height:42px !important;
-        padding:0 10px !important;
-        font-size:20px !important;
-        border:1px solid #dce3ed !important;
-        border-radius:12px !important;
-        background:#fff !important;
-    }
-
     .top-icon button {
-        height:42px !important;
-        min-height:42px !important;
+        height:50px !important;
+        min-height:50px !important;
         border:1px solid #dce3ed !important;
         background:#fff !important;
         border-radius:12px !important;
@@ -697,8 +602,8 @@ st.markdown(
     .station-card-visual.supply.selected { border:3px solid #a07de2 !important; }
     .station-card-visual.onsite.selected { border:3px solid #e0b94f !important; }
     .station-icon-circle {
-        width:64px; height:64px; border-radius:50%; display:flex; align-items:center; justify-content:center;
-        font-size:30px; font-weight:900; position:absolute; left:24px; top:18px;
+        width:70px; height:70px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+        font-size:34px; font-weight:900; position:absolute; left:24px; top:18px;
         background:rgba(255,255,255,.48);
     }
     .care .station-icon-circle { color:#e51c3a; background:#ffd7df; }
@@ -707,20 +612,20 @@ st.markdown(
     .supply .station-icon-circle { color:#5d2ac9; background:#dfceff; }
     .onsite .station-icon-circle { color:#c98700; background:#ffe5a8; }
     .station-copy { position:absolute; left:112px; top:29px; }
-    .station-card-title { font-size:18px; font-weight:850; line-height:1.1; letter-spacing:-.3px; }
-    .station-count-line { display:flex; align-items:baseline; gap:6px; margin-top:8px; }
-    .station-count { font-size:32px; line-height:1; font-weight:900; }
-    .station-active { font-size:12px; color:#53637f; }
+    .station-card-title { font-size:21px; font-weight:850; line-height:1.1; letter-spacing:-.3px; }
+    .station-count-line { display:flex; align-items:baseline; gap:7px; margin-top:9px; }
+    .station-count { font-size:38px; line-height:1; font-weight:900; }
+    .station-active { font-size:14px; color:#53637f; }
     .care .station-count { color:#e51c3a; }
     .arch .station-count { color:#0879c9; }
     .pet .station-count { color:#087b58; }
     .supply .station-count { color:#5d2ac9; }
     .onsite .station-count { color:#c98700; }
-    .station-arrow { position:absolute; right:20px; top:28px; font-size:25px; font-weight:300; color:#30466b; }
-    .station-warning { position:absolute; left:24px; bottom:39px; font-size:12px; font-weight:750; color:#53637f; }
+    .station-arrow { position:absolute; right:20px; top:31px; font-size:29px; font-weight:300; color:#30466b; }
+    .station-warning { position:absolute; left:24px; bottom:39px; font-size:14px; font-weight:750; color:#53637f; }
     .station-warning.active { color:#d33a4e; }
     .arch .station-warning.active, .pet .station-warning.active, .supply .station-warning.active, .onsite .station-warning.active { color:#53637f; }
-    .station-sla-ref { position:absolute; left:24px; bottom:17px; font-size:12px; color:#53637f; }
+    .station-sla-ref { position:absolute; left:24px; bottom:17px; font-size:14px; color:#53637f; }
     .station-sla-ref strong { color:#102041; }
     /* Make the real button transparent and stretch it over the card. */
     [class*="st-key-station_wrap_care"] [class*="st-key-station_CARE"],
@@ -804,10 +709,11 @@ st.markdown(
         display:inline-block;
         padding:7px 14px;
         border-radius:18px;
+        background:#ffecef;
+        color:#e51c3a;
         font-weight:800;
-        font-size:13px;
+        font-size:14px;
         margin-left:10px;
-        vertical-align:middle;
     }
 
     .case-head {
@@ -860,8 +766,7 @@ st.markdown(
         width:100% !important;
         min-width:0 !important;
     }
-    [class*="st-key-case_cell_"] button,
-    [class*="st-key-case_cell_"] [data-testid="stButton"] button {
+    [class*="st-key-case_cell_"] button {
         width:100% !important;
         min-width:0 !important;
         max-width:100% !important;
@@ -874,27 +779,12 @@ st.markdown(
         background:#fff !important;
         box-shadow:none !important;
         color:#31435f !important;
-        font-size:9px !important;
+        font-size:10px !important;
         font-weight:500 !important;
-        line-height:11px !important;
-        font-family:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+        line-height:1.1 !important;
         white-space:nowrap !important;
         overflow:hidden !important;
         text-overflow:ellipsis !important;
-    }
-    /* Streamlit renders button labels inside nested elements. Force the same
-       compact 10px typography on every nested label so the case number cannot
-       fall back to Streamlit's default 14px button font. */
-    [class*="st-key-case_cell_"] button *,
-    [class*="st-key-case_cell_"] button p,
-    [class*="st-key-case_cell_"] button div,
-    [class*="st-key-case_cell_"] button span {
-        font-size:9px !important;
-        font-weight:500 !important;
-        line-height:11px !important;
-        font-family:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
-        margin:0 !important;
-        padding:0 !important;
     }
     [class*="st-key-case_cell_"] button:hover {
         border-color:#b7c4d7 !important;
@@ -1781,8 +1671,7 @@ def transfer_case(task, destination):
 # ============================================================
 
 header_cols = st.columns(
-    [4.0, 5.35, 0.55],
-    vertical_alignment="center",
+    [4.3, 5.4, 0.6, 0.6]
 )
 
 with header_cols[0]:
@@ -1791,11 +1680,11 @@ with header_cols[0]:
         f"""
         <div class="brand-row">
             <div class="brand-mark" aria-hidden="true">
-                <img
-                    src="https://raw.githubusercontent.com/hpe-design/logos/master/HPE%20Element%20-%20SVG/hpe-element-black.svg"
-                    alt="HPE"
-                    class="hpe-primary-logo"
-                />
+                <svg viewBox="0 0 48 48" width="48" height="48">
+                    <path d="M24 4 42 14 24 24 6 14 24 4Z" fill="#8068ff"/>
+                    <path d="M6 14v9l18 10 18-10v-9L24 24 6 14Z" fill="#5d42e8"/>
+                    <path d="M6 25v9l18 10 18-10v-9L24 35 6 25Z" fill="#4a30cf"/>
+                </svg>
             </div>
             <div class="brand-name">{html.escape(APP_NAME)}</div>
             <div class="brand-divider"></div>
@@ -1822,6 +1711,21 @@ with header_cols[1]:
     st.session_state["search"] = search
 
 with header_cols[2]:
+
+    alert_count = len(
+        active_alerts()
+    )
+
+    if st.button(
+        f"🔔 {alert_count}" if alert_count else "🔔",
+        key="open_alerts",
+        use_container_width=True,
+    ):
+        st.session_state[
+            "show_alerts"
+        ] = True
+
+with header_cols[3]:
 
     if st.button(
         "⚙",
@@ -2752,11 +2656,7 @@ def dashboard_fragment():
             <span class="cases-title">
                 Active Cases
             </span>
-            <span class="station-pill" style="
-                background:{STATIONS.get(selected, STATIONS["CARE"])["soft"]};
-                color:{STATIONS.get(selected, STATIONS["CARE"])["accent"]};
-                border:1px solid {STATIONS.get(selected, STATIONS["CARE"])["accent"]}33;
-            ">
+            <span class="station-pill">
                 {html.escape(selected)}
             </span>
             """,
