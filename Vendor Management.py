@@ -973,6 +973,9 @@ def calculate_state(task, now=None):
 
     sla = config["sla_minutes"] * 60
 
+    # SLA duration is measured from the moment the case entered its
+    # current station. station_started_at is therefore authoritative.
+    # created_at is only a legacy-data fallback when that field is missing.
     started = as_utc(
         task.get("station_started_at")
         or task.get("created_at")
@@ -2394,28 +2397,27 @@ def dashboard_fragment():
             for t in station_tasks
         ]
 
-        # A tile flashes only when there is an actual attention condition:
-        # (a) a high-priority account, or
-        # (b) a normal case that is genuinely nearing its SLA deadline.
-        # A freshly-created normal case is NOT considered nearing due simply
-        # because it is critical for another reason.
-        priority_count = sum(
-            state["priority_account"]
-            for state in station_states
-        )
+        # Tile flashing is based ONLY on elapsed time in the CURRENT station.
+        # A priority account is still marked CRITICAL and can generate alerts,
+        # but it must NOT make a station tile blink by itself.
+        #
+        # "Nearing due" means the case has entered the final 20% of the
+        # station SLA, while it has not yet breached the SLA.
+        #
+        # The duration clock itself starts at station_started_at. When a case
+        # is transferred, transfer_case() resets station_started_at to the
+        # transfer time, so the SLA clock starts over in the destination
+        # station.
+        sla_seconds = STATIONS[station]["sla_minutes"] * 60
         nearing = sum(
             1
             for state in station_states
             if (
-                state["critical"]
-                and not state["priority_account"]
-                and not state["breached"]
+                state["remaining"] > 0
+                and state["remaining"] <= sla_seconds * 0.20
             )
         )
-        flash_tile = (
-            priority_count > 0
-            or nearing > 0
-        )
+        flash_tile = nearing > 0
 
         config = STATIONS[
             station
@@ -2802,13 +2804,12 @@ def dashboard_fragment():
 
         with row[6]:
 
+            # Duration is the time spent in the CURRENT station.
+            # station_started_at is reset whenever the case enters/transfers
+            # into a station. Legacy records without it fall back to created_at.
             started = iso_z(
-                task.get(
-                    "station_started_at"
-                )
-                or task.get(
-                    "created_at"
-                )
+                task.get("station_started_at")
+                or task.get("created_at")
             )
 
             # Browser-side timer:
