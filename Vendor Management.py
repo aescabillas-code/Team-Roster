@@ -570,87 +570,38 @@ st.markdown(
         border:1px solid transparent;
     }
 
-    /* REAL CLICKABLE STATION TILES
-       The Streamlit button itself is the complete station tile.
-       This avoids the unreliable invisible-overlay approach and removes
-       the extra empty button boxes underneath the cards. */
-    [data-testid="stButton"] button {
-        font-family:inherit !important;
-    }
+    /* CLICKABLE STATION TILES */
+    [class*="st-key-station_CARE"],
+    [class*="st-key-station_ARCH"],
+    [class*="st-key-station_PET"],
+    [class*="st-key-station_SUPPLY"],
+    [class*="st-key-station_ONSITE"] { width:100% !important; }
 
-    /* Station buttons are identified by their Streamlit key wrapper. */
     [class*="st-key-station_CARE"] button,
     [class*="st-key-station_ARCH"] button,
     [class*="st-key-station_PET"] button,
     [class*="st-key-station_SUPPLY"] button,
     [class*="st-key-station_ONSITE"] button {
-        height:145px !important;
-        min-height:145px !important;
-        border-radius:13px !important;
-        padding:17px 18px !important;
-        text-align:left !important;
-        justify-content:flex-start !important;
-        align-items:flex-start !important;
-        white-space:pre-line !important;
-        font-size:13px !important;
-        line-height:1.28 !important;
-        font-weight:500 !important;
-        box-shadow:none !important;
+        width:100% !important; height:132px !important; min-height:132px !important;
+        box-sizing:border-box !important; border-radius:13px !important;
+        padding:15px 18px !important; text-align:left !important;
+        justify-content:flex-start !important; align-items:flex-start !important;
+        white-space:pre-line !important; font-family:inherit !important;
+        font-size:12px !important; line-height:1.25 !important; font-weight:500 !important;
+        box-shadow:none !important; overflow:hidden !important;
         transition:transform .12s ease, box-shadow .12s ease !important;
     }
-
-    [class*="st-key-station_CARE"] button {
-        background:linear-gradient(135deg,#fff4f6,#ffe8ec) !important;
-        border:1px solid #f24a61 !important;
-        color:#31435f !important;
-    }
-    [class*="st-key-station_ARCH"] button {
-        background:linear-gradient(135deg,#eaf8ff,#d9f1fc) !important;
-        border:1px solid transparent !important;
-        color:#31435f !important;
-    }
-    [class*="st-key-station_PET"] button {
-        background:linear-gradient(135deg,#ecfff9,#dcf7ee) !important;
-        border:1px solid transparent !important;
-        color:#31435f !important;
-    }
-    [class*="st-key-station_SUPPLY"] button {
-        background:linear-gradient(135deg,#f7f0ff,#eee5ff) !important;
-        border:1px solid transparent !important;
-        color:#31435f !important;
-    }
-    [class*="st-key-station_ONSITE"] button {
-        background:linear-gradient(135deg,#fff9e8,#fff3cf) !important;
-        border:1px solid transparent !important;
-        color:#31435f !important;
-    }
-
-    [class*="st-key-station_CARE"] button:hover,
-    [class*="st-key-station_ARCH"] button:hover,
-    [class*="st-key-station_PET"] button:hover,
-    [class*="st-key-station_SUPPLY"] button:hover,
-    [class*="st-key-station_ONSITE"] button:hover {
-        transform:translateY(-1px) !important;
-        box-shadow:0 7px 18px rgba(29,55,96,.08) !important;
-    }
-
-    /* Make the first line/labels visually closer to the reference tile. */
-    [class*="st-key-station_CARE"] button p,
-    [class*="st-key-station_ARCH"] button p,
-    [class*="st-key-station_PET"] button p,
-    [class*="st-key-station_SUPPLY"] button p,
-    [class*="st-key-station_ONSITE"] button p {
-        margin:0 !important;
-    }
-
-        @keyframes stationFlash {
-        from {
-            box-shadow:0 0 0 0 rgba(239,51,79,.08);
-        }
-        to {
-            box-shadow:0 0 28px 5px rgba(239,51,79,.30);
-        }
-    }
+    [class*="st-key-station_CARE"] button { background:linear-gradient(135deg,#fff4f6,#ffe8ec) !important; border:1px solid #f24a61 !important; color:#31435f !important; }
+    [class*="st-key-station_ARCH"] button { background:linear-gradient(135deg,#eaf8ff,#d9f1fc) !important; border:1px solid transparent !important; color:#31435f !important; }
+    [class*="st-key-station_PET"] button { background:linear-gradient(135deg,#ecfff9,#dcf7ee) !important; border:1px solid transparent !important; color:#31435f !important; }
+    [class*="st-key-station_SUPPLY"] button { background:linear-gradient(135deg,#f7f0ff,#eee5ff) !important; border:1px solid transparent !important; color:#31435f !important; }
+    [class*="st-key-station_ONSITE"] button { background:linear-gradient(135deg,#fff9e8,#fff3cf) !important; border:1px solid transparent !important; color:#31435f !important; }
+    [class*="st-key-station_CARE"] button:hover, [class*="st-key-station_ARCH"] button:hover,
+    [class*="st-key-station_PET"] button:hover, [class*="st-key-station_SUPPLY"] button:hover,
+    [class*="st-key-station_ONSITE"] button:hover { transform:translateY(-1px) !important; box-shadow:0 7px 18px rgba(29,55,96,.08) !important; }
+    [class*="st-key-station_CARE"] button p, [class*="st-key-station_ARCH"] button p,
+    [class*="st-key-station_PET"] button p, [class*="st-key-station_SUPPLY"] button p,
+    [class*="st-key-station_ONSITE"] button p { margin:0 !important; padding:0 !important; }
 
     /* TABLE */
 
@@ -682,7 +633,7 @@ st.markdown(
     }
 
     .case-row {
-        min-height:34px;
+        min-height:30px;
         border-bottom:1px solid #edf0f5;
         color:#31435f;
         font-size:10px;
@@ -695,17 +646,13 @@ st.markdown(
     .case-selected { background:#fff0f3 !important; }
 
     .case-button button {
-        border:none !important;
-        background:transparent !important;
-        border-radius:0 !important;
-        box-shadow:none !important;
-        color:#66758d !important;
-        padding:3px 0 !important;
-        min-height:30px !important;
-        height:30px !important;
-        text-align:left !important;
-        font-size:10px !important;
-        font-weight:600 !important;
+        border:none !important; background:transparent !important; border-radius:0 !important;
+        box-shadow:none !important; color:#66758d !important;
+        padding:0 !important; margin:0 !important; min-height:24px !important; height:24px !important;
+        text-align:left !important; font-size:10px !important; line-height:1.2 !important; font-weight:500 !important;
+    }
+    .case-button button p, .case-button button div {
+        font-size:10px !important; line-height:1.2 !important; margin:0 !important; padding:0 !important;
     }
 
     .case-button button:hover {
@@ -834,78 +781,8 @@ st.markdown(
         font-weight:850;
     }
 
-    /* REFERENCE-IMAGE STATION CARDS */
-    .station-card-visual {
-        position:relative; height:145px; border-radius:13px;
-        padding:18px; box-sizing:border-box; overflow:hidden;
-        border:1px solid transparent;
-    }
-    .station-card-visual.care { background:linear-gradient(135deg,#fff4f6,#ffe8ec); border-color:#f24a61; }
-    .station-card-visual.arch { background:linear-gradient(135deg,#eaf8ff,#d9f1fc); }
-    .station-card-visual.pet { background:linear-gradient(135deg,#ecfff9,#dcf7ee); }
-    .station-card-visual.supply { background:linear-gradient(135deg,#f7f0ff,#eee5ff); }
-    .station-card-visual.onsite { background:linear-gradient(135deg,#fff9e8,#fff3cf); }
+    /* STATION TILE FLASH */
     .station-card-visual.critical { animation:stationFlash .85s infinite alternate; }
-    .station-card-visual { cursor:pointer; transition:transform .12s ease, box-shadow .12s ease; }
-    .station-card-visual:hover { transform:translateY(-1px); box-shadow:0 7px 18px rgba(29,55,96,.08); }
-    .station-icon-circle { width:68px;height:68px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:31px;position:absolute;left:22px;top:18px; }
-    .care .station-icon-circle { background:#ffd9df;color:#df1737; }
-    .arch .station-icon-circle { background:#bfeaff;color:#0877bf; }
-    .pet .station-icon-circle { background:#bdeedc;color:#0a8a5a; }
-    .supply .station-icon-circle { background:#ddc9ff;color:#5a2dc9; }
-    .onsite .station-icon-circle { background:#ffe0a2;color:#c78300; }
-    .station-copy { margin-left:90px; }
-    .station-card-title { font-size:20px;font-weight:850;color:#102041;line-height:1.1;padding-top:12px; }
-    .station-count-line { margin-top:7px;display:flex;align-items:baseline;gap:8px; }
-    .station-count { font-size:40px;font-weight:850;line-height:1;color:#102041; }
-    .care .station-count { color:#e11d35; }.arch .station-count { color:#0877bf; }.pet .station-count { color:#0a8a5a; }.supply .station-count { color:#5a2dc9; }.onsite .station-count { color:#c78300; }
-    .station-active { font-size:12px;color:#50617c; }
-    .station-arrow { position:absolute;right:18px;top:37px;font-size:25px;color:#273b5e; }
-    .station-sla-ref { position:absolute;left:18px;bottom:15px;font-size:12px;color:#52627c; }
-    .station-sla-ref strong { color:#152645;font-size:13px; }
-    .station-warning { position:absolute;left:18px;bottom:17px;color:#df1737;font-weight:800;font-size:12px; }
-    .station-warning + .station-sla-ref { bottom:0; }
-    /* Invisible click target layered over each visual station card.
-       The visual card itself remains pure HTML/CSS, so Streamlit does not
-       replace it with a text button. */
-    [class*="st-key-station_wrap_"] {
-        position:relative !important;
-        min-height:145px !important;
-    }
-    [class*="st-key-station_wrap_"] .stButton,
-    [class*="st-key-station_wrap_"] [data-testid="stButton"] {
-        position:absolute !important;
-        inset:0 !important;
-        height:145px !important;
-        min-height:145px !important;
-        z-index:20 !important;
-        margin:0 !important;
-        padding:0 !important;
-    }
-    [class*="st-key-station_wrap_"] .stButton > button,
-    [class*="st-key-station_wrap_"] [data-testid="stButton"] button {
-        width:100% !important;
-        height:145px !important;
-        min-height:145px !important;
-        margin:0 !important;
-        padding:0 !important;
-        opacity:0 !important;
-        border:0 !important;
-        background:transparent !important;
-        box-shadow:none !important;
-        color:transparent !important;
-        cursor:pointer !important;
-    }
-    [class*="st-key-station_wrap_"] .stButton > button:hover,
-    [class*="st-key-station_wrap_"] .stButton > button:focus,
-    [class*="st-key-station_wrap_"] .stButton > button:active,
-    [class*="st-key-station_wrap_"] [data-testid="stButton"] button:hover,
-    [class*="st-key-station_wrap_"] [data-testid="stButton"] button:focus,
-    [class*="st-key-station_wrap_"] [data-testid="stButton"] button:active {
-        border:0 !important;
-        background:transparent !important;
-        box-shadow:none !important;
-    }
 
     /* REFERENCE TABLE PANEL */
     .cases-panel { background:#fff;border-radius:18px;padding:16px 12px 18px;box-shadow:0 3px 18px rgba(29,55,96,.05); }
@@ -1174,7 +1051,7 @@ MOCK_ACCOUNTS = [
 ]
 
 # Increment this when the structure/timing of demonstration cases changes.
-MOCK_DATA_VERSION = 3
+MOCK_DATA_VERSION = 4
 
 
 def seed_mock_cases(force=False):
@@ -2525,14 +2402,18 @@ def dashboard_fragment():
             # This version makes the real Streamlit button the clickable tile,
             # so clicking anywhere inside it reliably changes the station.
             warning_text = (
-                f"◷  {nearing} nearing due\\n"
+                f"◷  {nearing} nearing due\n"
                 if nearing
                 else ""
             )
 
+            # Use real line breaks. Literal \n text was previously displayed
+            # inside the Streamlit button and made the tile look broken.
             tile_label = (
-                f"{icon}   **{station}**\\n\\n"
-                f"**{len(station_tasks)}**  Active Cases\\n\\n"
+                f"{icon}   **{station}**\n"
+                f"\n"
+                f"**{len(station_tasks)}**  Active Cases\n"
+                f"\n"
                 f"{warning_text}"
                 f"◷  Max Timeframe: **{sla_text}**"
             )
