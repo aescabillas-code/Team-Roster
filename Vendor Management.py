@@ -92,6 +92,9 @@ VENDOR_COLLECTION = "Vendor_Collection"
 ACCESS_COLLECTION = "Access_Collection"
 ALERT_COLLECTION = "Alert_Collection"
 
+# Performance tuning: short cache keeps station switches responsive while preserving near-real-time data.
+TASK_CACHE_TTL = 1.0
+
 STATIONS = {
     "CARE": {
         "sla_minutes": 15,
@@ -1419,6 +1422,7 @@ def task_projection():
     }
 
 
+@st.cache_data(ttl=TASK_CACHE_TTL, show_spinner=False)
 def fetch_tasks(
     search="",
     station=None,
@@ -1454,6 +1458,14 @@ def fetch_tasks(
         )
     except PyMongoError:
         return []
+
+
+def clear_task_cache():
+    """Invalidate the short-lived task read cache after task mutations."""
+    try:
+        fetch_tasks.clear()
+    except Exception:
+        pass
 
 
 def calculate_state(task, now=None):
@@ -1600,6 +1612,7 @@ MOCK_ACCOUNTS = [
 MOCK_DATA_VERSION = 9
 
 
+@st.cache_resource(show_spinner=False)
 def seed_mock_cases(force=False):
     existing = col(TASKS_COLLECTION).count_documents(
         {"is_mock": True}
@@ -1838,57 +1851,81 @@ def acknowledge_station_alerts(station):
 
 
 def scan_alerts(tasks):
+    """Create missing alerts with minimal MongoDB round trips.
+
+    State calculation remains in Python, but existing unacknowledged alerts
+    are loaded in one query instead of performing one find() per task.
+    """
     now = utc_now()
+    candidates = []
 
     for task in tasks:
-        state = calculate_state(
-            task,
-            now,
-        )
-
+        state = calculate_state(task, now)
         if not state["critical"]:
             continue
 
         if state["priority_account"]:
-
-            create_alert(
-                task,
-                "PRIORITY_ACCOUNT",
-                (
-                    f"High-priority account detected: "
-                    f"{text(task.get('account_name'))} "
-                    f"— Case {text(task.get('case_number'))}"
-                ),
+            alert_type = "PRIORITY_ACCOUNT"
+            message = (
+                f"High-priority account detected: "
+                f"{text(task.get('account_name'))} "
+                f"— Case {text(task.get('case_number'))}"
             )
-
         elif state["breached"]:
-
-            create_alert(
-                task,
-                "BREACHED",
-                (
-                    f"Case {text(task.get('case_number'))} "
-                    f"has exceeded the "
-                    f"{station_name(task.get('department'))} "
-                    "timeframe."
-                ),
-            )
-
+            # Breached cases intentionally do NOT create a trigger.
+            continue
         else:
-
-            create_alert(
-                task,
-                "NEARING_DUE",
-                (
-                    f"Case {text(task.get('case_number'))} "
-                    f"is nearing its due time."
-                ),
+            alert_type = "NEARING_DUE"
+            message = (
+                f"Case nearing SLA: {text(task.get('case_number'))} "
+                f"— {text(task.get('account_name'))}"
             )
 
+        candidates.append((task, alert_type, message))
 
-# ============================================================
-# VENDOR SYNC
-# ============================================================
+    if not candidates:
+        return
+
+    task_ids = [str(task["_id"]) for task, _, _ in candidates]
+    try:
+        existing = {
+            (str(doc.get("task_id")), doc.get("alert_type"))
+            for doc in col(ALERT_COLLECTION).find(
+                {
+                    "acknowledged": False,
+                    "task_id": {"$in": task_ids},
+                },
+                {"task_id": 1, "alert_type": 1},
+            )
+        }
+    except Exception:
+        existing = set()
+
+    docs = []
+    created_at = utc_now()
+
+    for task, alert_type, message in candidates:
+        key = (str(task["_id"]), alert_type)
+        if key in existing:
+            continue
+        docs.append({
+            "task_id": str(task["_id"]),
+            "case_number": task.get("case_number"),
+            "station": station_name(task.get("department")),
+            "account_name": task.get("account_name"),
+            "alert_type": alert_type,
+            "message": message,
+            "created_at": created_at,
+            "acknowledged": False,
+        })
+
+    if docs:
+        try:
+            col(ALERT_COLLECTION).insert_many(docs, ordered=False)
+        except Exception:
+            # Duplicate races are harmless; the next render will reconcile.
+            pass
+
 
 def sync_vendor_excel(uploaded_file):
     try:
@@ -2049,6 +2086,7 @@ def transfer_case(task, destination):
             },
         )
 
+        clear_task_cache()
         return True
 
     except Exception:
@@ -3561,16 +3599,18 @@ def dashboard_fragment():
                             }
                         });
 
-                        /* Hide Streamlit's transient loading/status UI while
-                           the fragment switches. The selected tile has already
-                           changed above, so the user sees the switch first. */
-                        document.querySelectorAll(
-                            '[data-testid="stStatusWidget"], ' +
-                            '[data-testid="stSpinner"], ' +
-                            '.stSpinner, [role="status"]'
-                        ).forEach(function (el) {
-                            el.style.opacity = "0";
-                            el.style.pointerEvents = "none";
+                        /* Give the browser one paint before Streamlit starts
+                           replacing the fragment. This makes the visual tile
+                           switch feel immediate instead of waiting on Python. */
+                        requestAnimationFrame(function () {
+                            document.querySelectorAll(
+                                '[data-testid="stStatusWidget"], ' +
+                                '[data-testid="stSpinner"], ' +
+                                '.stSpinner'
+                            ).forEach(function (el) {
+                                el.style.opacity = "0";
+                                el.style.pointerEvents = "none";
+                            });
                         });
                     }, {passive:true});
                 });
@@ -3604,9 +3644,8 @@ def dashboard_fragment():
 # Seed before the first dashboard render so the first view already
 # contains the mock cases. This check runs once per normal app render
 # and does not create a background refresh loop.
-# Always run the lightweight mock-data version check.  Existing demo
-# records are migrated once when MOCK_DATA_VERSION changes; otherwise
-# the function returns immediately without recreating the dataset.
+# Seed/mock migration is cached as a resource so normal fragment reruns
+# do not repeatedly query MongoDB for the mock-data count.
 seed_mock_cases()
 
 
