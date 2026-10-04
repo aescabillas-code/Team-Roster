@@ -69,7 +69,7 @@ st.set_page_config(
 
 APP_NAME = st.secrets.get(
     "APP_NAME",
-    "HPE Caseflow",
+    "Tasks Monitoring Tracker",
 )
 
 DB_NAME = "TeamRoster"
@@ -539,69 +539,67 @@ st.markdown(
         font-size:22px !important;
     }
 
-    /* STATIONS */
-
-    .station-title {
-        font-size:21px;
-        font-weight:850;
-        color:#11213e;
-        margin-top:5px;
+    /* STATION TILES — reference visual + reliable full-card click target */
+    [class*="st-key-station_wrap_care"], [class*="st-key-station_wrap_arch"],
+    [class*="st-key-station_wrap_pet"], [class*="st-key-station_wrap_supply"],
+    [class*="st-key-station_wrap_onsite"] { position:relative !important; min-height:184px !important; }
+    .station-card-visual {
+        position:relative; height:184px; min-height:184px; box-sizing:border-box;
+        border-radius:13px; padding:18px 24px; overflow:hidden;
+        color:#102041;
     }
-
-    .station-sub {
-        color:#63718a;
-        font-size:12px;
+    .station-card-visual.care { background:linear-gradient(135deg,#fff4f6,#ffe8ec); border:1.5px solid #f24a61; }
+    .station-card-visual.arch { background:linear-gradient(135deg,#eaf8ff,#d9f1fc); }
+    .station-card-visual.pet { background:linear-gradient(135deg,#ecfff9,#dcf7ee); }
+    .station-card-visual.supply { background:linear-gradient(135deg,#f7f0ff,#eee5ff); }
+    .station-card-visual.onsite { background:linear-gradient(135deg,#fff9e8,#fff3cf); }
+    .station-card-visual.selected { box-shadow:0 0 0 2px rgba(245,63,87,.15) inset; }
+    .station-icon-circle {
+        width:70px; height:70px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+        font-size:34px; font-weight:900; position:absolute; left:24px; top:18px;
+        background:rgba(255,255,255,.48);
     }
-
-    .station-sla {
-        color:#4f5e76;
-        font-size:12px;
-        margin-top:12px;
+    .care .station-icon-circle { color:#e51c3a; background:#ffd7df; }
+    .arch .station-icon-circle { color:#0879c9; background:#bce8ff; }
+    .pet .station-icon-circle { color:#087b58; background:#bff1df; }
+    .supply .station-icon-circle { color:#5d2ac9; background:#dfceff; }
+    .onsite .station-icon-circle { color:#c98700; background:#ffe5a8; }
+    .station-copy { position:absolute; left:112px; top:29px; }
+    .station-card-title { font-size:21px; font-weight:850; line-height:1.1; letter-spacing:-.3px; }
+    .station-count-line { display:flex; align-items:baseline; gap:7px; margin-top:9px; }
+    .station-count { font-size:38px; line-height:1; font-weight:900; }
+    .station-active { font-size:14px; color:#53637f; }
+    .care .station-count { color:#e51c3a; }
+    .arch .station-count { color:#0879c9; }
+    .pet .station-count { color:#087b58; }
+    .supply .station-count { color:#5d2ac9; }
+    .onsite .station-count { color:#c98700; }
+    .station-arrow { position:absolute; right:20px; top:31px; font-size:29px; font-weight:300; color:#30466b; }
+    .station-warning { position:absolute; left:24px; bottom:39px; font-size:14px; font-weight:750; color:#d33a4e; }
+    .arch .station-warning, .pet .station-warning, .supply .station-warning, .onsite .station-warning { color:#53637f; }
+    .station-sla-ref { position:absolute; left:24px; bottom:17px; font-size:14px; color:#53637f; }
+    .station-sla-ref strong { color:#102041; }
+    /* Make the real button transparent and stretch it over the card. */
+    [class*="st-key-station_wrap_care"] [class*="st-key-station_CARE"],
+    [class*="st-key-station_wrap_arch"] [class*="st-key-station_ARCH"],
+    [class*="st-key-station_wrap_pet"] [class*="st-key-station_PET"],
+    [class*="st-key-station_wrap_supply"] [class*="st-key-station_SUPPLY"],
+    [class*="st-key-station_wrap_onsite"] [class*="st-key-station_ONSITE"] {
+        position:absolute !important; inset:0 !important; z-index:20 !important;
+        width:100% !important; height:184px !important;
     }
-
-    .station-sla strong {
-        color:#132541;
+    [class*="st-key-station_wrap_care"] [class*="st-key-station_CARE"] button,
+    [class*="st-key-station_wrap_arch"] [class*="st-key-station_ARCH"] button,
+    [class*="st-key-station_wrap_pet"] [class*="st-key-station_PET"] button,
+    [class*="st-key-station_wrap_supply"] [class*="st-key-station_SUPPLY"] button,
+    [class*="st-key-station_wrap_onsite"] [class*="st-key-station_ONSITE"] button {
+        position:absolute !important; inset:0 !important; width:100% !important; height:184px !important;
+        background:transparent !important; border:0 !important; box-shadow:none !important;
+        color:transparent !important; font-size:1px !important; opacity:0 !important;
+        cursor:pointer !important; z-index:30 !important;
     }
-
-    .station-card {
-        border-radius:13px;
-        min-height:145px;
-        padding:18px;
-        border:1px solid transparent;
-    }
-
-    /* CLICKABLE STATION TILES */
-    [class*="st-key-station_CARE"],
-    [class*="st-key-station_ARCH"],
-    [class*="st-key-station_PET"],
-    [class*="st-key-station_SUPPLY"],
-    [class*="st-key-station_ONSITE"] { width:100% !important; }
-
-    [class*="st-key-station_CARE"] button,
-    [class*="st-key-station_ARCH"] button,
-    [class*="st-key-station_PET"] button,
-    [class*="st-key-station_SUPPLY"] button,
-    [class*="st-key-station_ONSITE"] button {
-        width:100% !important; height:132px !important; min-height:132px !important;
-        box-sizing:border-box !important; border-radius:13px !important;
-        padding:15px 18px !important; text-align:left !important;
-        justify-content:flex-start !important; align-items:flex-start !important;
-        white-space:pre-line !important; font-family:inherit !important;
-        font-size:12px !important; line-height:1.25 !important; font-weight:500 !important;
-        box-shadow:none !important; overflow:hidden !important;
-        transition:transform .12s ease, box-shadow .12s ease !important;
-    }
-    [class*="st-key-station_CARE"] button { background:linear-gradient(135deg,#fff4f6,#ffe8ec) !important; border:1px solid #f24a61 !important; color:#31435f !important; }
-    [class*="st-key-station_ARCH"] button { background:linear-gradient(135deg,#eaf8ff,#d9f1fc) !important; border:1px solid transparent !important; color:#31435f !important; }
-    [class*="st-key-station_PET"] button { background:linear-gradient(135deg,#ecfff9,#dcf7ee) !important; border:1px solid transparent !important; color:#31435f !important; }
-    [class*="st-key-station_SUPPLY"] button { background:linear-gradient(135deg,#f7f0ff,#eee5ff) !important; border:1px solid transparent !important; color:#31435f !important; }
-    [class*="st-key-station_ONSITE"] button { background:linear-gradient(135deg,#fff9e8,#fff3cf) !important; border:1px solid transparent !important; color:#31435f !important; }
-    [class*="st-key-station_CARE"] button:hover, [class*="st-key-station_ARCH"] button:hover,
-    [class*="st-key-station_PET"] button:hover, [class*="st-key-station_SUPPLY"] button:hover,
-    [class*="st-key-station_ONSITE"] button:hover { transform:translateY(-1px) !important; box-shadow:0 7px 18px rgba(29,55,96,.08) !important; }
-    [class*="st-key-station_CARE"] button p, [class*="st-key-station_ARCH"] button p,
-    [class*="st-key-station_PET"] button p, [class*="st-key-station_SUPPLY"] button p,
-    [class*="st-key-station_ONSITE"] button p { margin:0 !important; padding:0 !important; }
+    .station-card-visual.critical { animation:stationFlash .85s infinite alternate; }
+    @keyframes stationFlash { from { box-shadow:0 0 0 rgba(239,51,79,0); } to { box-shadow:0 0 22px rgba(239,51,79,.30); } }
 
     /* TABLE */
 
@@ -1051,7 +1049,7 @@ MOCK_ACCOUNTS = [
 ]
 
 # Increment this when the structure/timing of demonstration cases changes.
-MOCK_DATA_VERSION = 4
+MOCK_DATA_VERSION = 5
 
 
 def seed_mock_cases(force=False):
@@ -1091,9 +1089,7 @@ def seed_mock_cases(force=False):
                     {"$set": {
                         "created_at": reset_now,
                         "station_started_at": reset_now,
-                        "due_date": reset_now + timedelta(
-                            minutes=sla_minutes
-                        ),
+                        "due_date": reset_now + timedelta(days=2),
                         "last_update": reset_now,
                         "mock_data_version": MOCK_DATA_VERSION,
                     }},
@@ -1136,12 +1132,9 @@ def seed_mock_cases(force=False):
 
             started = now
 
-            due = (
-                started +
-                timedelta(
-                    minutes=config["sla_minutes"]
-                )
-            )
+            # All mock cases use a common demonstration due date:
+            # exactly two days from the time the mock dataset is seeded.
+            due = now + timedelta(days=2)
 
             docs.append({
                 "case_number": (
@@ -1534,7 +1527,7 @@ with header_cols[0]:
                     <path d="M6 25v9l18 10 18-10v-9L24 35 6 25Z" fill="#4a30cf"/>
                 </svg>
             </div>
-            <div class="brand-name">HPE Caseflow</div>
+            <div class="brand-name">{html.escape(APP_NAME)}</div>
             <div class="brand-divider"></div>
             <div class="top-nav">
                 <span>Track</span><span>•</span><span>Manage</span><span>•</span><span>Resolve</span>
@@ -2383,51 +2376,42 @@ def dashboard_fragment():
                 "SUPPLY CHAIN": "supply",
                 "ONSITE": "onsite",
             }[station]
-
             icon = config.get("icon", "•")
             sla = config["sla_minutes"]
-            sla_text = (
-                f"{sla} mins"
-                if sla < 60
-                else f"{sla // 60} hour"
-                + ("s" if sla != 60 else "")
-            )
+            sla_text = f"{sla} mins" if sla < 60 else f"{sla // 60} hour" + ("s" if sla != 60 else "")
+            critical_class = " critical" if critical else ""
+            selected_class = " selected" if selected == station else ""
 
-            # IMPORTANT:
-            # The Streamlit button IS the tile.  The previous implementation
-            # used an HTML card plus an invisible button layered over it.  That
-            # is unreliable across Streamlit DOM/layout versions and produced
-            # the empty button visible underneath the tile.
-            #
-            # This version makes the real Streamlit button the clickable tile,
-            # so clicking anywhere inside it reliably changes the station.
-            warning_text = (
-                f"◷  {nearing} nearing due\n"
-                if nearing
-                else ""
-            )
-
-            # Use real line breaks. Literal \n text was previously displayed
-            # inside the Streamlit button and made the tile look broken.
-            tile_label = (
-                f"{icon}   **{station}**\n"
-                f"\n"
-                f"**{len(station_tasks)}**  Active Cases\n"
-                f"\n"
-                f"{warning_text}"
-                f"◷  Max Timeframe: **{sla_text}**"
-            )
-
-            if st.button(
-                tile_label,
-                key=f"station_{station}",
-                use_container_width=True,
-            ):
-                if critical:
-                    acknowledge_station_alerts(station)
-
-                st.session_state["selected_station"] = station
-                st.rerun()
+            # Visual card + a real Streamlit button layered over the whole card.
+            # The overlay is the only clickable element, so the filter is
+            # reliable while the visual remains faithful to the reference.
+            with st.container(key=f"station_wrap_{slug}"):
+                st.markdown(
+                    f"""
+                    <div class="station-card-visual {slug}{critical_class}{selected_class}">
+                        <div class="station-icon-circle">{html.escape(icon)}</div>
+                        <div class="station-copy">
+                            <div class="station-card-title">{html.escape(station)}</div>
+                            <div class="station-count-line">
+                                <span class="station-count">{len(station_tasks)}</span>
+                                <span class="station-active">Active Cases</span>
+                            </div>
+                        </div>
+                        <div class="station-arrow">›</div>
+                        <div class="station-warning">◷ &nbsp; {nearing} nearing due</div>
+                        <div class="station-sla-ref">◷ &nbsp; Max Timeframe: <strong>{html.escape(sla_text)}</strong></div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                if st.button(
+                    f"Select {station}",
+                    key=f"station_{station}",
+                    use_container_width=True,
+                ):
+                    if critical:
+                        acknowledge_station_alerts(station)
+                    st.session_state["selected_station"] = station
 
     st.markdown(
         "<div style='height:10px'></div>",
@@ -2885,12 +2869,10 @@ def dashboard_fragment():
 # Seed before the first dashboard render so the first view already
 # contains the mock cases. This check runs once per normal app render
 # and does not create a background refresh loop.
-if (
-    col(TASKS_COLLECTION).count_documents(
-        {"is_mock": True}
-    ) == 0
-):
-    seed_mock_cases()
+# Always run the lightweight mock-data version check.  Existing demo
+# records are migrated once when MOCK_DATA_VERSION changes; otherwise
+# the function returns immediately without recreating the dataset.
+seed_mock_cases()
 
 
 # Render the dashboard once. No run_every / autorefresh is used.
