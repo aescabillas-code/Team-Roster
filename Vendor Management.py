@@ -591,7 +591,7 @@ st.markdown(
     [class*="st-key-station_wrap_pet"] [class*="st-key-station_PET"],
     [class*="st-key-station_wrap_supply"] [class*="st-key-station_SUPPLY"],
     [class*="st-key-station_wrap_onsite"] [class*="st-key-station_ONSITE"] {
-        position:absolute !important; inset:0 !important; z-index:20 !important;
+        position:absolute !important; inset:0 !important; z-index:50 !important;
         width:100% !important; height:184px !important;
     }
     [class*="st-key-station_wrap_care"] [class*="st-key-station_CARE"] button,
@@ -2532,28 +2532,25 @@ def dashboard_fragment():
             # Streamlit button is layered over the entire card so ONE click
             # anywhere on the tile changes the station filter.
             with st.container(key=f"station_wrap_{slug}"):
-                station_html = textwrap.dedent(
-                    f"""
-                    <div class="station-card-visual {slug}{critical_class}{selected_class}">
-                        {alert_icon}
-                        <div class="station-icon-circle">{html.escape(icon)}</div>
-                        <div class="station-copy">
-                            <div class="station-card-title">{html.escape(station)}</div>
-                            <div class="station-count-line">
-                                <span class="station-count">{len(station_tasks)}</span>
-                                <span class="station-active">Active Cases</span>
-                            </div>
-                        </div>
-                        <div class="station-arrow">›</div>
-                        <div class="station-warning{' active' if nearing > 0 else ''}">◷ &nbsp; {nearing} nearing due</div>
-                        <div class="station-sla-ref">◷ &nbsp; Max Timeframe: <strong>{html.escape(sla_text)}</strong></div>
-                    </div>
-                    """
-                ).strip()
-                st.markdown(
-                    station_html,
-                    unsafe_allow_html=True,
+                # Keep this HTML as one physical markdown line. Streamlit's
+                # Markdown parser can otherwise interpret indented multiline
+                # HTML as a code block and expose the raw tags.
+                station_html = (
+                    f'<div class="station-card-visual {slug}{critical_class}{selected_class}">'
+                    f'{alert_icon}'
+                    f'<div class="station-icon-circle">{html.escape(icon)}</div>'
+                    f'<div class="station-copy">'
+                    f'<div class="station-card-title">{html.escape(station)}</div>'
+                    f'<div class="station-count-line">'
+                    f'<span class="station-count">{len(station_tasks)}</span>'
+                    f'<span class="station-active">Active Cases</span>'
+                    f'</div></div>'
+                    f'<div class="station-arrow">›</div>'
+                    f'<div class="station-warning{" active" if nearing > 0 else ""}">◷ &nbsp; {nearing} nearing due</div>'
+                    f'<div class="station-sla-ref">◷ &nbsp; Max Timeframe: <strong>{html.escape(sla_text)}</strong></div>'
+                    f'</div>'
                 )
+                st.markdown(station_html, unsafe_allow_html=True)
                 if st.button(
                     f"Select {station}",
                     key=f"station_{station}",
