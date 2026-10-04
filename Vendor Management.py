@@ -492,59 +492,87 @@ st.markdown(
         font-family:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
     }
 
-    /* HEADER */
+    /* HEADER — compact, non-clipping layout */
+    [data-testid="stHorizontalBlock"] {
+        min-width:0 !important;
+    }
+    [data-testid="column"] {
+        min-width:0 !important;
+        overflow:visible !important;
+    }
 
     .brand-row {
+        width:100%;
+        min-width:0;
+        height:56px;
         display:flex;
         align-items:center;
-        gap:14px;
-        height:64px;
+        gap:9px;
+        overflow:visible;
+        white-space:nowrap;
+        box-sizing:border-box;
     }
 
     .brand-mark {
-        width:48px;
-        height:48px;
-        border-radius:11px;
-        background:linear-gradient(145deg,#7051ff,#3723c6);
-        color:#fff;
+        flex:0 0 40px;
+        width:40px;
+        height:34px;
         display:flex;
         align-items:center;
         justify-content:center;
-        font-size:27px;
-        font-weight:900;
-        box-shadow:0 7px 16px rgba(68,42,202,.20);
+        overflow:visible;
+        background:transparent !important;
+        box-shadow:none !important;
+        border:0 !important;
+        border-radius:0 !important;
+    }
+
+    .brand-mark img {
+        display:block;
+        width:40px;
+        height:auto;
+        max-height:34px;
+        object-fit:contain;
     }
 
     .brand-name {
+        flex:0 1 auto;
+        min-width:0;
         color:#102041;
-        font-size:25px;
+        font-size:20px;
         font-weight:850;
-        letter-spacing:-.7px;
+        letter-spacing:-.55px;
+        line-height:1;
     }
 
     .brand-divider {
-        height:28px;
+        flex:0 0 1px;
+        height:24px;
         width:1px;
         background:#dce2eb;
-        margin-left:2px;
+        margin:0 2px;
     }
 
     .top-nav {
+        flex:0 1 auto;
+        min-width:0;
         color:#53637f;
-        font-size:14px;
+        font-size:12px;
+        line-height:1;
     }
 
     .top-nav span {
-        margin-right:15px;
+        display:inline-block;
+        margin-right:10px;
     }
-
-    .brand-mark { background:transparent !important; box-shadow:none !important; border-radius:0 !important; width:48px;height:48px; }
-    .brand-mark svg { display:block; }
 
     /* SEARCH */
 
     div[data-testid="stTextInput"] input {
-        height:50px !important;
+        height:46px !important;
+        min-width:0 !important;
+        width:100% !important;
+        box-sizing:border-box !important;
         border:1px solid #dce3ed !important;
         border-radius:12px !important;
         background:#fff !important;
@@ -560,8 +588,9 @@ st.markdown(
     /* TOP ICON BUTTONS */
 
     .top-icon button {
-        height:50px !important;
-        min-height:50px !important;
+        height:46px !important;
+        min-height:46px !important;
+        min-width:0 !important;
         border:1px solid #dce3ed !important;
         background:#fff !important;
         border-radius:12px !important;
@@ -1688,7 +1717,8 @@ def transfer_case(task, destination):
 # ============================================================
 
 header_cols = st.columns(
-    [4.3, 5.4, 0.6]
+    [3.7, 5.7, 0.6],
+    gap="small",
 )
 
 with header_cols[0]:
@@ -1697,11 +1727,10 @@ with header_cols[0]:
         f"""
         <div class="brand-row">
             <div class="brand-mark" aria-hidden="true">
-                <svg viewBox="0 0 48 48" width="48" height="48">
-                    <path d="M24 4 42 14 24 24 6 14 24 4Z" fill="#8068ff"/>
-                    <path d="M6 14v9l18 10 18-10v-9L24 24 6 14Z" fill="#5d42e8"/>
-                    <path d="M6 25v9l18 10 18-10v-9L24 35 6 25Z" fill="#4a30cf"/>
-                </svg>
+                <img
+                    src="https://raw.githubusercontent.com/hpe-design/logos/master/HPE%20Element%20-%20SVG/hpe-element-black.svg"
+                    alt="HPE"
+                />
             </div>
             <div class="brand-name">{html.escape(APP_NAME)}</div>
             <div class="brand-divider"></div>
