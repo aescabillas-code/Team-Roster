@@ -472,12 +472,8 @@ st.markdown(
         padding-bottom:30px;
     }
 
-    body,
-    .stApp,
-    [data-testid="stAppViewContainer"],
-    [data-testid="stAppViewContainer"] > .main,
-    [data-testid="stHeader"] {
-        background:#ffffff !important;
+    body {
+        background:#f7f9fc;
     }
 
     .block-container,
@@ -492,87 +488,59 @@ st.markdown(
         font-family:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
     }
 
-    /* HEADER — compact, non-clipping layout */
-    [data-testid="stHorizontalBlock"] {
-        min-width:0 !important;
-    }
-    [data-testid="column"] {
-        min-width:0 !important;
-        overflow:visible !important;
-    }
+    /* HEADER */
 
     .brand-row {
-        width:100%;
-        min-width:0;
-        height:56px;
         display:flex;
         align-items:center;
-        gap:9px;
-        overflow:visible;
-        white-space:nowrap;
-        box-sizing:border-box;
+        gap:14px;
+        height:64px;
     }
 
     .brand-mark {
-        flex:0 0 40px;
-        width:40px;
-        height:34px;
+        width:48px;
+        height:48px;
+        border-radius:11px;
+        background:linear-gradient(145deg,#7051ff,#3723c6);
+        color:#fff;
         display:flex;
         align-items:center;
         justify-content:center;
-        overflow:visible;
-        background:transparent !important;
-        box-shadow:none !important;
-        border:0 !important;
-        border-radius:0 !important;
-    }
-
-    .brand-mark img {
-        display:block;
-        width:40px;
-        height:auto;
-        max-height:34px;
-        object-fit:contain;
+        font-size:27px;
+        font-weight:900;
+        box-shadow:0 7px 16px rgba(68,42,202,.20);
     }
 
     .brand-name {
-        flex:0 1 auto;
-        min-width:0;
         color:#102041;
-        font-size:20px;
+        font-size:25px;
         font-weight:850;
-        letter-spacing:-.55px;
-        line-height:1;
+        letter-spacing:-.7px;
     }
 
     .brand-divider {
-        flex:0 0 1px;
-        height:24px;
+        height:28px;
         width:1px;
         background:#dce2eb;
-        margin:0 2px;
+        margin-left:2px;
     }
 
     .top-nav {
-        flex:0 1 auto;
-        min-width:0;
         color:#53637f;
-        font-size:12px;
-        line-height:1;
+        font-size:14px;
     }
 
     .top-nav span {
-        display:inline-block;
-        margin-right:10px;
+        margin-right:15px;
     }
+
+    .brand-mark { background:transparent !important; box-shadow:none !important; border-radius:0 !important; width:48px;height:48px; }
+    .brand-mark svg { display:block; }
 
     /* SEARCH */
 
     div[data-testid="stTextInput"] input {
-        height:46px !important;
-        min-width:0 !important;
-        width:100% !important;
-        box-sizing:border-box !important;
+        height:50px !important;
         border:1px solid #dce3ed !important;
         border-radius:12px !important;
         background:#fff !important;
@@ -588,9 +556,8 @@ st.markdown(
     /* TOP ICON BUTTONS */
 
     .top-icon button {
-        height:46px !important;
-        min-height:46px !important;
-        min-width:0 !important;
+        height:50px !important;
+        min-height:50px !important;
         border:1px solid #dce3ed !important;
         background:#fff !important;
         border-radius:12px !important;
@@ -635,8 +602,8 @@ st.markdown(
     .station-card-visual.supply.selected { border:3px solid #a07de2 !important; }
     .station-card-visual.onsite.selected { border:3px solid #e0b94f !important; }
     .station-icon-circle {
-        width:62px; height:62px; border-radius:50%; display:flex; align-items:center; justify-content:center;
-        font-size:30px; font-weight:900; position:absolute; left:24px; top:18px;
+        width:70px; height:70px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+        font-size:34px; font-weight:900; position:absolute; left:24px; top:18px;
         background:rgba(255,255,255,.48);
     }
     .care .station-icon-circle { color:#e51c3a; background:#ffd7df; }
@@ -644,21 +611,21 @@ st.markdown(
     .pet .station-icon-circle { color:#087b58; background:#bff1df; }
     .supply .station-icon-circle { color:#5d2ac9; background:#dfceff; }
     .onsite .station-icon-circle { color:#c98700; background:#ffe5a8; }
-    .station-copy { position:absolute; left:104px; top:28px; }
-    .station-card-title { font-size:18px; font-weight:850; line-height:1.1; letter-spacing:-.25px; }
-    .station-count-line { display:flex; align-items:baseline; gap:6px; margin-top:7px; }
-    .station-count { font-size:32px; line-height:1; font-weight:900; }
-    .station-active { font-size:12px; color:#53637f; }
+    .station-copy { position:absolute; left:112px; top:29px; }
+    .station-card-title { font-size:21px; font-weight:850; line-height:1.1; letter-spacing:-.3px; }
+    .station-count-line { display:flex; align-items:baseline; gap:7px; margin-top:9px; }
+    .station-count { font-size:38px; line-height:1; font-weight:900; }
+    .station-active { font-size:14px; color:#53637f; }
     .care .station-count { color:#e51c3a; }
     .arch .station-count { color:#0879c9; }
     .pet .station-count { color:#087b58; }
     .supply .station-count { color:#5d2ac9; }
     .onsite .station-count { color:#c98700; }
-    .station-arrow { position:absolute; right:20px; top:31px; font-size:24px; font-weight:300; color:#30466b; }
-    .station-warning { position:absolute; left:24px; bottom:39px; font-size:12px; font-weight:750; color:#53637f; }
+    .station-arrow { position:absolute; right:20px; top:31px; font-size:29px; font-weight:300; color:#30466b; }
+    .station-warning { position:absolute; left:24px; bottom:39px; font-size:14px; font-weight:750; color:#53637f; }
     .station-warning.active { color:#d33a4e; }
     .arch .station-warning.active, .pet .station-warning.active, .supply .station-warning.active, .onsite .station-warning.active { color:#53637f; }
-    .station-sla-ref { position:absolute; left:24px; bottom:17px; font-size:12px; color:#53637f; }
+    .station-sla-ref { position:absolute; left:24px; bottom:17px; font-size:14px; color:#53637f; }
     .station-sla-ref strong { color:#102041; }
     /* Make the real button transparent and stretch it over the card. */
     [class*="st-key-station_wrap_care"] [class*="st-key-station_CARE"],
@@ -740,14 +707,13 @@ st.markdown(
 
     .station-pill {
         display:inline-block;
-        padding:6px 12px;
+        padding:7px 14px;
         border-radius:18px;
+        background:#ffecef;
+        color:#e51c3a;
         font-weight:800;
-        font-size:12px;
-        line-height:1.1;
+        font-size:14px;
         margin-left:10px;
-        vertical-align:middle;
-        border:1px solid transparent;
     }
 
     .case-head {
@@ -819,18 +785,6 @@ st.markdown(
         white-space:nowrap !important;
         overflow:hidden !important;
         text-overflow:ellipsis !important;
-    }
-    [class*="st-key-case_cell_"] button,
-    [class*="st-key-case_cell_"] button *,
-    [class*="st-key-case_cell_"] button p,
-    [class*="st-key-case_cell_"] button div,
-    [class*="st-key-case_cell_"] button span,
-    [class*="st-key-case_cell_"] button [data-testid],
-    [class*="st-key-case_cell_"] [data-testid="stMarkdownContainer"] * {
-        font-family:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
-        font-size:8px !important;
-        line-height:1.1 !important;
-        font-weight:500 !important;
     }
     [class*="st-key-case_cell_"] button:hover {
         border-color:#b7c4d7 !important;
@@ -1717,8 +1671,7 @@ def transfer_case(task, destination):
 # ============================================================
 
 header_cols = st.columns(
-    [3.7, 5.7, 0.6],
-    gap="small",
+    [4.3, 5.4, 0.6, 0.6]
 )
 
 with header_cols[0]:
@@ -1727,10 +1680,11 @@ with header_cols[0]:
         f"""
         <div class="brand-row">
             <div class="brand-mark" aria-hidden="true">
-                <img
-                    src="https://raw.githubusercontent.com/hpe-design/logos/master/HPE%20Element%20-%20SVG/hpe-element-black.svg"
-                    alt="HPE"
-                />
+                <svg viewBox="0 0 48 48" width="48" height="48">
+                    <path d="M24 4 42 14 24 24 6 14 24 4Z" fill="#8068ff"/>
+                    <path d="M6 14v9l18 10 18-10v-9L24 24 6 14Z" fill="#5d42e8"/>
+                    <path d="M6 25v9l18 10 18-10v-9L24 35 6 25Z" fill="#4a30cf"/>
+                </svg>
             </div>
             <div class="brand-name">{html.escape(APP_NAME)}</div>
             <div class="brand-divider"></div>
@@ -1757,6 +1711,21 @@ with header_cols[1]:
     st.session_state["search"] = search
 
 with header_cols[2]:
+
+    alert_count = len(
+        active_alerts()
+    )
+
+    if st.button(
+        f"🔔 {alert_count}" if alert_count else "🔔",
+        key="open_alerts",
+        use_container_width=True,
+    ):
+        st.session_state[
+            "show_alerts"
+        ] = True
+
+with header_cols[3]:
 
     if st.button(
         "⚙",
@@ -2687,11 +2656,7 @@ def dashboard_fragment():
             <span class="cases-title">
                 Active Cases
             </span>
-            <span class="station-pill" style="
-                background:{STATIONS.get(selected, STATIONS["CARE"])["soft"]};
-                color:{STATIONS.get(selected, STATIONS["CARE"])["accent"]};
-                border-color:{STATIONS.get(selected, STATIONS["CARE"])["accent"]}55;
-            ">
+            <span class="station-pill">
                 {html.escape(selected)}
             </span>
             """,
