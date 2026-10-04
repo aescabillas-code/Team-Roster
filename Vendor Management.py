@@ -2218,10 +2218,12 @@ def case_details(task_id):
 
 
 # ============================================================
-# REAL-TIME DASHBOARD FRAGMENT
+# DASHBOARD
 # ============================================================
+# IMPORTANT: This dashboard intentionally has NO periodic Streamlit
+# rerun. The only continuously updating value is Duration, which is
+# handled entirely by browser-side JavaScript below.
 
-@st.fragment(run_every="2s")
 def dashboard_fragment():
 
     selected = st.session_state[
@@ -2236,8 +2238,9 @@ def dashboard_fragment():
         limit=300,
     )
 
-    # Alert engine runs only inside the fragment.
-    # It does not cause a complete page refresh.
+    # Alerts are evaluated only when the dashboard itself renders
+    # (initial load or a user action). There is deliberately no
+    # background polling/rerun.
     scan_alerts(tasks)
 
     now = utc_now()
@@ -2536,9 +2539,8 @@ def dashboard_fragment():
                 key=f"case_{task_id}",
                 use_container_width=True,
             ):
-                # Open the dialog directly from the widget interaction.
-                # This is the supported pattern when the dashboard is a
-                # periodically rerunning fragment.
+                # Open the dialog directly from the user's click.
+                # There is no periodic dashboard rerun.
                 case_details(task_id)
 
             st.markdown(
@@ -2750,21 +2752,23 @@ def dashboard_fragment():
     )
 
 
-dashboard_fragment()
-
-
 # ============================================================
 # INITIAL MOCK DATA
 # ============================================================
 
-# Seed only after the interface is available.
-# This avoids repeatedly inserting mock cases.
+# Seed before the first dashboard render so the first view already
+# contains the mock cases. This check runs once per normal app render
+# and does not create a background refresh loop.
 if (
     col(TASKS_COLLECTION).count_documents(
         {"is_mock": True}
     ) == 0
 ):
     seed_mock_cases()
+
+
+# Render the dashboard once. No run_every / autorefresh is used.
+dashboard_fragment()
 
 
 # ============================================================
