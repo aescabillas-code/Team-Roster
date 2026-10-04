@@ -287,8 +287,8 @@ def station_name(value):
 # Behavior:
 #   - ACCESS_CODE and TOKEN_SECRET are read only from Streamlit Secrets.
 #   - Successful access creates a signed token.
-#   - The browser stores that token in localStorage.
-#   - sessionStorage is used only as a fallback when localStorage is blocked.
+#   - The browser stores that token in a durable first-party cookie and localStorage.
+#   - sessionStorage is used only as a fallback when persistent storage is blocked.
 #   - Refreshing/reopening the browser restores authorization automatically.
 #   - Changing ACCESS_CODE invalidates previously issued tokens.
 #   - Clearing browser access removes the stored authorization token.
@@ -301,6 +301,7 @@ def station_name(value):
 # the Knowledge Base implementation.
 
 ACCESS_STORAGE_KEY = "hpe_caseflow_authorized_v1"
+AUTH_COOKIE_KEY = "hpe_caseflow_authorized_cookie_v1"
 JS_READ_KEY = "hpe_caseflow_auth_read_v1"
 JS_SAVE_KEY = "hpe_caseflow_auth_save_v1"
 JS_CLEAR_KEY = "hpe_caseflow_auth_clear_v1"
@@ -417,8 +418,29 @@ def _js_parent_storage(expression: str, key: str):
         return None
 
 
+def _read_server_cookie_token():
+    """Read the signed authorization token from the browser cookie on the current request."""
+    try:
+        context = getattr(st, "context", None)
+        cookies = getattr(context, "cookies", None)
+        if cookies:
+            value = cookies.get(AUTH_COOKIE_KEY)
+            if value:
+                return str(value)
+    except Exception:
+        pass
+    return ""
+
+
 def _read_browser_token():
-    """Read persistent authorization from desktop/mobile browser storage."""
+    """Read persistent authorization; prefer a server-visible cookie, then browser storage."""
+    # Cookies survive refreshes and closing/reopening the tab and are available
+    # to Streamlit on the next request. This avoids relying solely on the
+    # streamlit-js-eval iframe's localStorage origin.
+    cookie_token = _read_server_cookie_token()
+    if cookie_token:
+        return cookie_token
+
     key = repr(ACCESS_STORAGE_KEY)
 
     expression = f"""
@@ -441,7 +463,6 @@ def _read_browser_token():
                 }} catch (e) {{}}
             }}
 
-            // Mobile/webview fallback.
             try {{
                 const value = window.sessionStorage.getItem(key);
                 if (value) return value;
@@ -454,49 +475,60 @@ def _read_browser_token():
     }})()
     """
 
-    value = _js_parent_storage(
-        expression,
-        JS_READ_KEY,
-    )
-
+    value = _js_parent_storage(expression, JS_READ_KEY)
     if value is None:
         return None
-
     return str(value or "")
 
 
 def _save_browser_token(token: str):
-    """Persist authorization across desktop and mobile browsers."""
+    """Persist authorization in a durable cookie plus browser storage fallback."""
     key = repr(ACCESS_STORAGE_KEY)
+    cookie_key = repr(AUTH_COOKIE_KEY)
     value = repr(str(token))
 
     expression = f"""
     (() => {{
         try {{
             const key = {key};
+            const cookieKey = {cookie_key};
             const value = {value};
             let saved = false;
+
+            // Durable first-party cookie. Secure is enabled automatically on HTTPS.
+            try {{
+                const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+                const cookie = cookieKey + '=' + encodeURIComponent(value) +
+                    '; Max-Age=31536000; Path=/; SameSite=Lax' + secure;
+                const docs = [];
+                const addDoc = (doc) => {{
+                    if (doc && !docs.includes(doc)) docs.push(doc);
+                }};
+                try {{ addDoc(window.top.document); }} catch (e) {{}}
+                try {{ addDoc(window.parent.document); }} catch (e) {{}}
+                try {{ addDoc(document); }} catch (e) {{}}
+                for (const doc of docs) {{
+                    try {{ doc.cookie = cookie; }} catch (e) {{}}
+                    try {{
+                        if (doc.cookie.indexOf(cookieKey + '=') !== -1) saved = true;
+                    }} catch (e) {{}}
+                }}
+            }} catch (e) {{}}
+
             const stores = [];
             const addStore = (store) => {{
                 if (store && !stores.includes(store)) stores.push(store);
             }};
-
             try {{ addStore(window.top.localStorage); }} catch (e) {{}}
             try {{ addStore(window.parent.localStorage); }} catch (e) {{}}
             try {{ addStore(window.localStorage); }} catch (e) {{}}
 
             for (const store of stores) {{
-                try {{
-                    store.setItem(key, value);
-                    saved = true;
-                }} catch (e) {{}}
+                try {{ store.setItem(key, value); saved = true; }} catch (e) {{}}
             }}
 
             if (!saved) {{
-                try {{
-                    window.sessionStorage.setItem(key, value);
-                    saved = true;
-                }} catch (e) {{}}
+                try {{ window.sessionStorage.setItem(key, value); saved = true; }} catch (e) {{}}
             }}
 
             return saved ? 'saved' : 'error';
@@ -506,44 +538,49 @@ def _save_browser_token(token: str):
     }})()
     """
 
-    result = _js_parent_storage(
-        expression,
-        JS_SAVE_KEY,
-    )
-
+    result = _js_parent_storage(expression, JS_SAVE_KEY)
     return result == "saved"
 
 
 def _clear_browser_token():
-    """Remove authorization from every browser storage location."""
+    """Remove authorization from cookie, localStorage and sessionStorage."""
     key = repr(ACCESS_STORAGE_KEY)
+    cookie_key = repr(AUTH_COOKIE_KEY)
 
     expression = f"""
     (() => {{
         try {{
             const key = {key};
+            const cookieKey = {cookie_key};
             let cleared = false;
+
+            try {{
+                const expired = cookieKey + '=; Max-Age=0; Path=/; SameSite=Lax';
+                const docs = [];
+                const addDoc = (doc) => {{
+                    if (doc && !docs.includes(doc)) docs.push(doc);
+                }};
+                try {{ addDoc(window.top.document); }} catch (e) {{}}
+                try {{ addDoc(window.parent.document); }} catch (e) {{}}
+                try {{ addDoc(document); }} catch (e) {{}}
+                for (const doc of docs) {{
+                    try {{ doc.cookie = expired; cleared = true; }} catch (e) {{}}
+                }}
+            }} catch (e) {{}}
+
             const stores = [];
             const addStore = (store) => {{
                 if (store && !stores.includes(store)) stores.push(store);
             }};
-
             try {{ addStore(window.top.localStorage); }} catch (e) {{}}
             try {{ addStore(window.parent.localStorage); }} catch (e) {{}}
             try {{ addStore(window.localStorage); }} catch (e) {{}}
 
             for (const store of stores) {{
-                try {{
-                    store.removeItem(key);
-                    cleared = true;
-                }} catch (e) {{}}
+                try {{ store.removeItem(key); cleared = true; }} catch (e) {{}}
             }}
 
-            try {{
-                window.sessionStorage.removeItem(key);
-                cleared = true;
-            }} catch (e) {{}}
-
+            try {{ window.sessionStorage.removeItem(key); cleared = true; }} catch (e) {{}}
             return cleared ? 'cleared' : 'error';
         }} catch (e) {{
             return 'error';
@@ -551,11 +588,7 @@ def _clear_browser_token():
     }})()
     """
 
-    result = _js_parent_storage(
-        expression,
-        JS_CLEAR_KEY,
-    )
-
+    result = _js_parent_storage(expression, JS_CLEAR_KEY)
     return result == "cleared"
 
 
@@ -1516,6 +1549,11 @@ def calculate_state(task, now=None):
         task.get("account_priority")
     )
 
+    # SLA warning is strictly time-based: final 20% BEFORE the SLA ends.
+    # Once elapsed time reaches the SLA, the case is past due instead.
+    nearing_due = (remaining > 0) and (remaining <= sla * 0.20)
+    past_due = remaining <= 0
+
     if priority_account:
         status = "CRITICAL"
     elif remaining <= 0:
@@ -1533,6 +1571,8 @@ def calculate_state(task, now=None):
         "remaining": remaining,
         "progress": progress,
         "priority_account": priority_account,
+        "nearing_due": nearing_due,
+        "past_due": past_due,
         "critical": status in {"CRITICAL", "BREACHED"},
         "breached": status == "BREACHED",
     }
@@ -2942,10 +2982,17 @@ def dashboard_fragment():
         # the warning threshold OR has already breached the station SLA.
         # This keeps the visual warning tied to the same cases that receive
         # the red duration indicator in the table.
+        # Nearing due = final 20% of the SLA, strictly BEFORE breach.
+        # Past due = SLA has already elapsed.
         nearing = sum(
             1
             for state in station_states
-            if state["remaining"] <= sla_seconds * 0.20
+            if state.get("nearing_due", False)
+        )
+        past_due = sum(
+            1
+            for state in station_states
+            if state.get("past_due", False)
         )
         # A tile flashes ONLY while at least one case is in the final
         # 20% of this station's SLA. Priority-account status alone does not
@@ -3019,7 +3066,7 @@ def dashboard_fragment():
                     f'<span class="station-active">Active Cases</span>'
                     f'</div></div>'
                     f'<div class="station-arrow">›</div>'
-                    f'<div class="station-warning{" active" if nearing > 0 else ""}">◷ &nbsp; {nearing} nearing due</div>'
+                    f'<div class="station-warning{" active" if nearing > 0 else ""}">◷ &nbsp; {nearing} nearing due{("  •  " + str(past_due) + " past due") if past_due else ""}</div>'
                     f'<div class="station-sla-ref">◷ &nbsp; Max Timeframe: <strong>{html.escape(sla_text)}</strong></div>'
                     f'</div>'
                 )
