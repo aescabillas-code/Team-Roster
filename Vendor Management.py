@@ -759,8 +759,8 @@ defaults = {
     "simulation_until": 0.0,
     "simulation_case_id": None,
     "search": "",
-    # Station warning acknowledgement deadlines. Clicking a warning tile
-    # keeps its warning visible for five seconds before the flashing stops.
+    # Kept for compatibility with existing session state; acknowledgement
+    # now stops tile flashing immediately.
     "station_warning_ack_until": {},
     # Stations silenced after the user clicks their active warning tile.
     # The station stays silenced until the current warning condition clears.
@@ -902,6 +902,15 @@ st.markdown(
         border-radius:12px !important;
         color:#152645 !important;
         font-size:22px !important;
+    }
+
+    /* Keep fragment station switching visually clean. The selected tile is
+       updated on pointerdown before Streamlit performs its fragment rerun. */
+    [data-testid="stStatusWidget"],
+    [data-testid="stSpinner"],
+    .stSpinner {
+        opacity:0 !important;
+        pointer-events:none !important;
     }
 
     /* STATION TILES — reference visual + reliable full-card click target */
@@ -2922,16 +2931,12 @@ def dashboard_fragment():
         )
         now_epoch = time.time()
 
-        # Before the user clicks the warning tile, the tile flashes normally.
-        # After the click, it continues flashing for exactly five seconds.
-        # Once those five seconds expire, it stays silent until the current
-        # nearing-due condition clears and a new warning cycle begins.
+        # A warning tile flashes only until the user clicks it.
+        # Clicking the tile silences the flashing immediately and keeps it
+        # silent until the current nearing-due condition clears.
         flash_tile = (
             nearing > 0
-            and (
-                station not in warning_silenced
-                or now_epoch < ack_until
-            )
+            and station not in warning_silenced
         )
 
         config = STATIONS[
@@ -2987,10 +2992,10 @@ def dashboard_fragment():
                     use_container_width=True,
                 ):
                     if nearing > 0:
-                        # Keep the warning visible for exactly five seconds,
-                        # then silence this warning cycle until the case(s)
-                        # leave the nearing-due window.
-                        warning_ack_until[station] = time.time() + 5.0
+                        # Stop the tile warning immediately on click.
+                        # Keep it silent until the current nearing-due condition
+                        # clears and a new warning cycle begins.
+                        warning_ack_until[station] = 0.0
                         warning_silenced.add(station)
                         acknowledge_station_alerts(station)
 
@@ -3508,11 +3513,9 @@ def dashboard_fragment():
                         Number(wrap.getAttribute("data-sla-seconds") || "0") * 0.20
                     );
 
-                    /* If a station was clicked, keep the warning visual alive
-                       for the requested five seconds, then stop it. */
-                    const acknowledged = ackStop > 0 && nowMs < ackStop;
-
-                    if (nearing && (!ackStop || acknowledged)) {
+                    /* Tile warning acknowledgement is handled immediately
+                       on pointerdown. Duration warning remains independent. */
+                    if (nearing) {
                         wrap.classList.add("duration-warning-active");
                     } else {
                         wrap.classList.remove("duration-warning-active");
@@ -3529,7 +3532,7 @@ def dashboard_fragment():
                     button.addEventListener("pointerdown", function () {
                         const keyHost = button.closest('[class*="st-key-station_"]');
                         if (!keyHost) return;
-                        const match = keyHost.className.match(/st-key-station_([^\s]+)/);
+                        const match = keyHost.className.match(/st-key-station_([^ ]+)/);
                         const stationMap = {
                             CARE:"CARE", ARCH:"ARCH", PET:"PET",
                             SUPPLY:"SUPPLY CHAIN", ONSITE:"ONSITE"
@@ -3539,10 +3542,35 @@ def dashboard_fragment():
                         document.querySelectorAll(
                             ".station-card-visual[data-station]"
                         ).forEach(function (card) {
-                            card.classList.toggle(
-                                "selected",
-                                card.getAttribute("data-station") === station
-                            );
+                            const isSelected =
+                                card.getAttribute("data-station") === station;
+
+                            card.classList.toggle("selected", isSelected);
+
+                            /* Stop flashing immediately — do not wait for the
+                               fragment rerender. */
+                            if (isSelected) {
+                                card.classList.remove("critical");
+                                card.classList.add("warning-muted");
+                                const icon = card.querySelector(".station-alert-icon");
+                                if (icon) {
+                                    icon.style.animation = "none";
+                                    icon.style.opacity = "1";
+                                }
+                                card.style.animation = "none";
+                            }
+                        });
+
+                        /* Hide Streamlit's transient loading/status UI while
+                           the fragment switches. The selected tile has already
+                           changed above, so the user sees the switch first. */
+                        document.querySelectorAll(
+                            '[data-testid="stStatusWidget"], ' +
+                            '[data-testid="stSpinner"], ' +
+                            '.stSpinner, [role="status"]'
+                        ).forEach(function (el) {
+                            el.style.opacity = "0";
+                            el.style.pointerEvents = "none";
                         });
                     }, {passive:true});
                 });
