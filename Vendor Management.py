@@ -579,6 +579,10 @@ st.markdown(
         border-radius:13px; padding:18px 24px; overflow:hidden;
         color:#102041;
     }
+    .station-card-visual {
+        transition:border-color .12s ease, box-shadow .12s ease, transform .12s ease;
+        will-change:border-color, box-shadow;
+    }
     .station-card-visual.care {
         background:linear-gradient(135deg,#fff4f6,#ffe8ec);
         border:1.5px solid #f24a61;
@@ -606,14 +610,6 @@ st.markdown(
     .station-card-visual.pet.selected { border:3px solid #70cda9 !important; }
     .station-card-visual.supply.selected { border:3px solid #a07de2 !important; }
     .station-card-visual.onsite.selected { border:3px solid #e0b94f !important; }
-    /* Immediate visual feedback while a station click is being processed. */
-    .station-card-visual { transition:border-color .12s ease, box-shadow .12s ease, transform .12s ease; }
-    [class*="st-key-station_wrap_"] button:active + * { transform:scale(.995); }
-    [class*="st-key-station_wrap_"]:has(button:active) .station-card-visual {
-        filter:brightness(.985);
-        transform:translateY(1px);
-    }
-
     .station-icon-circle {
         width:64px; height:64px; border-radius:50%; display:flex; align-items:center; justify-content:center;
         font-size:30px; font-weight:900; position:absolute; left:24px; top:18px;
@@ -720,33 +716,21 @@ st.markdown(
         opacity:1 !important;
     }
     .duration-warning-wrap {
-        display:flex;
+        display:inline-flex;
         align-items:center;
-        gap:5px;
         min-height:24px;
         white-space:nowrap;
     }
-    .duration-warning-icon {
-        width:12px;
-        min-width:12px;
-        display:inline-flex;
-        align-items:center;
-        justify-content:center;
-        color:#ef1738;
-        font-size:15px;
-        line-height:1;
-        font-weight:950;
-        animation:durationWarningFlash .55s ease-in-out infinite alternate;
-        text-shadow:0 0 7px rgba(239,23,56,.55);
+    /* The duration itself flashes when its case is nearing the end of SLA. */
+    .duration-warning-wrap.duration-warning-active {
+        color:#ef1738 !important;
+        font-weight:900 !important;
+        animation:durationTextFlash .65s ease-in-out infinite alternate;
+        text-shadow:0 0 8px rgba(239,23,56,.30);
     }
-    @keyframes durationWarningFlash {
-        from { transform:scale(.82); opacity:.58; }
-        to { transform:scale(1.12); opacity:1; }
-    }
-    .duration-warning-icon.warning-muted {
-        animation:none !important;
-        transform:none !important;
-        opacity:1 !important;
+    @keyframes durationTextFlash {
+        from { opacity:.55; }
+        to { opacity:1; }
     }
 
     /* TABLE */
@@ -1092,7 +1076,6 @@ def task_projection():
     }
 
 
-@st.cache_data(ttl=1.0, show_spinner=False)
 def fetch_tasks(
     search="",
     station=None,
@@ -1286,6 +1269,7 @@ def seed_mock_cases(force=False):
         needs_reset = col(TASKS_COLLECTION).count_documents({
             "is_mock": True,
             "mock_data_version": {"$ne": MOCK_DATA_VERSION},
+            "case_number": {"$not": {"$regex": "^SIM-"}},
         })
 
         if needs_reset:
@@ -1293,14 +1277,17 @@ def seed_mock_cases(force=False):
             reset_docs = col(TASKS_COLLECTION).find({
                 "is_mock": True,
                 "mock_data_version": {"$ne": MOCK_DATA_VERSION},
+                "case_number": {"$not": {"$regex": "^SIM-"}},
             })
 
-            # Reset every demonstration/mock case to a true zero-duration
-            # starting point. This intentionally includes simulation records.
             for old_task in reset_docs:
                 department = station_name(
                     old_task.get("department")
                 )
+                sla_minutes = STATIONS.get(
+                    department,
+                    STATIONS["CARE"],
+                )["sla_minutes"]
 
                 col(TASKS_COLLECTION).update_one(
                     {"_id": old_task["_id"]},
@@ -2644,6 +2631,7 @@ def dashboard_fragment():
                 # HTML as a code block and expose the raw tags.
                 station_html = (
                     f'<div class="station-card-visual {slug}{critical_class}{selected_class}" '
+                    f'data-station="{html.escape(station)}" '
                     f'data-warning-stop="{ack_until if ack_until > time.time() else 0:.3f}">'
                     f'{alert_icon}'
                     f'<div class="station-icon-circle">{html.escape(icon)}</div>'
@@ -3027,53 +3015,28 @@ def dashboard_fragment():
             )
 
             # Browser-side timer:
-            # duration changes every second according to
-            # the user's own PC/browser clock and does not
-            # require a Streamlit rerun.
+            # duration changes every second according to the user's own
+            # PC/browser clock and does not require a Streamlit rerun.
             sla_for_case = STATIONS.get(
                 case_station,
                 STATIONS["CARE"],
             )["sla_minutes"] * 60
 
-            # The red duration indicator follows the EXACT same warning
-            # threshold as the station tile. BREACHED cases do NOT trigger it.
-            case_causes_tile_warning = (
-                state["remaining"] > 0
-                and state["remaining"] <= sla_for_case * 0.20
-            )
+            # Warning is only the final 20% BEFORE breach.
+            # Breached cases remain red through status styling but their
+            # duration does not blink as a "nearing due" warning.
+            warning_threshold_seconds = sla_for_case * 0.80
 
             warning_ack_map = st.session_state.get(
                 "station_warning_ack_until",
                 {},
             )
-            warning_silenced_set = st.session_state.get(
-                "station_warning_silenced",
-                set(),
-            )
             case_ack_until = float(
                 warning_ack_map.get(case_station, 0.0) or 0.0
             )
-            case_warning_visual_active = (
-                case_causes_tile_warning
-                and (
-                    case_station not in warning_silenced_set
-                    or time.time() < case_ack_until
-                )
-            )
 
-            warning_icon_html = (
-                '<span class="duration-warning-icon" '
-                'data-case-warning="1" aria-label="SLA warning">!</span>'
-                if case_warning_visual_active
-                else ""
-            )
-
-            warning_stop_for_case = (
-                case_ack_until
-                if case_warning_visual_active and case_ack_until > time.time()
-                else 0.0
-            )
-
+            # The visual warning is handled entirely by browser-side JS so
+            # the Duration can blink without rerunning the dashboard.
             st.markdown(
                 f"""
                 <div class="case-row"
@@ -3081,8 +3044,10 @@ def dashboard_fragment():
                             color:{'#e51c3a' if state['critical'] else '#53637f'};
                             padding-top:4px;">
                     <div class="duration-warning-wrap"
-                         data-warning-stop="{warning_stop_for_case:.3f}">
-                        {warning_icon_html}
+                         data-warning-threshold="{warning_threshold_seconds:.3f}"
+                         data-sla-seconds="{sla_for_case:.3f}"
+                         data-warning-stop="{case_ack_until:.3f}"
+                         data-duration-start="{html.escape(started)}">
                         <span
                             data-duration-start="{html.escape(started)}"
                             data-duration-live="1">
@@ -3183,20 +3148,69 @@ def dashboard_fragment():
                 });
 
                 document.querySelectorAll(
-                    '.duration-warning-wrap[data-warning-stop]'
+                    '.duration-warning-wrap[data-warning-threshold]'
                 ).forEach(function (wrap) {
-                    const stopAt = Number(
+                    const startedRaw = wrap.getAttribute("data-duration-start") || "";
+                    const threshold = Number(
+                        wrap.getAttribute("data-warning-threshold") || "0"
+                    );
+                    const ackStop = Number(
                         wrap.getAttribute("data-warning-stop") || "0"
                     ) * 1000;
 
-                    if (stopAt > 0 && nowMs >= stopAt) {
-                        const icon = wrap.querySelector(
-                            ".duration-warning-icon"
-                        );
-                        if (icon) {
-                            icon.classList.add("warning-muted");
-                        }
+                    if (!startedRaw || !threshold) return;
+
+                    const started = new Date(startedRaw);
+                    if (isNaN(started.getTime())) return;
+
+                    const elapsed = Math.max(
+                        0,
+                        Math.floor((nowMs - started.getTime()) / 1000)
+                    );
+
+                    /* Nearing warning is final 20% BEFORE breach only. */
+                    const nearing = elapsed >= threshold && elapsed < (
+                        threshold +
+                        Number(wrap.getAttribute("data-sla-seconds") || "0") * 0.20
+                    );
+
+                    /* If a station was clicked, keep the warning visual alive
+                       for the requested five seconds, then stop it. */
+                    const acknowledged = ackStop > 0 && nowMs < ackStop;
+
+                    if (nearing && (!ackStop || acknowledged)) {
+                        wrap.classList.add("duration-warning-active");
+                    } else {
+                        wrap.classList.remove("duration-warning-active");
                     }
+                });
+
+                /* Make the selected station respond visually BEFORE the
+                   Streamlit fragment finishes rerendering. */
+                document.querySelectorAll(
+                    '[class*="st-key-station_"] button'
+                ).forEach(function (button) {
+                    if (button.__fastStationBound) return;
+                    button.__fastStationBound = true;
+                    button.addEventListener("pointerdown", function () {
+                        const keyHost = button.closest('[class*="st-key-station_"]');
+                        if (!keyHost) return;
+                        const match = keyHost.className.match(/st-key-station_([^\s]+)/);
+                        const stationMap = {
+                            CARE:"CARE", ARCH:"ARCH", PET:"PET",
+                            SUPPLY:"SUPPLY CHAIN", ONSITE:"ONSITE"
+                        };
+                        const station = match ? stationMap[match[1].toUpperCase()] : null;
+                        if (!station) return;
+                        document.querySelectorAll(
+                            ".station-card-visual[data-station]"
+                        ).forEach(function (card) {
+                            card.classList.toggle(
+                                "selected",
+                                card.getAttribute("data-station") === station
+                            );
+                        });
+                    }, {passive:true});
                 });
             }
 
