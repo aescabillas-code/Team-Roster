@@ -264,7 +264,17 @@ def is_priority(value):
 
 def station_name(value):
     value = text(value).upper()
-    ali# ============================================================
+    aliases = {
+        "SUPPLYCHAIN": "SUPPLY CHAIN",
+        "SUPPLY_CHAIN": "SUPPLY CHAIN",
+        "SUPPLY": "SUPPLY CHAIN",
+        "ON SITE": "ONSITE",
+        "ON-SITE": "ONSITE",
+    }
+    return aliases.get(value, value)
+
+
+# ============================================================
 # PERSISTENT ONE-TIME ACCESS — DESKTOP + MOBILE BROWSER STORAGE
 # ============================================================
 # The access code is requested only once per browser profile.
