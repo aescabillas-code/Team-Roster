@@ -10,7 +10,7 @@ UI is designed to closely match the supplied dashboard reference:
 - Five pastel station tiles
 - Borderless active-case table
 - Right-side case-detail dialog
-- Bell + settings controls only (no profile)
+- Settings control only (no alert bell / no profile)
 - Real-time duration using the user's browser clock
 - Fragment-only monitoring refreshes so the entire page does not refresh
 
@@ -425,12 +425,9 @@ defaults = {
     "simulation_until": 0.0,
     "simulation_case_id": None,
     "search": "",
-    # Stations whose current SLA warning has been acknowledged by clicking
-    # the tile. The warning can reappear only after the station is no longer
-    # in the warning window and later enters it again.
-    "acknowledged_flash_stations": set(),
-    # Case IDs whose individual SLA warning has been explicitly clicked.
-    "acknowledged_warning_cases": set(),
+    # Station warning acknowledgement deadlines. Clicking a warning tile
+    # keeps its warning visible for five seconds before the flashing stops.
+    "station_warning_ack_until": {},
 }
 
 for k, v in defaults.items():
@@ -477,8 +474,7 @@ st.markdown(
     body,
     .stApp,
     [data-testid="stAppViewContainer"],
-    [data-testid="stAppViewContainer"] > .main,
-    [data-testid="stHeader"] {
+    [data-testid="stAppViewContainer"] > .main {
         background:#ffffff !important;
     }
 
@@ -617,7 +613,7 @@ st.markdown(
     .pet .station-icon-circle { color:#087b58; background:#bff1df; }
     .supply .station-icon-circle { color:#5d2ac9; background:#dfceff; }
     .onsite .station-icon-circle { color:#c98700; background:#ffe5a8; }
-    .station-copy { position:absolute; left:104px; top:29px; }
+    .station-copy { position:absolute; left:112px; top:29px; }
     .station-card-title { font-size:18px; font-weight:850; line-height:1.1; letter-spacing:-.3px; }
     .station-count-line { display:flex; align-items:baseline; gap:6px; margin-top:8px; }
     .station-count { font-size:32px; line-height:1; font-weight:900; }
@@ -702,6 +698,49 @@ st.markdown(
         }
     }
 
+    .station-card-visual.warning-muted {
+        animation:none !important;
+        box-shadow:none !important;
+        filter:none !important;
+    }
+    .station-card-visual.warning-muted .station-alert-icon {
+        animation:none !important;
+        transform:none !important;
+        opacity:1 !important;
+    }
+    .duration-warning-wrap {
+        display:flex;
+        align-items:center;
+        gap:5px;
+        min-height:24px;
+        white-space:nowrap;
+    }
+    .duration-warning-icon {
+        width:16px;
+        height:16px;
+        min-width:16px;
+        border-radius:50%;
+        background:#ef1738;
+        color:#fff;
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        font-size:11px;
+        line-height:1;
+        font-weight:900;
+        animation:durationWarningFlash .55s ease-in-out infinite alternate;
+        box-shadow:0 0 0 2px rgba(239,23,56,.12), 0 0 9px rgba(239,23,56,.45);
+    }
+    @keyframes durationWarningFlash {
+        from { transform:scale(.82); opacity:.58; }
+        to { transform:scale(1.12); opacity:1; }
+    }
+    .duration-warning-icon.warning-muted {
+        animation:none !important;
+        transform:none !important;
+        opacity:1 !important;
+    }
+
     /* TABLE */
 
     .cases-title {
@@ -713,7 +752,7 @@ st.markdown(
 
     .station-pill {
         display:inline-block;
-        padding:6px 13px;
+        padding:7px 14px;
         border-radius:18px;
         font-weight:800;
         font-size:13px;
@@ -770,6 +809,16 @@ st.markdown(
     [class*="st-key-case_cell_"] > div {
         width:100% !important;
         min-width:0 !important;
+    }
+    [class*="st-key-case_cell_"] button,
+    [class*="st-key-case_cell_"] button *,
+    [class*="st-key-case_cell_"] button p,
+    [class*="st-key-case_cell_"] button div,
+    [class*="st-key-case_cell_"] button span {
+        font-family:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+        font-size:10px !important;
+        line-height:1.1 !important;
+        font-weight:500 !important;
     }
     [class*="st-key-case_cell_"] button {
         width:100% !important;
@@ -940,66 +989,6 @@ st.markdown(
     .duration-critical {
         color:#e51c3a;
         font-weight:850;
-    }
-
-    /* Individual SLA warning indicator beside the live duration.
-       It blinks until the user explicitly clicks the ! button. */
-    .case-warning-wrap {
-        display:flex;
-        align-items:center;
-        gap:7px;
-        min-height:30px;
-        border-bottom:1px solid #edf0f5;
-        font-size:10px;
-        padding:3px 6px;
-        box-sizing:border-box;
-    }
-
-    [class*="st-key-ack_case_warning_"] button {
-        width:22px !important;
-        height:22px !important;
-        min-width:22px !important;
-        min-height:22px !important;
-        padding:0 !important;
-        margin:0 !important;
-        border:0 !important;
-        border-radius:50% !important;
-        background:#ef1738 !important;
-        color:#ffffff !important;
-        font-size:13px !important;
-        line-height:22px !important;
-        font-weight:950 !important;
-        box-shadow:0 0 0 2px rgba(239,23,56,.14), 0 3px 10px rgba(239,23,56,.22) !important;
-        animation:caseWarningFlash .55s ease-in-out infinite alternate !important;
-        cursor:pointer !important;
-    }
-
-    [class*="st-key-ack_case_warning_"] button p,
-    [class*="st-key-ack_case_warning_"] button div,
-    [class*="st-key-ack_case_warning_"] button span {
-        font-size:13px !important;
-        line-height:22px !important;
-        font-weight:950 !important;
-        padding:0 !important;
-        margin:0 !important;
-    }
-
-    [class*="st-key-ack_case_warning_"] button:hover {
-        transform:scale(1.06);
-        background:#c9122f !important;
-    }
-
-    @keyframes caseWarningFlash {
-        from {
-            transform:scale(.86);
-            opacity:.55;
-            box-shadow:0 0 0 2px rgba(239,23,56,.10), 0 2px 8px rgba(239,23,56,.18);
-        }
-        to {
-            transform:scale(1.12);
-            opacity:1;
-            box-shadow:0 0 0 5px rgba(239,23,56,.24), 0 0 18px rgba(239,23,56,.55);
-        }
     }
 
 
@@ -1513,24 +1502,6 @@ def acknowledge_station_alerts(station):
     )
 
 
-def acknowledge_alerts_for_task(task_id):
-    try:
-        col(ALERT_COLLECTION).update_many(
-            {
-                "task_id": str(task_id),
-                "acknowledged": False,
-            },
-            {
-                "$set": {
-                    "acknowledged": True,
-                    "acknowledged_at": utc_now(),
-                }
-            },
-        )
-    except Exception:
-        pass
-
-
 def scan_alerts(tasks):
     now = utc_now()
 
@@ -1754,7 +1725,7 @@ def transfer_case(task, destination):
 # ============================================================
 
 header_cols = st.columns(
-    [4.3, 5.4, 0.6]
+    [4.3, 5.8, 0.6]
 )
 
 with header_cols[0]:
@@ -2559,31 +2530,6 @@ def dashboard_fragment():
             now,
         )
 
-    # Clear per-case acknowledgement after the case is no longer in the
-    # warning window, so a later warning cycle can notify the user again.
-    acknowledged_warning_cases = st.session_state.setdefault(
-        "acknowledged_warning_cases",
-        set(),
-    )
-    active_task_ids = set()
-    for task in tasks:
-        task_id = str(task["_id"])
-        active_task_ids.add(task_id)
-        case_state = states[task_id]
-        station_config = STATIONS.get(
-            station_name(task.get("department")),
-            STATIONS["CARE"],
-        )
-        in_warning_window = (
-            case_state["remaining"] > 0
-            and case_state["remaining"] <= station_config["sla_minutes"] * 60 * 0.20
-        )
-        if not in_warning_window:
-            acknowledged_warning_cases.discard(task_id)
-
-    # Remove stale IDs for cases that are no longer active.
-    acknowledged_warning_cases.intersection_update(active_task_ids)
-
     # --------------------------------------------------------
     # STATION TILES
     # --------------------------------------------------------
@@ -2627,25 +2573,30 @@ def dashboard_fragment():
                 and state["remaining"] <= sla_seconds * 0.20
             )
         )
-        # A tile flashes when it contains at least one case in the final
-        # 20% of its SLA whose individual warning has NOT been acknowledged.
-        # Clicking the station tile itself never dismisses the warning.
-        acknowledged_warning_cases = st.session_state.setdefault(
-            "acknowledged_warning_cases",
-            set(),
+        # A tile flashes ONLY while at least one case is in the final
+        # 20% of this station's SLA. Priority-account status alone does not
+        # trigger the tile animation.
+        warning_ack_until = st.session_state.setdefault(
+            "station_warning_ack_until",
+            {},
         )
 
-        unacknowledged_warning_count = sum(
-            1
-            for task in station_tasks
-            if (
-                states[str(task["_id"])]["remaining"] > 0
-                and states[str(task["_id"])]["remaining"] <= sla_seconds * 0.20
-                and str(task["_id"]) not in acknowledged_warning_cases
+        if nearing == 0:
+            warning_ack_until.pop(station, None)
+
+        ack_until = float(
+            warning_ack_until.get(station, 0.0) or 0.0
+        )
+
+        # Keep the warning active for five seconds after the tile is clicked.
+        # JavaScript stops the animation at the deadline without a timed rerun.
+        flash_tile = (
+            nearing > 0
+            and (
+                station not in warning_ack_until
+                or time.time() < ack_until
             )
         )
-
-        flash_tile = unacknowledged_warning_count > 0
 
         config = STATIONS[
             station
@@ -2677,7 +2628,8 @@ def dashboard_fragment():
                 # Markdown parser can otherwise interpret indented multiline
                 # HTML as a code block and expose the raw tags.
                 station_html = (
-                    f'<div class="station-card-visual {slug}{critical_class}{selected_class}">'
+                    f'<div class="station-card-visual {slug}{critical_class}{selected_class}" '
+                    f'data-warning-stop="{ack_until if ack_until > time.time() else 0:.3f}">'
                     f'{alert_icon}'
                     f'<div class="station-icon-circle">{html.escape(icon)}</div>'
                     f'<div class="station-copy">'
@@ -2697,9 +2649,14 @@ def dashboard_fragment():
                     key=f"station_{station}",
                     use_container_width=True,
                 ):
-                    # Selecting a station never acknowledges its warnings.
-                    # Individual SLA warnings are dismissed only by clicking
-                    # the red ! beside the affected case duration.
+                    if nearing > 0:
+                        # Acknowledge for exactly five seconds.
+                        warning_ack_until[station] = time.time() + 5.0
+                        acknowledge_station_alerts(station)
+
+                    # A single click changes the filter and reruns ONLY
+                    # the dashboard fragment. This keeps station switching
+                    # fast without refreshing the rest of the application.
                     st.session_state["selected_station"] = station
                     st.rerun(scope="fragment")
 
@@ -3051,64 +3008,58 @@ def dashboard_fragment():
                 or task.get("created_at")
             )
 
-            # A tile warning is triggered by the same final-20%-of-SLA
-            # condition used for the station tile. The individual ! remains
-            # visible and blinking until THIS case's warning is clicked.
-            station_config = STATIONS.get(
+            # Browser-side timer:
+            # duration changes every second according to
+            # the user's own PC/browser clock and does not
+            # require a Streamlit rerun.
+            sla_for_case = STATIONS.get(
                 case_station,
                 STATIONS["CARE"],
-            )
-            warning_active = (
+            )["sla_minutes"] * 60
+
+            case_causes_tile_warning = (
                 state["remaining"] > 0
-                and state["remaining"] <= station_config["sla_minutes"] * 60 * 0.20
-                and task_id not in st.session_state["acknowledged_warning_cases"]
+                and state["remaining"] <= sla_for_case * 0.20
             )
 
-            if warning_active:
-                warning_cols = st.columns([0.26, 1.74], gap="small")
+            warning_icon_html = (
+                '<span class="duration-warning-icon" '
+                'data-case-warning="1" aria-label="SLA warning">!</span>'
+                if case_causes_tile_warning
+                else ""
+            )
 
-                with warning_cols[0]:
-                    if st.button(
-                        "!",
-                        key=f"ack_case_warning_{task_id}",
-                        help="Acknowledge this SLA warning",
-                    ):
-                        st.session_state["acknowledged_warning_cases"].add(task_id)
-                        acknowledge_alerts_for_task(task_id)
-                        st.rerun(scope="fragment")
+            warning_stop_for_case = (
+                float(
+                    st.session_state.get(
+                        "station_warning_ack_until",
+                        {},
+                    ).get(case_station, 0.0)
+                    or 0.0
+                )
+                if case_causes_tile_warning
+                else 0.0
+            )
 
-                with warning_cols[1]:
-                    st.markdown(
-                        f"""
-                        <div class="case-warning-wrap"
-                             style="font-weight:700;color:#e51c3a;padding-left:0;">
-                            <span
-                                data-duration-start="{html.escape(started)}"
-                                data-duration-live="1">
-                                {duration_string(state['elapsed'])}
-                            </span>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-            else:
-                # Browser-side timer: duration changes every second according
-                # to the user's own PC/browser clock without a Streamlit rerun.
-                st.markdown(
-                    f"""
-                    <div class="case-row"
-                         style="font-weight:700;
-                                color:{'#e51c3a' if state['critical'] else '#53637f'};
-                                padding-top:8px;">
+            st.markdown(
+                f"""
+                <div class="case-row"
+                     style="font-weight:700;
+                            color:{'#e51c3a' if state['critical'] else '#53637f'};
+                            padding-top:4px;">
+                    <div class="duration-warning-wrap"
+                         data-warning-stop="{warning_stop_for_case:.3f}">
+                        {warning_icon_html}
                         <span
                             data-duration-start="{html.escape(started)}"
                             data-duration-live="1">
                             {duration_string(state['elapsed'])}
                         </span>
                     </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
     # --------------------------------------------------------
     # CLIENT-SIDE REAL-TIME DURATION
@@ -3176,12 +3127,56 @@ def dashboard_fragment():
                 });
             }
 
+            function updateWarningAnimations() {
+                const nowMs = Date.now();
+
+                document.querySelectorAll(
+                    '.station-card-visual[data-warning-stop]'
+                ).forEach(function (card) {
+                    const stopAt = Number(
+                        card.getAttribute("data-warning-stop") || "0"
+                    ) * 1000;
+
+                    if (stopAt > 0 && nowMs >= stopAt) {
+                        card.classList.remove("critical");
+
+                        const icon = card.querySelector(
+                            ".station-alert-icon"
+                        );
+                        if (icon) {
+                            icon.classList.add("warning-muted");
+                        }
+                    }
+                });
+
+                document.querySelectorAll(
+                    '.duration-warning-wrap[data-warning-stop]'
+                ).forEach(function (wrap) {
+                    const stopAt = Number(
+                        wrap.getAttribute("data-warning-stop") || "0"
+                    ) * 1000;
+
+                    if (stopAt > 0 && nowMs >= stopAt) {
+                        const icon = wrap.querySelector(
+                            ".duration-warning-icon"
+                        );
+                        if (icon) {
+                            icon.classList.add("warning-muted");
+                        }
+                    }
+                });
+            }
+
             updateDurations();
+            updateWarningAnimations();
 
             if (!window.__taskTrackerDurationTimer) {
                 window.__taskTrackerDurationTimer =
                     setInterval(
-                        updateDurations,
+                        function () {
+                            updateDurations();
+                            updateWarningAnimations();
+                        },
                         1000
                     );
             }
