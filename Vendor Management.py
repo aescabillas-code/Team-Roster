@@ -570,48 +570,80 @@ st.markdown(
         border:1px solid transparent;
     }
 
-    /* Click layer: the visual HTML card remains the tile.
-       The Streamlit button is absolutely positioned over it so
-       there is NO extra button box underneath the tile. */
-    [class*="st-key-station_wrap_"] {
-        position:relative !important;
-        min-height:145px !important;
+    /* REAL CLICKABLE STATION TILES
+       The Streamlit button itself is the complete station tile.
+       This avoids the unreliable invisible-overlay approach and removes
+       the extra empty button boxes underneath the cards. */
+    [data-testid="stButton"] button {
+        font-family:inherit !important;
     }
 
-    [class*="st-key-station_wrap_"] .stButton {
-        position:absolute !important;
-        inset:0 !important;
-        z-index:20 !important;
-        margin:0 !important;
-        padding:0 !important;
-        height:145px !important;
-    }
-
-    [class*="st-key-station_wrap_"] .stButton > button {
-        width:100% !important;
+    /* Station buttons are identified by their Streamlit key wrapper. */
+    [class*="st-key-station_CARE"] button,
+    [class*="st-key-station_ARCH"] button,
+    [class*="st-key-station_PET"] button,
+    [class*="st-key-station_SUPPLY"] button,
+    [class*="st-key-station_ONSITE"] button {
         height:145px !important;
         min-height:145px !important;
-        margin:0 !important;
-        padding:0 !important;
-        border:0 !important;
         border-radius:13px !important;
-        background:transparent !important;
-        color:transparent !important;
+        padding:17px 18px !important;
+        text-align:left !important;
+        justify-content:flex-start !important;
+        align-items:flex-start !important;
+        white-space:pre-line !important;
+        font-size:13px !important;
+        line-height:1.28 !important;
+        font-weight:500 !important;
         box-shadow:none !important;
-        opacity:0 !important;
-        cursor:pointer !important;
+        transition:transform .12s ease, box-shadow .12s ease !important;
     }
 
-    [class*="st-key-station_wrap_"] .stButton > button:hover,
-    [class*="st-key-station_wrap_"] .stButton > button:focus {
-        border:0 !important;
-        box-shadow:none !important;
-        background:transparent !important;
-        color:transparent !important;
-        outline:none !important;
+    [class*="st-key-station_CARE"] button {
+        background:linear-gradient(135deg,#fff4f6,#ffe8ec) !important;
+        border:1px solid #f24a61 !important;
+        color:#31435f !important;
+    }
+    [class*="st-key-station_ARCH"] button {
+        background:linear-gradient(135deg,#eaf8ff,#d9f1fc) !important;
+        border:1px solid transparent !important;
+        color:#31435f !important;
+    }
+    [class*="st-key-station_PET"] button {
+        background:linear-gradient(135deg,#ecfff9,#dcf7ee) !important;
+        border:1px solid transparent !important;
+        color:#31435f !important;
+    }
+    [class*="st-key-station_SUPPLY"] button {
+        background:linear-gradient(135deg,#f7f0ff,#eee5ff) !important;
+        border:1px solid transparent !important;
+        color:#31435f !important;
+    }
+    [class*="st-key-station_ONSITE"] button {
+        background:linear-gradient(135deg,#fff9e8,#fff3cf) !important;
+        border:1px solid transparent !important;
+        color:#31435f !important;
     }
 
-    @keyframes stationFlash {
+    [class*="st-key-station_CARE"] button:hover,
+    [class*="st-key-station_ARCH"] button:hover,
+    [class*="st-key-station_PET"] button:hover,
+    [class*="st-key-station_SUPPLY"] button:hover,
+    [class*="st-key-station_ONSITE"] button:hover {
+        transform:translateY(-1px) !important;
+        box-shadow:0 7px 18px rgba(29,55,96,.08) !important;
+    }
+
+    /* Make the first line/labels visually closer to the reference tile. */
+    [class*="st-key-station_CARE"] button p,
+    [class*="st-key-station_ARCH"] button p,
+    [class*="st-key-station_PET"] button p,
+    [class*="st-key-station_SUPPLY"] button p,
+    [class*="st-key-station_ONSITE"] button p {
+        margin:0 !important;
+    }
+
+        @keyframes stationFlash {
         from {
             box-shadow:0 0 0 0 rgba(239,51,79,.08);
         }
@@ -624,7 +656,7 @@ st.markdown(
 
     .cases-title {
         color:#11213e;
-        font-size:26px;
+        font-size:21px;
         font-weight:850;
         letter-spacing:-.5px;
     }
@@ -642,17 +674,21 @@ st.markdown(
 
     .case-head {
         color:#263957;
-        font-size:12px;
+        font-size:10px;
         font-weight:700;
-        padding:11px 8px;
+        padding:7px 6px;
         border-bottom:1px solid #edf0f5;
+        white-space:nowrap;
     }
 
     .case-row {
-        min-height:60px;
+        min-height:34px;
         border-bottom:1px solid #edf0f5;
         color:#31435f;
-        font-size:13px;
+        font-size:10px;
+        line-height:1.2;
+        padding:4px 6px;
+        box-sizing:border-box;
     }
 
     .case-row:hover { background:#fbfcfe; }
@@ -661,17 +697,69 @@ st.markdown(
     .case-button button {
         border:none !important;
         background:transparent !important;
+        border-radius:0 !important;
         box-shadow:none !important;
-        color:#315174 !important;
-        padding:4px 0 !important;
+        color:#66758d !important;
+        padding:3px 0 !important;
         min-height:30px !important;
+        height:30px !important;
         text-align:left !important;
-        font-size:13px !important;
+        font-size:10px !important;
+        font-weight:600 !important;
     }
 
     .case-button button:hover {
         color:#6c4cff !important;
         text-decoration:underline;
+    }
+
+    .agent-cell {
+        display:flex;
+        align-items:center;
+        gap:7px;
+        min-height:30px;
+        border-bottom:1px solid #edf0f5;
+        color:#31435f;
+        font-size:10px;
+        white-space:nowrap;
+    }
+
+    .agent-avatar {
+        width:25px;
+        height:25px;
+        min-width:25px;
+        border-radius:50%;
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        color:#fff;
+        font-size:9px;
+        font-weight:850;
+    }
+
+    .priority-pill {
+        display:inline-flex;
+        align-items:center;
+        gap:4px;
+        padding:5px 9px;
+        border-radius:14px;
+        font-size:9px;
+        font-weight:850;
+        white-space:nowrap;
+    }
+
+    .priority-pill.critical { background:#ffe5e9; color:#e51c3a; }
+    .priority-pill.high { background:#fff0dc; color:#e77700; }
+    .priority-pill.medium { background:#fff3d2; color:#b77a00; }
+    .priority-pill.low { background:#edf1f6; color:#65738a; }
+
+    .due-cell {
+        min-height:30px;
+        border-bottom:1px solid #edf0f5;
+        font-size:9px;
+        line-height:1.25;
+        padding:3px 6px;
+        box-sizing:border-box;
     }
 
     .priority-critical {
@@ -696,9 +784,9 @@ st.markdown(
 
     .badge {
         display:inline-block;
-        padding:7px 12px;
-        border-radius:18px;
-        font-size:11px;
+        padding:4px 7px;
+        border-radius:12px;
+        font-size:9px;
         font-weight:800;
     }
 
@@ -720,6 +808,10 @@ st.markdown(
     .badge-open {
         background:#dcf8df;
         color:#218137;
+    }
+
+    .case-row .badge {
+        margin-top:1px;
     }
 
     .badge-progress {
@@ -1082,7 +1174,7 @@ MOCK_ACCOUNTS = [
 ]
 
 # Increment this when the structure/timing of demonstration cases changes.
-MOCK_DATA_VERSION = 2
+MOCK_DATA_VERSION = 3
 
 
 def seed_mock_cases(force=False):
@@ -2407,38 +2499,54 @@ def dashboard_fragment():
         ]
 
         with station_cols[index]:
-            slug = {"CARE":"care","ARCH":"arch","PET":"pet","SUPPLY CHAIN":"supply","ONSITE":"onsite"}[station]
+            slug = {
+                "CARE": "care",
+                "ARCH": "arch",
+                "PET": "pet",
+                "SUPPLY CHAIN": "supply",
+                "ONSITE": "onsite",
+            }[station]
+
             icon = config.get("icon", "•")
             sla = config["sla_minutes"]
-            sla_text = f"{sla} mins" if sla < 60 else f"{sla // 60} hour" + ("s" if sla != 60 else "")
-            warning_html = f'<div class="station-warning">◷ &nbsp; {nearing} nearing due</div>' if nearing else ""
-            sla_bottom = "bottom:0px;" if nearing else "bottom:15px;"
-            critical_class = "critical" if critical else ""
+            sla_text = (
+                f"{sla} mins"
+                if sla < 60
+                else f"{sla // 60} hour"
+                + ("s" if sla != 60 else "")
+            )
 
-            # Keep the visual card and its invisible Streamlit click target
-            # inside the same keyed container. This prevents Streamlit from
-            # rendering a plain text button in place of the card.
-            with st.container(key=f"station_wrap_{slug}"):
-                st.markdown(
-                    f"""
-                    <div class="station-card-visual {slug} {critical_class}">
-                        <div class="station-icon-circle">{html.escape(icon)}</div>
-                        <div class="station-copy">
-                            <div class="station-card-title">{html.escape(station)}</div>
-                            <div class="station-count-line"><span class="station-count">{len(station_tasks)}</span><span class="station-active">Active Cases</span></div>
-                        </div>
-                        <div class="station-arrow">›</div>
-                        {warning_html}
-                        <div class="station-sla-ref" style="{sla_bottom}">◷ &nbsp; Max Timeframe: <strong>{sla_text}</strong></div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-                if st.button("", key=f"station_{station}", use_container_width=True):
-                    if critical:
-                        acknowledge_station_alerts(station)
-                    st.session_state["selected_station"] = station
-                    st.rerun()
+            # IMPORTANT:
+            # The Streamlit button IS the tile.  The previous implementation
+            # used an HTML card plus an invisible button layered over it.  That
+            # is unreliable across Streamlit DOM/layout versions and produced
+            # the empty button visible underneath the tile.
+            #
+            # This version makes the real Streamlit button the clickable tile,
+            # so clicking anywhere inside it reliably changes the station.
+            warning_text = (
+                f"◷  {nearing} nearing due\\n"
+                if nearing
+                else ""
+            )
+
+            tile_label = (
+                f"{icon}   **{station}**\\n\\n"
+                f"**{len(station_tasks)}**  Active Cases\\n\\n"
+                f"{warning_text}"
+                f"◷  Max Timeframe: **{sla_text}**"
+            )
+
+            if st.button(
+                tile_label,
+                key=f"station_{station}",
+                use_container_width=True,
+            ):
+                if critical:
+                    acknowledge_station_alerts(station)
+
+                st.session_state["selected_station"] = station
+                st.rerun()
 
     st.markdown(
         "<div style='height:10px'></div>",
@@ -2529,7 +2637,7 @@ def dashboard_fragment():
     # --------------------------------------------------------
 
     header = st.columns(
-        [1.05, 2.25, 1.25, 1.45, 1.45, 1.20, 1.15]
+        [1.05, 2.25, 1.15, 1.35, 1.35, 1.10, 1.00]
     )
 
     headers = [
@@ -2620,7 +2728,7 @@ def dashboard_fragment():
             status_class2 = "badge-open"
 
         row = st.columns(
-            [1.05, 2.25, 1.25, 1.45, 1.45, 1.20, 1.15]
+            [1.05, 2.25, 1.15, 1.35, 1.35, 1.10, 1.00]
         )
 
         with row[0]:
@@ -2659,10 +2767,26 @@ def dashboard_fragment():
 
         with row[2]:
 
+            priority_slug = {
+                "Critical": "critical",
+                "High": "high",
+                "Medium": "medium",
+                "Low": "low",
+            }.get(priority_text, "low")
+
+            priority_icon = {
+                "Critical": "●",
+                "High": "●",
+                "Medium": "●",
+                "Low": "●",
+            }.get(priority_text, "●")
+
             st.markdown(
                 f"""
-                <div class="case-row {priority_class}">
-                    {html.escape(priority_text)}
+                <div class="case-row">
+                    <span class="priority-pill {priority_slug}">
+                        {priority_icon} {html.escape(priority_text)}
+                    </span>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -2670,17 +2794,41 @@ def dashboard_fragment():
 
         with row[3]:
 
+            assigned = text(
+                task.get(
+                    "assigned_to",
+                    "Unassigned"
+                )
+            ) or "Unassigned"
+
+            initials = "".join(
+                part[0]
+                for part in assigned.split()
+                if part
+            )[:2].upper()
+
+            avatar_palette = [
+                "#e94b68",
+                "#3d8fe5",
+                "#70b942",
+                "#25a7d8",
+                "#8a63df",
+                "#7083a2",
+            ]
+
+            avatar_color = avatar_palette[
+                sum(ord(ch) for ch in assigned)
+                % len(avatar_palette)
+            ]
+
             st.markdown(
                 f"""
-                <div class="case-row">
-                    {html.escape(
-                        text(
-                            task.get(
-                                "assigned_to",
-                                "Unassigned"
-                            )
-                        )
-                    )}
+                <div class="agent-cell">
+                    <span class="agent-avatar"
+                          style="background:{avatar_color};">
+                        {html.escape(initials)}
+                    </span>
+                    <span>{html.escape(assigned)}</span>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -2705,7 +2853,7 @@ def dashboard_fragment():
 
             st.markdown(
                 f"""
-                <div class="case-row"
+                <div class="due-cell"
                      style="color:{due_color}">
                     {due}
                 </div>
@@ -2754,7 +2902,8 @@ def dashboard_fragment():
                 f"""
                 <div class="case-row"
                      style="font-weight:700;
-                            color:{'#e51c3a' if state['critical'] else '#53637f'}">
+                            color:{'#e51c3a' if state['critical'] else '#53637f'};
+                            padding-top:8px;">
                     <span
                         data-duration-start="{html.escape(started)}"
                         data-duration-live="1">
