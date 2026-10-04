@@ -42,6 +42,7 @@ import hmac
 import html
 import secrets
 import time
+import textwrap
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
@@ -546,9 +547,9 @@ st.markdown(
     /* STATION TILES — reference visual + reliable full-card click target */
     [class*="st-key-station_wrap_care"], [class*="st-key-station_wrap_arch"],
     [class*="st-key-station_wrap_pet"], [class*="st-key-station_wrap_supply"],
-    [class*="st-key-station_wrap_onsite"] { position:relative !important; min-height:184px !important; }
+    [class*="st-key-station_wrap_onsite"] { position:relative !important; min-height:184px !important; overflow:visible !important; }
     .station-card-visual {
-        position:relative; height:184px; min-height:184px; box-sizing:border-box;
+        position:relative; z-index:1; height:184px; min-height:184px; box-sizing:border-box;
         border-radius:13px; padding:18px 24px; overflow:hidden;
         color:#102041;
     }
@@ -600,8 +601,8 @@ st.markdown(
     [class*="st-key-station_wrap_onsite"] [class*="st-key-station_ONSITE"] button {
         position:absolute !important; inset:0 !important; width:100% !important; height:184px !important;
         background:transparent !important; border:0 !important; box-shadow:none !important;
-        color:transparent !important; font-size:1px !important; opacity:0 !important;
-        cursor:pointer !important; z-index:30 !important;
+        color:transparent !important; font-size:1px !important; opacity:0.001 !important;
+        cursor:pointer !important; z-index:30 !important; pointer-events:auto !important;
     }
     /* ACTIVE SLA WARNING: intentionally strong and unmistakable. */
     .station-card-visual.critical {
@@ -1162,7 +1163,7 @@ MOCK_ACCOUNTS = [
 ]
 
 # Increment this when the structure/timing of demonstration cases changes.
-MOCK_DATA_VERSION = 7
+MOCK_DATA_VERSION = 8
 
 
 def seed_mock_cases(force=False):
@@ -2531,7 +2532,7 @@ def dashboard_fragment():
             # Streamlit button is layered over the entire card so ONE click
             # anywhere on the tile changes the station filter.
             with st.container(key=f"station_wrap_{slug}"):
-                st.markdown(
+                station_html = textwrap.dedent(
                     f"""
                     <div class="station-card-visual {slug}{critical_class}{selected_class}">
                         {alert_icon}
@@ -2547,7 +2548,10 @@ def dashboard_fragment():
                         <div class="station-warning{' active' if nearing > 0 else ''}">◷ &nbsp; {nearing} nearing due</div>
                         <div class="station-sla-ref">◷ &nbsp; Max Timeframe: <strong>{html.escape(sla_text)}</strong></div>
                     </div>
-                    """,
+                    """
+                ).strip()
+                st.markdown(
+                    station_html,
                     unsafe_allow_html=True,
                 )
                 if st.button(
