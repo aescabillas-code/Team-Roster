@@ -34,17 +34,28 @@ Optional:
     APP_NAME = "HPE Caseflow"
 
 Install:
-    pip install streamlit pymongo pandas openpyxl
+    pip install streamlit pymongo pandas openpyxl itsdangerous streamlit-js-eval
 """
 
 import hashlib
 import hmac
 import html
 import secrets
+import os
 import time
 import textwrap
 from datetime import datetime, timezone, timedelta
 from typing import Optional
+
+try:
+    from itsdangerous import URLSafeTimedSerializer
+except Exception:
+    URLSafeTimedSerializer = None
+
+try:
+    from streamlit_js_eval import streamlit_js_eval
+except Exception:
+    streamlit_js_eval = None
 
 import pandas as pd
 import streamlit as st
@@ -253,95 +264,404 @@ def is_priority(value):
 
 def station_name(value):
     value = text(value).upper()
-    aliases = {
-        "SUPPLYCHAIN": "SUPPLY CHAIN",
-        "SUPPLY_CHAIN": "SUPPLY CHAIN",
-        "SUPPLY": "SUPPLY CHAIN",
-        "ON SITE": "ONSITE",
-        "ON-SITE": "ONSITE",
-    }
-    return aliases.get(value, value)
+    ali# ============================================================
+# PERSISTENT ONE-TIME ACCESS — DESKTOP + MOBILE BROWSER STORAGE
+# ============================================================
+# The access code is requested only once per browser profile.
+# A signed authorization token is stored in browser storage and is
+# NEVER placed in the URL or query string.
+#
+# Behavior:
+#   - ACCESS_CODE and TOKEN_SECRET are read only from Streamlit Secrets.
+#   - Successful access creates a signed token.
+#   - The browser stores that token in localStorage.
+#   - sessionStorage is used only as a fallback when localStorage is blocked.
+#   - Refreshing/reopening the browser restores authorization automatically.
+#   - Changing ACCESS_CODE invalidates previously issued tokens.
+#   - Clearing browser access removes the stored authorization token.
+#
+# Required dependencies:
+#   itsdangerous
+#   streamlit-js-eval
+#
+# This intentionally follows the persistent authorization behavior used by
+# the Knowledge Base implementation.
+
+ACCESS_STORAGE_KEY = "hpe_caseflow_authorized_v1"
+JS_READ_KEY = "hpe_caseflow_auth_read_v1"
+JS_SAVE_KEY = "hpe_caseflow_auth_save_v1"
+JS_CLEAR_KEY = "hpe_caseflow_auth_clear_v1"
 
 
-# ============================================================
-# ACCESS CONTROL
-# ============================================================
+def _get_access_secrets():
+    """Read ACCESS_CODE and TOKEN_SECRET only from Streamlit Secrets/environment."""
+    access_code_value = ""
+    token_secret = ""
+
+    try:
+        access_code_value = str(
+            st.secrets.get(
+                "ACCESS_CODE",
+                os.getenv("ACCESS_CODE", ""),
+            )
+        ).strip()
+        token_secret = str(
+            st.secrets.get(
+                "TOKEN_SECRET",
+                os.getenv("TOKEN_SECRET", ""),
+            )
+        ).strip()
+    except Exception:
+        access_code_value = os.getenv("ACCESS_CODE", "").strip()
+        token_secret = os.getenv("TOKEN_SECRET", "").strip()
+
+    return access_code_value, token_secret
+
 
 def access_code():
-    return text(st.secrets.get("ACCESS_CODE", ""))
+    return _get_access_secrets()[0]
 
 
 def admin_pin():
     return text(st.secrets.get("ADMIN_PIN", ""))
 
 
-def current_access_secret_hash():
-    return sha256(access_code())
+def _get_code_fingerprint(code: str) -> str:
+    return hashlib.sha256(
+        code.encode("utf-8")
+    ).hexdigest()[:32]
 
 
-def issue_access_token():
-    raw_token = secrets.token_urlsafe(32)
+def get_token_serializer():
+    if URLSafeTimedSerializer is None:
+        return None
 
-    col(ACCESS_COLLECTION).insert_one({
-        "token_hash": sha256(raw_token),
-        "access_code_hash": current_access_secret_hash(),
-        "created_at": utc_now(),
-        "active": True,
+    access_code_value, token_secret = _get_access_secrets()
+
+    if not access_code_value or not token_secret:
+        return None
+
+    salt = (
+        "hpe-caseflow-browser-access-v1-"
+        f"{_get_code_fingerprint(access_code_value)}"
+    )
+
+    return URLSafeTimedSerializer(
+        token_secret,
+        salt=salt,
+    )
+
+
+def create_browser_token():
+    serializer = get_token_serializer()
+    access_code_value, _ = _get_access_secrets()
+
+    if serializer is None or not access_code_value:
+        return ""
+
+    return serializer.dumps({
+        "authorized": True,
+        "fp": _get_code_fingerprint(access_code_value),
     })
 
-    st.session_state["access_token"] = raw_token
-    st.session_state["access_code_hash"] = current_access_secret_hash()
 
-
-def access_is_valid():
-    raw_token = st.session_state.get("access_token")
-
-    if not raw_token:
+def validate_browser_token(token):
+    if not token:
         return False
 
+    serializer = get_token_serializer()
+    access_code_value, _ = _get_access_secrets()
+
+    if serializer is None or not access_code_value:
+        return False
+
+    try:
+        payload = serializer.loads(str(token))
+
+        if payload.get("authorized") is not True:
+            return False
+
+        return hmac.compare_digest(
+            str(payload.get("fp", "")),
+            _get_code_fingerprint(access_code_value),
+        )
+    except Exception:
+        return False
+
+
+def _js_parent_storage(expression: str, key: str):
+    """Evaluate browser storage through streamlit-js-eval."""
+    if streamlit_js_eval is None:
+        return None
+
+    try:
+        return streamlit_js_eval(
+            js_expressions=expression,
+            want_output=True,
+            key=key,
+        )
+    except Exception:
+        return None
+
+
+def _read_browser_token():
+    """Read persistent authorization from desktop/mobile browser storage."""
+    key = repr(ACCESS_STORAGE_KEY)
+
+    expression = f"""
+    (() => {{
+        try {{
+            const key = {key};
+            const stores = [];
+            const addStore = (store) => {{
+                if (store && !stores.includes(store)) stores.push(store);
+            }};
+
+            try {{ addStore(window.top.localStorage); }} catch (e) {{}}
+            try {{ addStore(window.parent.localStorage); }} catch (e) {{}}
+            try {{ addStore(window.localStorage); }} catch (e) {{}}
+
+            for (const store of stores) {{
+                try {{
+                    const value = store.getItem(key);
+                    if (value) return value;
+                }} catch (e) {{}}
+            }}
+
+            // Mobile/webview fallback.
+            try {{
+                const value = window.sessionStorage.getItem(key);
+                if (value) return value;
+            }} catch (e) {{}}
+
+            return '';
+        }} catch (e) {{
+            return '';
+        }}
+    }})()
+    """
+
+    value = _js_parent_storage(
+        expression,
+        JS_READ_KEY,
+    )
+
+    if value is None:
+        return None
+
+    return str(value or "")
+
+
+def _save_browser_token(token: str):
+    """Persist authorization across desktop and mobile browsers."""
+    key = repr(ACCESS_STORAGE_KEY)
+    value = repr(str(token))
+
+    expression = f"""
+    (() => {{
+        try {{
+            const key = {key};
+            const value = {value};
+            let saved = false;
+            const stores = [];
+            const addStore = (store) => {{
+                if (store && !stores.includes(store)) stores.push(store);
+            }};
+
+            try {{ addStore(window.top.localStorage); }} catch (e) {{}}
+            try {{ addStore(window.parent.localStorage); }} catch (e) {{}}
+            try {{ addStore(window.localStorage); }} catch (e) {{}}
+
+            for (const store of stores) {{
+                try {{
+                    store.setItem(key, value);
+                    saved = true;
+                }} catch (e) {{}}
+            }}
+
+            if (!saved) {{
+                try {{
+                    window.sessionStorage.setItem(key, value);
+                    saved = true;
+                }} catch (e) {{}}
+            }}
+
+            return saved ? 'saved' : 'error';
+        }} catch (e) {{
+            return 'error';
+        }}
+    }})()
+    """
+
+    result = _js_parent_storage(
+        expression,
+        JS_SAVE_KEY,
+    )
+
+    return result == "saved"
+
+
+def _clear_browser_token():
+    """Remove authorization from every browser storage location."""
+    key = repr(ACCESS_STORAGE_KEY)
+
+    expression = f"""
+    (() => {{
+        try {{
+            const key = {key};
+            let cleared = false;
+            const stores = [];
+            const addStore = (store) => {{
+                if (store && !stores.includes(store)) stores.push(store);
+            }};
+
+            try {{ addStore(window.top.localStorage); }} catch (e) {{}}
+            try {{ addStore(window.parent.localStorage); }} catch (e) {{}}
+            try {{ addStore(window.localStorage); }} catch (e) {{}}
+
+            for (const store of stores) {{
+                try {{
+                    store.removeItem(key);
+                    cleared = true;
+                }} catch (e) {{}}
+            }}
+
+            try {{
+                window.sessionStorage.removeItem(key);
+                cleared = true;
+            }} catch (e) {{}}
+
+            return cleared ? 'cleared' : 'error';
+        }} catch (e) {{
+            return 'error';
+        }}
+    }})()
+    """
+
+    result = _js_parent_storage(
+        expression,
+        JS_CLEAR_KEY,
+    )
+
+    return result == "cleared"
+
+
+def browser_is_authorized():
+    """
+    Check Streamlit session state first, then persistent browser storage.
+    """
     if st.session_state.get(
-        "access_code_hash"
-    ) != current_access_secret_hash():
+        "access_authorized",
+        False,
+    ):
+        return True
+
+    token = _read_browser_token()
+
+    if token is None:
+        # The JS bridge has not returned yet. Do not incorrectly show
+        # the access-code form while the stored authorization is restoring.
+        return None
+
+    if validate_browser_token(token):
+        st.session_state["access_authorized"] = True
+        st.session_state["access_granted"] = True
+        return True
+
+    return False
+
+
+def authorize_browser():
+    """Authorize immediately and persist the signed token in browser storage."""
+    token = create_browser_token()
+
+    if not token:
         return False
 
-    return col(ACCESS_COLLECTION).find_one({
-        "token_hash": sha256(raw_token),
-        "access_code_hash": current_access_secret_hash(),
-        "active": True,
-    }) is not None
+    # The current session becomes authorized immediately. The browser
+    # component writes the signed token independently.
+    _save_browser_token(token)
+
+    st.session_state["access_authorized"] = True
+    st.session_state["access_granted"] = True
+
+    return True
 
 
 def clear_token_access():
-    col(ACCESS_COLLECTION).update_many(
-        {},
-        {
-            "$set": {
-                "active": False,
-                "cleared_at": utc_now(),
-            }
-        },
-    )
+    """
+    Clear authorization for this browser profile.
 
+    The authorization token is removed from localStorage/sessionStorage and
+    the current Streamlit session is reset. Existing authorization elsewhere
+    is governed by that browser's own stored token.
+    """
+    st.session_state["access_authorized"] = False
+    st.session_state["access_granted"] = False
     st.session_state.pop("access_token", None)
     st.session_state.pop("access_code_hash", None)
 
+    _clear_browser_token()
+
 
 def access_gate():
-    if access_is_valid():
+    """
+    One-time access-code gate with persistent desktop/mobile authorization.
+    """
+    if URLSafeTimedSerializer is None or streamlit_js_eval is None:
+        st.error(
+            "Persistent browser authorization is not installed. "
+            "Add `itsdangerous` and `streamlit-js-eval` to requirements.txt, "
+            "then redeploy."
+        )
+        st.stop()
+
+    access_code_value, token_secret = _get_access_secrets()
+
+    if not access_code_value or not token_secret:
+        st.error(
+            "Access control is not configured. Add ACCESS_CODE and "
+            "TOKEN_SECRET to Streamlit Secrets; do not place them in "
+            "the source code."
+        )
+        st.stop()
+
+    authorized = browser_is_authorized()
+
+    if authorized is True:
         return True
+
+    if authorized is None:
+        st.markdown(
+            """
+            <div style="
+                height:18vh;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                color:#5a7180;
+                font-size:13px;
+            ">
+                Restoring secure browser access…
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.stop()
 
     st.markdown(
         """
         <style>
         .access-wrap {
-            max-width: 560px;
-            margin: 12vh auto 0 auto;
+            max-width:560px;
+            margin:12vh auto 0 auto;
             background:#ffffff;
             border:1px solid #e8edf4;
             border-radius:26px;
             padding:42px;
             box-shadow:0 24px 70px rgba(20,38,70,.10);
         }
+
         .access-mark {
             width:62px;
             height:62px;
@@ -355,6 +675,7 @@ def access_gate():
             font-weight:900;
             margin:auto;
         }
+
         .access-title {
             text-align:center;
             color:#102041;
@@ -362,6 +683,7 @@ def access_gate():
             font-weight:850;
             margin-top:18px;
         }
+
         .access-sub {
             text-align:center;
             color:#73819a;
@@ -392,15 +714,17 @@ def access_gate():
         type="primary",
         use_container_width=True,
     ):
-        secret = access_code()
-
-        if not secret:
-            st.error(
-                "ACCESS_CODE is not configured in Streamlit Secrets."
-            )
-        elif hmac.compare_digest(code, secret):
-            issue_access_token()
-            st.rerun()
+        if hmac.compare_digest(
+            code,
+            access_code_value,
+        ):
+            if authorize_browser():
+                st.rerun()
+            else:
+                st.error(
+                    "Unable to save browser authorization. "
+                    "Please check browser storage permissions."
+                )
         else:
             st.error("Invalid access code.")
 
@@ -1924,7 +2248,7 @@ if st.session_state["show_settings"]:
                 )
 
                 st.info(
-                    "Changing ACCESS_CODE in Streamlit Secrets invalidates existing sessions."
+                    "Changing ACCESS_CODE or TOKEN_SECRET in Streamlit Secrets invalidates previously stored browser authorization."
                 )
 
                 if st.button(
