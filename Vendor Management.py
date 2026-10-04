@@ -2565,13 +2565,14 @@ def dashboard_fragment():
         # transfer time, so the SLA clock starts over in the destination
         # station.
         sla_seconds = STATIONS[station]["sla_minutes"] * 60
+        # A station warning is triggered by any case that has reached
+        # the warning threshold OR has already breached the station SLA.
+        # This keeps the visual warning tied to the same cases that receive
+        # the red duration indicator in the table.
         nearing = sum(
             1
             for state in station_states
-            if (
-                state["remaining"] > 0
-                and state["remaining"] <= sla_seconds * 0.20
-            )
+            if state["remaining"] <= sla_seconds * 0.20
         )
         # A tile flashes ONLY while at least one case is in the final
         # 20% of this station's SLA. Priority-account status alone does not
@@ -3029,9 +3030,10 @@ def dashboard_fragment():
                 STATIONS["CARE"],
             )["sla_minutes"] * 60
 
+            # The red duration indicator follows the EXACT same warning
+            # threshold as the station tile, including breached cases.
             case_causes_tile_warning = (
-                state["remaining"] > 0
-                and state["remaining"] <= sla_for_case * 0.20
+                state["remaining"] <= sla_for_case * 0.20
             )
 
             warning_ack_map = st.session_state.get(
