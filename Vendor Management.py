@@ -921,6 +921,44 @@ st.markdown(
         z-index:2 !important;
     }
 
+    /* HEADER HIT-AREA FIX
+       Decorative/header layers must never sit above the native controls.
+       The search field and Settings gear receive their own full-size,
+       high-z-index hit areas so the entire visible control is clickable,
+       not just its lower portion. */
+    [class*="st-key-caseflow_header_shell"] {
+        isolation:isolate !important;
+    }
+
+    [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] {
+        z-index:100 !important;
+        pointer-events:none !important;
+    }
+
+    [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] > div {
+        pointer-events:none !important;
+    }
+
+    [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(2),
+    [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(3) {
+        pointer-events:auto !important;
+        z-index:200 !important;
+    }
+
+    [class*="st-key-caseflow_header_shell"] [data-testid="stTextInput"],
+    [class*="st-key-caseflow_header_shell"] [data-testid="stTextInput"] > div,
+    [class*="st-key-caseflow_header_shell"] [data-testid="stTextInput"] input {
+        position:relative !important;
+        z-index:201 !important;
+        pointer-events:auto !important;
+    }
+
+    [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(3),
+    [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(3) > div,
+    [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(3) button {
+        pointer-events:auto !important;
+    }
+
     [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] {
         position:absolute !important;
         inset:0 !important;
@@ -1024,6 +1062,9 @@ st.markdown(
         left:34.2% !important;
         top:13px !important;
         width:44% !important;
+        height:36px !important;
+        min-height:36px !important;
+        z-index:200 !important;
         max-width:360px !important;
         min-width:220px !important;
         padding:0 !important;
@@ -1035,9 +1076,10 @@ st.markdown(
         right:1.1% !important;
         top:7px !important;
         width:48px !important;
-        max-width:34px !important;
-        min-width:34px !important;
-        height:37px !important;
+        max-width:48px !important;
+        min-width:48px !important;
+        height:48px !important;
+        min-height:48px !important;
         padding:0 !important;
         margin:0 !important;
     }
@@ -1089,7 +1131,9 @@ st.markdown(
     [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(3) button {
         width:48px !important;
         height:48px !important;
-        min-height:34px !important;
+        min-width:48px !important;
+        min-height:48px !important;
+        max-width:48px !important;
         padding:0 !important;
         margin:0 !important;
         border:1px solid rgba(255,255,255,.60) !important;
