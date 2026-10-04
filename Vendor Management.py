@@ -279,18 +279,49 @@ def current_access_secret_hash():
     return sha256(access_code())
 
 
+def restore_access_token_from_browser():
+    """Restore the already-issued access token after a browser refresh.
+
+    Streamlit session_state belongs to the current websocket session, so a
+    hard refresh/new websocket does not retain it. The token is also stored
+    in the URL query string so the browser can re-present it to the server.
+    The database remains the source of truth; the raw access code is never
+    stored in the URL or database.
+    """
+    if st.session_state.get("access_token"):
+        return
+
+    try:
+        token = text(st.query_params.get("access_token", ""))
+    except Exception:
+        token = ""
+
+    if token:
+        st.session_state["access_token"] = token
+        st.session_state["access_code_hash"] = current_access_secret_hash()
+
+
 def issue_access_token():
     raw_token = secrets.token_urlsafe(32)
+    secret_hash = current_access_secret_hash()
 
     col(ACCESS_COLLECTION).insert_one({
         "token_hash": sha256(raw_token),
-        "access_code_hash": current_access_secret_hash(),
+        "access_code_hash": secret_hash,
         "created_at": utc_now(),
         "active": True,
     })
 
     st.session_state["access_token"] = raw_token
-    st.session_state["access_code_hash"] = current_access_secret_hash()
+    st.session_state["access_code_hash"] = secret_hash
+
+    # Persist the issued token across browser refreshes/new Streamlit
+    # websocket sessions. Only the random token is exposed; the access code
+    # itself is never exposed.
+    try:
+        st.query_params["access_token"] = raw_token
+    except Exception:
+        pass
 
 
 def access_is_valid():
@@ -299,16 +330,33 @@ def access_is_valid():
     if not raw_token:
         return False
 
+    current_hash = current_access_secret_hash()
+
     if st.session_state.get(
         "access_code_hash"
-    ) != current_access_secret_hash():
+    ) != current_hash:
         return False
 
-    return col(ACCESS_COLLECTION).find_one({
-        "token_hash": sha256(raw_token),
-        "access_code_hash": current_access_secret_hash(),
-        "active": True,
-    }) is not None
+    try:
+        valid = col(ACCESS_COLLECTION).find_one({
+            "token_hash": sha256(raw_token),
+            "access_code_hash": current_hash,
+            "active": True,
+        }) is not None
+    except PyMongoError:
+        return False
+
+    if not valid:
+        # Remove stale/cleared tokens from the browser URL so the user does
+        # not get trapped in a repeated invalid-token state.
+        try:
+            st.query_params.pop("access_token", None)
+        except Exception:
+            pass
+        st.session_state.pop("access_token", None)
+        st.session_state.pop("access_code_hash", None)
+
+    return valid
 
 
 def clear_token_access():
@@ -325,8 +373,16 @@ def clear_token_access():
     st.session_state.pop("access_token", None)
     st.session_state.pop("access_code_hash", None)
 
+    try:
+        st.query_params.pop("access_token", None)
+    except Exception:
+        pass
+
 
 def access_gate():
+    # Rehydrate the previously issued one-time token before checking access.
+    restore_access_token_from_browser()
+
     if access_is_valid():
         return True
 
@@ -500,13 +556,18 @@ st.markdown(
     .brand-row {
         display:flex;
         align-items:center;
-        gap:12px;
-        height:64px;
+        gap:10px;
+        height:54px;
+        width:100%;
+        min-width:0;
+        white-space:nowrap;
+        overflow:visible;
     }
 
     .brand-mark {
-        width:64px;
-        height:40px;
+        width:44px;
+        min-width:44px;
+        height:34px;
         border-radius:0;
         background:transparent;
         display:flex;
@@ -517,7 +578,7 @@ st.markdown(
 
     .hpe-primary-logo {
         display:block;
-        width:64px;
+        width:42px;
         height:auto;
         max-height:40px;
         object-fit:contain;
@@ -525,7 +586,7 @@ st.markdown(
 
     .brand-name {
         color:#102041;
-        font-size:25px;
+        font-size:22px;
         font-weight:850;
         letter-spacing:-.7px;
     }
@@ -539,16 +600,17 @@ st.markdown(
 
     .top-nav {
         color:#53637f;
-        font-size:14px;
+        font-size:13px;
+        flex-shrink:0;
     }
 
     .top-nav span {
         margin-right:15px;
     }
 
-    .brand-mark { background:transparent !important; box-shadow:none !important; border-radius:0 !important; width:64px;height:40px; }
+    .brand-mark { background:transparent !important; box-shadow:none !important; border-radius:0 !important; width:44px; min-width:44px; height:34px; }
     .brand-mark svg { display:block; }
-    .brand-mark img { display:block; width:64px; height:auto; max-height:40px; }
+    .brand-mark img { display:block; width:42px; height:auto; max-height:34px; }
 
     /* SEARCH */
 
@@ -567,6 +629,21 @@ st.markdown(
     }
 
     /* TOP ICON BUTTONS */
+
+    /* Keep the header inside its grid column; never clip the brand/search row. */
+    [data-testid="column"] { min-width:0 !important; }
+    div[data-testid="stTextInput"] { width:100% !important; min-width:0 !important; }
+    div[data-testid="stTextInput"] > div { width:100% !important; min-width:0 !important; }
+    [class*="st-key-open_alerts"] button,
+    [class*="st-key-open_settings"] button {
+        height:50px !important;
+        min-height:50px !important;
+        padding:0 10px !important;
+        font-size:20px !important;
+        border:1px solid #dce3ed !important;
+        border-radius:12px !important;
+        background:#fff !important;
+    }
 
     .top-icon button {
         height:50px !important;
@@ -793,11 +870,25 @@ st.markdown(
         color:#31435f !important;
         font-size:10px !important;
         font-weight:500 !important;
-        line-height:1.2 !important;
+        line-height:12px !important;
         font-family:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
         white-space:nowrap !important;
         overflow:hidden !important;
         text-overflow:ellipsis !important;
+    }
+    /* Streamlit renders button labels inside nested elements. Force the same
+       compact 10px typography on every nested label so the case number cannot
+       fall back to Streamlit's default 14px button font. */
+    [class*="st-key-case_cell_"] button *,
+    [class*="st-key-case_cell_"] button p,
+    [class*="st-key-case_cell_"] button div,
+    [class*="st-key-case_cell_"] button span {
+        font-size:10px !important;
+        font-weight:500 !important;
+        line-height:12px !important;
+        font-family:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+        margin:0 !important;
+        padding:0 !important;
     }
     [class*="st-key-case_cell_"] button:hover {
         border-color:#b7c4d7 !important;
@@ -1684,7 +1775,8 @@ def transfer_case(task, destination):
 # ============================================================
 
 header_cols = st.columns(
-    [4.3, 5.4, 0.6, 0.6]
+    [3.9, 5.7, 0.6, 0.6],
+    vertical_alignment="center",
 )
 
 with header_cols[0]:
@@ -1694,7 +1786,7 @@ with header_cols[0]:
         <div class="brand-row">
             <div class="brand-mark" aria-hidden="true">
                 <img
-                    src="https://raw.githubusercontent.com/hpe-design/logos/master/HPE%20Primary%20Logo%20-%20SVG/hpe-logo-color.svg"
+                    src="https://raw.githubusercontent.com/hpe-design/logos/master/HPE%20Element%20-%20SVG/hpe-element-black.svg"
                     alt="HPE"
                     class="hpe-primary-logo"
                 />
