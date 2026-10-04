@@ -1838,6 +1838,385 @@ if st.session_state["show_alerts"]:
     show_alert_center()
 
 
+@st.dialog(
+    "Case Details",
+    width="large",
+)
+def case_details(task_id):
+
+    try:
+        from bson import ObjectId
+
+        task = col(
+            TASKS_COLLECTION
+        ).find_one({
+            "_id": ObjectId(task_id)
+        })
+
+    except Exception:
+        task = None
+
+    if not task:
+
+        st.error(
+            "Case not found."
+        )
+
+        if st.button(
+            "Close",
+            use_container_width=True,
+        ):
+
+            st.session_state[
+                "show_case"
+            ] = False
+
+            st.rerun()
+
+        return
+
+    state = calculate_state(
+        task
+    )
+
+    status = text(
+        task.get(
+            "status",
+            "Open"
+        )
+    )
+
+    st.markdown(
+        f"""
+        <div style="
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+        ">
+            <div style="
+                font-size:25px;
+                font-weight:850;
+                color:#102041;
+            ">
+                Case Details
+                <span class="badge badge-critical"
+                      style="margin-left:12px;">
+                    {html.escape(state["status"])}
+                </span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        "---"
+    )
+
+    c1, c2 = st.columns(
+        [7, 2]
+    )
+
+    with c1:
+
+        st.markdown(
+            f"### {text(task.get('case_number'))}"
+        )
+
+        st.markdown(
+            f"**{text(task.get('subject'))}**"
+        )
+
+        st.write(
+            text(
+                task.get(
+                    "description"
+                )
+            )
+            or
+            text(
+                task.get(
+                    "issue"
+                )
+            )
+            or "No description available."
+        )
+
+    with c2:
+
+        if st.button(
+            "✕ Close",
+            use_container_width=True,
+        ):
+
+            st.session_state[
+                "show_case"
+            ] = False
+
+            st.session_state[
+                "selected_case_id"
+            ] = None
+
+            st.rerun()
+
+    st.markdown(
+        "---"
+    )
+
+    a, b = st.columns(2)
+
+    with a:
+
+        st.markdown("**Priority**")
+
+        if state["priority_account"]:
+            st.markdown(
+                '<span class="badge badge-critical">'
+                '⚠ Critical'
+                '</span>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.write(
+                text(
+                    task.get(
+                        "priority",
+                        "Low"
+                    )
+                )
+            )
+
+        st.markdown("**Current Department**")
+        st.write(
+            station_name(
+                task.get(
+                    "department"
+                )
+            )
+        )
+
+        st.markdown("**Assigned To**")
+        st.write(
+            text(
+                task.get(
+                    "assigned_to",
+                    "Unassigned"
+                )
+            )
+        )
+
+        st.markdown("**Due Date**")
+        st.write(
+            dt_display(
+                task.get(
+                    "due_date"
+                )
+            )
+        )
+
+        st.markdown("**Duration**")
+        st.markdown(
+            f"### {duration_string(state['elapsed'])}"
+        )
+
+    with b:
+
+        st.markdown("**Account Name**")
+        st.write(
+            text(
+                task.get(
+                    "account_name"
+                )
+            ) or "—"
+        )
+
+        st.markdown("**Case Status**")
+        st.write(status)
+
+        st.markdown("**Created**")
+        st.write(
+            dt_display(
+                task.get(
+                    "created_at"
+                )
+            )
+        )
+
+        st.markdown("**Last Update**")
+        st.write(
+            dt_display(
+                task.get(
+                    "last_update"
+                )
+            )
+        )
+
+    # ----------------------------------------------------
+    # VENDOR
+    # ----------------------------------------------------
+
+    st.markdown(
+        "### Vendor Information"
+    )
+
+    vendor = find_vendor(
+        task
+    )
+
+    if vendor:
+
+        items = {
+            k: v
+            for k, v in vendor.items()
+            if k not in {
+                "_id",
+                "vendor_key",
+                "synced_at",
+            }
+            and text(v)
+        }
+
+        if items:
+
+            vendor_cols = st.columns(
+                min(
+                    3,
+                    len(items),
+                )
+            )
+
+            for i, (
+                key,
+                value,
+            ) in enumerate(
+                items.items()
+            ):
+
+                with vendor_cols[
+                    i % len(vendor_cols)
+                ]:
+
+                    st.caption(
+                        key.replace(
+                            "_",
+                            " "
+                        ).title()
+                    )
+
+                    st.write(
+                        text(value)
+                    )
+
+    else:
+
+        st.info(
+            "No matching vendor information found. "
+            "Upload the vendor Excel file from Settings."
+        )
+
+    # ----------------------------------------------------
+    # TRANSFER
+    # ----------------------------------------------------
+
+    st.markdown(
+        "### Transfer Case"
+    )
+
+    stations = list(
+        STATIONS.keys()
+    )
+
+    current = station_name(
+        task.get(
+            "department"
+        )
+    )
+
+    destination = st.selectbox(
+        "Destination",
+        stations,
+        index=(
+            stations.index(current)
+            if current in stations
+            else 0
+        ),
+    )
+
+    st.caption(
+        "Duration resets when the case enters the destination station."
+    )
+
+    if st.button(
+        f"Transfer to {destination}",
+        type="primary",
+        use_container_width=True,
+    ):
+
+        if destination == current:
+
+            st.warning(
+                "Choose a different station."
+            )
+
+        elif transfer_case(
+            task,
+            destination,
+        ):
+
+            st.success(
+                f"Case transferred to {destination}."
+            )
+
+            st.session_state[
+                "show_case"
+            ] = False
+
+            st.session_state[
+                "selected_case_id"
+            ] = None
+
+            st.rerun()
+
+        else:
+
+            st.error(
+                "Unable to transfer case."
+            )
+
+    # ----------------------------------------------------
+    # HISTORY
+    # ----------------------------------------------------
+
+    history = task.get(
+        "history",
+        []
+    )
+
+    if history:
+
+        st.markdown(
+            "### Activity History"
+        )
+
+        for event in reversed(
+            history[-15:]
+        ):
+
+            st.write(
+                f"• {text(event.get('action'))}"
+            )
+
+            st.caption(
+                dt_display(
+                    event.get(
+                        "timestamp"
+                    )
+                )
+            )
+
+
+
+
 # ============================================================
 # REAL-TIME DASHBOARD FRAGMENT
 # ============================================================
@@ -2157,16 +2536,10 @@ def dashboard_fragment():
                 key=f"case_{task_id}",
                 use_container_width=True,
             ):
-
-                st.session_state[
-                    "selected_case_id"
-                ] = task_id
-
-                st.session_state[
-                    "show_case"
-                ] = True
-
-                st.rerun()
+                # Open the dialog directly from the widget interaction.
+                # This is the supported pattern when the dashboard is a
+                # periodically rerunning fragment.
+                case_details(task_id)
 
             st.markdown(
                 "</div>",
@@ -2378,398 +2751,6 @@ def dashboard_fragment():
 
 
 dashboard_fragment()
-
-
-# ============================================================
-# CASE DETAILS DIALOG
-# ============================================================
-
-if (
-    st.session_state["show_case"]
-    and st.session_state["selected_case_id"]
-):
-
-    @st.dialog(
-        "Case Details",
-        width="large",
-    )
-    def case_details():
-
-        try:
-            from bson import ObjectId
-
-            task = col(
-                TASKS_COLLECTION
-            ).find_one({
-                "_id": ObjectId(
-                    st.session_state[
-                        "selected_case_id"
-                    ]
-                )
-            })
-
-        except Exception:
-            task = None
-
-        if not task:
-
-            st.error(
-                "Case not found."
-            )
-
-            if st.button(
-                "Close",
-                use_container_width=True,
-            ):
-
-                st.session_state[
-                    "show_case"
-                ] = False
-
-                st.rerun()
-
-            return
-
-        state = calculate_state(
-            task
-        )
-
-        status = text(
-            task.get(
-                "status",
-                "Open"
-            )
-        )
-
-        st.markdown(
-            f"""
-            <div style="
-                display:flex;
-                justify-content:space-between;
-                align-items:center;
-            ">
-                <div style="
-                    font-size:25px;
-                    font-weight:850;
-                    color:#102041;
-                ">
-                    Case Details
-                    <span class="badge badge-critical"
-                          style="margin-left:12px;">
-                        {html.escape(state["status"])}
-                    </span>
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        st.markdown(
-            "---"
-        )
-
-        c1, c2 = st.columns(
-            [7, 2]
-        )
-
-        with c1:
-
-            st.markdown(
-                f"### {text(task.get('case_number'))}"
-            )
-
-            st.markdown(
-                f"**{text(task.get('subject'))}**"
-            )
-
-            st.write(
-                text(
-                    task.get(
-                        "description"
-                    )
-                )
-                or
-                text(
-                    task.get(
-                        "issue"
-                    )
-                )
-                or "No description available."
-            )
-
-        with c2:
-
-            if st.button(
-                "✕ Close",
-                use_container_width=True,
-            ):
-
-                st.session_state[
-                    "show_case"
-                ] = False
-
-                st.session_state[
-                    "selected_case_id"
-                ] = None
-
-                st.rerun()
-
-        st.markdown(
-            "---"
-        )
-
-        a, b = st.columns(2)
-
-        with a:
-
-            st.markdown("**Priority**")
-
-            if state["priority_account"]:
-                st.markdown(
-                    '<span class="badge badge-critical">'
-                    '⚠ Critical'
-                    '</span>',
-                    unsafe_allow_html=True,
-                )
-            else:
-                st.write(
-                    text(
-                        task.get(
-                            "priority",
-                            "Low"
-                        )
-                    )
-                )
-
-            st.markdown("**Current Department**")
-            st.write(
-                station_name(
-                    task.get(
-                        "department"
-                    )
-                )
-            )
-
-            st.markdown("**Assigned To**")
-            st.write(
-                text(
-                    task.get(
-                        "assigned_to",
-                        "Unassigned"
-                    )
-                )
-            )
-
-            st.markdown("**Due Date**")
-            st.write(
-                dt_display(
-                    task.get(
-                        "due_date"
-                    )
-                )
-            )
-
-            st.markdown("**Duration**")
-            st.markdown(
-                f"### {duration_string(state['elapsed'])}"
-            )
-
-        with b:
-
-            st.markdown("**Account Name**")
-            st.write(
-                text(
-                    task.get(
-                        "account_name"
-                    )
-                ) or "—"
-            )
-
-            st.markdown("**Case Status**")
-            st.write(status)
-
-            st.markdown("**Created**")
-            st.write(
-                dt_display(
-                    task.get(
-                        "created_at"
-                    )
-                )
-            )
-
-            st.markdown("**Last Update**")
-            st.write(
-                dt_display(
-                    task.get(
-                        "last_update"
-                    )
-                )
-            )
-
-        # ----------------------------------------------------
-        # VENDOR
-        # ----------------------------------------------------
-
-        st.markdown(
-            "### Vendor Information"
-        )
-
-        vendor = find_vendor(
-            task
-        )
-
-        if vendor:
-
-            items = {
-                k: v
-                for k, v in vendor.items()
-                if k not in {
-                    "_id",
-                    "vendor_key",
-                    "synced_at",
-                }
-                and text(v)
-            }
-
-            if items:
-
-                vendor_cols = st.columns(
-                    min(
-                        3,
-                        len(items),
-                    )
-                )
-
-                for i, (
-                    key,
-                    value,
-                ) in enumerate(
-                    items.items()
-                ):
-
-                    with vendor_cols[
-                        i % len(vendor_cols)
-                    ]:
-
-                        st.caption(
-                            key.replace(
-                                "_",
-                                " "
-                            ).title()
-                        )
-
-                        st.write(
-                            text(value)
-                        )
-
-        else:
-
-            st.info(
-                "No matching vendor information found. "
-                "Upload the vendor Excel file from Settings."
-            )
-
-        # ----------------------------------------------------
-        # TRANSFER
-        # ----------------------------------------------------
-
-        st.markdown(
-            "### Transfer Case"
-        )
-
-        stations = list(
-            STATIONS.keys()
-        )
-
-        current = station_name(
-            task.get(
-                "department"
-            )
-        )
-
-        destination = st.selectbox(
-            "Destination",
-            stations,
-            index=(
-                stations.index(current)
-                if current in stations
-                else 0
-            ),
-        )
-
-        st.caption(
-            "Duration resets when the case enters the destination station."
-        )
-
-        if st.button(
-            f"Transfer to {destination}",
-            type="primary",
-            use_container_width=True,
-        ):
-
-            if destination == current:
-
-                st.warning(
-                    "Choose a different station."
-                )
-
-            elif transfer_case(
-                task,
-                destination,
-            ):
-
-                st.success(
-                    f"Case transferred to {destination}."
-                )
-
-                st.session_state[
-                    "show_case"
-                ] = False
-
-                st.session_state[
-                    "selected_case_id"
-                ] = None
-
-                st.rerun()
-
-            else:
-
-                st.error(
-                    "Unable to transfer case."
-                )
-
-        # ----------------------------------------------------
-        # HISTORY
-        # ----------------------------------------------------
-
-        history = task.get(
-            "history",
-            []
-        )
-
-        if history:
-
-            st.markdown(
-                "### Activity History"
-            )
-
-            for event in reversed(
-                history[-15:]
-            ):
-
-                st.write(
-                    f"• {text(event.get('action'))}"
-                )
-
-                st.caption(
-                    dt_display(
-                        event.get(
-                            "timestamp"
-                        )
-                    )
-                )
-
-    case_details()
 
 
 # ============================================================
