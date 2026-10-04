@@ -443,6 +443,15 @@ for k, v in defaults.items():
 st.markdown(
     """
     <style>
+    @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
+
+    html, body, [class*="css"], .stApp, .stApp * {
+        font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+    }
+
+    button, input, textarea, select, [role="button"], [role="combobox"] {
+        font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+    }
 
     #MainMenu,
     footer,
@@ -465,6 +474,18 @@ st.markdown(
 
     body {
         background:#f7f9fc;
+    }
+
+    .block-container,
+    .block-container p,
+    .block-container div,
+    .block-container span,
+    .block-container label,
+    .block-container button,
+    .block-container input,
+    .block-container textarea,
+    .block-container select {
+        font-family:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
     }
 
     /* HEADER */
@@ -553,12 +574,33 @@ st.markdown(
         border-radius:13px; padding:18px 24px; overflow:hidden;
         color:#102041;
     }
-    .station-card-visual.care { background:linear-gradient(135deg,#fff4f6,#ffe8ec); border:1.5px solid #f24a61; }
-    .station-card-visual.arch { background:linear-gradient(135deg,#eaf8ff,#d9f1fc); }
-    .station-card-visual.pet { background:linear-gradient(135deg,#ecfff9,#dcf7ee); }
-    .station-card-visual.supply { background:linear-gradient(135deg,#f7f0ff,#eee5ff); }
-    .station-card-visual.onsite { background:linear-gradient(135deg,#fff9e8,#fff3cf); }
-    .station-card-visual.selected { box-shadow:0 0 0 2px rgba(245,63,87,.15) inset; }
+    .station-card-visual.care {
+        background:linear-gradient(135deg,#fff4f6,#ffe8ec);
+        border:1.5px solid #f24a61;
+    }
+    .station-card-visual.arch {
+        background:linear-gradient(135deg,#eaf8ff,#d9f1fc);
+        border:1.5px solid #69b7e5;
+    }
+    .station-card-visual.pet {
+        background:linear-gradient(135deg,#ecfff9,#dcf7ee);
+        border:1.5px solid #70cda9;
+    }
+    .station-card-visual.supply {
+        background:linear-gradient(135deg,#f7f0ff,#eee5ff);
+        border:1.5px solid #a07de2;
+    }
+    .station-card-visual.onsite {
+        background:linear-gradient(135deg,#fff9e8,#fff3cf);
+        border:1.5px solid #e0b94f;
+    }
+
+    /* Selected station = visibly thicker border in its own station color. */
+    .station-card-visual.care.selected { border:3px solid #f24a61 !important; }
+    .station-card-visual.arch.selected { border:3px solid #69b7e5 !important; }
+    .station-card-visual.pet.selected { border:3px solid #70cda9 !important; }
+    .station-card-visual.supply.selected { border:3px solid #a07de2 !important; }
+    .station-card-visual.onsite.selected { border:3px solid #e0b94f !important; }
     .station-icon-circle {
         width:70px; height:70px; border-radius:50%; display:flex; align-items:center; justify-content:center;
         font-size:34px; font-weight:900; position:absolute; left:24px; top:18px;
@@ -608,6 +650,9 @@ st.markdown(
     .station-card-visual.critical {
         border:2px solid #ef334f !important;
         animation:stationCardFlash .55s ease-in-out infinite alternate;
+    }
+    .station-card-visual.critical.selected {
+        border-width:3px !important;
     }
     .station-alert-icon {
         position:absolute;
@@ -2414,6 +2459,7 @@ def case_details(task_id):
 # rerun. The only continuously updating value is Duration, which is
 # handled entirely by browser-side JavaScript below.
 
+@st.fragment
 def dashboard_fragment():
 
     selected = st.session_state[
@@ -2562,10 +2608,11 @@ def dashboard_fragment():
                         acknowledged_stations.add(station)
                         acknowledge_station_alerts(station)
 
-                    # A single click changes the filter and a single normal
-                    # rerun renders the selected station's cases.
+                    # A single click changes the filter and reruns ONLY
+                    # the dashboard fragment. This keeps station switching
+                    # fast without refreshing the rest of the application.
                     st.session_state["selected_station"] = station
-                    st.rerun()
+                    st.rerun(scope="fragment")
 
     st.markdown(
         "<div style='height:10px'></div>",
