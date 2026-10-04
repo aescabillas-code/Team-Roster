@@ -606,6 +606,14 @@ st.markdown(
     .station-card-visual.pet.selected { border:3px solid #70cda9 !important; }
     .station-card-visual.supply.selected { border:3px solid #a07de2 !important; }
     .station-card-visual.onsite.selected { border:3px solid #e0b94f !important; }
+    /* Immediate visual feedback while a station click is being processed. */
+    .station-card-visual { transition:border-color .12s ease, box-shadow .12s ease, transform .12s ease; }
+    [class*="st-key-station_wrap_"] button:active + * { transform:scale(.995); }
+    [class*="st-key-station_wrap_"]:has(button:active) .station-card-visual {
+        filter:brightness(.985);
+        transform:translateY(1px);
+    }
+
     .station-icon-circle {
         width:64px; height:64px; border-radius:50%; display:flex; align-items:center; justify-content:center;
         font-size:30px; font-weight:900; position:absolute; left:24px; top:18px;
@@ -1084,6 +1092,7 @@ def task_projection():
     }
 
 
+@st.cache_data(ttl=1.0, show_spinner=False)
 def fetch_tasks(
     search="",
     station=None,
@@ -1262,7 +1271,7 @@ MOCK_ACCOUNTS = [
 ]
 
 # Increment this when the structure/timing of demonstration cases changes.
-MOCK_DATA_VERSION = 8
+MOCK_DATA_VERSION = 9
 
 
 def seed_mock_cases(force=False):
@@ -1277,7 +1286,6 @@ def seed_mock_cases(force=False):
         needs_reset = col(TASKS_COLLECTION).count_documents({
             "is_mock": True,
             "mock_data_version": {"$ne": MOCK_DATA_VERSION},
-            "case_number": {"$not": {"$regex": "^SIM-"}},
         })
 
         if needs_reset:
@@ -1285,17 +1293,14 @@ def seed_mock_cases(force=False):
             reset_docs = col(TASKS_COLLECTION).find({
                 "is_mock": True,
                 "mock_data_version": {"$ne": MOCK_DATA_VERSION},
-                "case_number": {"$not": {"$regex": "^SIM-"}},
             })
 
+            # Reset every demonstration/mock case to a true zero-duration
+            # starting point. This intentionally includes simulation records.
             for old_task in reset_docs:
                 department = station_name(
                     old_task.get("department")
                 )
-                sla_minutes = STATIONS.get(
-                    department,
-                    STATIONS["CARE"],
-                )["sla_minutes"]
 
                 col(TASKS_COLLECTION).update_one(
                     {"_id": old_task["_id"]},
@@ -3031,9 +3036,10 @@ def dashboard_fragment():
             )["sla_minutes"] * 60
 
             # The red duration indicator follows the EXACT same warning
-            # threshold as the station tile, including breached cases.
+            # threshold as the station tile. BREACHED cases do NOT trigger it.
             case_causes_tile_warning = (
-                state["remaining"] <= sla_for_case * 0.20
+                state["remaining"] > 0
+                and state["remaining"] <= sla_for_case * 0.20
             )
 
             warning_ack_map = st.session_state.get(
