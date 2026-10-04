@@ -821,13 +821,15 @@ st.markdown(
         display:none !important;
     }
 
+    /* Remove Streamlit's native top header so Caseflow owns the full top edge. */
     header {
-        background:transparent !important;
+        display:none !important;
     }
 
+    /* Pull the application content to the very top of the browser viewport. */
     .block-container {
         max-width:1500px;
-        padding-top:18px;
+        padding-top:0 !important;
         padding-left:20px;
         padding-right:20px;
         padding-bottom:30px;
@@ -860,9 +862,12 @@ st.markdown(
         position:relative !important;
         height:62px !important;
         min-height:62px !important;
-        width:100% !important;
+        width:calc(100% + 40px) !important;
+        margin-left:-20px !important;
+        margin-right:-20px !important;
         padding:0 !important;
-        margin:0 0 18px 0 !important;
+        margin-top:0 !important;
+        margin-bottom:18px !important;
         overflow:hidden !important;
         border:1px solid #8aa4a3 !important;
         border-radius:1px !important;
