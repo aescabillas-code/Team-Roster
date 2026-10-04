@@ -522,7 +522,7 @@ st.markdown(
 
     .block-container {
         max-width:1500px;
-        padding-top:18px;
+        padding-top:8px;
         padding-left:20px;
         padding-right:20px;
         padding-bottom:30px;
@@ -556,18 +556,20 @@ st.markdown(
     .brand-row {
         display:flex;
         align-items:center;
-        gap:10px;
-        height:54px;
+        gap:8px;
+        height:46px;
         width:100%;
         min-width:0;
+        max-width:100%;
         white-space:nowrap;
-        overflow:visible;
+        overflow:hidden;
+        box-sizing:border-box;
     }
 
     .brand-mark {
-        width:44px;
-        min-width:44px;
-        height:34px;
+        width:38px;
+        min-width:38px;
+        height:30px;
         border-radius:0;
         background:transparent;
         display:flex;
@@ -578,44 +580,48 @@ st.markdown(
 
     .hpe-primary-logo {
         display:block;
-        width:42px;
+        width:36px;
         height:auto;
-        max-height:40px;
+        max-height:30px;
         object-fit:contain;
     }
 
     .brand-name {
         color:#102041;
-        font-size:22px;
+        font-size:19px;
         font-weight:850;
-        letter-spacing:-.7px;
+        letter-spacing:-.55px;
+        flex:0 0 auto;
     }
 
     .brand-divider {
-        height:28px;
+        height:24px;
         width:1px;
+        flex:0 0 1px;
         background:#dce2eb;
-        margin-left:2px;
+        margin-left:1px;
     }
 
     .top-nav {
         color:#53637f;
-        font-size:13px;
-        flex-shrink:0;
+        font-size:12px;
+        line-height:1;
+        flex:0 0 auto;
+        min-width:0;
     }
 
     .top-nav span {
-        margin-right:15px;
+        margin-right:11px;
     }
 
-    .brand-mark { background:transparent !important; box-shadow:none !important; border-radius:0 !important; width:44px; min-width:44px; height:34px; }
+    .brand-mark { background:transparent !important; box-shadow:none !important; border-radius:0 !important; width:38px; min-width:38px; height:30px; }
     .brand-mark svg { display:block; }
-    .brand-mark img { display:block; width:42px; height:auto; max-height:34px; }
+    .brand-mark img { display:block; width:36px; height:auto; max-height:30px; }
 
     /* SEARCH */
 
     div[data-testid="stTextInput"] input {
-        height:50px !important;
+        height:42px !important;
         border:1px solid #dce3ed !important;
         border-radius:12px !important;
         background:#fff !important;
@@ -634,10 +640,9 @@ st.markdown(
     [data-testid="column"] { min-width:0 !important; }
     div[data-testid="stTextInput"] { width:100% !important; min-width:0 !important; }
     div[data-testid="stTextInput"] > div { width:100% !important; min-width:0 !important; }
-    [class*="st-key-open_alerts"] button,
     [class*="st-key-open_settings"] button {
-        height:50px !important;
-        min-height:50px !important;
+        height:42px !important;
+        min-height:42px !important;
         padding:0 10px !important;
         font-size:20px !important;
         border:1px solid #dce3ed !important;
@@ -646,8 +651,8 @@ st.markdown(
     }
 
     .top-icon button {
-        height:50px !important;
-        min-height:50px !important;
+        height:42px !important;
+        min-height:42px !important;
         border:1px solid #dce3ed !important;
         background:#fff !important;
         border-radius:12px !important;
@@ -855,7 +860,8 @@ st.markdown(
         width:100% !important;
         min-width:0 !important;
     }
-    [class*="st-key-case_cell_"] button {
+    [class*="st-key-case_cell_"] button,
+    [class*="st-key-case_cell_"] [data-testid="stButton"] button {
         width:100% !important;
         min-width:0 !important;
         max-width:100% !important;
@@ -868,9 +874,9 @@ st.markdown(
         background:#fff !important;
         box-shadow:none !important;
         color:#31435f !important;
-        font-size:10px !important;
+        font-size:9px !important;
         font-weight:500 !important;
-        line-height:12px !important;
+        line-height:11px !important;
         font-family:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
         white-space:nowrap !important;
         overflow:hidden !important;
@@ -883,9 +889,9 @@ st.markdown(
     [class*="st-key-case_cell_"] button p,
     [class*="st-key-case_cell_"] button div,
     [class*="st-key-case_cell_"] button span {
-        font-size:10px !important;
+        font-size:9px !important;
         font-weight:500 !important;
-        line-height:12px !important;
+        line-height:11px !important;
         font-family:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
         margin:0 !important;
         padding:0 !important;
@@ -1775,7 +1781,7 @@ def transfer_case(task, destination):
 # ============================================================
 
 header_cols = st.columns(
-    [3.9, 5.7, 0.6, 0.6],
+    [4.0, 5.35, 0.55],
     vertical_alignment="center",
 )
 
@@ -1816,21 +1822,6 @@ with header_cols[1]:
     st.session_state["search"] = search
 
 with header_cols[2]:
-
-    alert_count = len(
-        active_alerts()
-    )
-
-    if st.button(
-        f"🔔 {alert_count}" if alert_count else "🔔",
-        key="open_alerts",
-        use_container_width=True,
-    ):
-        st.session_state[
-            "show_alerts"
-        ] = True
-
-with header_cols[3]:
 
     if st.button(
         "⚙",
