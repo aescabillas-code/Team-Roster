@@ -473,7 +473,14 @@ st.markdown(
     }
 
     body {
-        background:#f7f9fc;
+        background:#ffffff !important;
+    }
+
+    .stApp,
+    [data-testid="stAppViewContainer"],
+    [data-testid="stAppViewContainer"] > .main,
+    [data-testid="stHeader"] {
+        background:#ffffff !important;
     }
 
     .block-container,
@@ -493,22 +500,27 @@ st.markdown(
     .brand-row {
         display:flex;
         align-items:center;
-        gap:14px;
+        gap:12px;
         height:64px;
     }
 
     .brand-mark {
-        width:48px;
-        height:48px;
-        border-radius:11px;
-        background:linear-gradient(145deg,#7051ff,#3723c6);
-        color:#fff;
+        width:64px;
+        height:40px;
+        border-radius:0;
+        background:transparent;
         display:flex;
         align-items:center;
-        justify-content:center;
-        font-size:27px;
-        font-weight:900;
-        box-shadow:0 7px 16px rgba(68,42,202,.20);
+        justify-content:flex-start;
+        overflow:visible;
+    }
+
+    .hpe-primary-logo {
+        display:block;
+        width:64px;
+        height:auto;
+        max-height:40px;
+        object-fit:contain;
     }
 
     .brand-name {
@@ -534,8 +546,9 @@ st.markdown(
         margin-right:15px;
     }
 
-    .brand-mark { background:transparent !important; box-shadow:none !important; border-radius:0 !important; width:48px;height:48px; }
+    .brand-mark { background:transparent !important; box-shadow:none !important; border-radius:0 !important; width:64px;height:40px; }
     .brand-mark svg { display:block; }
+    .brand-mark img { display:block; width:64px; height:auto; max-height:40px; }
 
     /* SEARCH */
 
@@ -602,8 +615,8 @@ st.markdown(
     .station-card-visual.supply.selected { border:3px solid #a07de2 !important; }
     .station-card-visual.onsite.selected { border:3px solid #e0b94f !important; }
     .station-icon-circle {
-        width:70px; height:70px; border-radius:50%; display:flex; align-items:center; justify-content:center;
-        font-size:34px; font-weight:900; position:absolute; left:24px; top:18px;
+        width:64px; height:64px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+        font-size:30px; font-weight:900; position:absolute; left:24px; top:18px;
         background:rgba(255,255,255,.48);
     }
     .care .station-icon-circle { color:#e51c3a; background:#ffd7df; }
@@ -612,20 +625,20 @@ st.markdown(
     .supply .station-icon-circle { color:#5d2ac9; background:#dfceff; }
     .onsite .station-icon-circle { color:#c98700; background:#ffe5a8; }
     .station-copy { position:absolute; left:112px; top:29px; }
-    .station-card-title { font-size:21px; font-weight:850; line-height:1.1; letter-spacing:-.3px; }
-    .station-count-line { display:flex; align-items:baseline; gap:7px; margin-top:9px; }
-    .station-count { font-size:38px; line-height:1; font-weight:900; }
-    .station-active { font-size:14px; color:#53637f; }
+    .station-card-title { font-size:18px; font-weight:850; line-height:1.1; letter-spacing:-.3px; }
+    .station-count-line { display:flex; align-items:baseline; gap:6px; margin-top:8px; }
+    .station-count { font-size:32px; line-height:1; font-weight:900; }
+    .station-active { font-size:12px; color:#53637f; }
     .care .station-count { color:#e51c3a; }
     .arch .station-count { color:#0879c9; }
     .pet .station-count { color:#087b58; }
     .supply .station-count { color:#5d2ac9; }
     .onsite .station-count { color:#c98700; }
-    .station-arrow { position:absolute; right:20px; top:31px; font-size:29px; font-weight:300; color:#30466b; }
-    .station-warning { position:absolute; left:24px; bottom:39px; font-size:14px; font-weight:750; color:#53637f; }
+    .station-arrow { position:absolute; right:20px; top:28px; font-size:25px; font-weight:300; color:#30466b; }
+    .station-warning { position:absolute; left:24px; bottom:39px; font-size:12px; font-weight:750; color:#53637f; }
     .station-warning.active { color:#d33a4e; }
     .arch .station-warning.active, .pet .station-warning.active, .supply .station-warning.active, .onsite .station-warning.active { color:#53637f; }
-    .station-sla-ref { position:absolute; left:24px; bottom:17px; font-size:14px; color:#53637f; }
+    .station-sla-ref { position:absolute; left:24px; bottom:17px; font-size:12px; color:#53637f; }
     .station-sla-ref strong { color:#102041; }
     /* Make the real button transparent and stretch it over the card. */
     [class*="st-key-station_wrap_care"] [class*="st-key-station_CARE"],
@@ -709,11 +722,10 @@ st.markdown(
         display:inline-block;
         padding:7px 14px;
         border-radius:18px;
-        background:#ffecef;
-        color:#e51c3a;
         font-weight:800;
-        font-size:14px;
+        font-size:13px;
         margin-left:10px;
+        vertical-align:middle;
     }
 
     .case-head {
@@ -781,7 +793,8 @@ st.markdown(
         color:#31435f !important;
         font-size:10px !important;
         font-weight:500 !important;
-        line-height:1.1 !important;
+        line-height:1.2 !important;
+        font-family:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
         white-space:nowrap !important;
         overflow:hidden !important;
         text-overflow:ellipsis !important;
@@ -1680,11 +1693,11 @@ with header_cols[0]:
         f"""
         <div class="brand-row">
             <div class="brand-mark" aria-hidden="true">
-                <svg viewBox="0 0 48 48" width="48" height="48">
-                    <path d="M24 4 42 14 24 24 6 14 24 4Z" fill="#8068ff"/>
-                    <path d="M6 14v9l18 10 18-10v-9L24 24 6 14Z" fill="#5d42e8"/>
-                    <path d="M6 25v9l18 10 18-10v-9L24 35 6 25Z" fill="#4a30cf"/>
-                </svg>
+                <img
+                    src="https://raw.githubusercontent.com/hpe-design/logos/master/HPE%20Primary%20Logo%20-%20SVG/hpe-logo-color.svg"
+                    alt="HPE"
+                    class="hpe-primary-logo"
+                />
             </div>
             <div class="brand-name">{html.escape(APP_NAME)}</div>
             <div class="brand-divider"></div>
@@ -2656,7 +2669,11 @@ def dashboard_fragment():
             <span class="cases-title">
                 Active Cases
             </span>
-            <span class="station-pill">
+            <span class="station-pill" style="
+                background:{STATIONS.get(selected, STATIONS["CARE"])["soft"]};
+                color:{STATIONS.get(selected, STATIONS["CARE"])["accent"]};
+                border:1px solid {STATIONS.get(selected, STATIONS["CARE"])["accent"]}33;
+            ">
                 {html.escape(selected)}
             </span>
             """,
