@@ -110,13 +110,10 @@ TASKS_COLLECTION = "Tasks_Collection"
 VENDOR_COLLECTION = "Vendor_Collection"
 ACCESS_COLLECTION = "Access_Collection"
 ALERT_COLLECTION = "Alert_Collection"
-KB_COLLECTION = "Knowledge_Base_Collection"
-SOP_COLLECTION = "SOP_Collection"
 
 
 # Performance tuning: short cache keeps station switches responsive while preserving near-real-time data.
 TASK_CACHE_TTL = 0.5
-KB_CACHE_TTL = 5.0
 # Alert scans are lightweight and run in a dedicated 1-second fragment.
 # Duration itself remains browser-side, while Alert_Collection is kept near real time.
 ALERT_SCAN_MIN_INTERVAL = 1.0
@@ -237,9 +234,6 @@ def initialize_indexes():
         col(ALERT_COLLECTION).create_index(
             [("acknowledged", ASCENDING), ("created_at", DESCENDING)]
         )
-        col(KB_COLLECTION).create_index([("title", ASCENDING)])
-        col(KB_COLLECTION).create_index([("category", ASCENDING)])
-        col(SOP_COLLECTION).create_index([("title", ASCENDING)])
     except Exception:
         pass
 
@@ -1722,12 +1716,6 @@ st.markdown(
     }
     [class*="st-key-case_cell_"] button:hover {
         filter:brightness(.985);
-        cursor:pointer !important;
-        box-shadow:0 2px 7px rgba(31,48,82,.10) !important;
-    }
-    [class*="st-key-case_cell_"] button:focus-visible {
-        outline:3px solid rgba(93,66,232,.28) !important;
-        outline-offset:2px !important;
     }
 
 
@@ -1886,270 +1874,11 @@ st.markdown(
 
     /* DIALOG */
 
+
     div[data-testid="stDialog"] > div {
         border-radius:18px !important;
-        background:#ffffff !important;
     }
 
-    div[data-testid="stDialog"] header {
-        background:#ffffff !important;
-        min-height:72px !important;
-        padding:0 28px !important;
-        display:flex !important;
-        align-items:center !important;
-    }
-
-    div[data-testid="stDialog"] header h1,
-    div[data-testid="stDialog"] header [data-testid="stMarkdownContainer"] {
-        color:#10284a !important;
-        font-size:28px !important;
-        font-weight:850 !important;
-        letter-spacing:-.4px !important;
-    }
-
-    div[data-testid="stDialog"] [data-testid="stDialogContent"] {
-        background:#ffffff !important;
-        padding:0 28px 28px !important;
-    }
-
-    .case-detail-statusbar {
-        display:flex;
-        align-items:center;
-        justify-content:flex-start;
-        gap:12px;
-        min-height:38px;
-        margin:0 0 10px;
-        border-top:1px solid #edf0f5;
-        padding-top:14px;
-    }
-
-    .case-detail-critical,
-    .case-detail-status {
-        display:inline-flex;
-        align-items:center;
-        gap:7px;
-        min-height:34px;
-        padding:7px 15px;
-        border-radius:12px;
-        font-size:14px;
-        font-weight:850;
-        line-height:1;
-        white-space:nowrap;
-    }
-
-    .case-detail-critical {
-        background:#ffe4e9;
-        color:#e51c3a;
-    }
-
-    .case-detail-critical-dot {
-        width:19px;
-        height:19px;
-        border-radius:50%;
-        display:inline-flex;
-        align-items:center;
-        justify-content:center;
-        background:#ef334f;
-        color:#ffffff;
-        font-size:12px;
-        font-weight:900;
-    }
-
-    .case-detail-status {
-        background:#dff0ff;
-        color:#1774c8;
-    }
-
-    .case-detail-case-row {
-        display:flex;
-        align-items:center;
-        gap:12px;
-        flex-wrap:wrap;
-        margin-top:2px;
-    }
-
-    .case-detail-number {
-        color:#10284a;
-        font-size:25px;
-        font-weight:900;
-        letter-spacing:-.3px;
-    }
-
-    .case-detail-subject {
-        color:#122442;
-        font-size:20px;
-        font-weight:800;
-        line-height:1.25;
-        margin-top:9px;
-    }
-
-    .case-detail-description {
-        color:#718099;
-        font-size:14px;
-        line-height:1.55;
-        margin-top:10px;
-        padding-bottom:17px;
-        border-bottom:1px solid #edf0f5;
-    }
-
-    .detail-grid {
-        display:grid;
-        grid-template-columns:minmax(0,1fr) minmax(0,1fr);
-        margin-top:0;
-        border-bottom:1px solid #edf0f5;
-    }
-
-    .detail-grid-col {
-        padding:12px 22px 13px 0;
-    }
-
-    .detail-grid-col.right {
-        padding:12px 0 13px 22px;
-        border-left:1px solid #edf0f5;
-    }
-
-    .detail-field {
-        margin:0 0 17px;
-    }
-
-    .detail-label {
-        color:#718099;
-        font-size:13px;
-        line-height:1.25;
-        margin-bottom:6px;
-    }
-
-    .detail-value {
-        color:#182b4c;
-        font-size:15px;
-        font-weight:650;
-        line-height:1.35;
-    }
-
-    .detail-value.red {
-        color:#e51c3a;
-        font-weight:850;
-    }
-
-    .detail-pill {
-        display:inline-flex;
-        align-items:center;
-        gap:6px;
-        padding:7px 12px;
-        border-radius:15px;
-        font-size:13px;
-        font-weight:850;
-        line-height:1;
-        white-space:nowrap;
-    }
-
-    .detail-pill.red {
-        background:#ffe4e9;
-        color:#e51c3a;
-    }
-
-    .detail-pill.blue {
-        background:#dff0ff;
-        color:#1774c8;
-    }
-
-    .detail-pill.purple {
-        background:#f7ddff;
-        color:#b83cc9;
-    }
-
-    .detail-assignee {
-        display:flex;
-        align-items:center;
-        gap:10px;
-    }
-
-    .detail-assignee-avatar {
-        width:43px;
-        height:43px;
-        min-width:43px;
-        border-radius:50%;
-        display:inline-flex;
-        align-items:center;
-        justify-content:center;
-        background:#7545df;
-        color:#ffffff;
-        font-size:13px;
-        font-weight:900;
-    }
-
-    .detail-section-title {
-        color:#122442;
-        font-size:16px;
-        font-weight:850;
-        margin:16px 0 8px;
-    }
-
-    .detail-information-card {
-        background:#f8fafc;
-        border:1px solid #e6ebf2;
-        border-radius:15px;
-        padding:14px 16px 4px;
-        margin-top:12px;
-    }
-
-    .vendor-card {
-        background:#f4f7fb;
-        border:1px solid #e5eaf1;
-        border-radius:16px;
-        padding:18px 18px 16px;
-        margin:16px 0 14px;
-    }
-
-    .vendor-heading {
-        display:flex;
-        align-items:center;
-        gap:10px;
-        color:#122442;
-        font-size:16px;
-        font-weight:850;
-        margin-bottom:13px;
-    }
-
-    .vendor-heading-link {
-        margin-left:auto;
-        color:#3d8fe7;
-        font-size:12px;
-        font-weight:750;
-        text-decoration:underline;
-    }
-
-    .vendor-icon {
-        width:29px;
-        height:29px;
-        border:2px solid #64758f;
-        border-radius:7px;
-        display:inline-flex;
-        align-items:center;
-        justify-content:center;
-        color:#64758f;
-        font-size:14px;
-    }
-
-    .vendor-grid {
-        display:grid;
-        grid-template-columns:150px minmax(0,1fr);
-        column-gap:12px;
-        row-gap:8px;
-    }
-
-    .vendor-key {
-        color:#718099;
-        font-size:12px;
-        font-weight:650;
-    }
-
-    .vendor-value {
-        color:#33435d;
-        font-size:13px;
-        font-weight:650;
-        overflow-wrap:anywhere;
-    }
 
     /* ALERT */
 
@@ -2204,84 +1933,7 @@ st.markdown(
 
 
     /* MOBILE LAYOUT — header, station cards and case table remain usable on phones. */
-    /* INTEGRATED KNOWLEDGE BASE */
-    .kb-panel{background:#f7f9fc;border:1px solid #e3e9f1;border-radius:17px;padding:18px;margin:8px 0 12px}
-    .kb-panel-header{display:flex;align-items:center;justify-content:space-between;gap:10px}
-    .kb-title{color:#122442;font-size:18px;font-weight:850}
-    .kb-subtitle{color:#718099;font-size:12px;line-height:1.45;margin-top:5px}
-    .kb-auto-badge{display:inline-flex;padding:5px 9px;border-radius:12px;background:#e1f7f2;color:#007765;font-size:10px;font-weight:800}
-    .kb-answer-card{background:#fff;border:1px solid #dce5ef;border-radius:13px;padding:14px;margin-top:12px}
-    .kb-answer-card.best{border:2px solid #6d5ce7;box-shadow:0 5px 18px rgba(70,57,160,.08)}
-    .kb-answer-label{color:#6756dc;font-size:10px;font-weight:850;text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px}
-    .kb-result-title{color:#182b4c;font-size:14px;font-weight:800;margin-bottom:5px}
-    .kb-result-text{color:#5d6c82;font-size:12px;line-height:1.5}
-    .kb-meta{color:#8491a4;font-size:10px;margin-top:8px}
-    .kb-source-pill{display:inline-block;background:#edf2f8;color:#5d6c82;border-radius:10px;padding:3px 7px;font-size:9px;font-weight:750;margin-right:4px}
-    .kb-empty{color:#718099;font-size:12px;padding:10px 0}
-
-
     @media(max-width:700px) {
-        div[data-testid="stDialog"] > div {
-            top:10px !important;
-            right:10px !important;
-            left:10px !important;
-            width:calc(100vw - 20px) !important;
-            max-width:calc(100vw - 20px) !important;
-            height:calc(100vh - 20px) !important;
-            max-height:calc(100vh - 20px) !important;
-            border-radius:16px !important;
-        }
-
-        div[data-testid="stDialog"] header {
-            min-height:62px !important;
-            padding:0 18px !important;
-        }
-
-        div[data-testid="stDialog"] header h1,
-        div[data-testid="stDialog"] header [data-testid="stMarkdownContainer"] {
-            font-size:22px !important;
-        }
-
-        div[data-testid="stDialog"] [data-testid="stDialogContent"] {
-            padding:0 18px 22px !important;
-        }
-
-        .detail-grid {
-            grid-template-columns:1fr;
-        }
-
-        .detail-grid-col,
-        .detail-grid-col.right {
-            padding:12px 0 0;
-            border-left:0;
-        }
-
-        .detail-grid-col.right {
-            border-top:1px solid #edf0f5;
-        }
-
-        .vendor-grid {
-            grid-template-columns:1fr;
-            row-gap:3px;
-            margin-bottom:10px;
-        }
-
-        .vendor-key {
-            margin-top:6px;
-        }
-
-        .case-detail-number {
-            font-size:21px;
-        }
-
-        .case-detail-subject {
-            font-size:17px;
-        }
-
-        .case-detail-description {
-            font-size:13px;
-        }
-
         .block-container {
             padding:10px 10px 24px !important;
         }
@@ -2478,17 +2130,27 @@ st.markdown(
 
 def task_projection():
     return {
-        "_id": 1, "case_number": 1, "subject": 1, "priority": 1,
-        "account_priority": 1, "assigned_to": 1, "due_date": 1,
-        "created_at": 1, "station_started_at": 1, "department": 1,
-        "status": 1, "last_update": 1, "account_name": 1, "vendor": 1,
-        "issue": 1, "description": 1, "notes": 1, "history": 1,
-        "active": 1, "is_mock": 1, "source_type": 1, "case_type": 1,
-        "category": 1, "contact_name": 1, "contact_number": 1,
-        "email": 1, "site_location": 1, "product": 1, "serial_number": 1,
-        "reference_number": 1, "resolution": 1, "next_action": 1,
+        "_id": 1,
+        "case_number": 1,
+        "subject": 1,
+        "priority": 1,
+        "account_priority": 1,
+        "assigned_to": 1,
+        "due_date": 1,
+        "created_at": 1,
+        "station_started_at": 1,
+        "department": 1,
+        "status": 1,
+        "last_update": 1,
+        "account_name": 1,
+        "vendor": 1,
+        "issue": 1,
+        "description": 1,
+        "notes": 1,
+        "history": 1,
+        "active": 1,
+        "is_mock": 1,
     }
-
 
 
 
@@ -2661,263 +2323,275 @@ def duration_string(seconds):
 
 MOCK_SUBJECTS = {
     "CARE": [
-        "RMA request - HPE ProLiant DL380 Gen11 system board",
-        "RMA request - Aruba AP-515 intermittent connectivity",
-        "RMA request - HPE Alletra failed storage component",
-        "RMA request - Aruba Central device hardware failure",
-        "RMA request - HPE StoreEasy storage controller fault",
+        "Guest room AC not working",
+        "Water leak in restroom",
+        "Housekeeping request – extra towels",
+        "Door lock not functioning",
+        "TV no signal",
     ],
     "ARCH": [
-        "RMA documentation request - HPE ProLiant replacement",
-        "RMA documentation request - Aruba AP-515 replacement",
-        "RMA entitlement verification - HPE Alletra",
-        "RMA configuration record - ArubaOS-CX switch",
-        "RMA warranty validation - HPE ProLiant",
+        "Archive retrieval request",
+        "Document indexing issue",
+        "Historical record access",
+        "Archive metadata correction",
+        "Retention request",
     ],
     "PET": [
-        "RMA request - Aruba ClearPass appliance fault",
-        "RMA request - HPE OneView managed server hardware",
-        "RMA request - Aruba Central managed access point",
-        "RMA request - HPE iLO server hardware failure",
-        "RMA request - Aruba CX switch port hardware fault",
+        "Pet registration inquiry",
+        "Pet policy clarification",
+        "Pet service request",
+        "Animal facility issue",
+        "Pet account update",
     ],
     "SUPPLY CHAIN": [
-        "RMA replacement shipment - HPE ProLiant",
-        "RMA replacement shipment - Aruba CX switch",
-        "RMA replacement shipment - HPE Alletra storage",
-        "RMA replacement shipment - Aruba AP",
-        "RMA spare-part replacement - HPE server",
+        "Missing shipment",
+        "Purchase order mismatch",
+        "Supplier delivery delay",
+        "Inventory discrepancy",
+        "Replacement request",
     ],
     "ONSITE": [
-        "RMA onsite replacement - HPE ProLiant server",
-        "RMA onsite replacement - Aruba CX switch",
-        "RMA onsite replacement - Aruba AP",
-        "RMA onsite replacement - HPE Alletra storage",
-        "RMA onsite replacement - Aruba ClearPass appliance",
+        "Onsite technician request",
+        "Hardware replacement",
+        "Network equipment issue",
+        "Site access request",
+        "Installation support",
     ],
 }
 
-MOCK_NAMES = ["John Dela Cruz", "Maria Santos", "Anna Reyes", "Carlo Banaag", "Liza Tan"]
-MOCK_ACCOUNTS = ["HPE Aruba Networking Demo Lab", "Enterprise Customer - BGC", "Enterprise Customer - Makati", "Enterprise Customer - Cavite", "Enterprise Customer - Quezon City"]
-MOCK_DATA_VERSION = 16
 
-# Rich demonstration information shown inside Case Details.
-MOCK_CASE_DETAILS = {
-    "CARE": [
-        {"case_type":"Guest Services / Maintenance","category":"Facilities","contact_name":"Daniel Wong","contact_number":"+63 917 555 0141","email":"daniel.wong@example.com","site_location":"Manila Bay Hotel • Room 1214","product":"Room HVAC / Thermostat","serial_number":"CARE-HVAC-1214","reference_number":"CARE-REQ-1214","issue":"Guest reports that the room air-conditioning is running but the room is not cooling.","description":"Guest confirmed the thermostat is set to 20°C. Airflow is present but remains warm. The room is occupied and the guest requested priority handling.","resolution":"Pending initial troubleshooting and maintenance validation.","next_action":"Verify thermostat mode, power cycle the unit, document the result, then route to the maintenance vendor if unresolved.","notes":"Guest requested an update before 9:00 PM."},
-        {"case_type":"Facilities / Plumbing","category":"Maintenance","contact_name":"Maria Santos","contact_number":"+63 917 555 0142","email":"maria.santos@example.com","site_location":"Hilton Manila • Room 807","product":"Bathroom Plumbing","serial_number":"PLB-807-22","reference_number":"CARE-PLB-0807","issue":"Water is slowly leaking from the bathroom sink connection.","description":"A small continuous leak was reported under the sink. Guest placed a towel below the pipe while waiting for assistance.","resolution":"Pending fulfillment inspection.","next_action":"Confirm leak location and dispatch the appropriate maintenance resource.","notes":"No reported electrical hazard."},
-        {"case_type":"Housekeeping Request","category":"Guest Services","contact_name":"Anna Reyes","contact_number":"+63 917 555 0143","email":"anna.reyes@example.com","site_location":"Accenture Guest Suite • Room 510","product":"Housekeeping Service","serial_number":"N/A","reference_number":"CARE-HK-0510","issue":"Guest requested additional towels and two bottles of water.","description":"Routine guest-service request for additional room supplies.","resolution":"Pending housekeeping fulfillment.","next_action":"Coordinate with housekeeping and confirm completion with the guest.","notes":"Standard request; no escalation required."},
-        {"case_type":"Access / Door Hardware","category":"Security & Facilities","contact_name":"Carlo Banaag","contact_number":"+63 917 555 0144","email":"carlo.banaag@example.com","site_location":"Microsoft Executive Floor • Room 1502","product":"Electronic Door Lock","serial_number":"LOCK-1502-88","reference_number":"CARE-LOCK-1502","issue":"Electronic room lock intermittently rejects the access card.","description":"Guest reports two failed card attempts followed by one successful entry. Battery status is unknown.","resolution":"Pending lock inspection.","next_action":"Check lock battery and access-card reader, then test with a validated credential.","notes":"Guest is currently inside the room."},
-        {"case_type":"In-Room Entertainment","category":"Guest Services","contact_name":"Liza Tan","contact_number":"+63 917 555 0145","email":"liza.tan@example.com","site_location":"Acme Corporation Hotel Block • Room 903","product":"IPTV / Room TV","serial_number":"TV-903-441","reference_number":"CARE-TV-0903","issue":"Television displays a no-signal message on all channels.","description":"Power and HDMI connections were checked by the guest. The issue remains after restarting the TV.","resolution":"Pending remote/basic troubleshooting.","next_action":"Validate room network/TV input configuration and escalate to the entertainment support vendor if needed.","notes":"Guest requested a callback after troubleshooting."}],
-    "ARCH": [
-        {"case_type":"Archive Retrieval","category":"Records Management","contact_name":"John Dela Cruz","contact_number":"+63 917 555 0241","email":"john.delacruz@example.com","site_location":"Manila Records Center","product":"Archive Repository","serial_number":"N/A","reference_number":"ARCH-RET-001","issue":"Historical contract record requested for retrieval.","description":"Requester needs a copy of a historical contract and provided the account name and approximate document year.","resolution":"Pending archive index search.","next_action":"Search by record identifier, account and date range, then document the retrieval result.","notes":"Requester indicated the document is needed for an audit review."},
-        {"case_type":"Document Indexing","category":"Records Management","contact_name":"Maria Santos","contact_number":"+63 917 555 0242","email":"maria.santos@example.com","site_location":"Cavite Archive Hub","product":"Document Index","serial_number":"N/A","reference_number":"ARCH-IDX-002","issue":"A recently uploaded document is not appearing in the archive search results.","description":"Document metadata appears complete, but the record cannot be located using the expected title and reference number.","resolution":"Pending index validation.","next_action":"Validate metadata and indexing status, then reprocess the record if required.","notes":"Check for duplicate document identifiers before reprocessing."},
-        {"case_type":"Historical Record Access","category":"Access Control","contact_name":"Anna Reyes","contact_number":"+63 917 555 0243","email":"anna.reyes@example.com","site_location":"Quezon City Records Office","product":"Archive Portal","serial_number":"N/A","reference_number":"ARCH-ACC-003","issue":"Requester cannot open a restricted historical record.","description":"The record is visible in search results but access is denied when the requester attempts to open it.","resolution":"Pending permission validation.","next_action":"Confirm requester authorization and the record's access classification before escalation.","notes":"Do not bypass archive permissions."},
-        {"case_type":"Metadata Correction","category":"Records Management","contact_name":"Carlo Banaag","contact_number":"+63 917 555 0244","email":"carlo.banaag@example.com","site_location":"Pasig Archive Hub","product":"Archive Metadata","serial_number":"N/A","reference_number":"ARCH-META-004","issue":"Archive record contains an incorrect date in its metadata.","description":"Requester supplied supporting documentation showing the correct record date.","resolution":"Pending validation of source documentation.","next_action":"Validate the supporting document and update metadata according to the approved process.","notes":"Retain an audit trail for the metadata change."},
-        {"case_type":"Retention Request","category":"Records Management","contact_name":"Liza Tan","contact_number":"+63 917 555 0245","email":"liza.tan@example.com","site_location":"Makati Records Office","product":"Retention Schedule","serial_number":"N/A","reference_number":"ARCH-RET-005","issue":"Business user is asking whether a record is eligible for retention review.","description":"The requester supplied the record type and approximate creation date and is asking for the applicable retention treatment.","resolution":"Pending policy validation.","next_action":"Check the applicable retention schedule and document the approved disposition path.","notes":"Final disposition must follow the approved records policy."}],
-    "PET": [
-        {"case_type":"Pet Registration","category":"Pet Services","contact_name":"John Dela Cruz","contact_number":"+63 917 555 0341","email":"john.delacruz@example.com","site_location":"Marriott Hotel • Guest Services","product":"Pet Registration","serial_number":"N/A","reference_number":"PET-REG-001","issue":"Guest needs to register a pet before check-in.","description":"Guest provided the pet type and requested confirmation of registration requirements and applicable policy documentation.","resolution":"Pending registration validation.","next_action":"Confirm account details, required documentation and current pet registration procedure.","notes":"Customer requested written confirmation of requirements."},
-        {"case_type":"Policy Clarification","category":"Pet Services","contact_name":"Maria Santos","contact_number":"+63 917 555 0342","email":"maria.santos@example.com","site_location":"Hilton Group • Front Desk","product":"Pet Policy","serial_number":"N/A","reference_number":"PET-POL-002","issue":"Customer is asking whether a specific pet type is allowed under the current policy.","description":"Customer provided the animal type and requested a policy confirmation before arrival.","resolution":"Pending policy confirmation.","next_action":"Check the current pet policy and communicate the applicable restriction or approval requirement.","notes":"Do not promise an exception without approval."},
-        {"case_type":"Pet Service Request","category":"Pet Services","contact_name":"Anna Reyes","contact_number":"+63 917 555 0343","email":"anna.reyes@example.com","site_location":"Accenture Executive Stay • Room 404","product":"Pet Service","serial_number":"N/A","reference_number":"PET-SVC-003","issue":"Guest requested information about available pet-related services.","description":"Customer wants to know which approved services can be arranged during the stay.","resolution":"Pending service availability check.","next_action":"Confirm available services and coordinate with the appropriate provider.","notes":"Provide only currently approved services."},
-        {"case_type":"Animal Facility Issue","category":"Facilities / Pet Services","contact_name":"Carlo Banaag","contact_number":"+63 917 555 0344","email":"carlo.banaag@example.com","site_location":"Microsoft Guest Facility","product":"Pet Facility","serial_number":"PET-FAC-004","reference_number":"PET-FAC-004","issue":"Pet facility area requires inspection after a reported cleanliness concern.","description":"Guest reported an issue with the condition of a designated pet area.","resolution":"Pending facility inspection.","next_action":"Inspect the area, document the condition and coordinate corrective action.","notes":"Keep the area safe for guests and animals during inspection."},
-        {"case_type":"Pet Account Update","category":"Account Maintenance","contact_name":"Liza Tan","contact_number":"+63 917 555 0345","email":"liza.tan@example.com","site_location":"Acme Corporation • Guest Services","product":"Pet Account","serial_number":"N/A","reference_number":"PET-ACC-005","issue":"Customer requested an update to pet information on the account.","description":"The customer wants to correct the pet name and update the recorded pet information.","resolution":"Pending account validation.","next_action":"Verify requester identity and update the account using the approved workflow.","notes":"Document the requested and final values."}],
-    "SUPPLY CHAIN": [
-        {"case_type":"Shipment Exception","category":"Logistics","contact_name":"John Dela Cruz","contact_number":"+63 917 555 0441","email":"john.delacruz@example.com","site_location":"Manila Distribution Center","product":"Enterprise Hardware Shipment","serial_number":"SHIP-001","reference_number":"SC-SHP-001","issue":"Expected shipment has not arrived at the receiving location.","description":"The purchase order and shipment reference are available. Receiving team confirmed that the expected delivery has not been logged.","resolution":"Pending supplier and carrier validation.","next_action":"Validate shipment reference, expected delivery date and carrier status, then document the exception.","notes":"Customer requested a delivery update."},
-        {"case_type":"Purchase Order Exception","category":"Procurement","contact_name":"Maria Santos","contact_number":"+63 917 555 0442","email":"maria.santos@example.com","site_location":"Cavite Procurement Office","product":"Purchase Order","serial_number":"N/A","reference_number":"SC-PO-002","issue":"Invoice and purchase order quantities do not match.","description":"The received invoice shows a quantity different from the approved purchase order.","resolution":"Pending PO and invoice reconciliation.","next_action":"Compare PO, receipt and invoice details and route the discrepancy to procurement if confirmed.","notes":"Do not approve the invoice until reconciliation is complete."},
-        {"case_type":"Supplier Delivery Delay","category":"Supplier Management","contact_name":"Anna Reyes","contact_number":"+63 917 555 0443","email":"anna.reyes@example.com","site_location":"Pasig Fulfillment Center","product":"Replacement Parts","serial_number":"N/A","reference_number":"SC-DLY-003","issue":"Supplier advised that the delivery will miss the committed date.","description":"The supplier has reported a delay and the business is asking for an updated ETA.","resolution":"Pending supplier confirmation.","next_action":"Obtain revised ETA and document impact to the requested delivery schedule.","notes":"Escalate if the revised ETA affects a committed customer date."},
-        {"case_type":"Inventory Discrepancy","category":"Inventory","contact_name":"Carlo Banaag","contact_number":"+63 917 555 0444","email":"carlo.banaag@example.com","site_location":"Makati Warehouse","product":"Warehouse Inventory","serial_number":"INV-004","reference_number":"SC-INV-004","issue":"Physical inventory count does not match the recorded quantity.","description":"Warehouse reported a discrepancy during a routine count.","resolution":"Pending inventory validation.","next_action":"Recount the affected item and reconcile system quantity against the physical result.","notes":"Record the final count and supporting transaction references."},
-        {"case_type":"Replacement Request","category":"Logistics / Replacement","contact_name":"Liza Tan","contact_number":"+63 917 555 0445","email":"liza.tan@example.com","site_location":"Quezon City Customer Site","product":"Replacement Equipment","serial_number":"RPL-005","reference_number":"SC-RPL-005","issue":"Customer requested replacement equipment after a confirmed delivery exception.","description":"Replacement requirement has been raised and needs validation against the original order and shipment record.","resolution":"Pending replacement authorization.","next_action":"Validate the original order, reason for replacement and approved fulfillment route.","notes":"Keep the original shipment reference attached to the case."}],
-    "ONSITE": [
-        {"case_type":"Fulfillment Technician","category":"Field Services","contact_name":"John Dela Cruz","contact_number":"+63 917 555 0541","email":"john.delacruz@example.com","site_location":"BGC Enterprise Site","product":"HPE Server Infrastructure","serial_number":"SGH-ON-001","reference_number":"ONS-TECH-001","issue":"Customer requested fulfillment technical assistance for a hardware issue.","description":"Remote checks identified a suspected hardware fault. Customer has confirmed site access requirements and a local contact.","resolution":"Pending dispatch validation.","next_action":"Confirm technician availability, site access window, equipment details and dispatch requirements.","notes":"Site contact must be called before arrival."},
-        {"case_type":"Hardware Replacement","category":"Field Services","contact_name":"Maria Santos","contact_number":"+63 917 555 0542","email":"maria.santos@example.com","site_location":"Makati Data Center","product":"HPE Storage Hardware","serial_number":"SGH-RPL-002","reference_number":"ONS-RPL-002","issue":"A hardware component requires replacement at the customer site.","description":"Customer provided the affected device information and requested an fulfillment replacement schedule.","resolution":"Pending replacement scheduling.","next_action":"Validate entitlement, replacement part availability and technician dispatch window.","notes":"Record serial number before and after replacement."},
-        {"case_type":"Network Equipment","category":"Network / Field Services","contact_name":"Anna Reyes","contact_number":"+63 917 555 0543","email":"anna.reyes@example.com","site_location":"Cavite Manufacturing Site","product":"Network Switch","serial_number":"SW-ONS-003","reference_number":"ONS-NET-003","issue":"Network equipment is reporting intermittent connectivity at the site.","description":"Customer reports intermittent connectivity affecting a local segment. Initial remote checks are inconclusive.","resolution":"Pending fulfillment diagnostics.","next_action":"Confirm topology, affected ports and fulfillment access before dispatch.","notes":"Capture current configuration before hardware changes."},
-        {"case_type":"Site Access","category":"Field Services","contact_name":"Carlo Banaag","contact_number":"+63 917 555 0544","email":"carlo.banaag@example.com","site_location":"Quezon City Corporate Office","product":"Fulfillment Support Visit","serial_number":"N/A","reference_number":"ONS-ACC-004","issue":"Scheduled fulfillment support requires updated visitor access information.","description":"Customer changed the site access window and needs the technician visit details updated.","resolution":"Pending access confirmation.","next_action":"Confirm the new access window, site contact and visitor requirements.","notes":"Do not dispatch without confirmed site access."},
-        {"case_type":"Installation Support","category":"Deployment / Field Services","contact_name":"Liza Tan","contact_number":"+63 917 555 0545","email":"liza.tan@example.com","site_location":"Pasig Technology Center","product":"HPE Compute System","serial_number":"CMP-ONS-005","reference_number":"ONS-INS-005","issue":"Customer needs fulfillment assistance during a new equipment installation.","description":"Equipment is scheduled for installation and the customer requested support for physical setup and validation.","resolution":"Pending installation scheduling.","next_action":"Confirm equipment availability, site readiness, installation window and required technician skills.","notes":"Coordinate with the customer before confirming the appointment."}],
-}
+MOCK_NAMES = [
+    "John Dela Cruz",
+    "Maria Santos",
+    "Anna Reyes",
+    "Carlo Banaag",
+    "Liza Tan",
+]
 
 
-# Ensure every demonstration record is explicitly HPE / Aruba focused while
-# retaining the complete contact, site, reference, resolution and notes fields.
-HPE_ARUBA_MOCK_CONTEXT = {
-    "CARE": [
-        ("HPE ProLiant DL380 Gen11", "Server / RMA", "Validate serial number, entitlement, failed component details and RMA eligibility before replacement authorization."),
-        ("Aruba AP-515", "Wireless / RMA", "Validate AP serial number, hardware symptoms, Aruba Central status and RMA eligibility."),
-        ("HPE Alletra Storage", "Storage / RMA", "Validate storage serial number, failed component, support entitlement and replacement part availability."),
-        ("Aruba Central", "Network / RMA", "Confirm affected device serial, hardware fault evidence and approved Aruba RMA workflow."),
-        ("HPE StoreEasy", "File Storage / RMA", "Validate controller or storage hardware fault, serial information and replacement entitlement."),
-    ],
-    "ARCH": [
-        ("HPE ProLiant", "RMA / Entitlement Records", "Confirm the RMA reference, serial number, support entitlement and approved replacement record."),
-        ("Aruba AP-515", "RMA / Documentation", "Retrieve the RMA record, serial number, failure evidence and approved replacement documentation."),
-        ("HPE Alletra", "RMA / Entitlement Records", "Validate entitlement, affected component, serial number and historical RMA documentation."),
-        ("ArubaOS-CX", "RMA / Configuration Records", "Preserve the switch identity, configuration record and hardware-failure evidence required for RMA."),
-        ("HPE ProLiant", "RMA / Warranty Records", "Validate serial number, warranty coverage and the supporting RMA documentation."),
-    ],
-    "PET": [
-        ("Aruba ClearPass", "Network Access Control / RMA", "Validate appliance serial number, hardware fault evidence, entitlement and replacement requirements."),
-        ("HPE OneView", "Server Management / RMA", "Confirm the affected server, serial number, hardware failure and RMA eligibility."),
-        ("Aruba AP", "Wireless / RMA", "Check device identity, hardware symptoms, Aruba Central records and replacement eligibility."),
-        ("HPE iLO", "Server Remote Management / RMA", "Validate the affected server serial number, hardware event evidence and replacement entitlement."),
-        ("Aruba CX Switch", "Switch / RMA", "Confirm switch serial number, affected hardware, configuration evidence and RMA approval path."),
-    ],
-    "SUPPLY CHAIN": [
-        ("HPE ProLiant", "Enterprise Server / RMA Shipment", "Validate approved RMA, replacement part number, shipment reference and expected delivery date."),
-        ("Aruba CX Switch", "Network Hardware / RMA Shipment", "Confirm RMA authorization, replacement model, quantity, shipment reference and carrier status."),
-        ("HPE Alletra Storage", "Enterprise Storage / RMA Shipment", "Confirm replacement component, RMA reference, destination, carrier status and ETA."),
-        ("Aruba AP", "Wireless Hardware / RMA", "Reconcile the approved RMA, replacement AP model, serial information and inventory record."),
-        ("HPE Replacement Part", "Spare Parts / RMA", "Validate entitlement, replacement part number, RMA approval and fulfillment status."),
-    ],
-    "ONSITE": [
-        ("HPE ProLiant Server", "Server / Onsite RMA", "Validate RMA authorization, replacement part availability, serial number and technician dispatch window."),
-        ("Aruba CX Switch", "Network / Onsite RMA", "Confirm RMA approval, replacement hardware, configuration backup and site access before dispatch."),
-        ("Aruba AP", "Wireless / Onsite RMA", "Confirm RMA authorization, replacement AP, mounting location, cabling and installation window."),
-        ("HPE Alletra Storage", "Storage / Onsite RMA", "Validate replacement component, RMA approval, site readiness and technician requirements."),
-        ("Aruba ClearPass", "Network Access Control / Onsite RMA", "Confirm appliance RMA, replacement unit, network prerequisites, site access and implementation window."),
-    ],
-}
+MOCK_ACCOUNTS = [
+    "Marriott Hotel",
+    "Hilton Group",
+    "Accenture",
+    "Microsoft",
+    "Acme Corporation",
+]
 
-for _station, _details in MOCK_CASE_DETAILS.items():
-    for _i, _detail in enumerate(_details):
-        _product, _category, _next_action = HPE_ARUBA_MOCK_CONTEXT[_station][_i]
-        _subject = MOCK_SUBJECTS[_station][_i]
-        _detail["case_type"] = "RMA"
-        _detail["product"] = _product
-        _detail["category"] = _category
-        _detail["issue"] = _subject
-        _detail["description"] = (
-            f"HPE / Aruba RMA case: {_subject}. "
-            f"Customer reports a hardware issue involving {_product} and is requesting return/replacement processing. "
-            "The case contains the customer contact, site, serial/reference and entitlement information needed for RMA triage."
-        )
-        _detail["resolution"] = "Pending RMA validation, entitlement verification and replacement authorization."
-        _detail["next_action"] = _next_action
-        _detail["notes"] = (
-            f"Mock HPE / Aruba RMA case for {_station}. Verify serial number, failure evidence, entitlement and RMA reference before escalation."
-        )
-        _detail["rma_reason"] = "Suspected hardware failure / replacement required"
-        _detail["rma_status"] = "Pending validation"
-        _detail["return_status"] = "Return authorization not yet completed"
-        _detail["replacement_status"] = "Replacement pending approval"
+
+# Increment this when the structure/timing of demonstration cases changes.
+# Version 11 resets existing demonstration cases to 00:00:00 on first load.
+MOCK_DATA_VERSION = 11
+
+
 
 
 def reset_mock_case_durations():
-    now = utc_now()
+    """Reset every seeded mock case to zero elapsed duration.
+
+
+    The reset is persisted in MongoDB so the browser-side live timer starts
+    from 00:00:00 for every mock case after the next dashboard refresh.
+    """
+    reset_now = utc_now()
+
 
     result = col(TASKS_COLLECTION).update_many(
-        {"is_mock": True, "case_number": {"$not": {"$regex": "^SIM-"}}},
-        {"$set": {
-            "created_at": now,
-            "station_started_at": now,
-            "last_update": now,
-            "mock_data_version": MOCK_DATA_VERSION,
-        }},
+        {
+            "is_mock": True,
+            "case_number": {"$not": {"$regex": "^SIM-"}},
+        },
+        {
+            "$set": {
+                "created_at": reset_now,
+                "station_started_at": reset_now,
+                "last_update": reset_now,
+                "mock_data_version": MOCK_DATA_VERSION,
+            }
+        },
     )
 
-    for station, cfg in STATIONS.items():
+
+    # Give each station a fresh SLA window.
+    for station, config in STATIONS.items():
         col(TASKS_COLLECTION).update_many(
             {
                 "is_mock": True,
                 "case_number": {"$not": {"$regex": "^SIM-"}},
                 "department": station,
             },
-            {"$set": {
-                "due_date": now + timedelta(minutes=cfg["sla_minutes"])
-            }},
+            {
+                "$set": {
+                    "due_date": reset_now + timedelta(
+                        minutes=config["sla_minutes"]
+                    ),
+                }
+            },
         )
+
 
     clear_task_cache()
     return result.modified_count
 
 
+
+
 @st.cache_resource(show_spinner=False)
-def seed_mock_cases():
-    # Remove old mock distributions so the app always ends with 5 per station.
-    existing = list(
-        col(TASKS_COLLECTION).find(
-            {"is_mock": True},
-            {"_id": 1, "department": 1, "mock_data_version": 1}
-        )
+def seed_mock_cases(force=False):
+    existing = col(TASKS_COLLECTION).count_documents(
+        {"is_mock": True}
     )
 
-    expected = len(STATIONS) * 5
-    valid = (
-        len(existing) == expected
-        and all(
-            x.get("mock_data_version") == MOCK_DATA_VERSION
-            for x in existing
-        )
-        and all(
-            sum(
-                1 for x in existing
-                if station_name(x.get("department")) == station
-            ) == 5
-            for station in STATIONS
-        )
-    )
 
-    if valid:
-        return len(existing)
+    # One-time migration for mock data created by an earlier version.
+    # This resets demonstration durations to 00:00:00 without doing so
+    # again on every normal Streamlit rerun.
+    if existing and not force:
+        reset_filter = {
+            "is_mock": True,
+            "mock_data_version": {"$ne": MOCK_DATA_VERSION},
+            "case_number": {"$not": {"$regex": "^SIM-"}},
+        }
+        needs_reset = col(TASKS_COLLECTION).count_documents(reset_filter)
 
-    col(TASKS_COLLECTION).delete_many({"is_mock": True})
+
+        if needs_reset:
+            # Reset every demonstration case from one common timestamp.
+            # update_many is substantially faster than one database write per case.
+            reset_now = utc_now()
+            col(TASKS_COLLECTION).update_many(
+                reset_filter,
+                {"$set": {
+                    "created_at": reset_now,
+                    "station_started_at": reset_now,
+                    "due_date": reset_now + timedelta(days=2),
+                    "last_update": reset_now,
+                    "mock_data_version": MOCK_DATA_VERSION,
+                }},
+            )
+            clear_task_cache()
+
+
+        return existing
+
+
+    if force:
+        col(TASKS_COLLECTION).delete_many(
+            {"is_mock": True}
+        )
+
 
     now = utc_now()
     docs = []
-    number = 1
 
-    for station, cfg in STATIONS.items():
-        for i in range(5):
-            priority = i == 0
-            detail = MOCK_CASE_DETAILS[station][i]
+
+    case_index = 1
+
+
+    for station, config in STATIONS.items():
+
+
+        subjects = MOCK_SUBJECTS[station]
+        target_count = {
+            "CARE": 12,
+            "ARCH": 8,
+            "PET": 6,
+            "SUPPLY CHAIN": 5,
+            "ONSITE": 4,
+        }[station]
+
+
+        for i in range(target_count):
+
+
+            subject = subjects[i % len(subjects)]
             account = MOCK_ACCOUNTS[i % len(MOCK_ACCOUNTS)]
-            vendor = "HPE Services" if i % 2 == 0 else "Aruba Networking Services"
+
+
+            # Mock cases intentionally start at zero duration.
+            # The browser timer then increments from 00:00:00.
+            # Priority-account behavior is still preserved for alert/status testing.
+            priority_account = (
+                i == 0
+            )
+
+
+            started = now
+
+
+            # All mock cases use a common demonstration due date:
+            # exactly two days from the time the mock dataset is seeded.
+            due = now + timedelta(days=2)
+
 
             docs.append({
-                "case_number": f"RMA-{station[:3].upper()}-2026-{number:04d}",
-                "subject": MOCK_SUBJECTS[station][i],
-                "priority": "Critical" if priority else ("Medium" if i == 1 else "Low"),
-                "account_priority": "Yes" if priority else "No",
-                "assigned_to": MOCK_NAMES[i],
+                "case_number": (
+                    f"{station[:3].upper()}"
+                    f"-2026-{case_index:04d}"
+                ),
+                "subject": subject,
+                "priority": (
+                    "Critical"
+                    if priority_account
+                    else "Medium"
+                    if i == 1
+                    else "Low"
+                ),
+                "account_priority": (
+                    "Yes"
+                    if priority_account
+                    else "No"
+                ),
+                "assigned_to": MOCK_NAMES[
+                    i % len(MOCK_NAMES)
+                ],
                 "department": station,
                 "account_name": account,
-                "vendor": vendor,
-                "issue": detail["issue"],
-                "description": detail["description"],
-                "status": "In Progress" if i % 2 == 0 else "Open",
-                "created_at": now,
-                "station_started_at": now,
-                "due_date": now + timedelta(minutes=cfg["sla_minutes"]),
+                "vendor": (
+                    "CoolTech Solutions"
+                    if i % 2 == 0
+                    else "HPE Partner Services"
+                ),
+                "issue": subject,
+                "description": (
+                    f"Mock task for {station}. "
+                    "This record was created for dashboard demonstration."
+                ),
+                "status": (
+                    "In Progress"
+                    if i % 2 == 0
+                    else "Open"
+                ),
+                "created_at": started,
+                "station_started_at": started,
+                "due_date": due,
                 "last_update": now,
-                "notes": detail["notes"],
+                "notes": "Mock demonstration case.",
                 "active": True,
                 "is_mock": True,
                 "mock_data_version": MOCK_DATA_VERSION,
-                "source_type": "mock",
-                "case_type": "RMA",
-                "category": detail["category"],
-                "rma_number": f"RMA-{station[:3].upper()}-2026-{number:04d}",
-                "rma_reason": detail.get("rma_reason", "Suspected hardware failure / replacement required"),
-                "rma_status": detail.get("rma_status", "Pending validation"),
-                "return_status": detail.get("return_status", "Return authorization not yet completed"),
-                "replacement_status": detail.get("replacement_status", "Replacement pending approval"),
-                "contact_name": detail["contact_name"],
-                "contact_number": detail["contact_number"],
-                "email": detail["email"],
-                "site_location": detail["site_location"],
-                "product": detail["product"],
-                "serial_number": detail["serial_number"],
-                "reference_number": detail["reference_number"],
-                "resolution": detail["resolution"],
-                "next_action": detail["next_action"],
                 "history": [
-                    {"action": f"Case entered {station}", "timestamp": now},
-                    {"action": f"Assigned to {MOCK_NAMES[i]}", "timestamp": now},
-                    {"action": f"Initial triage completed — {detail['category']}", "timestamp": now},
+                    {
+                        "action": (
+                            f"Case entered {station}"
+                        ),
+                        "timestamp": started,
+                    }
                 ],
             })
-            number += 1
 
-    col(TASKS_COLLECTION).insert_many(docs)
+
+            case_index += 1
+
+
+    if docs:
+        col(TASKS_COLLECTION).insert_many(
+            docs
+        )
+
+
     return len(docs)
+
+
 
 
 # ============================================================
@@ -3227,80 +2901,139 @@ def sync_vendor_excel(uploaded_file):
 
 
 def import_cases_excel(uploaded_file, replace_existing_excel=False):
+    """Import case records from an Excel workbook into Tasks_Collection.
+
+
+    The workbook mirrors the case fields used by the dashboard. Existing records
+    with the same Case # are updated, while new Case # values are inserted.
+    Imported rows are tagged source_type='excel' so they can be replaced safely.
+    """
     try:
         df = pd.read_excel(uploaded_file)
+
+
         if df.empty:
             return False, "The Excel file is empty.", 0
 
-        def norm(c):
+
+        def normalize_column(value):
             return (
-                text(c).lower().strip()
+                text(value).lower().strip()
                 .replace("#", "number")
                 .replace("/", "_")
                 .replace("-", "_")
                 .replace(" ", "_")
             )
 
-        df.columns = [norm(c) for c in df.columns]
-        df = df.rename(columns={
+
+        df.columns = [normalize_column(c) for c in df.columns]
+
+
+        aliases = {
             "case": "case_number",
             "case_no": "case_number",
+            "case_no.": "case_number",
+            "case_number": "case_number",
+            "case_number_": "case_number",
             "caseid": "case_number",
             "case_id": "case_number",
             "account": "account_name",
             "accountname": "account_name",
+            "department": "department",
             "station": "department",
             "assigned": "assigned_to",
             "assignedto": "assigned_to",
             "accountpriority": "account_priority",
+            "account_priority": "account_priority",
             "created": "created_at",
             "created_date": "created_at",
+            "created_datetime": "created_at",
             "station_started": "station_started_at",
             "station_start": "station_started_at",
             "due": "due_date",
             "due_datetime": "due_date",
             "last_update_date": "last_update",
-        })
+            "isactive": "active",
+        }
+        df = df.rename(columns=aliases)
+
 
         required = {"case_number", "subject", "department"}
         missing = sorted(required - set(df.columns))
         if missing:
-            return False, "Missing required column(s): " + ", ".join(missing), 0
+            return (
+                False,
+                "Missing required column(s): " + ", ".join(missing),
+                0,
+            )
 
-        def parse_dt(value, fallback):
+
+        def parse_datetime(value, fallback=None):
             if value is None or (isinstance(value, float) and pd.isna(value)):
                 return fallback
             parsed = pd.to_datetime(value, errors="coerce", utc=True)
-            return fallback if pd.isna(parsed) else parsed.to_pydatetime()
+            if pd.isna(parsed):
+                return fallback
+            return parsed.to_pydatetime()
+
+
+        def parse_bool(value, default=True):
+            if value is None or (isinstance(value, float) and pd.isna(value)):
+                return default
+            return text(value).lower() in {
+                "true", "yes", "y", "1", "active", "open"
+            }
+
 
         now = utc_now()
         operations = []
         skipped = 0
 
+
         if replace_existing_excel:
             col(TASKS_COLLECTION).delete_many({"source_type": "excel"})
+
 
         for _, row in df.iterrows():
             case_number = text(row.get("case_number"))
             subject = text(row.get("subject"))
-            station = station_name(row.get("department"))
 
-            if not case_number or not subject or station not in STATIONS:
+
+            if not case_number or not subject:
                 skipped += 1
                 continue
 
-            created = parse_dt(row.get("created_at"), now)
-            started = parse_dt(row.get("station_started_at"), created)
-            due = parse_dt(
-                row.get("due_date"),
-                started + timedelta(minutes=STATIONS[station]["sla_minutes"]),
+
+            station = station_name(row.get("department"))
+            if station not in STATIONS:
+                skipped += 1
+                continue
+
+
+            created_at = parse_datetime(row.get("created_at"), now)
+            started_at = parse_datetime(row.get("station_started_at"), created_at)
+            due_default = started_at + timedelta(
+                minutes=STATIONS[station]["sla_minutes"]
             )
+            due_date = parse_datetime(row.get("due_date"), due_default)
+            last_update = parse_datetime(row.get("last_update"), now)
+
+
+            priority = text(row.get("priority")) or "Low"
+            account_priority = (
+                "Yes" if is_priority(row.get("account_priority")) else "No"
+            )
+
+
+            active = parse_bool(row.get("active"), True)
+            raw_is_mock = parse_bool(row.get("is_mock"), False)
+
 
             doc = {
                 "case_number": case_number,
                 "subject": subject,
-                "priority": text(row.get("priority")) or "Low",
-                "account_priority": "Yes" if is_priority(row.get("account_priority")) else "No",
+                "priority": priority,
+                "account_priority": account_priority,
                 "assigned_to": text(row.get("assigned_to")) or "Unassigned",
                 "department": station,
                 "account_name": text(row.get("account_name")),
@@ -3308,29 +3041,44 @@ def import_cases_excel(uploaded_file, replace_existing_excel=False):
                 "issue": text(row.get("issue")) or subject,
                 "description": text(row.get("description")),
                 "status": text(row.get("status")) or "Open",
-                "created_at": created,
-                "station_started_at": started,
-                "due_date": due,
-                "last_update": parse_dt(row.get("last_update"), now),
+                "created_at": created_at,
+                "station_started_at": started_at,
+                "due_date": due_date,
+                "last_update": last_update,
                 "notes": text(row.get("notes")),
-                "active": True,
-                "is_mock": False,
+                "active": active,
+                "is_mock": raw_is_mock,
                 "source_type": "excel",
-                "history": [{"action": f"Case imported into {station}", "timestamp": now}],
+                "history": [{
+                    "action": f"Case imported into {station}",
+                    "timestamp": now,
+                }],
             }
 
+
             operations.append(
-                ReplaceOne({"case_number": case_number}, doc, upsert=True)
+                ReplaceOne(
+                    {"case_number": case_number},
+                    doc,
+                    upsert=True,
+                )
             )
+
 
         if operations:
             col(TASKS_COLLECTION).bulk_write(operations, ordered=False)
             clear_task_cache()
 
-        return True, f"{len(operations)} case record(s) imported; {skipped} skipped.", len(operations)
+
+        imported = len(operations)
+        return True, (
+            f"{imported} case record(s) imported successfully"
+            + (f"; {skipped} row(s) skipped." if skipped else ".")
+        ), imported
+
+
     except Exception as exc:
         return False, f"Unable to import cases: {exc}", 0
-
 
 
 
@@ -3424,260 +3172,6 @@ def transfer_case(task, destination):
         return False
 
 
-
-
-# ============================================================
-# KNOWLEDGE BASE
-# ============================================================
-
-def kb_text(doc):
-    fields = [
-        doc.get("title"), doc.get("subject"), doc.get("question"),
-        doc.get("keywords"), doc.get("category"), doc.get("answer"),
-        doc.get("content"), doc.get("body"), doc.get("summary"),
-        doc.get("resolution"), doc.get("sop"),
-    ]
-
-    parts = []
-    for value in fields:
-        if isinstance(value, list):
-            parts.extend(text(x) for x in value)
-        elif isinstance(value, dict):
-            parts.extend(text(x) for x in value.values())
-        else:
-            parts.append(text(value))
-
-    return " ".join(x for x in parts if x).lower()
-
-
-def kb_content(doc):
-    for key in ["answer", "content", "body", "resolution", "summary", "description", "sop"]:
-        if doc.get(key):
-            return text(doc.get(key))
-    return "No detailed answer was provided in this article."
-
-
-def kb_score(query, doc):
-    words = {
-        x.strip(".,:;!?()[]{}").lower()
-        for x in text(query).split()
-        if len(x.strip(".,:;!?()[]{}")) >= 3
-    }
-
-    if not words:
-        return 0
-
-    haystack = kb_text(doc)
-    title = text(doc.get("title")).lower()
-    category = text(doc.get("category")).lower()
-
-    score = sum(1 for word in words if word in haystack)
-    score += 4 if any(word in title for word in words) else 0
-    score += 2 if any(word in category for word in words) else 0
-
-    keywords = doc.get("keywords", [])
-    if isinstance(keywords, list):
-        score += sum(
-            3 for keyword in keywords
-            if any(word in text(keyword).lower() for word in words)
-        )
-
-    return score
-
-
-def load_kb_documents():
-    docs = []
-
-    for collection_name in [KB_COLLECTION, SOP_COLLECTION]:
-        try:
-            docs.extend(
-                list(
-                    col(collection_name).find(
-                        {},
-                        {
-                            "_id": 1, "title": 1, "subject": 1, "question": 1,
-                            "keywords": 1, "category": 1, "answer": 1,
-                            "content": 1, "body": 1, "summary": 1,
-                            "description": 1, "resolution": 1, "sop": 1,
-                            "source": 1, "source_type": 1, "url": 1,
-                        },
-                    ).limit(1000)
-                )
-            )
-        except Exception:
-            pass
-
-    return docs
-
-
-def search_kb(query, limit=5):
-    results = [
-        (kb_score(query, doc), doc)
-        for doc in load_kb_documents()
-        if kb_score(query, doc) > 0
-    ]
-    results.sort(key=lambda x: -x[0])
-    return [doc for _, doc in results[:limit]]
-
-
-def case_kb_query(task):
-    return " ".join(
-        x for x in [
-            text(task.get("subject")),
-            text(task.get("issue")),
-            station_name(task.get("department")),
-            text(task.get("account_name")),
-        ]
-        if x
-    )
-
-
-def seed_demo_kb():
-    try:
-        if col(KB_COLLECTION).count_documents({}) or col(SOP_COLLECTION).count_documents({}):
-            return
-
-        docs = [
-            {
-                "title": "CARE - Guest Room AC Not Working",
-                "category": "CARE / Maintenance",
-                "keywords": ["AC", "air conditioning", "room", "HVAC", "not working"],
-                "answer": "Verify the room number, thermostat setting, power and airflow. Document the symptoms and route the case through the applicable maintenance/vendor process if basic checks do not resolve the issue.",
-                "source": "Caseflow Demo Knowledge Base",
-                "source_type": "demo",
-            },
-            {
-                "title": "HPE Licensing - Portal Access Troubleshooting",
-                "category": "Licensing",
-                "keywords": ["licensing", "portal", "access", "HPE", "login"],
-                "answer": "Confirm the customer's account and entitlement context, verify the portal account and capture the exact access error. If entitlement is valid but portal access fails, follow the approved account-access escalation process.",
-                "source": "Caseflow Demo Knowledge Base",
-                "source_type": "demo",
-            },
-            {
-                "title": "FULFILLMENT - Hardware Replacement",
-                "category": "FULFILLMENT",
-                "keywords": ["fulfillment", "hardware", "replacement", "device", "technician"],
-                "answer": "Capture the device, serial number, site/location, symptoms, contact details and access requirements. Confirm whether fulfillment dispatch or remote troubleshooting is appropriate before escalation.",
-                "source": "Caseflow Demo Knowledge Base",
-                "source_type": "demo",
-            },
-            {
-                "title": "SUPPLY CHAIN - Missing Shipment",
-                "category": "SUPPLY CHAIN",
-                "keywords": ["shipment", "missing", "delivery", "supplier", "order"],
-                "answer": "Validate the purchase order or shipment reference, delivery destination and expected delivery date. Document supplier confirmation and escalate the delivery exception through the approved process.",
-                "source": "Caseflow Demo Knowledge Base",
-                "source_type": "demo",
-            },
-            {
-                "title": "ARCH - Document Retrieval",
-                "category": "ARCH",
-                "keywords": ["archive", "document", "retrieval", "record", "index"],
-                "answer": "Confirm the record identifier, date range and retention context. Search the applicable archive index and document the retrieval result or reason the record cannot be located.",
-                "source": "Caseflow Demo Knowledge Base",
-                "source_type": "demo",
-            },
-            {
-                "title": "PET - Pet Registration Inquiry",
-                "category": "PET",
-                "keywords": ["pet", "registration", "policy", "animal"],
-                "answer": "Confirm the account and pet information, then follow the current pet registration and policy procedure. Record required approval or documentation in the case.",
-                "source": "Caseflow Demo Knowledge Base",
-                "source_type": "demo",
-            },
-        ]
-
-        col(KB_COLLECTION).insert_many(docs)
-        load_kb_documents.clear()
-    except Exception:
-        pass
-
-
-def local_kb_ai_answer(question, task, documents):
-    """Create a deterministic, KB-grounded answer without an external AI API."""
-    question = text(question).strip()
-
-    if not question:
-        return {
-            "answer": "Please enter a question first.",
-            "sources": [],
-            "confidence": "No question",
-        }
-
-    if not documents:
-        return {
-            "answer": (
-                "No matching Knowledge Base or SOP article was found. "
-                "Try a product name, issue keyword, station name, or "
-                "troubleshooting term."
-            ),
-            "sources": [],
-            "confidence": "No matching source",
-        }
-
-    selected = []
-    seen = set()
-
-    for doc in documents:
-        title = text(doc.get("title")) or "Knowledge Base Article"
-        identity = text(doc.get("_id")) or title.lower()
-        if identity in seen:
-            continue
-        seen.add(identity)
-        selected.append(doc)
-        if len(selected) >= 4:
-            break
-
-    retrieval_query = f"{question} {case_kb_query(task)}"
-    scores = [kb_score(retrieval_query, doc) for doc in selected]
-    best_score = max(scores) if scores else 0
-
-    if best_score >= 8:
-        confidence = "High match"
-    elif best_score >= 4:
-        confidence = "Good match"
-    else:
-        confidence = "Related match"
-
-    best = selected[0]
-    best_title = text(best.get("title")) or "Knowledge Base Article"
-    best_content = kb_content(best).strip()
-
-    answer_parts = [
-        "### Recommended guidance",
-        f"**{best_title}**",
-        "",
-        best_content,
-    ]
-
-    if len(selected) > 1:
-        answer_parts.extend(["", "### Additional relevant guidance"])
-        for doc in selected[1:3]:
-            title = text(doc.get("title")) or "Related Article"
-            content = kb_content(doc).strip()
-            if len(content) > 450:
-                content = content[:450].rstrip() + "…"
-            answer_parts.append(f"- **{title}:** {content}")
-
-    answer_parts.extend([
-        "",
-        "### Verify before action",
-        (
-            "Confirm the current case details, applicable policy or "
-            "entitlement, required identifiers, and the latest approved "
-            "SOP before escalating or taking an external action."
-        ),
-    ])
-
-    return {
-        "answer": "\n".join(answer_parts),
-        "sources": selected,
-        "confidence": confidence,
-    }
-
-
-seed_demo_kb()
 
 
 # ============================================================
@@ -4185,547 +3679,256 @@ if st.session_state["show_alerts"]:
 
 
 @st.dialog(
-    "Case Details",
+    "📁 Case Details",
     width="large",
 )
 def case_details(task_id):
-    """Functional case-detail modal adapted from the supplied PY reference.
+    """Template-style Case Details UI using the ORIGINAL Caseflow data/functions.
 
-    The dashboard remains the entry point: clicking a case number opens this
-    modal for that exact MongoDB case. All displayed values are read from the
-    selected case, and edits/communications/attachments are persisted.
+    Important: this modal is presentation-only. CaseFlow's original MongoDB
+    schema, SLA engine, transfer logic, duration logic, and state management
+    remain unchanged.
     """
     try:
         from bson import ObjectId
-        task = col(TASKS_COLLECTION).find_one({"_id": ObjectId(str(task_id))})
+        task = col(TASKS_COLLECTION).find_one({"_id": ObjectId(task_id)})
     except Exception:
         task = None
 
     if not task:
         st.error("Case not found.")
+        if st.button("Close", use_container_width=True):
+            st.session_state["show_case"] = False
+            st.session_state["selected_case_id"] = None
+            st.rerun()
         return
 
-    user = st.session_state.get("current_user", {}) or {}
-    user_name = text(user.get("name")) or "CaseFlow User"
-    user_role = text(user.get("role")) or "Agent"
-    is_admin = user_role in {"Admin", "Admin/Agent"}
-
+    # ORIGINAL Caseflow engine — do not replace with template priority logic.
     state = calculate_state(task)
-    station = station_name(task.get("department"))
-    visible_station = "FULFILLMENT" if station == "ONSITE" else station
-    status = text(task.get("status")) or "Open"
+    status = text(task.get("status", "Open")) or "Open"
+    department = station_name(task.get("department"))
+    case_number = text(task.get("case_number")) or "—"
+    subject = text(task.get("subject")) or text(task.get("issue")) or "No subject available."
     description = text(task.get("description")) or text(task.get("issue")) or "No description available."
-    # CaseFlow uses calculate_state() as the authoritative live SLA/priority engine.
-    # Do not call the legacy get_dynamic_priority() helper here because it is not
-    # part of this build.
-    priority = str(state.get("status") or "LOW").title()
-    countdown_txt, countdown_color, is_overdue = calculate_countdown(task.get("due_date"))
-    elapsed_txt = duration_string(state.get("elapsed", 0))
-    assigned_to = text(task.get("assigned_to")) or "Unassigned"
-    parts = [p for p in assigned_to.split() if p]
-    initials = "".join(p[0] for p in parts[:2]).upper() or "—"
 
-    case_type = text(task.get("case_type"))
-    if not case_type and text(task.get("rma_number")):
-        case_type = "RMA"
-    if not case_type:
-        case_type = "RMA" if text(task.get("rma_reason")) else (text(task.get("category")) or "—")
+    priority_label = "CRITICAL" if state.get("priority_account") else str(state.get("status") or "LOW").upper()
+    priority_class = {
+        "BREACHED": "badge-critical",
+        "CRITICAL": "badge-critical",
+        "MEDIUM": "badge-medium",
+        "LOW": "badge-low",
+    }.get(priority_label, "badge-low")
 
-    critical = bool(state.get("priority_account") or priority in {"Critical", "Breached"})
-    priority_html = (
-        '<span class="detail-pill red">! Critical</span>' if critical
-        else f'<span class="detail-pill blue">{html.escape(priority.title())}</span>'
-    )
-    account_html = '<span class="detail-pill purple">⌖ Priority Account</span>' if state.get("priority_account") else ""
-
-    # Header — follows the supplied reference while retaining the native
-    # Streamlit dialog close control.
+    # ------------------------------------------------------------------
+    # TEMPLATE-STYLE HEADER
+    # ------------------------------------------------------------------
     st.markdown(
         f"""
-        <div class="detail-header">
-            <div class="detail-header-title">Case Details</div>
-            {('<span class="detail-critical"><span class="detail-critical-dot">!</span>Critical</span>' if critical else f'<span class="detail-pill blue">{html.escape(status)}</span>')}
-        </div>
-        <div class="detail-case-title">
-            {html.escape(text(task.get('case_number')) or '—')}
-            <span class="detail-status">{html.escape(status)}</span>
-        </div>
-        <div class="detail-subject">{html.escape(text(task.get('subject')) or 'No subject available.')}</div>
-        <div class="detail-description">{html.escape(description)}</div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    # Reference two-column summary layout.
-    st.markdown(
-        f"""
-        <div class="detail-grid">
-            <div class="detail-grid-col">
-                <div class="detail-field"><div class="detail-label">Priority</div><div class="detail-value">{priority_html}</div></div>
-                <div class="detail-field"><div class="detail-label">Current Department</div><div class="detail-value"><span class="detail-pill" style="background:{STATIONS.get(station, STATIONS['CARE'])['soft']};color:{STATIONS.get(station, STATIONS['CARE'])['accent']}">{html.escape(visible_station)}</span></div></div>
-                <div class="detail-field"><div class="detail-label">Assigned To</div><div class="detail-value detail-assignee"><span class="detail-assignee-avatar">{html.escape(initials)}</span><span>{html.escape(assigned_to)}</span></div></div>
-                <div class="detail-field"><div class="detail-label">Due Date</div><div class="{'detail-value red' if is_overdue else 'detail-value'}">{html.escape(dt_display(task.get('due_date')))}</div></div>
-                <div class="detail-field"><div class="detail-label">Duration</div><div class="detail-value">{html.escape(elapsed_txt)}</div></div>
-            </div>
-            <div class="detail-grid-col right">
-                <div class="detail-field"><div class="detail-label">Account Name</div><div class="detail-value">{html.escape(text(task.get('account_name')) or '—')} {account_html}</div></div>
-                <div class="detail-field"><div class="detail-label">Case Type</div><div class="detail-value">{html.escape(case_type)}</div></div>
-                <div class="detail-field"><div class="detail-label">Case Status</div><div class="detail-value">{html.escape(status)}</div></div>
-                <div class="detail-field"><div class="detail-label">Created By</div><div class="detail-value">{html.escape(text(task.get('created_by')) or 'System')}</div></div>
-                <div class="detail-field"><div class="detail-label">Date Created</div><div class="detail-value">{html.escape(dt_display(task.get('created_at')))}</div></div>
-            </div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:18px;margin-top:-6px;">
+          <div style="min-width:0;">
+            <div style="font-size:11px;font-weight:800;letter-spacing:.08em;color:#64748B;text-transform:uppercase;">CASE NUMBER</div>
+            <div style="font-size:24px;font-weight:850;color:#102041;line-height:1.15;margin-top:3px;">{html.escape(case_number)}</div>
+            <div style="font-size:13px;color:#64748B;margin-top:6px;">{html.escape(subject)}</div>
+          </div>
+          <div style="text-align:right;white-space:nowrap;">
+            <span class="badge {priority_class}">{html.escape(priority_label)}</span>
+            <div style="font-size:11px;color:#64748B;margin-top:8px;">{html.escape(status)}</div>
+          </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    tab_info, tab_vendor, tab_comm, tab_att = st.tabs([
-        "ⓘ Case Information",
-        "♧ Vendor Information",
-        "✉ Communication",
-        f"📎 Attachments ({len(task.get('attachments', []) or [])})",
+    # Live values still come from the original Caseflow calculate_state().
+    m1, m2, m3, m4 = st.columns(4)
+    with m1:
+        st.caption("CURRENT STATION")
+        st.markdown(f"**{html.escape(department or '—')}**")
+    with m2:
+        st.caption("ASSIGNED TO")
+        st.markdown(f"**{html.escape(text(task.get('assigned_to')) or 'Unassigned')}**")
+    with m3:
+        st.caption("DUE")
+        st.markdown(f"**{html.escape(dt_display(task.get('due_date')) or '—')}**")
+    with m4:
+        st.caption("ELAPSED")
+        st.markdown(f"**{html.escape(duration_string(state.get('elapsed', 0)))}**")
+
+    st.markdown("<hr style='border:0;border-top:1px solid #E2E8F0;margin:8px 0 14px;'>", unsafe_allow_html=True)
+
+    tab_info, tab_vendor, tab_comm, tab_attach, tab_actions = st.tabs([
+        "Case Information",
+        "Vendor Information",
+        "Communication",
+        "Attachments",
+        "Actions & History",
     ])
 
     # ------------------------------------------------------------------
-    # CASE INFORMATION
+    # CASE INFORMATION — display existing original fields only
     # ------------------------------------------------------------------
     with tab_info:
-        head1, head2 = st.columns([4, 1])
-        with head1:
-            st.markdown("### 📄 Case Information")
-        with head2:
-            edit_key = f"edit_case_{task_id}"
-            if st.button("Done" if st.session_state.get(edit_key) else "Edit", key=f"toggle_edit_{task_id}", use_container_width=True):
-                st.session_state[edit_key] = not st.session_state.get(edit_key, False)
-                st.rerun()
+        st.markdown("### Case Information")
+        info_items = [
+            ("Account Name", text(task.get("account_name"))),
+            ("Case Type", text(task.get("case_type"))),
+            ("Category", text(task.get("category"))),
+            ("Product / Service", text(task.get("product"))),
+            ("Serial Number", text(task.get("serial_number"))),
+            ("Reference Number", text(task.get("reference_number"))),
+            ("Contact Name", text(task.get("contact_name"))),
+            ("Contact Number", text(task.get("contact_number"))),
+            ("Email", text(task.get("email"))),
+            ("Site / Location", text(task.get("site_location"))),
+            ("RMA Number", text(task.get("rma_number"))),
+            ("RMA Reason", text(task.get("rma_reason"))),
+            ("RMA Status", text(task.get("rma_status"))),
+            ("Return Status", text(task.get("return_status"))),
+            ("Replacement Status", text(task.get("replacement_status"))),
+            ("Created By", text(task.get("created_by"))),
+            ("Created", dt_display(task.get("created_at"))),
+            ("Last Update", dt_display(task.get("last_update"))),
+        ]
+        info_items = [(k, v) for k, v in info_items if v]
+        if info_items:
+            cols = st.columns(2)
+            for i, (label, value) in enumerate(info_items):
+                with cols[i % 2]:
+                    st.markdown(
+                        f"<div style='padding:9px 0;border-bottom:1px solid #EEF2F7;'><div style='font-size:10px;font-weight:800;letter-spacing:.06em;color:#64748B;text-transform:uppercase;'>{html.escape(label)}</div><div style='font-size:13px;color:#17233C;margin-top:3px;'>{html.escape(str(value))}</div></div>",
+                        unsafe_allow_html=True,
+                    )
 
-        if st.session_state.get(edit_key, False):
-            e1, e2 = st.columns(2)
-            with e1:
-                new_subject = st.text_input("Subject", value=text(task.get("subject")), key=f"edit_subject_{task_id}")
-                new_account = st.text_input("Account Name", value=text(task.get("account_name")), key=f"edit_account_{task_id}")
-                new_product = st.text_input("Product / Service", value=text(task.get("product")), key=f"edit_product_{task_id}")
-            with e2:
-                new_category = st.text_input("Category", value=text(task.get("category")), key=f"edit_category_{task_id}")
-                new_reference = st.text_input("Reference Number", value=text(task.get("reference_number")), key=f"edit_reference_{task_id}")
-                new_serial = st.text_input("Serial Number", value=text(task.get("serial_number")), key=f"edit_serial_{task_id}")
-            new_description = st.text_area("Description", value=description, height=100, key=f"edit_description_{task_id}")
-            if st.button("💾 Save Changes", type="primary", use_container_width=True, key=f"save_case_{task_id}"):
-                now = utc_now()
-                history = list(task.get("history") or [])
-                history.append({"action": "Case information updated", "timestamp": now, "user": user_name, "type": "Case Update"})
-                col(TASKS_COLLECTION).update_one(
-                    {"_id": task["_id"]},
-                    {"$set": {
-                        "subject": new_subject, "account_name": new_account,
-                        "product": new_product, "category": new_category,
-                        "reference_number": new_reference, "serial_number": new_serial,
-                        "description": new_description, "last_update": now,
-                        "history": history[-50:],
-                    }},
-                )
-                clear_task_cache()
-                st.session_state[edit_key] = False
-                st.success("Case information updated!")
-                st.rerun()
-        else:
-            detail_items = [
-                ("Contact Person", text(task.get("contact_name"))),
-                ("Contact Number", text(task.get("contact_number"))),
-                ("Email", text(task.get("email"))),
-                ("Site / Location", text(task.get("site_location"))),
-                ("Product / Service", text(task.get("product"))),
-                ("Serial Number", text(task.get("serial_number"))),
-                ("Reference Number", text(task.get("reference_number"))),
-                ("RMA Number", text(task.get("rma_number"))),
-                ("RMA Reason", text(task.get("rma_reason"))),
-                ("RMA Status", text(task.get("rma_status"))),
-                ("Return Status", text(task.get("return_status"))),
-                ("Replacement Status", text(task.get("replacement_status"))),
-                ("Category", text(task.get("category"))),
-            ]
-            detail_items = [x for x in detail_items if x[1]]
-            if detail_items:
-                info_cols = st.columns(2)
-                for i, (label, value) in enumerate(detail_items):
-                    with info_cols[i % 2]:
-                        st.markdown(f"<div class='detail-field'><div class='detail-label'>{html.escape(label)}</div><div class='detail-value'>{html.escape(value)}</div></div>", unsafe_allow_html=True)
+        st.markdown("### Description")
+        st.info(description)
 
-            resolution = text(task.get("resolution"))
-            next_action = text(task.get("next_action"))
-            notes = text(task.get("notes"))
-            if resolution:
-                st.markdown("**Current Resolution / Assessment**")
-                st.info(resolution)
-            if next_action:
-                st.markdown("**Recommended Next Action**")
-                st.success(next_action)
-            if notes:
-                st.markdown("**Case Notes**")
-                st.caption(notes)
+        resolution = text(task.get("resolution"))
+        next_action = text(task.get("next_action"))
+        notes = text(task.get("notes"))
+        if resolution:
+            st.markdown("**Current Resolution / Assessment**")
+            st.info(resolution)
+        if next_action:
+            st.markdown("**Recommended Next Action**")
+            st.success(next_action)
+        if notes:
+            st.markdown("**Case Notes**")
+            st.caption(notes)
 
     # ------------------------------------------------------------------
-    # VENDOR INFORMATION
+    # VENDOR INFORMATION — original find_vendor() behavior
     # ------------------------------------------------------------------
     with tab_vendor:
-        vendor = find_vendor(task)
         st.markdown("### 🏢 Vendor Information")
+        vendor = find_vendor(task)
         if vendor:
-            items = {k: v for k, v in vendor.items() if k not in {"_id", "vendor_key", "synced_at"} and text(v)}
+            items = {
+                k: v for k, v in vendor.items()
+                if k not in {"_id", "vendor_key", "synced_at"} and text(v)
+            }
+            if items:
+                cols = st.columns(2)
+                for i, (key, value) in enumerate(items.items()):
+                    with cols[i % 2]:
+                        st.markdown(
+                            f"<div style='padding:9px 0;border-bottom:1px solid #EEF2F7;'><div style='font-size:10px;font-weight:800;color:#64748B;text-transform:uppercase;'>{html.escape(key.replace('_',' '))}</div><div style='font-size:13px;color:#17233C;margin-top:3px;'>{html.escape(text(value))}</div></div>",
+                            unsafe_allow_html=True,
+                        )
+            else:
+                st.info("The synchronized vendor record is empty.")
         else:
-            items = {}
-            case_vendor = text(task.get("vendor"))
-            if case_vendor:
-                items["vendor_name"] = case_vendor
-                items["record_status"] = "Case vendor — vendor contact record not synchronized"
-        if items:
-            vendor_cols = st.columns(2)
-            for i, (key, value) in enumerate(items.items()):
-                with vendor_cols[i % 2]:
-                    st.markdown(f"<div class='detail-field'><div class='detail-label'>{html.escape(key.replace('_',' ').title())}</div><div class='detail-value'>{html.escape(text(value))}</div></div>", unsafe_allow_html=True)
-        else:
-            st.info("No vendor information is attached to this case.")
+            st.info("No matching vendor information found. Upload the vendor Excel file from Settings.")
 
     # ------------------------------------------------------------------
-    # COMMUNICATION LOG — adapted from the reference script
+    # COMMUNICATION — display existing original record if present
     # ------------------------------------------------------------------
     with tab_comm:
-        st.markdown("### ✉ Case Communication Log")
-        communications = list(task.get("communications") or [])
-        if communications:
-            for msg in reversed(communications[-20:]):
-                sender = text(msg.get("sender")) or text(msg.get("user")) or "CaseFlow User"
-                direction = text(msg.get("direction")) or "Internal"
-                timestamp = dt_display(msg.get("timestamp"))
-                body = text(msg.get("message")) or text(msg.get("details"))
+        st.markdown("### ✉ Communication")
+        communications = task.get("communications") or task.get("communication_history") or []
+        if isinstance(communications, list) and communications:
+            for item in reversed(communications[-20:]):
+                if isinstance(item, dict):
+                    sender = text(item.get("sender") or item.get("user") or item.get("from")) or "Caseflow User"
+                    body = text(item.get("message") or item.get("body") or item.get("details")) or "—"
+                    stamp = dt_display(item.get("timestamp") or item.get("created_at"))
+                else:
+                    sender, body, stamp = "Caseflow User", text(item), ""
                 st.markdown(
-                    f"<div style='border:1px solid #E2E8F0;border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#fff;'><strong>{html.escape(sender)}</strong> <span style='color:#64748B;font-size:11px;'>· {html.escape(direction)} · {html.escape(timestamp)}</span><div style='margin-top:6px;color:#334155;font-size:12px;white-space:pre-wrap;'>{html.escape(body)}</div></div>",
+                    f"<div style='border:1px solid #E2E8F0;border-radius:10px;padding:11px 13px;margin-bottom:9px;background:#FAFCFE;'><div style='display:flex;justify-content:space-between;gap:12px;'><strong style='font-size:12px;color:#17233C;'>{html.escape(sender)}</strong><span style='font-size:10px;color:#64748B;'>{html.escape(stamp)}</span></div><div style='font-size:13px;color:#334155;margin-top:6px;white-space:pre-wrap;'>{html.escape(body)}</div></div>",
                     unsafe_allow_html=True,
                 )
         else:
-            st.caption("No communications recorded for this case.")
-
-        st.markdown("#### ✍️ Compose New Communication")
-        comm_type = st.selectbox("Type", ["Internal Note", "Vendor", "Customer"], key=f"comm_type_{task_id}")
-        comm_message = st.text_area("Message", height=100, key=f"comm_message_{task_id}", placeholder="Enter the communication or case note...")
-        if st.button("Send Communication", type="primary", use_container_width=True, key=f"send_comm_{task_id}"):
-            if not text(comm_message).strip():
-                st.warning("Enter a message first.")
-            else:
-                now = utc_now()
-                communications.append({"sender": user_name, "direction": comm_type, "message": text(comm_message).strip(), "timestamp": now})
-                history = list(task.get("history") or [])
-                history.append({"action": f"{comm_type} communication added", "timestamp": now, "user": user_name, "type": "Communications"})
-                col(TASKS_COLLECTION).update_one({"_id": task["_id"]}, {"$set": {"communications": communications[-50:], "history": history[-50:], "last_update": now}})
-                clear_task_cache()
-                st.success("Communication added to the case.")
-                st.rerun()
+            st.info("No communication history is stored on this case.")
 
     # ------------------------------------------------------------------
-    # ATTACHMENTS
+    # ATTACHMENTS — display existing original record if present
     # ------------------------------------------------------------------
-    with tab_att:
-        attachments = list(task.get("attachments") or [])
-        st.markdown("### 📎 Case Attachments")
-        if attachments:
-            for idx, attachment in enumerate(attachments):
-                if isinstance(attachment, dict):
-                    name = text(attachment.get("name")) or f"Attachment {idx + 1}"
-                    source = text(attachment.get("url")) or text(attachment.get("path")) or ""
-                    uploaded_by = text(attachment.get("uploaded_by")) or "Unknown"
-                    uploaded_at = dt_display(attachment.get("timestamp"))
-                    st.markdown(f"**{html.escape(name)}**  ·  {html.escape(uploaded_by)}  ·  {html.escape(uploaded_at)}")
-                    if source:
-                        st.code(source, language=None)
+    with tab_attach:
+        st.markdown("### 📎 Attachments")
+        attachments = task.get("attachments") or task.get("files") or []
+        if isinstance(attachments, list) and attachments:
+            for item in attachments:
+                if isinstance(item, dict):
+                    name = text(item.get("name") or item.get("filename") or item.get("file_name")) or "Attachment"
+                    detail = text(item.get("description") or item.get("type") or item.get("size"))
                 else:
-                    st.write(str(attachment))
+                    name, detail = text(item), ""
+                st.markdown(
+                    f"<div style='display:flex;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid #E2E8F0;border-radius:8px;margin-bottom:7px;'><span>📎 <strong>{html.escape(name)}</strong></span><span style='color:#64748B;font-size:11px;'>{html.escape(detail)}</span></div>",
+                    unsafe_allow_html=True,
+                )
         else:
-            st.caption("No attachments are currently linked to this case.")
+            st.info("No attachments are recorded for this case.")
 
-        uploaded = st.file_uploader(
-            "Add attachment",
-            key=f"case_attachment_{task_id}",
-            type=None,
+    # ------------------------------------------------------------------
+    # ACTIONS / TRANSFER / HISTORY — ORIGINAL FUNCTIONS
+    # ------------------------------------------------------------------
+    with tab_actions:
+        st.markdown("### Transfer Case")
+        stations = list(STATIONS.keys())
+        current = station_name(task.get("department"))
+        destination = st.selectbox(
+            "Destination",
+            stations,
+            index=(stations.index(current) if current in stations else 0),
+            key=f"case_transfer_destination_{task_id}",
         )
-        if uploaded is not None and st.button("Add Attachment Record", use_container_width=True, key=f"save_attachment_{task_id}"):
-            now = utc_now()
-            attachments.append({"name": uploaded.name, "size": uploaded.size, "uploaded_by": user_name, "timestamp": now, "type": uploaded.type or "application/octet-stream"})
-            history = list(task.get("history") or [])
-            history.append({"action": f"Attachment added: {uploaded.name}", "timestamp": now, "user": user_name, "type": "Attachments"})
-            col(TASKS_COLLECTION).update_one({"_id": task["_id"]}, {"$set": {"attachments": attachments[-50:], "history": history[-50:], "last_update": now}})
-            clear_task_cache()
-            st.success("Attachment record added.")
-            st.rerun()
+        st.caption("Duration resets when the case enters the destination station.")
 
-    # -------------------------
-    # INTEGRATED KNOWLEDGE BASE
-    # -------------------------
-
-    auto_query = case_kb_query(task)
-
-    st.markdown(
-        f"""
-        <div class="kb-panel">
-            <div class="kb-panel-header">
-                <div class="kb-title">Knowledge Base</div>
-                <span class="kb-auto-badge">CASE-MATCHED</span>
-            </div>
-            <div class="kb-subtitle">
-                Recommended SOPs, troubleshooting guidance and knowledge
-                articles based on this case.
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    kb_query = st.text_area(
-        "Ask Knowledge Base",
-        value=auto_query,
-        placeholder="Ask a question about this case, troubleshooting, licensing, devices or SOPs...",
-        key=f"kb_query_{task_id}",
-        height=82,
-        label_visibility="collapsed",
-    )
-
-    kb1, kb2 = st.columns([2, 1])
-
-    with kb1:
-        search_clicked = st.button(
-            "✨ Ask Knowledge Base",
+        if st.button(
+            f"Transfer to {station_name(destination)}",
             type="primary",
             use_container_width=True,
-            key=f"kb_search_{task_id}",
-        )
+            key=f"case_transfer_{task_id}",
+        ):
+            if destination == current:
+                st.warning("Choose a different station.")
+            elif transfer_case(task, destination):
+                st.success(f"Case transferred to {station_name(destination)}.")
+                st.session_state["show_case"] = False
+                st.session_state["selected_case_id"] = None
+                st.rerun()
+            else:
+                st.error("Unable to transfer case.")
 
-    with kb2:
-        case_match_clicked = st.button(
-            "↻ Case Match",
-            use_container_width=True,
-            key=f"kb_case_match_{task_id}",
-        )
+        history = task.get("history") or []
+        if history:
+            st.markdown("### Activity History")
+            for event in reversed(history[-15:]):
+                if isinstance(event, dict):
+                    action = text(event.get("action") or event.get("event") or event.get("details")) or "Case updated"
+                    stamp = dt_display(event.get("timestamp"))
+                else:
+                    action, stamp = text(event), ""
+                st.markdown(f"**• {html.escape(action)}**")
+                if stamp:
+                    st.caption(stamp)
 
-    if search_clicked:
-        active_query = text(kb_query).strip() or auto_query
-        results = search_kb(f"{active_query} {auto_query}", limit=5)
-    elif case_match_clicked:
-        results = search_kb(auto_query, limit=5)
-    else:
-        results = search_kb(auto_query, limit=5)
-
-    if results:
-
-        best = results[0]
-
-        st.markdown(
-            f"""
-            <div class="kb-answer-card best">
-                <div class="kb-answer-label">Best Match</div>
-                <div class="kb-result-title">
-                    {html.escape(text(best.get("title")) or "Knowledge Base Article")}
-                </div>
-                <div class="kb-result-text">
-                    {html.escape(kb_content(best))}
-                </div>
-                <div class="kb-meta">
-                    <span class="kb-source-pill">
-                        {html.escape(text(best.get("category")) or "Knowledge Base")}
-                    </span>
-                    <span class="kb-source-pill">
-                        {html.escape(text(best.get("source_type")) or "KB")}
-                    </span>
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        for index, result in enumerate(results[1:], start=2):
-
-            content = kb_content(result)
-            if len(content) > 450:
-                content = content[:450].rstrip() + "…"
-
-            st.markdown(
-                f"""
-                <div class="kb-answer-card">
-                    <div class="kb-result-title">
-                        {index}. {html.escape(text(result.get("title")) or "Knowledge Base Article")}
-                    </div>
-                    <div class="kb-result-text">
-                        {html.escape(content)}
-                    </div>
-                    <div class="kb-meta">
-                        <span class="kb-source-pill">
-                            {html.escape(text(result.get("category")) or "Knowledge Base")}
-                        </span>
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-    else:
-
-        st.markdown(
-            f"""
-            <div class="kb-answer-card">
-                <div class="kb-result-title">No matching article found</div>
-                <div class="kb-empty">
-                    Try a shorter issue description or a product/SOP keyword.
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-
-    # -------------------------
-    # ASK KNOWLEDGE BASE
-    # -------------------------
-
-    ai_question_key = f"local_ai_question_{task_id}"
-    ai_result_key = f"local_ai_result_{task_id}"
-
-    if ai_question_key not in st.session_state:
-        st.session_state[ai_question_key] = "What are the recommended next steps for this case?"
-
-    st.markdown(
-        """
-        <div class="kb-panel">
-            <div class="kb-panel-header">
-                <div>
-                    <div class="kb-title">✨ Ask Knowledge Base</div>
-                    <div class="kb-subtitle">
-                        Ask a question about this case. Caseflow searches the local Knowledge Base and SOPs;
-                        no OpenAI API key is required.
-                    </div>
-                </div>
-                <span class="kb-auto-badge">CASE-AWARE</span>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    ai_question = st.text_area(
-        "Ask the Knowledge Base",
-        key=ai_question_key,
-        height=90,
-        placeholder="Example: What should I verify before escalating this case?",
-        label_visibility="collapsed",
-    )
-
-    ask_col, clear_col = st.columns([3, 1])
-
-    with ask_col:
-        ask_ai_clicked = st.button(
-            "✨ Ask Knowledge Base",
-            type="primary",
-            use_container_width=True,
-            key=f"ask_local_kb_{task_id}",
-        )
-
-    with clear_col:
-        clear_ai_clicked = st.button(
-            "Clear",
-            use_container_width=True,
-            key=f"clear_local_kb_{task_id}",
-        )
-
-    if clear_ai_clicked:
-        st.session_state.pop(ai_result_key, None)
-        st.session_state[ai_question_key] = ""
-        st.rerun()
-
-    if ask_ai_clicked:
-        question = text(ai_question).strip()
-        retrieval_query = " ".join(x for x in [question, case_kb_query(task)] if x)
-        retrieved = search_kb(retrieval_query, limit=6)
-        st.session_state[ai_result_key] = local_kb_ai_answer(question, task, retrieved)
-
-    ai_result = st.session_state.get(ai_result_key)
-
-    if ai_result:
-        answer_html = html.escape(text(ai_result.get("answer"))).replace("\n", "<br>")
-        st.markdown(
-            f"""
-            <div class="kb-answer-card best">
-                <div class="kb-answer-label">Knowledge Base Answer · {html.escape(text(ai_result.get("confidence")))}</div>
-                <div class="kb-result-text">{answer_html}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        sources = ai_result.get("sources", [])
-        if sources:
-            pills = "".join(
-                f'<span class="kb-source-pill">{html.escape(text(doc.get("title")) or "KB Article")}</span>'
-                for doc in sources[:6]
-            )
-            st.markdown(
-                f'<div class="kb-meta" style="margin-top:8px"><strong>Sources used:</strong> {pills}</div>',
-                unsafe_allow_html=True,
-            )
-
-
-    # -------------------------
-    # Transfer
-    # -------------------------
-
-    st.markdown("### Transfer Case")
-
-    stations = list(STATIONS.keys())
-    current = station
-
-    destination = st.selectbox(
-        "Destination",
-        stations,
-        index=stations.index(current) if current in stations else 0,
-        key=f"destination_{task_id}",
-    )
-
-    st.caption("Duration resets when the case enters the destination station.")
-
-    if st.button(
-        f"Transfer to {destination}",
-        type="primary",
-        use_container_width=True,
-        key=f"transfer_{task_id}",
-    ):
-
-        if destination == current:
-            st.warning("Choose a different station.")
-        elif transfer_case(task, destination):
-            st.success(f"Case transferred to {destination}.")
+        st.markdown("---")
+        if st.button("✕ Close Case Details", use_container_width=True, key=f"close_case_{task_id}"):
+            st.session_state["show_case"] = False
+            st.session_state["selected_case_id"] = None
             st.rerun()
-        else:
-            st.error("Unable to transfer case.")
-
-    # -------------------------
-    # History
-    # -------------------------
-
-    history = task.get("history", [])
-
-    if history:
-
-        st.markdown("### Activity History")
-
-        for event in reversed(history[-15:]):
-            st.write(f"• {text(event.get('action'))}")
-            st.caption(dt_display(event.get("timestamp")))
-
-    if st.button("Close", use_container_width=True, key=f"close_case_{task_id}"):
-        st.rerun()
-
-
-
-
-
-
-
 
 
 # ============================================================
@@ -5154,20 +4357,13 @@ def dashboard_fragment():
 
 
             with st.container(key=f"case_cell_{case_slug}_{task_id}"):
-                case_number = text(task.get("case_number")) or "—"
-
                 if st.button(
-                    case_number,
+                    text(task.get("case_number")),
                     key=f"case_{task_id}",
                     use_container_width=True,
-                    help="Click to open Case Details",
-                    type="secondary",
                 ):
-                    # IMPORTANT: Case number is the sole entry point to the
-                    # case-detail modal. The click occurs inside the live
-                    # dashboard fragment, so this opens the Streamlit dialog
-                    # only for the selected case and does not turn the detail
-                    # panel into an inline table row.
+                    # Open the dialog directly from the user's click.
+                    # There is no periodic dashboard rerun.
                     case_details(task_id)
 
 
