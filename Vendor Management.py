@@ -10,7 +10,7 @@ UI is designed to closely match the supplied dashboard reference:
 - Integrated live search bar
 - Five pastel station tiles
 - Borderless active-case table
-- Right-side case-detail dialog
+- Centered compact case-detail dialog
 - Settings control only (no alert bell / no profile)
 - Admin Settings supports Excel case import and vendor synchronization
 - Real-time duration using the user's browser clock
@@ -110,6 +110,8 @@ TASKS_COLLECTION = "Tasks_Collection"
 VENDOR_COLLECTION = "Vendor_Collection"
 ACCESS_COLLECTION = "Access_Collection"
 ALERT_COLLECTION = "Alert_Collection"
+KB_COLLECTION = "Knowledge_Base_Collection"
+SOP_COLLECTION = "SOP_Collection"
 
 
 # Performance tuning: short cache keeps station switches responsive while preserving near-real-time data.
@@ -2135,10 +2137,10 @@ div[data-testid="stDialog"] > div {
     right: auto !important;
     bottom: auto !important;
     transform: translate(-50%, -50%) !important;
-    width: min(1500px, calc(100vw - 32px)) !important;
-    max-width: min(1500px, calc(100vw - 32px)) !important;
-    height: min(920px, calc(100vh - 32px)) !important;
-    max-height: calc(100vh - 32px) !important;
+    width: min(1180px, calc(100vw - 48px)) !important;
+    max-width: min(1180px, calc(100vw - 48px)) !important;
+    height: min(760px, calc(100vh - 48px)) !important;
+    max-height: calc(100vh - 48px) !important;
     margin: 0 !important;
     border-radius: 12px !important;
     overflow: hidden !important;
@@ -2248,9 +2250,31 @@ div[data-testid="stDialog"] [aria-selected="true"] { color:#0879c9 !important; f
 .attachment-row { display:flex; justify-content:space-between; gap:12px; padding:10px 12px; border:1px solid #e2e8f0; border-radius:7px; margin-bottom:7px; color:#172b52; font-size:12px; }
 .attachment-row > span:last-child { color:#64748b; font-size:10px; }
 .case-detail-footer { height:3px; }
+.kb-inline-card { overflow:hidden; }
+.kb-mini-best { background:#f3f8ff; border:1px solid #bcd8f2; border-left:4px solid #0879c9; border-radius:7px; padding:9px; margin:5px 0 7px; }
+.kb-mini-label { color:#0879c9; font-size:9px; font-weight:850; letter-spacing:.5px; }
+.kb-mini-title { color:#102041; font-size:12px; font-weight:800; margin-top:3px; line-height:1.25; }
+.kb-mini-text { color:#334155; font-size:10.5px; line-height:1.35; margin-top:4px; }
+.kb-mini-meta { color:#64748b; font-size:9px; margin-top:6px; }
+.kb-mini-result { display:flex; flex-direction:column; gap:3px; padding:7px 8px; border:1px solid #e2e8f0; border-radius:6px; margin-top:5px; background:#fff; }
+.kb-mini-result strong { color:#172b52; font-size:10.5px; }
+.kb-mini-result span { color:#64748b; font-size:9.5px; line-height:1.3; }
+.kb-panel{background:#f7f9fc;border:1px solid #e3e9f1;border-radius:10px;padding:12px;margin:6px 0 9px}
+.kb-panel-header{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.kb-title{color:#122442;font-size:16px;font-weight:850}
+.kb-subtitle{color:#64748b;font-size:10.5px;line-height:1.4;margin-top:3px}
+.kb-auto-badge{background:#e9f5ff;color:#0879c9;border-radius:999px;padding:4px 7px;font-size:9px;font-weight:800}
+.kb-answer-card{background:#fff;border:1px solid #dce5ef;border-radius:8px;padding:10px;margin-top:8px}
+.kb-answer-card.best{border:1.5px solid #0879c9;box-shadow:0 3px 12px rgba(8,121,201,.07)}
+.kb-answer-label{color:#0879c9;font-size:9px;font-weight:850;letter-spacing:.35px}
+.kb-result-title{color:#102041;font-size:12px;font-weight:800;margin-top:3px}
+.kb-result-text{color:#334155;font-size:10.5px;line-height:1.4;margin-top:4px}
+.kb-meta{margin-top:6px;color:#64748b;font-size:9px}
+.kb-source-pill{display:inline-block;background:#edf2f8;color:#5d6c82;border-radius:10px;padding:3px 7px;font-size:9px;font-weight:750;margin-right:4px}
+
 
 @media (max-width: 1100px) {
-    div[data-testid="stDialog"] > div { width:calc(100vw - 20px) !important; max-width:calc(100vw - 20px) !important; height:calc(100vh - 20px) !important; max-height:calc(100vh - 20px) !important; }
+    div[data-testid="stDialog"] > div { width:calc(100vw - 24px) !important; max-width:calc(100vw - 24px) !important; height:calc(100vh - 24px) !important; max-height:calc(100vh - 24px) !important; }
     .case-detail-title-row { flex-direction:column; }
     .case-detail-timing { min-width:0; width:100%; }
     .case-summary-strip { grid-template-columns:repeat(3,1fr); }
@@ -3824,6 +3848,123 @@ if st.session_state["show_alerts"]:
 
 
 
+# ============================================================
+# INTEGRATED KNOWLEDGE BASE — local MongoDB retrieval, no API key required
+# ============================================================
+def kb_text(doc):
+    fields = [doc.get("title"), doc.get("subject"), doc.get("question"),
+              doc.get("keywords"), doc.get("category"), doc.get("answer"),
+              doc.get("content"), doc.get("body"), doc.get("summary"),
+              doc.get("resolution"), doc.get("sop")]
+    parts = []
+    for value in fields:
+        if isinstance(value, list):
+            parts.extend(text(x) for x in value)
+        elif isinstance(value, dict):
+            parts.extend(text(x) for x in value.values())
+        else:
+            parts.append(text(value))
+    return " ".join(x for x in parts if x).lower()
+
+
+def kb_content(doc):
+    for key in ["answer", "content", "body", "resolution", "summary", "description", "sop"]:
+        if doc.get(key):
+            return text(doc.get(key))
+    return "No detailed answer was provided in this article."
+
+
+def kb_score(query, doc):
+    words = {x.strip(".,:;!?()[]{}").lower() for x in text(query).split()
+             if len(x.strip(".,:;!?()[]{}")) >= 3}
+    if not words:
+        return 0
+    haystack = kb_text(doc)
+    title = text(doc.get("title")).lower()
+    category = text(doc.get("category")).lower()
+    score = sum(1 for word in words if word in haystack)
+    score += 4 if any(word in title for word in words) else 0
+    score += 2 if any(word in category for word in words) else 0
+    keywords = doc.get("keywords", [])
+    if isinstance(keywords, list):
+        score += sum(3 for keyword in keywords if any(word in text(keyword).lower() for word in words))
+    return score
+
+
+def load_kb_documents():
+    docs = []
+    for collection_name in [KB_COLLECTION, SOP_COLLECTION]:
+        try:
+            docs.extend(list(col(collection_name).find({}, {
+                "_id": 1, "title": 1, "subject": 1, "question": 1,
+                "keywords": 1, "category": 1, "answer": 1, "content": 1,
+                "body": 1, "summary": 1, "description": 1, "resolution": 1,
+                "sop": 1, "source": 1, "source_type": 1, "url": 1,
+            }).limit(1000)))
+        except Exception:
+            pass
+    return docs
+
+
+def search_kb(query, limit=5):
+    ranked = [(kb_score(query, doc), doc) for doc in load_kb_documents() if kb_score(query, doc) > 0]
+    ranked.sort(key=lambda x: -x[0])
+    return [doc for _, doc in ranked[:limit]]
+
+
+def case_kb_query(task):
+    return " ".join(x for x in [
+        text(task.get("subject")), text(task.get("issue")),
+        station_name(task.get("department")), text(task.get("account_name")),
+        text(task.get("product")), text(task.get("category")),
+    ] if x)
+
+
+def seed_demo_kb():
+    try:
+        if col(KB_COLLECTION).count_documents({}) or col(SOP_COLLECTION).count_documents({}):
+            return
+        docs = [
+            {"title":"HPE ProLiant / iLO Alert Troubleshooting","category":"HPE Compute","keywords":["HPE","ProLiant","iLO","server","alert","hardware"],"answer":"Verify the server model and serial number, capture the iLO alert code, review hardware health and recent events, and confirm whether the issue is recoverable remotely before escalation or onsite dispatch.","source":"HPE Caseflow Knowledge Base","source_type":"demo"},
+            {"title":"Aruba Central Device Offline","category":"Aruba Networking","keywords":["Aruba","Central","offline","AP","switch","network"],"answer":"Confirm the device serial number, site, last-seen time and connectivity path. Check Aruba Central status and the local uplink/power state. Document the exact error and last successful contact before escalation.","source":"HPE Caseflow Knowledge Base","source_type":"demo"},
+            {"title":"HPE Licensing Portal Access","category":"HPE Licensing","keywords":["HPE","licensing","portal","access","entitlement","login"],"answer":"Validate the customer account, entitlement and exact portal error. Capture the affected user/email and licensing reference. If entitlement is valid but access remains blocked, follow the approved licensing/account-access escalation path.","source":"HPE Caseflow Knowledge Base","source_type":"demo"},
+            {"title":"Aruba ClearPass Endpoint Profiling","category":"Aruba ClearPass","keywords":["Aruba","ClearPass","endpoint","profiling","policy","authentication"],"answer":"Capture the endpoint identifier, authentication method, enforcement profile and timestamp. Review the ClearPass request/event details and confirm whether the endpoint is being classified correctly before changing policy.","source":"HPE Caseflow Knowledge Base","source_type":"demo"},
+            {"title":"HPE Alletra Storage Capacity Warning","category":"HPE Storage","keywords":["HPE","Alletra","storage","capacity","warning","array"],"answer":"Confirm the array/site, affected system and current capacity threshold. Capture the alert details and recent capacity trend. Follow the applicable storage monitoring and escalation SOP before making configuration changes.","source":"HPE Caseflow Knowledge Base","source_type":"demo"},
+            {"title":"Aruba CX Switch Onsite Support","category":"Aruba CX","keywords":["Aruba","CX","switch","onsite","replacement","technician"],"answer":"Confirm the switch model, serial number, site address, onsite contact, access requirements and symptoms. Verify whether remote troubleshooting has been completed and document the replacement/dispatch requirement.","source":"HPE Caseflow Knowledge Base","source_type":"demo"},
+        ]
+        col(KB_COLLECTION).insert_many(docs)
+    except Exception:
+        pass
+
+
+def local_kb_ai_answer(question, task, documents):
+    question = text(question).strip()
+    if not question:
+        return {"answer":"Please enter a question first.","sources":[],"confidence":"No question"}
+    if not documents:
+        return {"answer":"No matching Knowledge Base or SOP article was found. Try a product, issue, station, or troubleshooting keyword.","sources":[],"confidence":"No matching source"}
+    selected=[]; seen=set()
+    for doc in documents:
+        identity=text(doc.get("_id")) or text(doc.get("title")).lower()
+        if identity in seen: continue
+        seen.add(identity); selected.append(doc)
+        if len(selected)>=4: break
+    score=max([kb_score(f"{question} {case_kb_query(task)}", d) for d in selected] or [0])
+    confidence="High match" if score>=8 else "Good match" if score>=4 else "Related match"
+    best=selected[0]
+    parts=["### Recommended guidance", f"**{text(best.get('title')) or 'Knowledge Base Article'}**", "", kb_content(best)]
+    if len(selected)>1:
+        parts += ["", "### Additional relevant guidance"]
+        for doc in selected[1:3]:
+            c=kb_content(doc); c=c[:450].rstrip()+"…" if len(c)>450 else c
+            parts.append(f"- **{text(doc.get('title')) or 'Related Article'}:** {c}")
+    parts += ["", "### Verify before action", "Confirm the current case details, applicable policy or entitlement, required identifiers, and the latest approved SOP before escalating or taking an external action."]
+    return {"answer":"\n".join(parts),"sources":selected,"confidence":confidence}
+
+
+seed_demo_kb()
+
+
 @st.dialog("Case Details", width="large")
 def case_details(task_id):
     """Centered Case Details dialog.
@@ -3947,9 +4088,9 @@ def case_details(task_id):
         unsafe_allow_html=True,
     )
 
-    tab_info, tab_vendor, tab_comm, tab_attach = st.tabs([
+    tab_info, tab_kb, tab_comm, tab_attach = st.tabs([
         "ⓘ  Case Information",
-        "♧  Vendor Information",
+        "✦  Knowledge Base",
         "✉  Communication",
         "♧  Attachments",
     ])
@@ -3990,37 +4131,40 @@ def case_details(task_id):
             st.markdown("</div>", unsafe_allow_html=True)
 
         with middle:
-            st.markdown("<div class='case-card'>", unsafe_allow_html=True)
+            st.markdown("<div class='case-card kb-inline-card'>", unsafe_allow_html=True)
             st.markdown(
-                "<div class='case-card-heading'><span class='case-heading-icon'>▥</span>Vendor Information</div>",
+                "<div class='case-card-heading'><span class='case-heading-icon'>✦</span>Knowledge Base</div>",
                 unsafe_allow_html=True,
             )
-            st.markdown(f"<div class='vendor-brand'>{html.escape(vendor_name)}</div>", unsafe_allow_html=True)
-            vendor_rows = [
-                ("Primary Contact", vendor_contact or "—"),
-                ("Email", vendor_email or "—"),
-                ("Phone", vendor_phone or "—"),
-                ("Alternate Contact", text((vendor or {}).get("alternate_contact")) or "—"),
-                ("Alternate Email", text((vendor or {}).get("alternate_email")) or "—"),
-                ("Address", vendor_address or "—"),
-            ]
-            for label, value in vendor_rows:
+            auto_query = case_kb_query(task)
+            kb_query = st.text_input(
+                "Knowledge Base Search",
+                value=auto_query,
+                placeholder="Search HPE, Aruba, licensing, devices, troubleshooting...",
+                key=f"inline_kb_query_{task_id}",
+                label_visibility="collapsed",
+            )
+            kb_search, kb_match = st.columns(2)
+            with kb_search:
+                kb_clicked = st.button("✨ Ask", use_container_width=True, key=f"inline_kb_ask_{task_id}")
+            with kb_match:
+                match_clicked = st.button("↻ Match", use_container_width=True, key=f"inline_kb_match_{task_id}")
+            active_query = auto_query if match_clicked else (text(kb_query).strip() or auto_query)
+            results = search_kb(f"{active_query} {auto_query}", limit=3)
+            if results:
+                best = results[0]
+                content = kb_content(best)
+                if len(content) > 420:
+                    content = content[:420].rstrip() + "…"
                 st.markdown(
-                    f"<div class='case-info-row vendor-row'><span>{html.escape(label)}</span><strong>{html.escape(str(value))}</strong></div>",
+                    f"<div class='kb-mini-best'><div class='kb-mini-label'>BEST MATCH</div><div class='kb-mini-title'>{html.escape(text(best.get('title')) or 'Knowledge Base Article')}</div><div class='kb-mini-text'>{html.escape(content)}</div><div class='kb-mini-meta'>{html.escape(text(best.get('category')) or 'Knowledge Base')}</div></div>",
                     unsafe_allow_html=True,
                 )
-
-            st.markdown(
-                """
-                <div class="quick-actions">
-                    <div class="quick-actions-title">＋ Quick Actions</div>
-                    <div class="quick-actions-grid">
-                        <div>✉ Copy Email</div><div>☎ Copy Phone</div><div>▣ View Record</div>
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+                for result in results[1:]:
+                    c=kb_content(result); c=c[:180].rstrip()+"…" if len(c)>180 else c
+                    st.markdown(f"<div class='kb-mini-result'><strong>{html.escape(text(result.get('title')) or 'Related Article')}</strong><span>{html.escape(c)}</span></div>", unsafe_allow_html=True)
+            else:
+                st.caption("No matching Knowledge Base article found.")
             st.markdown("</div>", unsafe_allow_html=True)
 
         with right:
@@ -4107,24 +4251,54 @@ def case_details(task_id):
         st.markdown("</div>", unsafe_allow_html=True)
 
     # ------------------------------------------------------------------
-    # VENDOR TAB — preserves original vendor lookup data.
+    # INTEGRATED KNOWLEDGE BASE — replaces the vendor tab in Case Details.
     # ------------------------------------------------------------------
-    with tab_vendor:
-        st.markdown("### Vendor Information")
-        if vendor:
-            items = {k: v for k, v in vendor.items() if k not in {"_id", "vendor_key", "synced_at"} and text(v)}
-            if items:
-                cols = st.columns(2)
-                for i, (key, value) in enumerate(items.items()):
-                    with cols[i % 2]:
-                        st.markdown(
-                            f"<div class='case-info-row'><span>{html.escape(key.replace('_',' ').title())}</span><strong>{html.escape(text(value))}</strong></div>",
-                            unsafe_allow_html=True,
-                        )
-            else:
-                st.info("The synchronized vendor record is empty.")
+    with tab_kb:
+        st.markdown("### ✦ Integrated Knowledge Base")
+        st.caption("Case-aware HPE and Aruba guidance from the local Knowledge Base and SOP collections. No OpenAI API key is required.")
+
+        auto_query = case_kb_query(task)
+        kb_query = st.text_area(
+            "Ask Knowledge Base",
+            value=auto_query,
+            placeholder="Ask about this case, licensing, HPE devices, Aruba networking, troubleshooting or SOPs...",
+            key=f"kb_query_{task_id}",
+            height=72,
+            label_visibility="collapsed",
+        )
+        kb1, kb2 = st.columns([2,1])
+        with kb1:
+            search_clicked = st.button("✨ Ask Knowledge Base", type="primary", use_container_width=True, key=f"kb_search_{task_id}")
+        with kb2:
+            case_match_clicked = st.button("↻ Case Match", use_container_width=True, key=f"kb_case_match_{task_id}")
+
+        active_query = auto_query if case_match_clicked else (text(kb_query).strip() or auto_query)
+        results = search_kb(f"{active_query} {auto_query}" if search_clicked else active_query, limit=5)
+        if results:
+            best=results[0]
+            st.markdown(f"<div class='kb-answer-card best'><div class='kb-answer-label'>BEST MATCH</div><div class='kb-result-title'>{html.escape(text(best.get('title')) or 'Knowledge Base Article')}</div><div class='kb-result-text'>{html.escape(kb_content(best))}</div><div class='kb-meta'><span class='kb-source-pill'>{html.escape(text(best.get('category')) or 'Knowledge Base')}</span></div></div>", unsafe_allow_html=True)
+            for index,result in enumerate(results[1:],start=2):
+                c=kb_content(result); c=c[:420].rstrip()+"…" if len(c)>420 else c
+                st.markdown(f"<div class='kb-answer-card'><div class='kb-result-title'>{index}. {html.escape(text(result.get('title')) or 'Knowledge Base Article')}</div><div class='kb-result-text'>{html.escape(c)}</div><div class='kb-meta'><span class='kb-source-pill'>{html.escape(text(result.get('category')) or 'Knowledge Base')}</span></div></div>", unsafe_allow_html=True)
         else:
-            st.info("No matching vendor information found. Upload the vendor Excel file from Settings.")
+            st.info("No matching Knowledge Base article found.")
+
+        question_key=f"kb_ai_question_{task_id}"
+        result_key=f"kb_ai_result_{task_id}"
+        if question_key not in st.session_state:
+            st.session_state[question_key]="What are the recommended next steps for this case?"
+        st.markdown("### ✨ Ask Knowledge Base")
+        question=st.text_area("Question", key=question_key, height=70, label_visibility="collapsed", placeholder="Example: What should I verify before escalating this case?")
+        if st.button("Get Recommended Guidance", type="primary", use_container_width=True, key=f"kb_get_guidance_{task_id}"):
+            retrieved=search_kb(f"{text(question)} {auto_query}", limit=6)
+            st.session_state[result_key]=local_kb_ai_answer(question, task, retrieved)
+        ai_result=st.session_state.get(result_key)
+        if ai_result:
+            st.markdown(f"<div class='kb-answer-card best'><div class='kb-answer-label'>KNOWLEDGE BASE ANSWER · {html.escape(text(ai_result.get('confidence')))}</div><div class='kb-result-text'>{html.escape(text(ai_result.get('answer'))).replace(chr(10),'<br>')}</div></div>", unsafe_allow_html=True)
+            sources=ai_result.get('sources',[])
+            if sources:
+                pills=''.join(f"<span class='kb-source-pill'>{html.escape(text(d.get('title')) or 'KB Article')}</span>" for d in sources[:6])
+                st.markdown(f"<div class='kb-meta'><strong>Sources used:</strong> {pills}</div>", unsafe_allow_html=True)
 
     # ------------------------------------------------------------------
     # COMMUNICATION — original stored records only.
