@@ -2655,45 +2655,45 @@ def duration_string(seconds):
 
 MOCK_SUBJECTS = {
     "CARE": [
-        "HPE ProLiant DL380 Gen11 iLO alert",
-        "Aruba AP-515 client connectivity issue",
-        "HPE Alletra storage capacity warning",
-        "Aruba Central device showing offline",
-        "HPE StoreEasy file access issue",
+        "RMA request - HPE ProLiant DL380 Gen11 system board",
+        "RMA request - Aruba AP-515 intermittent connectivity",
+        "RMA request - HPE Alletra failed storage component",
+        "RMA request - Aruba Central device hardware failure",
+        "RMA request - HPE StoreEasy storage controller fault",
     ],
     "ARCH": [
-        "HPE support contract record retrieval",
-        "Aruba Central audit export retrieval",
-        "HPE licensing entitlement archive request",
-        "ArubaOS-CX configuration archive request",
-        "HPE warranty and support document retrieval",
+        "RMA documentation request - HPE ProLiant replacement",
+        "RMA documentation request - Aruba AP-515 replacement",
+        "RMA entitlement verification - HPE Alletra",
+        "RMA configuration record - ArubaOS-CX switch",
+        "RMA warranty validation - HPE ProLiant",
     ],
     "PET": [
-        "Aruba ClearPass endpoint profiling issue",
-        "HPE OneView server profile request",
-        "Aruba Central group configuration request",
-        "HPE iLO user access issue",
-        "Aruba switch port policy request",
+        "RMA request - Aruba ClearPass appliance fault",
+        "RMA request - HPE OneView managed server hardware",
+        "RMA request - Aruba Central managed access point",
+        "RMA request - HPE iLO server hardware failure",
+        "RMA request - Aruba CX switch port hardware fault",
     ],
     "SUPPLY CHAIN": [
-        "HPE ProLiant shipment not received",
-        "Aruba CX switch purchase order mismatch",
-        "HPE storage delivery delay",
-        "Aruba AP inventory discrepancy",
-        "HPE replacement part fulfillment request",
+        "RMA replacement shipment - HPE ProLiant",
+        "RMA replacement shipment - Aruba CX switch",
+        "RMA replacement shipment - HPE Alletra storage",
+        "RMA replacement shipment - Aruba AP",
+        "RMA spare-part replacement - HPE server",
     ],
     "ONSITE": [
-        "HPE ProLiant server hardware replacement",
-        "Aruba CX switch onsite support",
-        "Aruba AP installation support",
-        "HPE Alletra storage installation",
-        "Aruba ClearPass appliance onsite support",
+        "RMA onsite replacement - HPE ProLiant server",
+        "RMA onsite replacement - Aruba CX switch",
+        "RMA onsite replacement - Aruba AP",
+        "RMA onsite replacement - HPE Alletra storage",
+        "RMA onsite replacement - Aruba ClearPass appliance",
     ],
 }
 
 MOCK_NAMES = ["John Dela Cruz", "Maria Santos", "Anna Reyes", "Carlo Banaag", "Liza Tan"]
 MOCK_ACCOUNTS = ["HPE Aruba Networking Demo Lab", "Enterprise Customer - BGC", "Enterprise Customer - Makati", "Enterprise Customer - Cavite", "Enterprise Customer - Quezon City"]
-MOCK_DATA_VERSION = 15
+MOCK_DATA_VERSION = 16
 
 # Rich demonstration information shown inside Case Details.
 MOCK_CASE_DETAILS = {
@@ -2734,39 +2734,39 @@ MOCK_CASE_DETAILS = {
 # retaining the complete contact, site, reference, resolution and notes fields.
 HPE_ARUBA_MOCK_CONTEXT = {
     "CARE": [
-        ("HPE ProLiant DL380 Gen11", "Server / iLO", "Verify iLO health, hardware event logs and current support entitlement before escalation."),
-        ("Aruba AP-515", "Wireless / Access Point", "Validate AP status in Aruba Central, client association details and RF/SSID configuration."),
-        ("HPE Alletra Storage", "Storage", "Check capacity, alerts and storage health in the approved management interface."),
-        ("Aruba Central", "Cloud Network Management", "Verify device connectivity, last-seen status and the applicable site/group configuration."),
-        ("HPE StoreEasy", "File Storage", "Validate storage connectivity, file-service status and the affected client path."),
+        ("HPE ProLiant DL380 Gen11", "Server / RMA", "Validate serial number, entitlement, failed component details and RMA eligibility before replacement authorization."),
+        ("Aruba AP-515", "Wireless / RMA", "Validate AP serial number, hardware symptoms, Aruba Central status and RMA eligibility."),
+        ("HPE Alletra Storage", "Storage / RMA", "Validate storage serial number, failed component, support entitlement and replacement part availability."),
+        ("Aruba Central", "Network / RMA", "Confirm affected device serial, hardware fault evidence and approved Aruba RMA workflow."),
+        ("HPE StoreEasy", "File Storage / RMA", "Validate controller or storage hardware fault, serial information and replacement entitlement."),
     ],
     "ARCH": [
-        ("HPE Support Contract", "Support / Entitlement Records", "Confirm the contract identifier, customer entitlement and applicable support period."),
-        ("Aruba Central", "Audit / Configuration Records", "Retrieve the applicable audit or configuration record and preserve the requested date range."),
-        ("HPE Licensing", "Licensing / Entitlement Records", "Validate the entitlement identifier, product family and historical licensing record."),
-        ("ArubaOS-CX", "Network Configuration Archive", "Confirm switch identity, configuration timestamp and the approved archive record."),
-        ("HPE Warranty", "Warranty / Support Records", "Validate the serial number and retrieve the applicable warranty or support documentation."),
+        ("HPE ProLiant", "RMA / Entitlement Records", "Confirm the RMA reference, serial number, support entitlement and approved replacement record."),
+        ("Aruba AP-515", "RMA / Documentation", "Retrieve the RMA record, serial number, failure evidence and approved replacement documentation."),
+        ("HPE Alletra", "RMA / Entitlement Records", "Validate entitlement, affected component, serial number and historical RMA documentation."),
+        ("ArubaOS-CX", "RMA / Configuration Records", "Preserve the switch identity, configuration record and hardware-failure evidence required for RMA."),
+        ("HPE ProLiant", "RMA / Warranty Records", "Validate serial number, warranty coverage and the supporting RMA documentation."),
     ],
     "PET": [
-        ("Aruba ClearPass", "Network Access Control", "Validate endpoint identity, profiling attributes and the applicable ClearPass policy."),
-        ("HPE OneView", "Server Management", "Confirm the server profile, enclosure context and the requested OneView configuration."),
-        ("Aruba Central", "Network Configuration", "Check the group configuration, device assignment and requested policy change."),
-        ("HPE iLO", "Server Remote Management", "Validate the affected iLO account, authorization and current security configuration."),
-        ("Aruba CX Switch", "Switch Port Policy", "Confirm the switch, port, VLAN and access policy before making a configuration change."),
+        ("Aruba ClearPass", "Network Access Control / RMA", "Validate appliance serial number, hardware fault evidence, entitlement and replacement requirements."),
+        ("HPE OneView", "Server Management / RMA", "Confirm the affected server, serial number, hardware failure and RMA eligibility."),
+        ("Aruba AP", "Wireless / RMA", "Check device identity, hardware symptoms, Aruba Central records and replacement eligibility."),
+        ("HPE iLO", "Server Remote Management / RMA", "Validate the affected server serial number, hardware event evidence and replacement entitlement."),
+        ("Aruba CX Switch", "Switch / RMA", "Confirm switch serial number, affected hardware, configuration evidence and RMA approval path."),
     ],
     "SUPPLY CHAIN": [
-        ("HPE ProLiant", "Enterprise Server Shipment", "Validate the purchase order, shipment reference, serial information and expected delivery date."),
-        ("Aruba CX Switch", "Network Hardware Procurement", "Compare the purchase order, requested model, quantity and supplier invoice."),
-        ("HPE Alletra Storage", "Enterprise Storage Shipment", "Confirm the shipment reference, destination, carrier status and revised ETA."),
-        ("Aruba AP", "Wireless Hardware Inventory", "Reconcile physical quantity, serial information and inventory records."),
-        ("HPE Replacement Part", "Spare Parts / Fulfillment", "Validate entitlement, replacement part number, shipment status and approved fulfillment route."),
+        ("HPE ProLiant", "Enterprise Server / RMA Shipment", "Validate approved RMA, replacement part number, shipment reference and expected delivery date."),
+        ("Aruba CX Switch", "Network Hardware / RMA Shipment", "Confirm RMA authorization, replacement model, quantity, shipment reference and carrier status."),
+        ("HPE Alletra Storage", "Enterprise Storage / RMA Shipment", "Confirm replacement component, RMA reference, destination, carrier status and ETA."),
+        ("Aruba AP", "Wireless Hardware / RMA", "Reconcile the approved RMA, replacement AP model, serial information and inventory record."),
+        ("HPE Replacement Part", "Spare Parts / RMA", "Validate entitlement, replacement part number, RMA approval and fulfillment status."),
     ],
     "ONSITE": [
-        ("HPE ProLiant Server", "Server / Field Services", "Validate entitlement, replacement part availability, serial number and technician dispatch window."),
-        ("Aruba CX Switch", "Network / Field Services", "Confirm topology, affected ports, configuration backup and site access before dispatch."),
-        ("Aruba AP", "Wireless / Installation", "Confirm mounting location, cabling, Aruba Central assignment and installation window."),
-        ("HPE Alletra Storage", "Storage / Field Services", "Validate hardware details, installation prerequisites, site readiness and technician skills."),
-        ("Aruba ClearPass", "Network Access Control / Field Services", "Confirm appliance details, network prerequisites, site access and implementation window."),
+        ("HPE ProLiant Server", "Server / Onsite RMA", "Validate RMA authorization, replacement part availability, serial number and technician dispatch window."),
+        ("Aruba CX Switch", "Network / Onsite RMA", "Confirm RMA approval, replacement hardware, configuration backup and site access before dispatch."),
+        ("Aruba AP", "Wireless / Onsite RMA", "Confirm RMA authorization, replacement AP, mounting location, cabling and installation window."),
+        ("HPE Alletra Storage", "Storage / Onsite RMA", "Validate replacement component, RMA approval, site readiness and technician requirements."),
+        ("Aruba ClearPass", "Network Access Control / Onsite RMA", "Confirm appliance RMA, replacement unit, network prerequisites, site access and implementation window."),
     ],
 }
 
@@ -2774,19 +2774,24 @@ for _station, _details in MOCK_CASE_DETAILS.items():
     for _i, _detail in enumerate(_details):
         _product, _category, _next_action = HPE_ARUBA_MOCK_CONTEXT[_station][_i]
         _subject = MOCK_SUBJECTS[_station][_i]
+        _detail["case_type"] = "RMA"
         _detail["product"] = _product
         _detail["category"] = _category
         _detail["issue"] = _subject
         _detail["description"] = (
-            f"HPE / Aruba demonstration case: {_subject}. "
-            f"Customer requires support for {_product}. "
-            "The case includes the customer contact, site, reference and device information needed for triage."
+            f"HPE / Aruba RMA case: {_subject}. "
+            f"Customer reports a hardware issue involving {_product} and is requesting return/replacement processing. "
+            "The case contains the customer contact, site, serial/reference and entitlement information needed for RMA triage."
         )
-        _detail["resolution"] = "Pending HPE / Aruba support validation and approved troubleshooting workflow."
+        _detail["resolution"] = "Pending RMA validation, entitlement verification and replacement authorization."
         _detail["next_action"] = _next_action
         _detail["notes"] = (
-            f"Mock HPE / Aruba case for {_station}. Verify the serial/reference details and consult the integrated Knowledge Base before escalation."
+            f"Mock HPE / Aruba RMA case for {_station}. Verify serial number, failure evidence, entitlement and RMA reference before escalation."
         )
+        _detail["rma_reason"] = "Suspected hardware failure / replacement required"
+        _detail["rma_status"] = "Pending validation"
+        _detail["return_status"] = "Return authorization not yet completed"
+        _detail["replacement_status"] = "Replacement pending approval"
 
 
 def reset_mock_case_durations():
@@ -2861,7 +2866,7 @@ def seed_mock_cases():
             vendor = "HPE Services" if i % 2 == 0 else "Aruba Networking Services"
 
             docs.append({
-                "case_number": f"{station[:3].upper()}-2026-{number:04d}",
+                "case_number": f"RMA-{station[:3].upper()}-2026-{number:04d}",
                 "subject": MOCK_SUBJECTS[station][i],
                 "priority": "Critical" if priority else ("Medium" if i == 1 else "Low"),
                 "account_priority": "Yes" if priority else "No",
@@ -2881,8 +2886,13 @@ def seed_mock_cases():
                 "is_mock": True,
                 "mock_data_version": MOCK_DATA_VERSION,
                 "source_type": "mock",
-                "case_type": detail["case_type"],
+                "case_type": "RMA",
                 "category": detail["category"],
+                "rma_number": f"RMA-{station[:3].upper()}-2026-{number:04d}",
+                "rma_reason": detail.get("rma_reason", "Suspected hardware failure / replacement required"),
+                "rma_status": detail.get("rma_status", "Pending validation"),
+                "return_status": detail.get("return_status", "Return authorization not yet completed"),
+                "replacement_status": detail.get("replacement_status", "Replacement pending approval"),
                 "contact_name": detail["contact_name"],
                 "contact_number": detail["contact_number"],
                 "email": detail["email"],
@@ -4362,6 +4372,11 @@ def case_details(task_id):
         ("Product / Service", text(task.get("product"))),
         ("Serial Number", text(task.get("serial_number"))),
         ("Reference Number", text(task.get("reference_number"))),
+        ("RMA Number", text(task.get("rma_number"))),
+        ("RMA Reason", text(task.get("rma_reason"))),
+        ("RMA Status", text(task.get("rma_status"))),
+        ("Return Status", text(task.get("return_status"))),
+        ("Replacement Status", text(task.get("replacement_status"))),
         ("Category", text(task.get("category"))),
     ]
 
