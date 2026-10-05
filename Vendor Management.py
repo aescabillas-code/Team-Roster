@@ -393,6 +393,12 @@ def station_name(value):
     return aliases.get(value, value)
 
 
+def station_display_name(value):
+    """UI label for a station; keep ONSITE as the internal key but show FULFILLMENT."""
+    canonical = station_name(value)
+    return "FULFILLMENT" if canonical == "ONSITE" else canonical
+
+
 
 
 # ============================================================
@@ -3928,6 +3934,23 @@ def append_case_checklist_item(task_id, station, label):
         return False
 
 
+def remove_case_checklist_item(task_id, station, index):
+    """Remove one checklist item from the selected station without changing other stations."""
+    station = station_name(station)
+    try:
+        from bson import ObjectId
+        task = col(TASKS_COLLECTION).find_one({"_id": ObjectId(str(task_id))})
+        if not task:
+            return False
+        items = get_case_station_checklist(task, station)
+        if index < 0 or index >= len(items):
+            return False
+        items.pop(index)
+        return save_case_station_checklist(task_id, station, items)
+    except Exception:
+        return False
+
+
 def reassign_case(task, assignee):
     assignee = text(assignee)
     current = station_name(task.get("department"))
@@ -4863,7 +4886,7 @@ def case_details(task_id):
 
     # Native Streamlit scroll container: this is the actual reliable scrollbar.
     # Header/summary remain above it; all tabs and their complete content scroll inside it.
-    with st.container(height=380, border=False):
+    with st.container(height=500, border=False):
         tab_info, tab_actions, tab_kb, tab_comm, tab_attach = st.tabs([
             "ⓘ  Case Information",
             "◷  Case Actions",
@@ -4962,7 +4985,7 @@ def case_details(task_id):
                 st.markdown("<div class='action-readonly-label'>Current Status</div>", unsafe_allow_html=True)
                 st.markdown(f"<div class='action-readonly-value'>{html.escape(status)}</div>", unsafe_allow_html=True)
                 st.markdown("<div class='action-readonly-label'>Current Station</div>", unsafe_allow_html=True)
-                st.markdown(f"<div class='action-readonly-value'>{html.escape(station_name(current))}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='action-readonly-value'>{html.escape(station_display_name(current))}</div>", unsafe_allow_html=True)
                 st.markdown("<div class='action-readonly-label'>Current Assignee</div>", unsafe_allow_html=True)
                 st.markdown(f"<div class='action-readonly-value'>{html.escape(assigned_to)}</div>", unsafe_allow_html=True)
 
@@ -4991,10 +5014,17 @@ def case_details(task_id):
                     "Transfer to station",
                     stations,
                     index=stations.index(current),
-                    format_func=station_name,
+                    format_func=station_display_name,
                     key=f"case_transfer_destination_{task_id}",
                 )
-                if st.button("Transfer Case", type="primary", use_container_width=True, key=f"case_transfer_{task_id}"):
+                if st.button(
+                    "Transfer Case",
+                    type="primary",
+                    use_container_width=True,
+                    key=f"case_transfer_{task_id}",
+                    disabled=bool(current_missing),
+                    help="Complete every checklist item for the current station to enable transfer." if current_missing else "Transfer the case to the selected station.",
+                ):
                     if destination == current:
                         st.warning("Choose a different station.")
                     elif current_missing:
@@ -5028,10 +5058,14 @@ def case_details(task_id):
                 for idx, station in enumerate(stations):
                     station_items = get_case_station_checklist(task, station)
                     complete = bool(station_items) and all(bool(x.get("checked")) for x in station_items)
-                    label = "✓" if complete else "•"
-                    button_label = f"{label} {station_name(station)}"
+                    button_label = station_display_name(station)
                     with status_cols[idx]:
-                        if st.button(button_label, use_container_width=True, key=f"select_action_station_{task_id}_{station}"):
+                        if st.button(
+                            button_label,
+                            use_container_width=True,
+                            key=f"select_action_station_{task_id}_{station}",
+                            type="primary" if selected_check_station == station else "secondary",
+                        ):
                             st.session_state[selected_key] = station
                             st.rerun()
 
@@ -5041,7 +5075,7 @@ def case_details(task_id):
                 complete_class = "complete" if not selected_missing else "pending"
                 complete_text = "✓ Complete" if not selected_missing else f"{len(selected_missing)} item(s) remaining"
                 st.markdown(
-                    f"<div class='case-checklist-wrap'><div class='case-checklist-title'>{html.escape(station_name(selected_check_station))} Required Tasks</div>"
+                    f"<div class='case-checklist-wrap'><div class='case-checklist-title'>{html.escape(station_display_name(selected_check_station))} Required Tasks</div>"
                     f"<div class='case-checklist-sub'>Every task below must be completed before this case can leave the current station.</div>"
                     f"<span class='case-checklist-status {complete_class}'>{html.escape(complete_text)}</span></div>",
                     unsafe_allow_html=True,
@@ -5051,18 +5085,32 @@ def case_details(task_id):
                     check_key = f"case_checklist_{task_id}_{selected_check_station}_{idx}"
                     if check_key not in st.session_state:
                         st.session_state[check_key] = bool(item.get("checked"))
-                    st.checkbox(
-                        item.get("item") or f"Checklist item {idx + 1}",
-                        key=check_key,
-                        on_change=set_case_checklist_item,
-                        args=(task_id, selected_check_station, idx, check_key),
-                    )
+
+                    item_col, remove_col = st.columns([1, 0.08], gap="small")
+                    with item_col:
+                        st.checkbox(
+                            item.get("item") or f"Checklist item {idx + 1}",
+                            key=check_key,
+                            on_change=set_case_checklist_item,
+                            args=(task_id, selected_check_station, idx, check_key),
+                        )
+                    with remove_col:
+                        if st.button(
+                            "×",
+                            key=f"case_checklist_remove_{task_id}_{selected_check_station}_{idx}",
+                            help="Remove this checklist item",
+                        ):
+                            if remove_case_checklist_item(task_id, selected_check_station, idx):
+                                st.session_state.pop(check_key, None)
+                                st.rerun()
+                            else:
+                                st.error("Unable to remove this checklist item.")
 
                 add_key = f"case_checklist_new_{task_id}_{selected_check_station}"
                 add_item = st.text_input(
                     "Add checklist item",
                     key=add_key,
-                    placeholder=f"Add a {station_name(selected_check_station)}-specific task...",
+                    placeholder=f"Add a {station_display_name(selected_check_station)}-specific task...",
                 )
                 if st.button("＋ Add Checklist Item", use_container_width=True, key=f"case_checklist_add_{task_id}_{selected_check_station}"):
                     if append_case_checklist_item(task_id, selected_check_station, add_item):
@@ -5140,9 +5188,9 @@ def case_details(task_id):
                         results[0],
                     )
                     st.markdown(
-                        f"<div class='kb-answer-card best'><div class='kb-answer-label'>BEST MATCH / RECOMMENDED SOP</div>"
-                        f"<div class='kb-result-title'>{html.escape(text(selected_doc.get('title')) or 'Knowledge Base Article')}</div>"
-                        f"<div class='kb-result-text'>{html.escape(text(selected_doc.get('category')) or 'HPE / Aruba Guidance')}</div></div>",
+                        f"<div class='kb-answer-card best kb-selected-sop'><div class='kb-answer-label'>BEST MATCH / RECOMMENDED SOP</div>"
+                        f"<div class='kb-selected-sop-title'>{html.escape(text(selected_doc.get('title')) or 'Knowledge Base Article')}</div>"
+                        f"<div class='kb-selected-sop-meta'>{html.escape(text(selected_doc.get('category')) or 'HPE / Aruba Guidance')}</div></div>",
                         unsafe_allow_html=True,
                     )
                     full_content = kb_content(selected_doc)
@@ -5176,8 +5224,124 @@ def case_details(task_id):
         # COMMUNICATION TAB
         # ---------------------------------------------------------------
         with tab_comm:
-            st.markdown("<div class='case-card'>", unsafe_allow_html=True)
+            st.markdown("<div class='case-card communication-workspace-card'>", unsafe_allow_html=True)
             st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>✉</span>Communication</div>", unsafe_allow_html=True)
+
+            # -----------------------------------------------------------
+            # WAR ROOM / MEETING RECORD
+            # -----------------------------------------------------------
+            st.markdown(
+                "<div class='meeting-panel'>"
+                "<div class='meeting-panel-title'>War Room / Meeting</div>"
+                "<div class='meeting-panel-sub'>Create a meeting record, add the war-room link, tag participants, record attendance and capture agreed actions.</div>"
+                "</div>",
+                unsafe_allow_html=True,
+            )
+
+            meeting_link_key = f"meeting_link_{task_id}"
+            meeting_tags_key = f"meeting_tags_{task_id}"
+            meeting_attendance_key = f"meeting_attendance_{task_id}"
+            meeting_actions_key = f"meeting_actions_{task_id}"
+
+            participant_options = list(dict.fromkeys(
+                CASEFLOW_ASSIGNEES
+                + ([assigned_to] if assigned_to and assigned_to not in CASEFLOW_ASSIGNEES else [])
+            ))
+
+            meeting_link = st.text_input(
+                "War Room / Meeting Link",
+                value="",
+                placeholder="Paste Teams, Meet, Zoom or other meeting link...",
+                key=meeting_link_key,
+            )
+            meeting_tagged = st.multiselect(
+                "Tag people",
+                participant_options,
+                default=[],
+                placeholder="Select people to tag in this meeting...",
+                key=meeting_tags_key,
+            )
+            meeting_attendance = st.multiselect(
+                "Attendance",
+                participant_options,
+                default=[],
+                placeholder="Select attendees who joined...",
+                key=meeting_attendance_key,
+            )
+            meeting_actions = st.text_area(
+                "Meeting actions / decisions",
+                placeholder="Record decisions, owners, next steps or commitments...",
+                height=90,
+                key=meeting_actions_key,
+            )
+
+            if st.button(
+                "＋ Record Meeting",
+                type="primary",
+                use_container_width=True,
+                key=f"record_meeting_{task_id}",
+            ):
+                if not text(meeting_link) and not meeting_tagged and not meeting_attendance and not text(meeting_actions):
+                    st.warning("Add at least a meeting link, tagged participant, attendee, or meeting action.")
+                else:
+                    try:
+                        from bson import ObjectId
+                        now = utc_now()
+                        meeting_record = {
+                            "timestamp": now,
+                            "meeting_link": text(meeting_link),
+                            "tagged_people": list(meeting_tagged),
+                            "attendance": list(meeting_attendance),
+                            "actions": text(meeting_actions),
+                            "recorded_by": assigned_to,
+                        }
+                        col(TASKS_COLLECTION).update_one(
+                            {"_id": ObjectId(str(task_id))},
+                            {
+                                "$push": {
+                                    "meetings": {
+                                        "$each": [meeting_record],
+                                        "$slice": -50,
+                                    }
+                                },
+                                "$set": {"last_update": now},
+                            },
+                        )
+                        clear_task_cache()
+                        st.success("Meeting record saved.")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Unable to save the meeting record: {exc}")
+
+            meetings = task.get("meetings") or []
+            if isinstance(meetings, list) and meetings:
+                st.markdown("<div class='communication-section-label'>Recorded Meetings</div>", unsafe_allow_html=True)
+                for meeting in reversed(meetings[-10:]):
+                    if not isinstance(meeting, dict):
+                        continue
+                    meeting_stamp = dt_display(meeting.get("timestamp")) or "—"
+                    tagged = meeting.get("tagged_people") or []
+                    attendance = meeting.get("attendance") or []
+                    actions = text(meeting.get("actions")) or "No actions recorded."
+                    link = text(meeting.get("meeting_link"))
+                    tagged_html = ", ".join(html.escape(text(x)) for x in tagged) or "None"
+                    attendance_html = ", ".join(html.escape(text(x)) for x in attendance) or "No attendance recorded."
+                    link_html = (
+                        f"<a href='{html.escape(link, quote=True)}' target='_blank' rel='noopener noreferrer'>Open war room</a>"
+                        if link else "No meeting link"
+                    )
+                    st.markdown(
+                        f"<div class='meeting-record'>"
+                        f"<div class='communication-head'><strong>Meeting</strong><span>{html.escape(meeting_stamp)}</span></div>"
+                        f"<div class='meeting-record-row'><b>War Room:</b> {link_html}</div>"
+                        f"<div class='meeting-record-row'><b>Tagged:</b> {tagged_html}</div>"
+                        f"<div class='meeting-record-row'><b>Attendance:</b> {attendance_html}</div>"
+                        f"<div class='meeting-record-row'><b>Actions / Decisions:</b> {html.escape(actions).replace(chr(10), '<br>')}</div>"
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+
+            st.markdown("<div class='communication-section-label'>Communication History</div>", unsafe_allow_html=True)
             communications = task.get("communications") or task.get("communication_history") or []
             if isinstance(communications, list) and communications:
                 for item in reversed(communications[-20:]):
@@ -5296,6 +5460,224 @@ div[data-testid="stDialog"] [data-testid="stVerticalBlock"]::-webkit-scrollbar-t
         max-height: calc(100vh - 12px) !important;
     }
 }
+
+/* ============================================================
+   CASE DETAILS VISUAL REFINEMENT — INTER / UNIFORM BODY TYPE
+   ============================================================ */
+div[data-testid="stDialog"],
+div[data-testid="stDialog"] * {
+    font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif !important;
+}
+
+/* Keep ordinary Case Details text on one consistent readable scale.
+   Headings, selected SOP title and status chips retain deliberate hierarchy. */
+div[data-testid="stDialog"] .case-card,
+div[data-testid="stDialog"] .case-card p,
+div[data-testid="stDialog"] .case-card label,
+div[data-testid="stDialog"] .case-card input,
+div[data-testid="stDialog"] .case-card textarea,
+div[data-testid="stDialog"] .case-card button,
+div[data-testid="stDialog"] .case-card [data-baseweb="select"] {
+    font-size:11px !important;
+}
+
+div[data-testid="stDialog"] .case-card-heading {
+    font-size:12px !important;
+    font-weight:800 !important;
+}
+
+div[data-testid="stDialog"] .action-readonly-label,
+div[data-testid="stDialog"] .case-checklist-sub,
+div[data-testid="stDialog"] .case-actions-note,
+div[data-testid="stDialog"] .communication-section-label {
+    font-size:10px !important;
+}
+
+div[data-testid="stDialog"] .action-readonly-value,
+div[data-testid="stDialog"] .case-checklist-title,
+div[data-testid="stDialog"] [data-testid="stCheckbox"] label,
+div[data-testid="stDialog"] .communication-card,
+div[data-testid="stDialog"] .meeting-record {
+    font-size:11px !important;
+    line-height:1.35 !important;
+}
+
+/* Station buttons: clean names only — no bullet/check prefix. */
+div[data-testid="stDialog"] [class*="st-key-select_action_station_"] button {
+    font-size:11px !important;
+    font-weight:650 !important;
+    min-height:34px !important;
+    height:34px !important;
+    padding:5px 10px !important;
+    border-radius:8px !important;
+}
+
+/* Checklist delete control. */
+div[data-testid="stDialog"] [class*="st-key-case_checklist_remove_"] button {
+    width:28px !important;
+    min-width:28px !important;
+    height:28px !important;
+    min-height:28px !important;
+    padding:0 !important;
+    border:0 !important;
+    background:transparent !important;
+    color:#94a3b8 !important;
+    font-size:18px !important;
+    font-weight:400 !important;
+}
+div[data-testid="stDialog"] [class*="st-key-case_checklist_remove_"] button:hover {
+    color:#dc3545 !important;
+    background:#fff1f2 !important;
+}
+
+/* Transfer stays visibly disabled until the CURRENT station is complete. */
+div[data-testid="stDialog"] [class*="st-key-case_transfer_"] button:disabled {
+    opacity:.42 !important;
+    cursor:not-allowed !important;
+}
+
+/* ============================================================
+   KNOWLEDGE BASE — CLEAN TWO-PANE READER
+   ============================================================ */
+div[data-testid="stDialog"] .kb-inline-card {
+    overflow:hidden !important;
+}
+
+div[data-testid="stDialog"] .kb-inline-card [class*="st-key-kb_tile_"] button {
+    font-size:10px !important;
+    line-height:1.25 !important;
+    min-height:34px !important;
+    padding:7px 9px !important;
+    border-radius:7px !important;
+    text-align:left !important;
+    white-space:normal !important;
+    overflow:hidden !important;
+}
+
+div[data-testid="stDialog"] .kb-selected-sop {
+    padding:12px 14px !important;
+    border-left:4px solid #0879c9 !important;
+    background:#f7fbff !important;
+}
+
+div[data-testid="stDialog"] .kb-selected-sop-title {
+    color:#102041 !important;
+    font-size:15px !important;
+    line-height:1.3 !important;
+    font-weight:800 !important;
+    margin-top:4px !important;
+}
+
+div[data-testid="stDialog"] .kb-selected-sop-meta {
+    color:#5f7189 !important;
+    font-size:10px !important;
+    line-height:1.3 !important;
+    margin-top:5px !important;
+}
+
+div[data-testid="stDialog"] .kb-full-sop {
+    padding:13px 15px !important;
+    background:#fff !important;
+    border:1px solid #dbe5ef !important;
+    border-radius:8px !important;
+}
+
+div[data-testid="stDialog"] .kb-full-sop-label {
+    font-size:9px !important;
+    font-weight:800 !important;
+    letter-spacing:.35px !important;
+    color:#0879c9 !important;
+    margin-bottom:7px !important;
+}
+
+div[data-testid="stDialog"] .kb-full-sop-text {
+    font-size:12px !important;
+    line-height:1.55 !important;
+    color:#263957 !important;
+}
+
+div[data-testid="stDialog"] .kb-recommendation .kb-full-sop-text {
+    font-size:11.5px !important;
+    line-height:1.5 !important;
+}
+
+/* ============================================================
+   COMMUNICATION / WAR ROOM
+   ============================================================ */
+div[data-testid="stDialog"] .meeting-panel {
+    background:#f5fbfa !important;
+    border:1px solid #cde8e3 !important;
+    border-left:4px solid #00a98f !important;
+    border-radius:8px !important;
+    padding:10px 12px !important;
+    margin-bottom:10px !important;
+}
+
+div[data-testid="stDialog"] .meeting-panel-title {
+    color:#0b625b !important;
+    font-size:12px !important;
+    font-weight:800 !important;
+}
+
+div[data-testid="stDialog"] .meeting-panel-sub {
+    color:#5d7180 !important;
+    font-size:10px !important;
+    line-height:1.4 !important;
+    margin-top:3px !important;
+}
+
+div[data-testid="stDialog"] .communication-section-label {
+    color:#102041 !important;
+    font-weight:800 !important;
+    margin:12px 0 6px !important;
+}
+
+div[data-testid="stDialog"] .meeting-record {
+    border:1px solid #dbe5ed !important;
+    border-radius:8px !important;
+    background:#fbfdff !important;
+    padding:10px 12px !important;
+    margin-bottom:8px !important;
+    color:#334155 !important;
+}
+
+div[data-testid="stDialog"] .meeting-record-row {
+    margin-top:5px !important;
+}
+
+div[data-testid="stDialog"] .meeting-record-row b {
+    color:#172b52 !important;
+}
+
+div[data-testid="stDialog"] .meeting-record a {
+    color:#0879c9 !important;
+    font-weight:700 !important;
+    text-decoration:none !important;
+}
+
+div[data-testid="stDialog"] .meeting-record a:hover {
+    text-decoration:underline !important;
+}
+
+/* Keep the single actual Case Details scroll surface sleek and transparent. */
+div[data-testid="stDialog"] [data-testid="stVerticalBlock"] {
+    scrollbar-width:thin !important;
+    scrollbar-color:rgba(71,85,105,.42) transparent !important;
+}
+div[data-testid="stDialog"] [data-testid="stVerticalBlock"]::-webkit-scrollbar {
+    width:5px !important;
+}
+div[data-testid="stDialog"] [data-testid="stVerticalBlock"]::-webkit-scrollbar-track {
+    background:transparent !important;
+}
+div[data-testid="stDialog"] [data-testid="stVerticalBlock"]::-webkit-scrollbar-thumb {
+    background:rgba(71,85,105,.42) !important;
+    border-radius:999px !important;
+}
+div[data-testid="stDialog"] [data-testid="stVerticalBlock"]::-webkit-scrollbar-thumb:hover {
+    background:rgba(30,41,59,.62) !important;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
