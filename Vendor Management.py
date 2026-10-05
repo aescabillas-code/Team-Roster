@@ -2528,6 +2528,157 @@ div[data-testid="stDialog"] [data-testid="stHorizontalBlock"] > div { min-width:
 
 
 # ============================================================
+# CASE DETAILS — FINAL RESPONSIVE / SCROLL / TYPOGRAPHY OVERRIDE
+# ============================================================
+st.markdown(r"""
+<style>
+/* One centered modal. No zoom hacks and no hidden scroll container. */
+div[data-testid="stDialog"] > div {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: translate(-50%, -50%) !important;
+    width: min(1260px, calc(100vw - 32px)) !important;
+    max-width: min(1260px, calc(100vw - 32px)) !important;
+    height: min(88vh, 820px) !important;
+    max-height: calc(100vh - 32px) !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+    border-radius: 12px !important;
+}
+
+/* The dialog content is the ONLY vertical scrolling surface. */
+div[data-testid="stDialog"] [data-testid="stDialogContent"] {
+    height: calc(100% - 52px) !important;
+    max-height: calc(100% - 52px) !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    padding: 0 10px 12px 10px !important;
+    scrollbar-width: auto !important;
+    scrollbar-color: #8fa3b9 #edf2f7 !important;
+}
+
+div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar {
+    width: 10px !important;
+    display: block !important;
+}
+
+div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar-track {
+    background: #edf2f7 !important;
+    border-radius: 8px !important;
+}
+
+div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar-thumb {
+    background: #8fa3b9 !important;
+    border-radius: 8px !important;
+    border: 2px solid #edf2f7 !important;
+}
+
+div[data-testid="stDialog"] [data-testid="stDialogContent"] > div {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    zoom: 1 !important;
+    box-sizing: border-box !important;
+}
+
+div[data-testid="stDialog"] > div > div {
+    overflow: hidden !important;
+}
+
+/* Compact typography matching the dashboard/reference. */
+div[data-testid="stDialog"] header {
+    min-height: 52px !important;
+    height: 52px !important;
+    padding: 5px 14px !important;
+}
+div[data-testid="stDialog"] header p {
+    font-size: 19px !important;
+    font-weight: 800 !important;
+}
+div[data-testid="stDialog"] .case-detail-hero {
+    margin: 0 0 5px 0 !important;
+    padding: 5px 6px 4px 6px !important;
+}
+div[data-testid="stDialog"] .case-detail-case-number { font-size: 16px !important; }
+div[data-testid="stDialog"] .case-detail-subject { font-size: 14px !important; margin-top: 3px !important; }
+div[data-testid="stDialog"] .case-detail-description { font-size: 9px !important; line-height: 1.25 !important; }
+div[data-testid="stDialog"] .case-detail-timing { min-width: 0 !important; }
+div[data-testid="stDialog"] .case-timing-item { padding: 1px 10px !important; }
+div[data-testid="stDialog"] .case-timing-item span { font-size: 8px !important; }
+div[data-testid="stDialog"] .case-timing-item strong { font-size: 9.5px !important; }
+div[data-testid="stDialog"] .case-timing-icon { font-size: 14px !important; }
+div[data-testid="stDialog"] .case-due-badge { font-size: 8px !important; padding: 3px 5px !important; }
+
+div[data-testid="stDialog"] .case-summary-strip {
+    padding: 3px 4px !important;
+    margin: 2px 0 5px !important;
+}
+div[data-testid="stDialog"] .case-summary-cell { padding: 1px 7px !important; }
+div[data-testid="stDialog"] .case-summary-cell > span { font-size: 8px !important; margin-bottom: 2px !important; }
+div[data-testid="stDialog"] .case-summary-cell > strong { font-size: 9px !important; }
+div[data-testid="stDialog"] .case-assignee-copy > span { font-size: 8px !important; }
+div[data-testid="stDialog"] .case-assignee-copy > strong { font-size: 9px !important; font-weight: 600 !important; line-height: 1.2 !important; white-space: normal !important; }
+div[data-testid="stDialog"] .case-avatar { width: 27px !important; height: 27px !important; font-size: 9px !important; }
+div[data-testid="stDialog"] .case-status-chip { padding: 2px 6px !important; font-size: 8px !important; }
+
+/* Keep tab labels compact and separate. */
+div[data-testid="stDialog"] [data-baseweb="tab-list"] { gap: 0 !important; }
+div[data-testid="stDialog"] [data-baseweb="tab"] { padding: 7px 10px !important; font-size: 9px !important; }
+
+/* Cards and information rows. */
+div[data-testid="stDialog"] .case-card { padding: 7px 9px !important; border-radius: 6px !important; }
+div[data-testid="stDialog"] .case-card-heading { font-size: 10px !important; padding-bottom: 5px !important; margin-bottom: 4px !important; gap: 5px !important; }
+div[data-testid="stDialog"] .case-heading-icon { font-size: 13px !important; }
+div[data-testid="stDialog"] .case-info-row { grid-template-columns: 100px minmax(0,1fr) !important; gap: 5px !important; padding: 3px 0 !important; line-height: 1.15 !important; }
+div[data-testid="stDialog"] .case-info-row span { font-size: 8px !important; }
+div[data-testid="stDialog"] .case-info-row strong { font-size: 8.5px !important; }
+div[data-testid="stDialog"] .action-readonly-label { font-size: 8px !important; margin-top: 3px !important; }
+div[data-testid="stDialog"] .action-readonly-value { font-size: 9px !important; padding: 5px 7px !important; }
+div[data-testid="stDialog"] .case-checklist-title { font-size: 9px !important; }
+div[data-testid="stDialog"] .case-checklist-sub { font-size: 7.5px !important; line-height: 1.2 !important; }
+div[data-testid="stDialog"] .case-checklist-status { font-size: 7.5px !important; padding: 2px 5px !important; }
+div[data-testid="stDialog"] [data-testid="stCheckbox"] label { font-size: 8px !important; line-height: 1.15 !important; }
+div[data-testid="stDialog"] input { font-size: 9px !important; }
+div[data-testid="stDialog"] button { font-size: 9px !important; }
+
+/* Two-column KB: clickable result tiles + complete SOP reader. */
+div[data-testid="stDialog"] .kb-full-sop,
+div[data-testid="stDialog"] .kb-recommendation {
+    margin-top: 7px !important;
+    padding: 8px !important;
+    background: #f7fbff !important;
+    border: 1px solid #d7e6f4 !important;
+    border-radius: 7px !important;
+}
+div[data-testid="stDialog"] .kb-full-sop-label { color:#0879c9 !important; font-size:8px !important; font-weight:850 !important; letter-spacing:.3px !important; margin-bottom:4px !important; }
+div[data-testid="stDialog"] .kb-full-sop-text { color:#334155 !important; font-size:8.5px !important; line-height:1.35 !important; word-break:break-word !important; }
+div[data-testid="stDialog"] [class*="st-key-kb_tile_"] { margin: 3px 0 !important; }
+div[data-testid="stDialog"] [class*="st-key-kb_tile_"] button { width:100% !important; min-height:34px !important; height:auto !important; padding:5px 7px !important; text-align:left !important; justify-content:flex-start !important; white-space:normal !important; line-height:1.2 !important; font-size:8.5px !important; }
+
+/* Never allow an inner horizontal block to overflow the modal. */
+div[data-testid="stDialog"] [data-testid="stHorizontalBlock"] { align-items:flex-start !important; }
+div[data-testid="stDialog"] [data-testid="stHorizontalBlock"] > div { min-width:0 !important; }
+
+@media (max-width: 900px) {
+    div[data-testid="stDialog"] > div { width:calc(100vw - 20px) !important; max-width:calc(100vw - 20px) !important; height:calc(100vh - 20px) !important; max-height:calc(100vh - 20px) !important; }
+    div[data-testid="stDialog"] .case-detail-title-row { flex-direction:column !important; }
+    div[data-testid="stDialog"] .case-detail-timing { width:100% !important; }
+    div[data-testid="stDialog"] .case-summary-strip { grid-template-columns:repeat(3,minmax(0,1fr)) !important; }
+}
+
+@media (max-width: 650px) {
+    div[data-testid="stDialog"] .case-summary-strip { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
+    div[data-testid="stDialog"] [data-baseweb="tab"] { padding:6px 7px !important; font-size:8px !important; }
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+# ============================================================
 # TASK ENGINE
 # ============================================================
 
@@ -4368,20 +4519,21 @@ seed_demo_kb()
 
 @st.dialog("Case Details", width="large")
 def case_details(task_id):
-    """Centered, scrollable Case Details dialog.
+    """Compact, centered Case Details modal using the original Caseflow data/actions.
 
-    Layout order inside Case Information is intentionally:
-        1. Case Information
-        2. Case Actions
-        3. Knowledge Base
+    Tabs are deliberately separated:
+      1. Case Information
+      2. Case Actions
+      3. Knowledge Base
+      4. Communication
+      5. Attachments
 
-    Knowledge Base is no longer a separate tab before Communication.  It is
-    the last panel in the main Case Information view so the agent can review
-    the case, complete the station checklist, and then use the matching SOP.
+    The original MongoDB task model, SLA engine, checklist gate, transfer logic,
+    reassignment logic, and local/shared KB retrieval remain the source of truth.
     """
     try:
         from bson import ObjectId
-        task = col(TASKS_COLLECTION).find_one({"_id": ObjectId(task_id)})
+        task = col(TASKS_COLLECTION).find_one({"_id": ObjectId(str(task_id))})
     except Exception:
         task = None
 
@@ -4395,7 +4547,7 @@ def case_details(task_id):
 
     state = calculate_state(task)
     status = text(task.get("status", "Open")) or "Open"
-    department = station_name(task.get("department"))
+    department = station_name(task.get("department")) or "CARE"
     case_number = text(task.get("case_number")) or "—"
     subject = text(task.get("subject")) or text(task.get("issue")) or "No subject available."
     description = text(task.get("description")) or text(task.get("issue")) or "No description available."
@@ -4430,7 +4582,7 @@ def case_details(task_id):
     vendor_email = text((vendor or {}).get("email")) or text(task.get("vendor_email"))
 
     # ---------------------------------------------------------------
-    # TOP SUMMARY
+    # COMPACT TOP SUMMARY
     # ---------------------------------------------------------------
     st.markdown(
         f"""
@@ -4469,12 +4621,13 @@ def case_details(task_id):
         unsafe_allow_html=True,
     )
 
+    initials = "".join(p[:1] for p in assigned_to.split()[:2]) or "—"
     st.markdown(
         f"""
         <div class="case-summary-strip">
             <div class="case-summary-cell case-assignee">
-                <div class="case-avatar">{html.escape(''.join([p[:1] for p in assigned_to.split()[:2]]) or '—')}</div>
-                <div><span>Assigned To</span><strong>{html.escape(assigned_to)}</strong></div>
+                <div class="case-avatar">{html.escape(initials.upper())}</div>
+                <div class="case-assignee-copy"><span>Assigned To</span><strong>{html.escape(assigned_to)}</strong></div>
             </div>
             <div class="case-summary-cell"><span>Priority</span><strong class="priority-text">{html.escape(priority_label.title())}</strong></div>
             <div class="case-summary-cell"><span>Current Status</span><strong><span class="case-status-chip">{html.escape(status)}</span></strong></div>
@@ -4487,28 +4640,22 @@ def case_details(task_id):
         unsafe_allow_html=True,
     )
 
-    tab_info, tab_comm, tab_attach = st.tabs([
+    tab_info, tab_actions, tab_kb, tab_comm, tab_attach = st.tabs([
         "ⓘ  Case Information",
+        "◷  Case Actions",
+        "✦  Knowledge Base",
         "✉  Communication",
         "♧  Attachments",
     ])
 
+    # ---------------------------------------------------------------
+    # CASE INFORMATION TAB
+    # ---------------------------------------------------------------
     with tab_info:
-        # =============================================================
-        # THREE-COLUMN CASE WORKSPACE
-        # Case Information | Case Actions | Knowledge Base
-        # =============================================================
-        info_col, actions_col, kb_col = st.columns([1.02, 1.02, 1.16], gap="small")
-
+        info_col, meta_col = st.columns([1.35, 1], gap="small")
         with info_col:
-            # =============================================================
-            # 1. CASE INFORMATION
-            # =============================================================
             st.markdown("<div class='case-card'>", unsafe_allow_html=True)
-            st.markdown(
-                "<div class='case-card-heading'><span class='case-heading-icon'>♙</span>Case Information</div>",
-                unsafe_allow_html=True,
-            )
+            st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>♙</span>Case Information</div>", unsafe_allow_html=True)
             rows = [
                 ("Case #", case_number),
                 ("Subject", subject),
@@ -4533,240 +4680,34 @@ def case_details(task_id):
                     unsafe_allow_html=True,
                 )
             if vendor_contact or vendor_email:
+                vendor_line = html.escape(vendor_contact or "—")
+                if vendor_email:
+                    vendor_line += " · " + html.escape(vendor_email)
                 st.markdown(
-                    f"<div class='case-info-row'><span>Vendor Contact</span><strong>{html.escape(vendor_contact or '—')}" 
-                    f"{(' · ' + html.escape(vendor_email)) if vendor_email else ''}</strong></div>",
+                    f"<div class='case-info-row'><span>Vendor Contact</span><strong>{vendor_line}</strong></div>",
                     unsafe_allow_html=True,
                 )
             st.markdown("</div>", unsafe_allow_html=True)
 
-
-
-        with actions_col:
-            # =============================================================
-            # 2. CASE ACTIONS
-            # =============================================================
-            st.markdown("<div class='case-card case-actions-card' style='margin-top:9px;'>", unsafe_allow_html=True)
-            st.markdown(
-                "<div class='case-card-heading'><span class='case-heading-icon'>◷</span>Case Actions</div>",
-                unsafe_allow_html=True,
-            )
-            st.markdown("<div class='action-readonly-label'>Current Status</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='action-readonly-value'>{html.escape(status)}</div>", unsafe_allow_html=True)
-            st.markdown("<div class='action-readonly-label'>Current Station</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='action-readonly-value'>{html.escape(station_name(department))}</div>", unsafe_allow_html=True)
-            st.markdown("<div class='action-readonly-label'>Current Assignee</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='action-readonly-value'>{html.escape(assigned_to)}</div>", unsafe_allow_html=True)
+        with meta_col:
+            st.markdown("<div class='case-card'>", unsafe_allow_html=True)
+            st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>✓</span>Resolution & Next Action</div>", unsafe_allow_html=True)
+            resolution = text(task.get("resolution"))
+            next_action = text(task.get("next_action"))
+            notes = text(task.get("notes"))
+            if resolution:
+                st.markdown(f"<div class='resolution-label'>Current Resolution / Assessment</div><div class='resolution-value'>{html.escape(resolution)}</div>", unsafe_allow_html=True)
+            if next_action:
+                st.markdown(f"<div class='resolution-label'>Recommended Next Action</div><div class='resolution-value'>{html.escape(next_action)}</div>", unsafe_allow_html=True)
+            if notes:
+                st.markdown(f"<div class='resolution-label'>Case Notes</div><div class='resolution-value'>{html.escape(notes)}</div>", unsafe_allow_html=True)
+            if not any([resolution, next_action, notes]):
+                st.caption("No resolution, next action, or notes are recorded for this case.")
             st.markdown("</div>", unsafe_allow_html=True)
 
-            stations = list(STATIONS.keys())
-            current = station_name(task.get("department")) or "CARE"
-            if current not in stations:
-                current = "CARE"
-
-            # Checklist station selector lets the user maintain a checklist for
-            # every station. Transfer/reassignment always validates the CURRENT one.
-            checklist_station = st.selectbox(
-                "Checklist station",
-                stations,
-                index=stations.index(current),
-                format_func=station_name,
-                key=f"checklist_station_{task_id}",
-            )
-            checklist_items = get_case_station_checklist(task, checklist_station)
-            current_missing = checklist_missing(task, current)
-            current_complete = not current_missing
-
-            if checklist_station == current:
-                badge_class = "complete" if current_complete else "pending"
-                badge_text = "✓ Checklist complete" if current_complete else f"{len(current_missing)} item(s) remaining"
-                st.markdown(
-                    f"<div class='case-checklist-wrap'><div class='case-checklist-title'>Required {html.escape(station_name(current))} Checklist</div>"
-                    f"<div class='case-checklist-sub'>Every item must be completed before this case can be reassigned or transferred to another station.</div>"
-                    f"<span class='case-checklist-status {badge_class}'>{html.escape(badge_text)}</span></div>",
-                    unsafe_allow_html=True,
-                )
-            else:
-                st.markdown(
-                    f"<div class='case-checklist-wrap'><div class='case-checklist-title'>{html.escape(station_name(checklist_station))} Checklist</div>"
-                    f"<div class='case-checklist-sub'>This is the checklist for the selected station. The current {html.escape(station_name(current))} checklist remains the gate for transfer.</div></div>",
-                    unsafe_allow_html=True,
-                )
-
-            # Each checkbox writes immediately to MongoDB, so the transfer gate
-            # remains reliable even if the dialog reruns between clicks.
-            for idx, item in enumerate(checklist_items):
-                check_key = f"case_checklist_{task_id}_{checklist_station}_{idx}"
-                if check_key not in st.session_state:
-                    st.session_state[check_key] = bool(item.get("checked"))
-                st.checkbox(
-                    item.get("item") or f"Checklist item {idx + 1}",
-                    key=check_key,
-                    on_change=set_case_checklist_item,
-                    args=(task_id, checklist_station, idx, check_key),
-                )
-
-            add_key = f"case_checklist_new_{task_id}_{checklist_station}"
-            add_item = st.text_input(
-                "Add checklist item",
-                key=add_key,
-                placeholder=f"Add a {station_name(checklist_station)}-specific completion item...",
-            )
-            if st.button("＋ Add Checklist Item", use_container_width=True, key=f"case_checklist_add_{task_id}_{checklist_station}"):
-                if append_case_checklist_item(task_id, checklist_station, add_item):
-                    st.session_state.pop(add_key, None)
-                    st.success("Checklist item added.")
-                    st.rerun()
-                else:
-                    st.warning("Enter a new checklist item.")
-
-            st.markdown("<div class='case-action-divider'></div>", unsafe_allow_html=True)
-
-            assignee_options = list(dict.fromkeys(CASEFLOW_ASSIGNEES + ([assigned_to] if assigned_to else [])))
-            new_assignee = st.selectbox(
-                "Reassign case to",
-                assignee_options,
-                index=assignee_options.index(assigned_to) if assigned_to in assignee_options else 0,
-                key=f"case_reassign_assignee_{task_id}",
-            )
-            if st.button("Reassign Case", use_container_width=True, key=f"case_reassign_{task_id}"):
-                if new_assignee == assigned_to:
-                    st.warning("Choose a different assignee.")
-                elif not current_complete:
-                    st.error("Complete every item in the current-station checklist before reassigning this case.")
-                else:
-                    ok, message = reassign_case(task, new_assignee)
-                    if ok:
-                        st.success(f"Case reassigned to {new_assignee}.")
-                        st.rerun()
-                    else:
-                        st.error(message or "Unable to reassign case.")
-
-            destination = st.selectbox(
-                "Transfer to next station",
-                stations,
-                index=stations.index(current),
-                format_func=station_name,
-                key=f"case_transfer_destination_{task_id}",
-            )
-            st.markdown(
-                "<div class='case-actions-note'>Duration resets when the case enters the destination station. "
-                "The current-station checklist is a mandatory transfer gate.</div>",
-                unsafe_allow_html=True,
-            )
-            if st.button(
-                f"Transfer to {station_name(destination)}",
-                type="primary",
-                use_container_width=True,
-                key=f"case_transfer_{task_id}",
-            ):
-                if destination == current:
-                    st.warning("Choose a different station.")
-                elif not current_complete:
-                    missing_html = "<br>• ".join(html.escape(x) for x in current_missing[:8])
-                    st.error(f"Complete the current-station checklist before transfer:<br>• {missing_html}", unsafe_allow_html=True)
-                elif transfer_case(task, destination):
-                    st.success(f"Case transferred to {station_name(destination)}.")
-                    st.session_state["show_case"] = False
-                    st.session_state["selected_case_id"] = None
-                    st.rerun()
-                else:
-                    st.error("Unable to transfer case.")
-
-
-
-        with kb_col:
-            # =============================================================
-            # 3. KNOWLEDGE BASE — intentionally LAST
-            # =============================================================
-            st.markdown("<div class='case-card kb-inline-card' style='margin-top:9px;'>", unsafe_allow_html=True)
-            st.markdown(
-                "<div class='case-card-heading'><span class='case-heading-icon'>✦</span>Knowledge Base</div>",
-                unsafe_allow_html=True,
-            )
-            st.caption("Case-aware HPE and Aruba guidance from Caseflow plus the shared HPE Knowledge Base/SOP repository. No OpenAI API key is required.")
-
-            auto_query = case_kb_query(task)
-            kb_query = st.text_input(
-                "Knowledge Base Search",
-                value=auto_query,
-                placeholder="Search HPE, Aruba, licensing, devices, troubleshooting or SOPs...",
-                key=f"inline_kb_query_{task_id}",
-                label_visibility="collapsed",
-            )
-            kb_search, kb_match = st.columns(2)
-            with kb_search:
-                kb_clicked = st.button("✨ Ask Knowledge Base", type="primary", use_container_width=True, key=f"inline_kb_ask_{task_id}")
-            with kb_match:
-                match_clicked = st.button("↻ Match This Case", use_container_width=True, key=f"inline_kb_match_{task_id}")
-
-            active_query = auto_query if match_clicked else (text(kb_query).strip() or auto_query)
-            results = search_kb(f"{active_query} {auto_query}" if kb_clicked else active_query, limit=5)
-            if results:
-                best = results[0]
-                content = kb_content(best)
-                if len(content) > 700:
-                    content = content[:700].rstrip() + "…"
-                st.markdown(
-                    f"<div class='kb-answer-card best'><div class='kb-answer-label'>BEST MATCH</div>"
-                    f"<div class='kb-result-title'>{html.escape(text(best.get('title')) or 'Knowledge Base Article')}</div>"
-                    f"<div class='kb-result-text'>{html.escape(content).replace(chr(10), '<br>')}</div>"
-                    f"<div class='kb-meta'><span class='kb-source-pill'>{html.escape(text(best.get('category')) or 'Knowledge Base')}</span>"
-                    f"<span class='kb-source-pill'>{html.escape(text(best.get('source_type')) or text(best.get('source')) or 'SOP')}</span></div></div>",
-                    unsafe_allow_html=True,
-                )
-                if text(best.get("url")):
-                    st.caption(f"Source: {text(best.get('url'))}")
-                for index, result in enumerate(results[1:], start=2):
-                    c = kb_content(result)
-                    c = c[:260].rstrip() + "…" if len(c) > 260 else c
-                    st.markdown(
-                        f"<div class='kb-answer-card'><div class='kb-result-title'>{index}. {html.escape(text(result.get('title')) or 'Related Article')}</div>"
-                        f"<div class='kb-result-text'>{html.escape(c).replace(chr(10), '<br>')}</div>"
-                        f"<div class='kb-meta'><span class='kb-source-pill'>{html.escape(text(result.get('category')) or 'Knowledge Base')}</span></div></div>",
-                        unsafe_allow_html=True,
-                    )
-            else:
-                st.info("No matching Knowledge Base/SOP article found. Try the exact product, model, acronym or issue.")
-
-            question_key = f"kb_ai_question_{task_id}"
-            result_key = f"kb_ai_result_{task_id}"
-            if question_key not in st.session_state:
-                st.session_state[question_key] = "What should I verify before escalating this case?"
-            question = st.text_area(
-                "Ask for recommended guidance",
-                key=question_key,
-                height=70,
-                label_visibility="collapsed",
-                placeholder="Example: What should I verify before escalating this HPE/Aruba case?",
-            )
-            if st.button("Get Recommended Guidance", type="primary", use_container_width=True, key=f"kb_get_guidance_{task_id}"):
-                retrieved = search_kb(f"{text(question)} {auto_query}", limit=6)
-                st.session_state[result_key] = local_kb_ai_answer(question, task, retrieved)
-            ai_result = st.session_state.get(result_key)
-            if ai_result:
-                answer_text = text(ai_result.get("answer"))
-                st.markdown(
-                    f"<div class='kb-answer-card best'><div class='kb-answer-label'>KNOWLEDGE BASE ANSWER · {html.escape(text(ai_result.get('confidence')))}</div>"
-                    f"<div class='kb-result-text'>{html.escape(answer_text).replace(chr(10), '<br>')}</div></div>",
-                    unsafe_allow_html=True,
-                )
-                sources = ai_result.get("sources", [])
-                if sources:
-                    pills = "".join(
-                        f"<span class='kb-source-pill'>{html.escape(text(d.get('title')) or 'KB Article')}</span>"
-                        for d in sources[:6]
-                    )
-                    st.markdown(f"<div class='kb-meta'><strong>Sources used:</strong> {pills}</div>", unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        # History and resolution stay below the three primary sections.
         history = task.get("history") or []
         st.markdown("<div class='case-card case-history-card'>", unsafe_allow_html=True)
-        st.markdown(
-            "<div class='case-card-heading'><span class='case-heading-icon'>◷</span>Case History</div>",
-            unsafe_allow_html=True,
-        )
+        st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>◷</span>Case History</div>", unsafe_allow_html=True)
         if history:
             for event in reversed(history[-10:]):
                 if isinstance(event, dict):
@@ -4783,26 +4724,236 @@ def case_details(task_id):
             st.info("No activity history is stored on this case.")
         st.markdown("</div>", unsafe_allow_html=True)
 
-        st.markdown("<div class='case-card case-resolution-card'>", unsafe_allow_html=True)
-        st.markdown(
-            "<div class='case-card-heading'><span class='case-heading-icon'>✓</span>Resolution & Next Action</div>",
-            unsafe_allow_html=True,
-        )
-        resolution = text(task.get("resolution"))
-        next_action = text(task.get("next_action"))
-        notes = text(task.get("notes"))
-        if resolution:
-            st.markdown(f"<div class='resolution-label'>Current Resolution / Assessment</div><div class='resolution-value'>{html.escape(resolution)}</div>", unsafe_allow_html=True)
-        if next_action:
-            st.markdown(f"<div class='resolution-label'>Recommended Next Action</div><div class='resolution-value'>{html.escape(next_action)}</div>", unsafe_allow_html=True)
-        if notes:
-            st.markdown(f"<div class='resolution-label'>Case Notes</div><div class='resolution-value'>{html.escape(notes)}</div>", unsafe_allow_html=True)
-        if not any([resolution, next_action, notes]):
-            st.caption("No resolution, next action, or notes are recorded for this case.")
-        st.markdown("</div>", unsafe_allow_html=True)
+    # ---------------------------------------------------------------
+    # CASE ACTIONS TAB — two-column operational workspace
+    # ---------------------------------------------------------------
+    with tab_actions:
+        action_col, checklist_col = st.columns([1, 1.35], gap="small")
+        stations = list(STATIONS.keys())
+        current = department if department in stations else "CARE"
 
+        with action_col:
+            st.markdown("<div class='case-card case-actions-card'>", unsafe_allow_html=True)
+            st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>◷</span>Case Action</div>", unsafe_allow_html=True)
+            st.markdown("<div class='action-readonly-label'>Current Status</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='action-readonly-value'>{html.escape(status)}</div>", unsafe_allow_html=True)
+            st.markdown("<div class='action-readonly-label'>Current Station</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='action-readonly-value'>{html.escape(station_name(current))}</div>", unsafe_allow_html=True)
+            st.markdown("<div class='action-readonly-label'>Current Assignee</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='action-readonly-value'>{html.escape(assigned_to)}</div>", unsafe_allow_html=True)
+
+            assignee_options = list(dict.fromkeys(CASEFLOW_ASSIGNEES + ([assigned_to] if assigned_to else [])))
+            new_assignee = st.selectbox(
+                "Reassign case to",
+                assignee_options,
+                index=assignee_options.index(assigned_to) if assigned_to in assignee_options else 0,
+                key=f"case_reassign_assignee_{task_id}",
+            )
+            current_missing = checklist_missing(task, current)
+            if st.button("Reassign Case", use_container_width=True, key=f"case_reassign_{task_id}"):
+                if new_assignee == assigned_to:
+                    st.warning("Choose a different assignee.")
+                elif current_missing:
+                    st.error("Complete every item in the current-station checklist before reassigning this case.")
+                else:
+                    ok, message = reassign_case(task, new_assignee)
+                    if ok:
+                        st.success(f"Case reassigned to {new_assignee}.")
+                        st.rerun()
+                    else:
+                        st.error(message or "Unable to reassign case.")
+
+            destination = st.selectbox(
+                "Transfer to station",
+                stations,
+                index=stations.index(current),
+                format_func=station_name,
+                key=f"case_transfer_destination_{task_id}",
+            )
+            if st.button("Transfer Case", type="primary", use_container_width=True, key=f"case_transfer_{task_id}"):
+                if destination == current:
+                    st.warning("Choose a different station.")
+                elif current_missing:
+                    missing_html = "<br>• ".join(html.escape(x) for x in current_missing[:8])
+                    st.error(f"Complete the current-station checklist before transfer:<br>• {missing_html}", unsafe_allow_html=True)
+                elif transfer_case(task, destination):
+                    st.success(f"Case transferred to {station_name(destination)}.")
+                    st.session_state["show_case"] = False
+                    st.session_state["selected_case_id"] = None
+                    st.rerun()
+                else:
+                    st.error("Unable to transfer case.")
+
+            st.markdown(
+                "<div class='case-actions-note'>Reassignment and station transfer are locked until every required item for the current station is checked.</div>",
+                unsafe_allow_html=True,
+            )
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        with checklist_col:
+            st.markdown("<div class='case-card'>", unsafe_allow_html=True)
+            st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>☑</span>Station Task Checklists</div>", unsafe_allow_html=True)
+            st.caption("Select a station to review or complete its required tasks. The checklist for the current station is the transfer/reassignment gate.")
+
+            selected_key = f"action_checklist_station_{task_id}"
+            if selected_key not in st.session_state or st.session_state[selected_key] not in stations:
+                st.session_state[selected_key] = current
+            selected_check_station = st.session_state[selected_key]
+
+            status_cols = st.columns(5, gap="small")
+            for idx, station in enumerate(stations):
+                station_items = get_case_station_checklist(task, station)
+                complete = bool(station_items) and all(bool(x.get("checked")) for x in station_items)
+                label = "✓" if complete else "•"
+                button_label = f"{label} {station_name(station)}"
+                with status_cols[idx]:
+                    if st.button(button_label, use_container_width=True, key=f"select_action_station_{task_id}_{station}"):
+                        st.session_state[selected_key] = station
+                        st.rerun()
+
+            selected_check_station = st.session_state[selected_key]
+            selected_items = get_case_station_checklist(task, selected_check_station)
+            selected_missing = [x.get("item") for x in selected_items if not bool(x.get("checked"))]
+            complete_class = "complete" if not selected_missing else "pending"
+            complete_text = "✓ Complete" if not selected_missing else f"{len(selected_missing)} item(s) remaining"
+            st.markdown(
+                f"<div class='case-checklist-wrap'><div class='case-checklist-title'>{html.escape(station_name(selected_check_station))} Required Tasks</div>"
+                f"<div class='case-checklist-sub'>Every task below must be completed before this case can leave the current station.</div>"
+                f"<span class='case-checklist-status {complete_class}'>{html.escape(complete_text)}</span></div>",
+                unsafe_allow_html=True,
+            )
+
+            for idx, item in enumerate(selected_items):
+                check_key = f"case_checklist_{task_id}_{selected_check_station}_{idx}"
+                if check_key not in st.session_state:
+                    st.session_state[check_key] = bool(item.get("checked"))
+                st.checkbox(
+                    item.get("item") or f"Checklist item {idx + 1}",
+                    key=check_key,
+                    on_change=set_case_checklist_item,
+                    args=(task_id, selected_check_station, idx, check_key),
+                )
+
+            add_key = f"case_checklist_new_{task_id}_{selected_check_station}"
+            add_item = st.text_input(
+                "Add checklist item",
+                key=add_key,
+                placeholder=f"Add a {station_name(selected_check_station)}-specific task...",
+            )
+            if st.button("＋ Add Checklist Item", use_container_width=True, key=f"case_checklist_add_{task_id}_{selected_check_station}"):
+                if append_case_checklist_item(task_id, selected_check_station, add_item):
+                    st.session_state.pop(add_key, None)
+                    st.success("Checklist item added.")
+                    st.rerun()
+                else:
+                    st.warning("Enter a new checklist item.")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    # ---------------------------------------------------------------
+    # KNOWLEDGE BASE TAB — two-column clickable SOP reader
+    # ---------------------------------------------------------------
+    with tab_kb:
+        kb_left, kb_right = st.columns([0.9, 1.35], gap="small")
+        auto_query = case_kb_query(task)
+        selected_kb_key = f"selected_kb_doc_{task_id}"
+
+        with kb_left:
+            st.markdown("<div class='case-card kb-inline-card'>", unsafe_allow_html=True)
+            st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>✦</span>Case-Matched Knowledge Base</div>", unsafe_allow_html=True)
+            st.caption("Search the local Caseflow KB, SOP collection, and the shared HPE Knowledge Base. No OpenAI API key is required.")
+            query_key = f"kb_tab_query_{task_id}"
+            query = st.text_input(
+                "Knowledge Base Search",
+                value=auto_query,
+                placeholder="Search product, model, issue, licensing, troubleshooting or SOP...",
+                key=query_key,
+                label_visibility="collapsed",
+            )
+            match_col, ask_col = st.columns(2, gap="small")
+            with match_col:
+                match_clicked = st.button("↻ Match This Case", use_container_width=True, key=f"kb_match_tab_{task_id}")
+            with ask_col:
+                ask_clicked = st.button("✨ Ask Knowledge Base", type="primary", use_container_width=True, key=f"kb_ask_tab_{task_id}")
+
+            active_query = auto_query if match_clicked else (text(query).strip() or auto_query)
+            results = search_kb(active_query, limit=8)
+            if ask_clicked:
+                results = search_kb(f"{text(query)} {auto_query}", limit=8)
+
+            if results:
+                if selected_kb_key not in st.session_state:
+                    st.session_state[selected_kb_key] = text(results[0].get("_id")) or text(results[0].get("title"))
+                available_ids = {text(x.get("_id")) or text(x.get("title")) for x in results}
+                if st.session_state[selected_kb_key] not in available_ids:
+                    st.session_state[selected_kb_key] = text(results[0].get("_id")) or text(results[0].get("title"))
+
+                for idx, result in enumerate(results):
+                    rid = text(result.get("_id")) or text(result.get("title")) or str(idx)
+                    title = text(result.get("title")) or "Knowledge Base Article"
+                    category = text(result.get("category")) or "Knowledge Base"
+                    selected = rid == st.session_state[selected_kb_key]
+                    prefix = "★ BEST · " if idx == 0 else f"{idx + 1}. "
+                    if st.button(
+                        f"{prefix}{title}  ·  {category}",
+                        use_container_width=True,
+                        key=f"kb_tile_{task_id}_{idx}_{sha256(rid)[:10]}",
+                        type="primary" if selected else "secondary",
+                    ):
+                        st.session_state[selected_kb_key] = rid
+                        st.rerun()
+            else:
+                st.info("No matching Knowledge Base/SOP article found. Try the exact product, model, acronym or issue.")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        with kb_right:
+            st.markdown("<div class='case-card kb-inline-card'>", unsafe_allow_html=True)
+            st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>✦</span>Recommended Answer / SOP</div>", unsafe_allow_html=True)
+            selected_doc = None
+            if results:
+                selected_id = st.session_state.get(selected_kb_key)
+                selected_doc = next(
+                    (doc for doc in results if (text(doc.get("_id")) or text(doc.get("title"))) == selected_id),
+                    results[0],
+                )
+                st.markdown(
+                    f"<div class='kb-answer-card best'><div class='kb-answer-label'>BEST MATCH / RECOMMENDED SOP</div>"
+                    f"<div class='kb-result-title'>{html.escape(text(selected_doc.get('title')) or 'Knowledge Base Article')}</div>"
+                    f"<div class='kb-result-text'>{html.escape(text(selected_doc.get('category')) or 'HPE / Aruba Guidance')}</div></div>",
+                    unsafe_allow_html=True,
+                )
+                full_content = kb_content(selected_doc)
+                st.markdown(
+                    f"<div class='kb-full-sop'><div class='kb-full-sop-label'>Complete SOP / Answer</div>"
+                    f"<div class='kb-full-sop-text'>{html.escape(full_content).replace(chr(10), '<br>')}</div></div>",
+                    unsafe_allow_html=True,
+                )
+
+                # Always provide a deterministic best-answer recommendation based
+                # on the retrieved SOP content and the actual case context.
+                recommendation = local_kb_ai_answer(
+                    f"What is the best next action for this case? {case_kb_query(task)}",
+                    task,
+                    [selected_doc] + [doc for doc in results if doc is not selected_doc][:3],
+                )
+                answer = text(recommendation.get("answer"))
+                st.markdown(
+                    f"<div class='kb-recommendation'><div class='kb-full-sop-label'>Best Possible Answer Recommendation · {html.escape(text(recommendation.get('confidence')))}</div>"
+                    f"<div class='kb-full-sop-text'>{html.escape(answer).replace(chr(10), '<br>')}</div></div>",
+                    unsafe_allow_html=True,
+                )
+                source = text(selected_doc.get("source")) or text(selected_doc.get("source_type"))
+                if source:
+                    st.caption(f"Source: {source}")
+            else:
+                st.info("Search for a matching SOP to see the complete guidance here.")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    # ---------------------------------------------------------------
+    # COMMUNICATION TAB
+    # ---------------------------------------------------------------
     with tab_comm:
-        st.markdown("### Communication")
+        st.markdown("<div class='case-card'>", unsafe_allow_html=True)
+        st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>✉</span>Communication</div>", unsafe_allow_html=True)
         communications = task.get("communications") or task.get("communication_history") or []
         if isinstance(communications, list) and communications:
             for item in reversed(communications[-20:]):
@@ -4818,9 +4969,14 @@ def case_details(task_id):
                 )
         else:
             st.info("No communication history is stored on this case.")
+        st.markdown("</div>", unsafe_allow_html=True)
 
+    # ---------------------------------------------------------------
+    # ATTACHMENTS TAB
+    # ---------------------------------------------------------------
     with tab_attach:
-        st.markdown("### Attachments")
+        st.markdown("<div class='case-card'>", unsafe_allow_html=True)
+        st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>♧</span>Attachments</div>", unsafe_allow_html=True)
         attachments = task.get("attachments") or task.get("files") or []
         if isinstance(attachments, list) and attachments:
             for item in attachments:
@@ -4835,6 +4991,7 @@ def case_details(task_id):
                 )
         else:
             st.info("No attachments are recorded for this case.")
+        st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("<div class='case-detail-footer'></div>", unsafe_allow_html=True)
 
