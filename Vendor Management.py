@@ -1722,6 +1722,12 @@ st.markdown(
     }
     [class*="st-key-case_cell_"] button:hover {
         filter:brightness(.985);
+        cursor:pointer !important;
+        box-shadow:0 2px 7px rgba(31,48,82,.10) !important;
+    }
+    [class*="st-key-case_cell_"] button:focus-visible {
+        outline:3px solid rgba(93,66,232,.28) !important;
+        outline-offset:2px !important;
     }
 
 
@@ -4183,10 +4189,15 @@ if st.session_state["show_alerts"]:
     width="large",
 )
 def case_details(task_id):
+    """Functional case-detail modal adapted from the supplied PY reference.
 
+    The dashboard remains the entry point: clicking a case number opens this
+    modal for that exact MongoDB case. All displayed values are read from the
+    selected case, and edits/communications/attachments are persisted.
+    """
     try:
         from bson import ObjectId
-        task = col(TASKS_COLLECTION).find_one({"_id": ObjectId(task_id)})
+        task = col(TASKS_COLLECTION).find_one({"_id": ObjectId(str(task_id))})
     except Exception:
         task = None
 
@@ -4194,289 +4205,254 @@ def case_details(task_id):
         st.error("Case not found.")
         return
 
+    user = st.session_state.get("current_user", {}) or {}
+    user_name = text(user.get("name")) or "CaseFlow User"
+    user_role = text(user.get("role")) or "Agent"
+    is_admin = user_role in {"Admin", "Admin/Agent"}
+
     state = calculate_state(task)
     station = station_name(task.get("department"))
-    status = text(task.get("status")) or "In Progress"
-
-    critical = (
-        state["priority_account"]
-        or state["status"] in {"CRITICAL", "BREACHED"}
-    )
-
-    description = (
-        text(task.get("description"))
-        or text(task.get("issue"))
-        or "No description available."
-    )
-
-    # -------------------------
-    # Reference header
-    # -------------------------
-
-    # Keep the Streamlit dialog's native title/close control and use the
-    # content area for the case-specific status and identity. This avoids
-    # duplicating the dialog title while keeping the reference layout.
     visible_station = "FULFILLMENT" if station == "ONSITE" else station
+    status = text(task.get("status")) or "Open"
+    description = text(task.get("description")) or text(task.get("issue")) or "No description available."
+    priority = get_dynamic_priority(task)
+    countdown_txt, countdown_color, is_overdue = calculate_countdown(task.get("due_date"))
+    elapsed_txt = duration_string(state.get("elapsed", 0))
     assigned_to = text(task.get("assigned_to")) or "Unassigned"
-    assigned_parts = [part for part in assigned_to.split() if part]
-    initials = "".join(part[0] for part in assigned_parts[:2]).upper() or "—"
-    time_value_class = "detail-value red" if critical else "detail-value"
+    parts = [p for p in assigned_to.split() if p]
+    initials = "".join(p[0] for p in parts[:2]).upper() or "—"
 
-    critical_badge = (
-        '<span class="case-detail-critical">'
-        '<span class="case-detail-critical-dot">!</span>Critical</span>'
-        if critical else
-        f'<span class="case-detail-status">{html.escape(status)}</span>'
+    case_type = text(task.get("case_type"))
+    if not case_type and text(task.get("rma_number")):
+        case_type = "RMA"
+    if not case_type:
+        case_type = "RMA" if text(task.get("rma_reason")) else (text(task.get("category")) or "—")
+
+    critical = bool(state.get("priority_account") or priority in {"Critical", "Breached"})
+    priority_html = (
+        '<span class="detail-pill red">! Critical</span>' if critical
+        else f'<span class="detail-pill blue">{html.escape(priority.title())}</span>'
     )
+    account_html = '<span class="detail-pill purple">⌖ Priority Account</span>' if state.get("priority_account") else ""
 
+    # Header — follows the supplied reference while retaining the native
+    # Streamlit dialog close control.
     st.markdown(
         f"""
-        <div class="case-detail-statusbar">
-            {critical_badge}
-            <span class="case-detail-status">{html.escape(status)}</span>
+        <div class="detail-header">
+            <div class="detail-header-title">Case Details</div>
+            {('<span class="detail-critical"><span class="detail-critical-dot">!</span>Critical</span>' if critical else f'<span class="detail-pill blue">{html.escape(status)}</span>')}
         </div>
-
-        <div class="case-detail-case-row">
-            <div class="case-detail-number">
-                {html.escape(text(task.get("case_number")) or "—")}
-            </div>
+        <div class="detail-case-title">
+            {html.escape(text(task.get('case_number')) or '—')}
+            <span class="detail-status">{html.escape(status)}</span>
         </div>
-
-        <div class="case-detail-subject">
-            {html.escape(text(task.get("subject")) or "No subject available.")}
-        </div>
-
-        <div class="case-detail-description">
-            {html.escape(description)}
-        </div>
+        <div class="detail-subject">{html.escape(text(task.get('subject')) or 'No subject available.')}</div>
+        <div class="detail-description">{html.escape(description)}</div>
         """,
         unsafe_allow_html=True,
     )
 
-    priority_html = (
-        '<span class="detail-pill red">! Critical</span>'
-        if critical
-        else f'<span class="detail-pill blue">{html.escape(text(task.get("priority","Low")).title())}</span>'
-    )
-
-    account_html = (
-        '<span class="detail-pill purple">⌖ Priority Account</span>'
-        if state["priority_account"]
-        else ""
-    )
-
+    # Reference two-column summary layout.
     st.markdown(
         f"""
         <div class="detail-grid">
-
             <div class="detail-grid-col">
-
-                <div class="detail-field">
-                    <div class="detail-label">Priority</div>
-                    <div class="detail-value">{priority_html}</div>
-                </div>
-
-                <div class="detail-field">
-                    <div class="detail-label">Current Department</div>
-                    <div class="detail-value">
-                        <span class="detail-pill"
-                              style="background:{STATIONS.get(station,STATIONS["CARE"])["soft"]};
-                                     color:{STATIONS.get(station,STATIONS["CARE"])["accent"]}">
-                            {html.escape(visible_station)}
-                        </span>
-                    </div>
-                </div>
-
-                <div class="detail-field">
-                    <div class="detail-label">Assigned To</div>
-                    <div class="detail-value detail-assignee">
-                        <span class="detail-assignee-avatar">{html.escape(initials)}</span>
-                        <span>{html.escape(assigned_to)}</span>
-                    </div>
-                </div>
-
-                <div class="detail-field">
-                    <div class="detail-label">Due Date</div>
-                    <div class="{time_value_class}">
-                        {html.escape(dt_display(task.get("due_date")))}
-                    </div>
-                </div>
-
-                <div class="detail-field">
-                    <div class="detail-label">Duration</div>
-                    <div class="{time_value_class}">
-                        {duration_string(state["elapsed"])}
-                    </div>
-                </div>
-
+                <div class="detail-field"><div class="detail-label">Priority</div><div class="detail-value">{priority_html}</div></div>
+                <div class="detail-field"><div class="detail-label">Current Department</div><div class="detail-value"><span class="detail-pill" style="background:{STATIONS.get(station, STATIONS['CARE'])['soft']};color:{STATIONS.get(station, STATIONS['CARE'])['accent']}">{html.escape(visible_station)}</span></div></div>
+                <div class="detail-field"><div class="detail-label">Assigned To</div><div class="detail-value detail-assignee"><span class="detail-assignee-avatar">{html.escape(initials)}</span><span>{html.escape(assigned_to)}</span></div></div>
+                <div class="detail-field"><div class="detail-label">Due Date</div><div class="{'detail-value red' if is_overdue else 'detail-value'}">{html.escape(dt_display(task.get('due_date')))}</div></div>
+                <div class="detail-field"><div class="detail-label">Duration</div><div class="detail-value">{html.escape(elapsed_txt)}</div></div>
             </div>
-
             <div class="detail-grid-col right">
-
-                <div class="detail-field">
-                    <div class="detail-label">Account Name</div>
-                    <div class="detail-value">
-                        {html.escape(text(task.get("account_name")) or "—")}
-                        {account_html}
-                    </div>
-                </div>
-
-                <div class="detail-field">
-                    <div class="detail-label">Case Type</div>
-                    <div class="detail-value">
-                        {html.escape(
-                            text(task.get("case_type"))
-                            or text(task.get("category"))
-                            or visible_station
-                            or "—"
-                        )}
-                    </div>
-                </div>
-
-                <div class="detail-field">
-                    <div class="detail-label">Case Status</div>
-                    <div class="detail-value">
-                        {html.escape(status)}
-                    </div>
-                </div>
-
-                <div class="detail-field">
-                    <div class="detail-label">Created By</div>
-                    <div class="detail-value">
-                        {html.escape(text(task.get("created_by")) or "System")}
-                    </div>
-                </div>
-
-                <div class="detail-field">
-                    <div class="detail-label">Date Created</div>
-                    <div class="detail-value">
-                        {html.escape(dt_display(task.get("created_at")))}
-                    </div>
-                </div>
-
+                <div class="detail-field"><div class="detail-label">Account Name</div><div class="detail-value">{html.escape(text(task.get('account_name')) or '—')} {account_html}</div></div>
+                <div class="detail-field"><div class="detail-label">Case Type</div><div class="detail-value">{html.escape(case_type)}</div></div>
+                <div class="detail-field"><div class="detail-label">Case Status</div><div class="detail-value">{html.escape(status)}</div></div>
+                <div class="detail-field"><div class="detail-label">Created By</div><div class="detail-value">{html.escape(text(task.get('created_by')) or 'System')}</div></div>
+                <div class="detail-field"><div class="detail-label">Date Created</div><div class="detail-value">{html.escape(dt_display(task.get('created_at')))}</div></div>
             </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    # -------------------------
-    # Detailed case information
-    # -------------------------
+    tab_info, tab_vendor, tab_comm, tab_att = st.tabs([
+        "ⓘ Case Information",
+        "♧ Vendor Information",
+        "✉ Communication",
+        f"📎 Attachments ({len(task.get('attachments', []) or [])})",
+    ])
 
-    detail_items = [
-        ("Contact Person", text(task.get("contact_name"))),
-        ("Contact Number", text(task.get("contact_number"))),
-        ("Email", text(task.get("email"))),
-        ("Site / Location", text(task.get("site_location"))),
-        ("Product / Service", text(task.get("product"))),
-        ("Serial Number", text(task.get("serial_number"))),
-        ("Reference Number", text(task.get("reference_number"))),
-        ("RMA Number", text(task.get("rma_number"))),
-        ("RMA Reason", text(task.get("rma_reason"))),
-        ("RMA Status", text(task.get("rma_status"))),
-        ("Return Status", text(task.get("return_status"))),
-        ("Replacement Status", text(task.get("replacement_status"))),
-        ("Category", text(task.get("category"))),
-    ]
+    # ------------------------------------------------------------------
+    # CASE INFORMATION
+    # ------------------------------------------------------------------
+    with tab_info:
+        head1, head2 = st.columns([4, 1])
+        with head1:
+            st.markdown("### 📄 Case Information")
+        with head2:
+            edit_key = f"edit_case_{task_id}"
+            if st.button("Done" if st.session_state.get(edit_key) else "Edit", key=f"toggle_edit_{task_id}", use_container_width=True):
+                st.session_state[edit_key] = not st.session_state.get(edit_key, False)
+                st.rerun()
 
-    detail_items = [item for item in detail_items if item[1]]
+        if st.session_state.get(edit_key, False):
+            e1, e2 = st.columns(2)
+            with e1:
+                new_subject = st.text_input("Subject", value=text(task.get("subject")), key=f"edit_subject_{task_id}")
+                new_account = st.text_input("Account Name", value=text(task.get("account_name")), key=f"edit_account_{task_id}")
+                new_product = st.text_input("Product / Service", value=text(task.get("product")), key=f"edit_product_{task_id}")
+            with e2:
+                new_category = st.text_input("Category", value=text(task.get("category")), key=f"edit_category_{task_id}")
+                new_reference = st.text_input("Reference Number", value=text(task.get("reference_number")), key=f"edit_reference_{task_id}")
+                new_serial = st.text_input("Serial Number", value=text(task.get("serial_number")), key=f"edit_serial_{task_id}")
+            new_description = st.text_area("Description", value=description, height=100, key=f"edit_description_{task_id}")
+            if st.button("💾 Save Changes", type="primary", use_container_width=True, key=f"save_case_{task_id}"):
+                now = utc_now()
+                history = list(task.get("history") or [])
+                history.append({"action": "Case information updated", "timestamp": now, "user": user_name, "type": "Case Update"})
+                col(TASKS_COLLECTION).update_one(
+                    {"_id": task["_id"]},
+                    {"$set": {
+                        "subject": new_subject, "account_name": new_account,
+                        "product": new_product, "category": new_category,
+                        "reference_number": new_reference, "serial_number": new_serial,
+                        "description": new_description, "last_update": now,
+                        "history": history[-50:],
+                    }},
+                )
+                clear_task_cache()
+                st.session_state[edit_key] = False
+                st.success("Case information updated!")
+                st.rerun()
+        else:
+            detail_items = [
+                ("Contact Person", text(task.get("contact_name"))),
+                ("Contact Number", text(task.get("contact_number"))),
+                ("Email", text(task.get("email"))),
+                ("Site / Location", text(task.get("site_location"))),
+                ("Product / Service", text(task.get("product"))),
+                ("Serial Number", text(task.get("serial_number"))),
+                ("Reference Number", text(task.get("reference_number"))),
+                ("RMA Number", text(task.get("rma_number"))),
+                ("RMA Reason", text(task.get("rma_reason"))),
+                ("RMA Status", text(task.get("rma_status"))),
+                ("Return Status", text(task.get("return_status"))),
+                ("Replacement Status", text(task.get("replacement_status"))),
+                ("Category", text(task.get("category"))),
+            ]
+            detail_items = [x for x in detail_items if x[1]]
+            if detail_items:
+                info_cols = st.columns(2)
+                for i, (label, value) in enumerate(detail_items):
+                    with info_cols[i % 2]:
+                        st.markdown(f"<div class='detail-field'><div class='detail-label'>{html.escape(label)}</div><div class='detail-value'>{html.escape(value)}</div></div>", unsafe_allow_html=True)
 
-    if detail_items:
-        st.markdown('<div class="detail-section-title">Case Information</div>', unsafe_allow_html=True)
-        st.markdown('<div class="detail-information-card">', unsafe_allow_html=True)
-        cols = st.columns(2)
-        for index, (label, value) in enumerate(detail_items):
-            with cols[index % 2]:
+            resolution = text(task.get("resolution"))
+            next_action = text(task.get("next_action"))
+            notes = text(task.get("notes"))
+            if resolution:
+                st.markdown("**Current Resolution / Assessment**")
+                st.info(resolution)
+            if next_action:
+                st.markdown("**Recommended Next Action**")
+                st.success(next_action)
+            if notes:
+                st.markdown("**Case Notes**")
+                st.caption(notes)
+
+    # ------------------------------------------------------------------
+    # VENDOR INFORMATION
+    # ------------------------------------------------------------------
+    with tab_vendor:
+        vendor = find_vendor(task)
+        st.markdown("### 🏢 Vendor Information")
+        if vendor:
+            items = {k: v for k, v in vendor.items() if k not in {"_id", "vendor_key", "synced_at"} and text(v)}
+        else:
+            items = {}
+            case_vendor = text(task.get("vendor"))
+            if case_vendor:
+                items["vendor_name"] = case_vendor
+                items["record_status"] = "Case vendor — vendor contact record not synchronized"
+        if items:
+            vendor_cols = st.columns(2)
+            for i, (key, value) in enumerate(items.items()):
+                with vendor_cols[i % 2]:
+                    st.markdown(f"<div class='detail-field'><div class='detail-label'>{html.escape(key.replace('_',' ').title())}</div><div class='detail-value'>{html.escape(text(value))}</div></div>", unsafe_allow_html=True)
+        else:
+            st.info("No vendor information is attached to this case.")
+
+    # ------------------------------------------------------------------
+    # COMMUNICATION LOG — adapted from the reference script
+    # ------------------------------------------------------------------
+    with tab_comm:
+        st.markdown("### ✉ Case Communication Log")
+        communications = list(task.get("communications") or [])
+        if communications:
+            for msg in reversed(communications[-20:]):
+                sender = text(msg.get("sender")) or text(msg.get("user")) or "CaseFlow User"
+                direction = text(msg.get("direction")) or "Internal"
+                timestamp = dt_display(msg.get("timestamp"))
+                body = text(msg.get("message")) or text(msg.get("details"))
                 st.markdown(
-                    f"""
-                    <div class=\"detail-field\">
-                        <div class=\"detail-label\">{html.escape(label)}</div>
-                        <div class=\"detail-value\">{html.escape(value)}</div>
-                    </div>
-                    """,
+                    f"<div style='border:1px solid #E2E8F0;border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#fff;'><strong>{html.escape(sender)}</strong> <span style='color:#64748B;font-size:11px;'>· {html.escape(direction)} · {html.escape(timestamp)}</span><div style='margin-top:6px;color:#334155;font-size:12px;white-space:pre-wrap;'>{html.escape(body)}</div></div>",
                     unsafe_allow_html=True,
                 )
+        else:
+            st.caption("No communications recorded for this case.")
 
-        resolution = text(task.get("resolution"))
-        next_action = text(task.get("next_action"))
-        notes = text(task.get("notes"))
+        st.markdown("#### ✍️ Compose New Communication")
+        comm_type = st.selectbox("Type", ["Internal Note", "Vendor", "Customer"], key=f"comm_type_{task_id}")
+        comm_message = st.text_area("Message", height=100, key=f"comm_message_{task_id}", placeholder="Enter the communication or case note...")
+        if st.button("Send Communication", type="primary", use_container_width=True, key=f"send_comm_{task_id}"):
+            if not text(comm_message).strip():
+                st.warning("Enter a message first.")
+            else:
+                now = utc_now()
+                communications.append({"sender": user_name, "direction": comm_type, "message": text(comm_message).strip(), "timestamp": now})
+                history = list(task.get("history") or [])
+                history.append({"action": f"{comm_type} communication added", "timestamp": now, "user": user_name, "type": "Communications"})
+                col(TASKS_COLLECTION).update_one({"_id": task["_id"]}, {"$set": {"communications": communications[-50:], "history": history[-50:], "last_update": now}})
+                clear_task_cache()
+                st.success("Communication added to the case.")
+                st.rerun()
 
-        if resolution:
-            st.markdown("**Current Resolution / Assessment**")
-            st.info(resolution)
+    # ------------------------------------------------------------------
+    # ATTACHMENTS
+    # ------------------------------------------------------------------
+    with tab_att:
+        attachments = list(task.get("attachments") or [])
+        st.markdown("### 📎 Case Attachments")
+        if attachments:
+            for idx, attachment in enumerate(attachments):
+                if isinstance(attachment, dict):
+                    name = text(attachment.get("name")) or f"Attachment {idx + 1}"
+                    source = text(attachment.get("url")) or text(attachment.get("path")) or ""
+                    uploaded_by = text(attachment.get("uploaded_by")) or "Unknown"
+                    uploaded_at = dt_display(attachment.get("timestamp"))
+                    st.markdown(f"**{html.escape(name)}**  ·  {html.escape(uploaded_by)}  ·  {html.escape(uploaded_at)}")
+                    if source:
+                        st.code(source, language=None)
+                else:
+                    st.write(str(attachment))
+        else:
+            st.caption("No attachments are currently linked to this case.")
 
-        if next_action:
-            st.markdown("**Recommended Next Action**")
-            st.success(next_action)
-
-        if notes:
-            st.markdown("**Case Notes**")
-            st.caption(notes)
-
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    # -------------------------
-    # Vendor reference card
-    # -------------------------
-
-    vendor = find_vendor(task)
-
-    st.markdown(
-        '<div class="vendor-card"><div class="vendor-heading">'
-        '<span class="vendor-icon">⌂</span>'
-        '<span>Vendor Information</span>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-    # Prefer the synchronized vendor record. If no record exists yet, still
-    # show the vendor carried by the case so the Case Details panel reflects
-    # the actual task instead of displaying an empty vendor section.
-    if vendor:
-        items = {
-            k: v for k, v in vendor.items()
-            if k not in {"_id", "vendor_key", "synced_at"} and text(v)
-        }
-    else:
-        items = {}
-        case_vendor = text(task.get("vendor"))
-        if case_vendor:
-            items["vendor_name"] = case_vendor
-            items["record_status"] = "Case vendor — vendor contact record not synchronized"
-
-    if items:
-        markup = ""
-        preferred_order = [
-            "vendor", "vendor_name", "vendor_id", "contact_name",
-            "contact_person", "phone", "contact_number", "email",
-            "address", "site_location", "account_name", "record_status",
-        ]
-        ordered_keys = [k for k in preferred_order if k in items]
-        ordered_keys += [k for k in items if k not in ordered_keys]
-
-        for key in ordered_keys:
-            value = items[key]
-            label = key.replace("_", " ").title()
-            markup += (
-                f'<div class="vendor-key">{html.escape(label)}</div>'
-                f'<div class="vendor-value">{html.escape(text(value))}</div>'
-            )
-
-        st.markdown(
-            f'<div class="vendor-grid">{markup}</div>',
-            unsafe_allow_html=True,
+        uploaded = st.file_uploader(
+            "Add attachment",
+            key=f"case_attachment_{task_id}",
+            type=None,
         )
-    else:
-        st.markdown(
-            '<div class="vendor-grid">'
-            '<div class="vendor-key">Vendor Name</div>'
-            '<div class="vendor-value">No vendor information is attached to this case.</div>'
-            '</div>',
-            unsafe_allow_html=True,
-        )
-
-    st.markdown("</div>", unsafe_allow_html=True)
+        if uploaded is not None and st.button("Add Attachment Record", use_container_width=True, key=f"save_attachment_{task_id}"):
+            now = utc_now()
+            attachments.append({"name": uploaded.name, "size": uploaded.size, "uploaded_by": user_name, "timestamp": now, "type": uploaded.type or "application/octet-stream"})
+            history = list(task.get("history") or [])
+            history.append({"action": f"Attachment added: {uploaded.name}", "timestamp": now, "user": user_name, "type": "Attachments"})
+            col(TASKS_COLLECTION).update_one({"_id": task["_id"]}, {"$set": {"attachments": attachments[-50:], "history": history[-50:], "last_update": now}})
+            clear_task_cache()
+            st.success("Attachment record added.")
+            st.rerun()
 
     # -------------------------
     # INTEGRATED KNOWLEDGE BASE
@@ -5175,13 +5151,20 @@ def dashboard_fragment():
 
 
             with st.container(key=f"case_cell_{case_slug}_{task_id}"):
+                case_number = text(task.get("case_number")) or "—"
+
                 if st.button(
-                    text(task.get("case_number")),
+                    case_number,
                     key=f"case_{task_id}",
                     use_container_width=True,
+                    help="Click to open Case Details",
+                    type="secondary",
                 ):
-                    # Open the dialog directly from the user's click.
-                    # There is no periodic dashboard rerun.
+                    # IMPORTANT: Case number is the sole entry point to the
+                    # case-detail modal. The click occurs inside the live
+                    # dashboard fragment, so this opens the Streamlit dialog
+                    # only for the selected case and does not turn the detail
+                    # panel into an inline table row.
                     case_details(task_id)
 
 
