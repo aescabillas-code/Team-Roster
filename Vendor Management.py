@@ -2527,378 +2527,6 @@ div[data-testid="stDialog"] [data-testid="stHorizontalBlock"] > div { min-width:
 """, unsafe_allow_html=True)
 
 
-
-# ============================================================
-# CASE DETAILS — TABBED WORKSPACE / FORCED SCROLL / TYPOGRAPHY
-# ============================================================
-st.markdown(r"""
-<style>
-/* Never scale the dialog body with zoom. */
-div[data-testid="stDialog"] [data-testid="stDialogContent"] > div {
-    zoom:1 !important;
-    width:100% !important;
-    max-width:100% !important;
-    box-sizing:border-box !important;
-}
-
-/* Force a usable scrollbar whenever a tab contains more content than the
-   available dialog height. */
-div[data-testid="stDialog"] [data-testid="stDialogContent"] {
-    height:calc(94vh - 58px) !important;
-    max-height:calc(94vh - 58px) !important;
-    min-height:0 !important;
-    overflow-y:auto !important;
-    overflow-x:hidden !important;
-    scrollbar-width:auto !important;
-    scrollbar-color:#71859b #edf2f7 !important;
-    padding:0 10px 12px 10px !important;
-}
-div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar {
-    width:11px !important;
-}
-div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar-track {
-    background:#edf2f7 !important;
-    border-radius:8px !important;
-}
-div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar-thumb {
-    background:#71859b !important;
-    border:2px solid #edf2f7 !important;
-    border-radius:8px !important;
-}
-div[data-testid="stDialog"] > div > div {
-    min-height:0 !important;
-    overflow:visible !important;
-}
-
-/* Assigned To uses exactly the same information typography as the other
-   summary cells; only the avatar remains visually distinct. */
-div[data-testid="stDialog"] .case-assignee > div:last-child > span {
-    display:block !important;
-    color:#334155 !important;
-    font-size:8px !important;
-    font-weight:500 !important;
-    margin-bottom:2px !important;
-}
-div[data-testid="stDialog"] .case-assignee > div:last-child > strong {
-    display:block !important;
-    color:#0d1937 !important;
-    font-size:10px !important;
-    font-weight:600 !important;
-    line-height:1.25 !important;
-    overflow:hidden !important;
-    text-overflow:ellipsis !important;
-    white-space:nowrap !important;
-}
-div[data-testid="stDialog"] .case-summary-cell > span {
-    font-size:8px !important;
-    font-weight:500 !important;
-}
-div[data-testid="stDialog"] .case-summary-cell > strong {
-    font-size:10px !important;
-    font-weight:600 !important;
-}
-
-/* Tabs are now the primary navigation for the three requested work areas. */
-div[data-testid="stDialog"] [data-baseweb="tab-list"] {
-    display:flex !important;
-    flex-wrap:nowrap !important;
-    gap:0 !important;
-    border-bottom:1px solid #dbe4ee !important;
-    position:sticky !important;
-    top:0 !important;
-    z-index:20 !important;
-    background:#fff !important;
-}
-div[data-testid="stDialog"] [data-baseweb="tab"] {
-    flex:0 0 auto !important;
-    padding:8px 13px !important;
-    font-size:10px !important;
-    line-height:1.1 !important;
-}
-div[data-testid="stDialog"] [aria-selected="true"] {
-    color:#0879c9 !important;
-    font-weight:800 !important;
-}
-
-/* Each tab has a bounded inner region. The outer dialog scrollbar remains
-   the guaranteed fallback for long information. */
-div[data-testid="stDialog"] .case-tab-scroll {
-    width:100% !important;
-    max-width:100% !important;
-    box-sizing:border-box !important;
-    padding:7px 0 14px 0 !important;
-}
-div[data-testid="stDialog"] .case-tab-scroll .case-card {
-    width:100% !important;
-    box-sizing:border-box !important;
-}
-
-/* Case Information */
-div[data-testid="stDialog"] .case-info-tab .case-info-row {
-    grid-template-columns:125px minmax(0,1fr) !important;
-}
-div[data-testid="stDialog"] .case-info-tab .case-info-row span {
-    font-size:8.5px !important;
-}
-div[data-testid="stDialog"] .case-info-tab .case-info-row strong {
-    font-size:9px !important;
-    font-weight:600 !important;
-}
-
-/* Case Actions: station cards are deliberately dense, two per row. */
-div[data-testid="stDialog"] .case-actions-intro {
-    display:flex !important;
-    flex-direction:column !important;
-    gap:2px !important;
-    background:#f4f8fc !important;
-    border:1px solid #dfe8f1 !important;
-    border-radius:7px !important;
-    padding:7px 9px !important;
-    margin-bottom:7px !important;
-    color:#526078 !important;
-    font-size:8px !important;
-    line-height:1.3 !important;
-}
-div[data-testid="stDialog"] .case-actions-intro strong {
-    color:#102041 !important;
-    font-size:11px !important;
-}
-div[data-testid="stDialog"] .station-action-card {
-    border:1px solid #dce5ef !important;
-    border-radius:8px !important;
-    background:#fff !important;
-    padding:7px 8px !important;
-    margin-bottom:4px !important;
-    box-sizing:border-box !important;
-}
-div[data-testid="stDialog"] .station-action-header {
-    display:flex !important;
-    align-items:center !important;
-    justify-content:space-between !important;
-    gap:5px !important;
-    padding-bottom:5px !important;
-    border-bottom:1px solid #edf1f5 !important;
-}
-div[data-testid="stDialog"] .station-action-header > div {
-    display:flex !important;
-    align-items:center !important;
-    gap:5px !important;
-    min-width:0 !important;
-}
-div[data-testid="stDialog"] .station-action-header strong {
-    color:#102041 !important;
-    font-size:10px !important;
-    font-weight:800 !important;
-}
-div[data-testid="stDialog"] .station-action-icon {
-    display:inline-flex !important;
-    align-items:center !important;
-    justify-content:center !important;
-    width:20px !important;
-    height:20px !important;
-    border-radius:50% !important;
-    background:#eef5fb !important;
-    color:#0879c9 !important;
-    font-size:10px !important;
-    font-weight:900 !important;
-}
-div[data-testid="stDialog"] .station-action-label {
-    color:#0879c9 !important;
-    font-size:6.5px !important;
-    font-weight:850 !important;
-    letter-spacing:.35px !important;
-    margin-top:5px !important;
-}
-div[data-testid="stDialog"] .station-action-text {
-    color:#334155 !important;
-    font-size:7.5px !important;
-    line-height:1.3 !important;
-    margin-top:2px !important;
-    min-height:28px !important;
-}
-div[data-testid="stDialog"] .case-actions-tab [data-testid="stCheckbox"] {
-    margin:0 !important;
-    padding:0 !important;
-    min-height:21px !important;
-}
-div[data-testid="stDialog"] .case-actions-tab [data-testid="stCheckbox"] label {
-    font-size:7.5px !important;
-    line-height:1.18 !important;
-}
-div[data-testid="stDialog"] .case-actions-tab [data-testid="stTextInput"] input {
-    height:25px !important;
-    min-height:25px !important;
-    font-size:7.5px !important;
-}
-div[data-testid="stDialog"] .case-actions-tab button {
-    font-size:7.5px !important;
-    min-height:26px !important;
-    padding:3px 6px !important;
-}
-div[data-testid="stDialog"] .case-movement-card {
-    margin-top:7px !important;
-    padding:7px 9px !important;
-}
-
-/* Knowledge Base: minimum two-column layout. */
-div[data-testid="stDialog"] .case-kb-tab [data-testid="stHorizontalBlock"] > div {
-    min-width:0 !important;
-}
-div[data-testid="stDialog"] .kb-column-card {
-    height:auto !important;
-    min-height:100% !important;
-    border:1px solid #dce5ef !important;
-    border-radius:8px !important;
-    background:#fff !important;
-    padding:8px !important;
-    box-sizing:border-box !important;
-}
-div[data-testid="stDialog"] .kb-column-heading {
-    color:#102041 !important;
-    font-size:10px !important;
-    font-weight:800 !important;
-    border-bottom:1px solid #e6edf4 !important;
-    padding-bottom:5px !important;
-    margin-bottom:6px !important;
-}
-div[data-testid="stDialog"] .kb-query-summary {
-    color:#64748b !important;
-    font-size:7.5px !important;
-    padding:4px 0 !important;
-}
-div[data-testid="stDialog"] .kb-query-summary strong {
-    color:#0879c9 !important;
-    font-size:10px !important;
-}
-div[data-testid="stDialog"] .kb-result-tile {
-    display:flex !important;
-    gap:7px !important;
-    border:1px solid #dce5ef !important;
-    border-radius:7px !important;
-    background:#fff !important;
-    padding:7px !important;
-    margin:4px 0 !important;
-    box-sizing:border-box !important;
-}
-div[data-testid="stDialog"] .kb-result-number {
-    flex:0 0 20px !important;
-    width:20px !important;
-    height:20px !important;
-    border-radius:50% !important;
-    background:#edf7ff !important;
-    color:#0879c9 !important;
-    display:flex !important;
-    align-items:center !important;
-    justify-content:center !important;
-    font-size:7px !important;
-    font-weight:800 !important;
-}
-div[data-testid="stDialog"] .kb-result-copy {
-    min-width:0 !important;
-}
-div[data-testid="stDialog"] .kb-result-title {
-    color:#172b52 !important;
-    font-size:8px !important;
-    font-weight:750 !important;
-    line-height:1.2 !important;
-}
-div[data-testid="stDialog"] .kb-result-text {
-    color:#526078 !important;
-    font-size:7px !important;
-    line-height:1.28 !important;
-    margin-top:2px !important;
-}
-div[data-testid="stDialog"] .kb-answer-column {
-    background:#f9fbfd !important;
-}
-div[data-testid="stDialog"] .kb-answer-card {
-    padding:8px !important;
-    margin:0 0 6px 0 !important;
-    border:1px solid #d7e3ef !important;
-    border-radius:7px !important;
-}
-div[data-testid="stDialog"] .kb-answer-card.best {
-    border-left:3px solid #0879c9 !important;
-    background:#f8fbff !important;
-}
-div[data-testid="stDialog"] .kb-answer-label {
-    color:#0879c9 !important;
-    font-size:6.5px !important;
-    font-weight:850 !important;
-    letter-spacing:.35px !important;
-    margin-bottom:3px !important;
-}
-div[data-testid="stDialog"] .kb-expanded-title {
-    color:#102041 !important;
-    font-size:10px !important;
-    line-height:1.25 !important;
-    font-weight:800 !important;
-}
-div[data-testid="stDialog"] .kb-expanded-body {
-    color:#334155 !important;
-    font-size:8px !important;
-    line-height:1.38 !important;
-    white-space:normal !important;
-    overflow-wrap:anywhere !important;
-    max-height:none !important;
-    margin-top:5px !important;
-}
-div[data-testid="stDialog"] .kb-recommendation {
-    background:#ecfbf4 !important;
-    border:1px solid #a8dfc6 !important;
-    border-left:4px solid #087b58 !important;
-    border-radius:7px !important;
-    padding:7px !important;
-    margin-top:6px !important;
-}
-div[data-testid="stDialog"] .kb-recommendation-title {
-    color:#087b58 !important;
-    font-size:6.5px !important;
-    font-weight:850 !important;
-}
-div[data-testid="stDialog"] .kb-recommendation-body {
-    color:#1f4d3c !important;
-    font-size:8px !important;
-    line-height:1.35 !important;
-    margin-top:3px !important;
-    overflow-wrap:anywhere !important;
-}
-div[data-testid="stDialog"] .kb-source-pill {
-    display:inline-block !important;
-    margin:3px 3px 0 0 !important;
-    padding:2px 4px !important;
-    border-radius:4px !important;
-    background:#eef5fb !important;
-    color:#466078 !important;
-    font-size:6px !important;
-    line-height:1.1 !important;
-}
-
-/* Other tabs also use the same forced outer scrollbar. */
-div[data-testid="stDialog"] .case-simple-tab {
-    min-height:500px !important;
-}
-
-/* Mobile: preserve the tab structure but let the outer scrollbar handle
-   long content rather than clipping it. */
-@media (max-width:900px) {
-    div[data-testid="stDialog"] > div {
-        width:calc(100vw - 10px) !important;
-        max-width:calc(100vw - 10px) !important;
-        height:calc(100vh - 10px) !important;
-        max-height:calc(100vh - 10px) !important;
-    }
-    div[data-testid="stDialog"] [data-testid="stDialogContent"] {
-        height:calc(100vh - 58px) !important;
-        max-height:calc(100vh - 58px) !important;
-        padding-left:6px !important;
-        padding-right:6px !important;
-    }
-}
-</style>
-""", unsafe_allow_html=True)
-
-
 # ============================================================
 # TASK ENGINE
 # ============================================================
@@ -4742,10 +4370,14 @@ seed_demo_kb()
 def case_details(task_id):
     """Centered, scrollable Case Details dialog.
 
-    Case Information, Case Actions, and Knowledge Base are separate tabs.
-    Case Actions uses a multi-column station layout with an action section
-    and persisted task checklist for every station. Knowledge Base uses a
-    minimum two-column search/results + full-answer layout.
+    Layout order inside Case Information is intentionally:
+        1. Case Information
+        2. Case Actions
+        3. Knowledge Base
+
+    Knowledge Base is no longer a separate tab before Communication.  It is
+    the last panel in the main Case Information view so the agent can review
+    the case, complete the station checklist, and then use the matching SOP.
     """
     try:
         from bson import ObjectId
@@ -4855,25 +4487,23 @@ def case_details(task_id):
         unsafe_allow_html=True,
     )
 
-    # =============================================================
-    # CASE DETAIL TABS
-    # =============================================================
-    # Case Information, Case Actions and Knowledge Base are deliberately
-    # separate tabs. Communication and Attachments remain independent tabs.
-    tab_info, tab_actions, tab_kb, tab_comm, tab_attach = st.tabs([
+    tab_info, tab_comm, tab_attach = st.tabs([
         "ⓘ  Case Information",
-        "◷  Case Actions",
-        "✦  Knowledge Base",
         "✉  Communication",
         "♧  Attachments",
     ])
 
     with tab_info:
-        st.markdown("<div class='case-tab-scroll case-info-tab'>", unsafe_allow_html=True)
-
-        info_col, vendor_col = st.columns([1.45, 1], gap="small")
+        # =============================================================
+        # THREE-COLUMN CASE WORKSPACE
+        # Case Information | Case Actions | Knowledge Base
+        # =============================================================
+        info_col, actions_col, kb_col = st.columns([1.02, 1.02, 1.16], gap="small")
 
         with info_col:
+            # =============================================================
+            # 1. CASE INFORMATION
+            # =============================================================
             st.markdown("<div class='case-card'>", unsafe_allow_html=True)
             st.markdown(
                 "<div class='case-card-heading'><span class='case-heading-icon'>♙</span>Case Information</div>",
@@ -4896,8 +4526,6 @@ def case_details(task_id):
                 ("Site / Location", text(task.get("site_location")) or "—"),
                 ("Reference Number", text(task.get("reference_number")) or "—"),
                 ("Vendor", vendor_name),
-                ("RMA / Replacement", text(task.get("rma_number") or task.get("rma")) or "—"),
-                ("Contact", text(task.get("contact_name") or task.get("customer_contact")) or "—"),
             ]
             for label, value in rows:
                 st.markdown(
@@ -4906,41 +4534,241 @@ def case_details(task_id):
                 )
             if vendor_contact or vendor_email:
                 st.markdown(
-                    f"<div class='case-info-row'><span>Vendor Contact</span><strong>{html.escape(vendor_contact or '—')}"
+                    f"<div class='case-info-row'><span>Vendor Contact</span><strong>{html.escape(vendor_contact or '—')}" 
                     f"{(' · ' + html.escape(vendor_email)) if vendor_email else ''}</strong></div>",
                     unsafe_allow_html=True,
                 )
             st.markdown("</div>", unsafe_allow_html=True)
 
-        with vendor_col:
-            st.markdown("<div class='case-card'>", unsafe_allow_html=True)
+
+
+        with actions_col:
+            # =============================================================
+            # 2. CASE ACTIONS
+            # =============================================================
+            st.markdown("<div class='case-card case-actions-card' style='margin-top:9px;'>", unsafe_allow_html=True)
             st.markdown(
-                "<div class='case-card-heading'><span class='case-heading-icon'>▣</span>Vendor Information</div>",
+                "<div class='case-card-heading'><span class='case-heading-icon'>◷</span>Case Actions</div>",
                 unsafe_allow_html=True,
             )
-            vendor_rows = [
-                ("Vendor", vendor_name),
-                ("Contact", vendor_contact or "—"),
-                ("Email", vendor_email or "—"),
-                ("Vendor Key", text((vendor or {}).get("vendor_key")) or "—"),
-                ("Service Type", text((vendor or {}).get("service_type")) or "—"),
-                ("Status", text((vendor or {}).get("status")) or "—"),
-            ]
-            for label, value in vendor_rows:
-                st.markdown(
-                    f"<div class='case-info-row'><span>{html.escape(label)}</span><strong>{html.escape(str(value))}</strong></div>",
-                    unsafe_allow_html=True,
-                )
+            st.markdown("<div class='action-readonly-label'>Current Status</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='action-readonly-value'>{html.escape(status)}</div>", unsafe_allow_html=True)
+            st.markdown("<div class='action-readonly-label'>Current Station</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='action-readonly-value'>{html.escape(station_name(department))}</div>", unsafe_allow_html=True)
+            st.markdown("<div class='action-readonly-label'>Current Assignee</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='action-readonly-value'>{html.escape(assigned_to)}</div>", unsafe_allow_html=True)
             st.markdown("</div>", unsafe_allow_html=True)
 
+            stations = list(STATIONS.keys())
+            current = station_name(task.get("department")) or "CARE"
+            if current not in stations:
+                current = "CARE"
+
+            # Checklist station selector lets the user maintain a checklist for
+            # every station. Transfer/reassignment always validates the CURRENT one.
+            checklist_station = st.selectbox(
+                "Checklist station",
+                stations,
+                index=stations.index(current),
+                format_func=station_name,
+                key=f"checklist_station_{task_id}",
+            )
+            checklist_items = get_case_station_checklist(task, checklist_station)
+            current_missing = checklist_missing(task, current)
+            current_complete = not current_missing
+
+            if checklist_station == current:
+                badge_class = "complete" if current_complete else "pending"
+                badge_text = "✓ Checklist complete" if current_complete else f"{len(current_missing)} item(s) remaining"
+                st.markdown(
+                    f"<div class='case-checklist-wrap'><div class='case-checklist-title'>Required {html.escape(station_name(current))} Checklist</div>"
+                    f"<div class='case-checklist-sub'>Every item must be completed before this case can be reassigned or transferred to another station.</div>"
+                    f"<span class='case-checklist-status {badge_class}'>{html.escape(badge_text)}</span></div>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    f"<div class='case-checklist-wrap'><div class='case-checklist-title'>{html.escape(station_name(checklist_station))} Checklist</div>"
+                    f"<div class='case-checklist-sub'>This is the checklist for the selected station. The current {html.escape(station_name(current))} checklist remains the gate for transfer.</div></div>",
+                    unsafe_allow_html=True,
+                )
+
+            # Each checkbox writes immediately to MongoDB, so the transfer gate
+            # remains reliable even if the dialog reruns between clicks.
+            for idx, item in enumerate(checklist_items):
+                check_key = f"case_checklist_{task_id}_{checklist_station}_{idx}"
+                if check_key not in st.session_state:
+                    st.session_state[check_key] = bool(item.get("checked"))
+                st.checkbox(
+                    item.get("item") or f"Checklist item {idx + 1}",
+                    key=check_key,
+                    on_change=set_case_checklist_item,
+                    args=(task_id, checklist_station, idx, check_key),
+                )
+
+            add_key = f"case_checklist_new_{task_id}_{checklist_station}"
+            add_item = st.text_input(
+                "Add checklist item",
+                key=add_key,
+                placeholder=f"Add a {station_name(checklist_station)}-specific completion item...",
+            )
+            if st.button("＋ Add Checklist Item", use_container_width=True, key=f"case_checklist_add_{task_id}_{checklist_station}"):
+                if append_case_checklist_item(task_id, checklist_station, add_item):
+                    st.session_state.pop(add_key, None)
+                    st.success("Checklist item added.")
+                    st.rerun()
+                else:
+                    st.warning("Enter a new checklist item.")
+
+            st.markdown("<div class='case-action-divider'></div>", unsafe_allow_html=True)
+
+            assignee_options = list(dict.fromkeys(CASEFLOW_ASSIGNEES + ([assigned_to] if assigned_to else [])))
+            new_assignee = st.selectbox(
+                "Reassign case to",
+                assignee_options,
+                index=assignee_options.index(assigned_to) if assigned_to in assignee_options else 0,
+                key=f"case_reassign_assignee_{task_id}",
+            )
+            if st.button("Reassign Case", use_container_width=True, key=f"case_reassign_{task_id}"):
+                if new_assignee == assigned_to:
+                    st.warning("Choose a different assignee.")
+                elif not current_complete:
+                    st.error("Complete every item in the current-station checklist before reassigning this case.")
+                else:
+                    ok, message = reassign_case(task, new_assignee)
+                    if ok:
+                        st.success(f"Case reassigned to {new_assignee}.")
+                        st.rerun()
+                    else:
+                        st.error(message or "Unable to reassign case.")
+
+            destination = st.selectbox(
+                "Transfer to next station",
+                stations,
+                index=stations.index(current),
+                format_func=station_name,
+                key=f"case_transfer_destination_{task_id}",
+            )
+            st.markdown(
+                "<div class='case-actions-note'>Duration resets when the case enters the destination station. "
+                "The current-station checklist is a mandatory transfer gate.</div>",
+                unsafe_allow_html=True,
+            )
+            if st.button(
+                f"Transfer to {station_name(destination)}",
+                type="primary",
+                use_container_width=True,
+                key=f"case_transfer_{task_id}",
+            ):
+                if destination == current:
+                    st.warning("Choose a different station.")
+                elif not current_complete:
+                    missing_html = "<br>• ".join(html.escape(x) for x in current_missing[:8])
+                    st.error(f"Complete the current-station checklist before transfer:<br>• {missing_html}", unsafe_allow_html=True)
+                elif transfer_case(task, destination):
+                    st.success(f"Case transferred to {station_name(destination)}.")
+                    st.session_state["show_case"] = False
+                    st.session_state["selected_case_id"] = None
+                    st.rerun()
+                else:
+                    st.error("Unable to transfer case.")
+
+
+
+        with kb_col:
+            # =============================================================
+            # 3. KNOWLEDGE BASE — intentionally LAST
+            # =============================================================
+            st.markdown("<div class='case-card kb-inline-card' style='margin-top:9px;'>", unsafe_allow_html=True)
+            st.markdown(
+                "<div class='case-card-heading'><span class='case-heading-icon'>✦</span>Knowledge Base</div>",
+                unsafe_allow_html=True,
+            )
+            st.caption("Case-aware HPE and Aruba guidance from Caseflow plus the shared HPE Knowledge Base/SOP repository. No OpenAI API key is required.")
+
+            auto_query = case_kb_query(task)
+            kb_query = st.text_input(
+                "Knowledge Base Search",
+                value=auto_query,
+                placeholder="Search HPE, Aruba, licensing, devices, troubleshooting or SOPs...",
+                key=f"inline_kb_query_{task_id}",
+                label_visibility="collapsed",
+            )
+            kb_search, kb_match = st.columns(2)
+            with kb_search:
+                kb_clicked = st.button("✨ Ask Knowledge Base", type="primary", use_container_width=True, key=f"inline_kb_ask_{task_id}")
+            with kb_match:
+                match_clicked = st.button("↻ Match This Case", use_container_width=True, key=f"inline_kb_match_{task_id}")
+
+            active_query = auto_query if match_clicked else (text(kb_query).strip() or auto_query)
+            results = search_kb(f"{active_query} {auto_query}" if kb_clicked else active_query, limit=5)
+            if results:
+                best = results[0]
+                content = kb_content(best)
+                if len(content) > 700:
+                    content = content[:700].rstrip() + "…"
+                st.markdown(
+                    f"<div class='kb-answer-card best'><div class='kb-answer-label'>BEST MATCH</div>"
+                    f"<div class='kb-result-title'>{html.escape(text(best.get('title')) or 'Knowledge Base Article')}</div>"
+                    f"<div class='kb-result-text'>{html.escape(content).replace(chr(10), '<br>')}</div>"
+                    f"<div class='kb-meta'><span class='kb-source-pill'>{html.escape(text(best.get('category')) or 'Knowledge Base')}</span>"
+                    f"<span class='kb-source-pill'>{html.escape(text(best.get('source_type')) or text(best.get('source')) or 'SOP')}</span></div></div>",
+                    unsafe_allow_html=True,
+                )
+                if text(best.get("url")):
+                    st.caption(f"Source: {text(best.get('url'))}")
+                for index, result in enumerate(results[1:], start=2):
+                    c = kb_content(result)
+                    c = c[:260].rstrip() + "…" if len(c) > 260 else c
+                    st.markdown(
+                        f"<div class='kb-answer-card'><div class='kb-result-title'>{index}. {html.escape(text(result.get('title')) or 'Related Article')}</div>"
+                        f"<div class='kb-result-text'>{html.escape(c).replace(chr(10), '<br>')}</div>"
+                        f"<div class='kb-meta'><span class='kb-source-pill'>{html.escape(text(result.get('category')) or 'Knowledge Base')}</span></div></div>",
+                        unsafe_allow_html=True,
+                    )
+            else:
+                st.info("No matching Knowledge Base/SOP article found. Try the exact product, model, acronym or issue.")
+
+            question_key = f"kb_ai_question_{task_id}"
+            result_key = f"kb_ai_result_{task_id}"
+            if question_key not in st.session_state:
+                st.session_state[question_key] = "What should I verify before escalating this case?"
+            question = st.text_area(
+                "Ask for recommended guidance",
+                key=question_key,
+                height=70,
+                label_visibility="collapsed",
+                placeholder="Example: What should I verify before escalating this HPE/Aruba case?",
+            )
+            if st.button("Get Recommended Guidance", type="primary", use_container_width=True, key=f"kb_get_guidance_{task_id}"):
+                retrieved = search_kb(f"{text(question)} {auto_query}", limit=6)
+                st.session_state[result_key] = local_kb_ai_answer(question, task, retrieved)
+            ai_result = st.session_state.get(result_key)
+            if ai_result:
+                answer_text = text(ai_result.get("answer"))
+                st.markdown(
+                    f"<div class='kb-answer-card best'><div class='kb-answer-label'>KNOWLEDGE BASE ANSWER · {html.escape(text(ai_result.get('confidence')))}</div>"
+                    f"<div class='kb-result-text'>{html.escape(answer_text).replace(chr(10), '<br>')}</div></div>",
+                    unsafe_allow_html=True,
+                )
+                sources = ai_result.get("sources", [])
+                if sources:
+                    pills = "".join(
+                        f"<span class='kb-source-pill'>{html.escape(text(d.get('title')) or 'KB Article')}</span>"
+                        for d in sources[:6]
+                    )
+                    st.markdown(f"<div class='kb-meta'><strong>Sources used:</strong> {pills}</div>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        # History and resolution stay below the three primary sections.
+        history = task.get("history") or []
         st.markdown("<div class='case-card case-history-card'>", unsafe_allow_html=True)
         st.markdown(
             "<div class='case-card-heading'><span class='case-heading-icon'>◷</span>Case History</div>",
             unsafe_allow_html=True,
         )
-        history = task.get("history") or []
         if history:
-            for event in reversed(history[-15:]):
+            for event in reversed(history[-10:]):
                 if isinstance(event, dict):
                     action = text(event.get("action") or event.get("event") or event.get("details")) or "Case updated"
                     stamp = dt_display(event.get("timestamp")) or ""
@@ -4948,9 +4776,7 @@ def case_details(task_id):
                 else:
                     action, stamp, actor = text(event), "", "System"
                 st.markdown(
-                    f"<div class='history-row'><div class='history-dot'></div><div class='history-main'>"
-                    f"<div class='history-meta'>{html.escape(stamp)} <span>{html.escape(actor)}</span></div>"
-                    f"<div class='history-action'>{html.escape(action)}</div></div></div>",
+                    f"<div class='history-row'><div class='history-dot'></div><div class='history-main'><div class='history-meta'>{html.escape(stamp)} <span>{html.escape(actor)}</span></div><div class='history-action'>{html.escape(action)}</div></div></div>",
                     unsafe_allow_html=True,
                 )
         else:
@@ -4966,331 +4792,16 @@ def case_details(task_id):
         next_action = text(task.get("next_action"))
         notes = text(task.get("notes"))
         if resolution:
-            st.markdown(
-                f"<div class='resolution-label'>Current Resolution / Assessment</div>"
-                f"<div class='resolution-value'>{html.escape(resolution)}</div>",
-                unsafe_allow_html=True,
-            )
+            st.markdown(f"<div class='resolution-label'>Current Resolution / Assessment</div><div class='resolution-value'>{html.escape(resolution)}</div>", unsafe_allow_html=True)
         if next_action:
-            st.markdown(
-                f"<div class='resolution-label'>Recommended Next Action</div>"
-                f"<div class='resolution-value'>{html.escape(next_action)}</div>",
-                unsafe_allow_html=True,
-            )
+            st.markdown(f"<div class='resolution-label'>Recommended Next Action</div><div class='resolution-value'>{html.escape(next_action)}</div>", unsafe_allow_html=True)
         if notes:
-            st.markdown(
-                f"<div class='resolution-label'>Case Notes</div>"
-                f"<div class='resolution-value'>{html.escape(notes)}</div>",
-                unsafe_allow_html=True,
-            )
+            st.markdown(f"<div class='resolution-label'>Case Notes</div><div class='resolution-value'>{html.escape(notes)}</div>", unsafe_allow_html=True)
         if not any([resolution, next_action, notes]):
             st.caption("No resolution, next action, or notes are recorded for this case.")
         st.markdown("</div>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    with tab_actions:
-        st.markdown("<div class='case-tab-scroll case-actions-tab'>", unsafe_allow_html=True)
-        st.markdown(
-            "<div class='case-actions-intro'>"
-            "<strong>Station Actions & Task Checklists</strong>"
-            "<span>Each station has its own action guidance and completion checklist. "
-            "Complete the current station checklist before reassignment or transfer.</span>"
-            "</div>",
-            unsafe_allow_html=True,
-        )
-
-        stations = list(STATIONS.keys())
-        current = station_name(task.get("department")) or "CARE"
-        if current not in stations:
-            current = "CARE"
-
-        station_action_defaults = {
-            "CARE": "Validate the customer symptom, HPE/Aruba product details, entitlement/support context, perform applicable remote troubleshooting, and document the recommended next action.",
-            "ARCH": "Retrieve and validate the requested HPE/Aruba record, entitlement, document, contract or reference information and record the verified result.",
-            "PET": "Validate the HPE/Aruba device, platform, policy or access requirement, review the relevant management details, and document the approved change or escalation.",
-            "SUPPLY CHAIN": "Validate the HPE/Aruba order, part number, quantity, shipment/tracking information and destination, then document the fulfillment exception or supplier action.",
-            "ONSITE": "Confirm the HPE/Aruba onsite scope, device/part details, site access and technician requirements, then document onsite findings and the next station/closure action.",
-        }
-
-        # Five station cards arranged in a responsive two-column workspace.
-        for row_start in range(0, len(stations), 2):
-            row_stations = stations[row_start:row_start + 2]
-            action_cols = st.columns(len(row_stations), gap="small")
-            for col_idx, station in enumerate(row_stations):
-                with action_cols[col_idx]:
-                    station_display = "FULFILLMENT" if station == "ONSITE" else station
-                    items = get_case_station_checklist(task, station)
-                    missing = checklist_missing(task, station)
-                    complete = not missing
-                    badge_class = "complete" if complete else "pending"
-                    badge_text = "✓ Complete" if complete else f"{len(missing)} task(s) remaining"
-
-                    st.markdown(
-                        f"<div class='station-action-card'>"
-                        f"<div class='station-action-header'>"
-                        f"<div><span class='station-action-icon'>{html.escape(STATIONS[station].get('icon','•'))}</span>"
-                        f"<strong>{html.escape(station_display)}</strong></div>"
-                        f"<span class='case-checklist-status {badge_class}'>{html.escape(badge_text)}</span>"
-                        f"</div>"
-                        f"<div class='station-action-label'>ACTION</div>"
-                        f"<div class='station-action-text'>"
-                        f"{html.escape(next_action if station == current and next_action else station_action_defaults.get(station, 'Complete the required station workflow and document the result.'))}"
-                        f"</div>"
-                        f"<div class='station-action-label'>TASK CHECKLIST</div>"
-                        f"</div>",
-                        unsafe_allow_html=True,
-                    )
-
-                    for idx, item in enumerate(items):
-                        check_key = f"case_checklist_{task_id}_{station}_{idx}"
-                        if check_key not in st.session_state:
-                            st.session_state[check_key] = bool(item.get("checked"))
-                        st.checkbox(
-                            item.get("item") or f"Checklist item {idx + 1}",
-                            key=check_key,
-                            on_change=set_case_checklist_item,
-                            args=(task_id, station, idx, check_key),
-                        )
-
-                    add_key = f"case_checklist_new_{task_id}_{station}"
-                    add_item = st.text_input(
-                        "Add task",
-                        key=add_key,
-                        placeholder=f"Add {station_display} task...",
-                        label_visibility="collapsed",
-                    )
-                    if st.button(
-                        "＋ Add Task",
-                        use_container_width=True,
-                        key=f"case_checklist_add_{task_id}_{station}",
-                    ):
-                        if append_case_checklist_item(task_id, station, add_item):
-                            st.session_state.pop(add_key, None)
-                            st.rerun()
-                        else:
-                            st.warning("Enter a new checklist task.")
-
-                    st.markdown("</div>", unsafe_allow_html=True)
-
-        # Case movement remains functional and is deliberately below all
-        # station checklists so the agent sees the required work first.
-        st.markdown(
-            "<div class='case-card case-movement-card'>"
-            "<div class='case-card-heading'><span class='case-heading-icon'>⇄</span>Case Movement</div>"
-            "</div>",
-            unsafe_allow_html=True,
-        )
-
-        current_missing = checklist_missing(task, current)
-        current_complete = not current_missing
-        assignee_options = list(dict.fromkeys(
-            CASEFLOW_ASSIGNEES + ([assigned_to] if assigned_to else [])
-        ))
-
-        move_cols = st.columns(2, gap="small")
-        with move_cols[0]:
-            new_assignee = st.selectbox(
-                "Reassign case to",
-                assignee_options,
-                index=assignee_options.index(assigned_to) if assigned_to in assignee_options else 0,
-                key=f"case_reassign_assignee_{task_id}",
-            )
-            if st.button(
-                "Reassign Case",
-                use_container_width=True,
-                key=f"case_reassign_{task_id}",
-            ):
-                if new_assignee == assigned_to:
-                    st.warning("Choose a different assignee.")
-                elif not current_complete:
-                    st.error("Complete every item in the current-station checklist before reassigning this case.")
-                else:
-                    ok, message = reassign_case(task, new_assignee)
-                    if ok:
-                        st.success(f"Case reassigned to {new_assignee}.")
-                        st.rerun()
-                    else:
-                        st.error(message or "Unable to reassign case.")
-
-        with move_cols[1]:
-            destination = st.selectbox(
-                "Transfer to next station",
-                stations,
-                index=stations.index(current),
-                format_func=lambda s: "FULFILLMENT" if s == "ONSITE" else s,
-                key=f"case_transfer_destination_{task_id}",
-            )
-            if st.button(
-                f"Transfer to {'FULFILLMENT' if destination == 'ONSITE' else destination}",
-                type="primary",
-                use_container_width=True,
-                key=f"case_transfer_{task_id}",
-            ):
-                if destination == current:
-                    st.warning("Choose a different station.")
-                elif not current_complete:
-                    missing_html = "<br>• ".join(html.escape(x) for x in current_missing[:8])
-                    st.error(
-                        f"Complete the current-station checklist before transfer:<br>• {missing_html}",
-                        unsafe_allow_html=True,
-                    )
-                elif transfer_case(task, destination):
-                    st.success(f"Case transferred to {'FULFILLMENT' if destination == 'ONSITE' else destination}.")
-                    st.session_state["show_case"] = False
-                    st.session_state["selected_case_id"] = None
-                    st.rerun()
-                else:
-                    st.error("Unable to transfer case.")
-
-        st.markdown(
-            f"<div class='case-actions-note'>Current station: <strong>{html.escape('FULFILLMENT' if current == 'ONSITE' else current)}</strong>. "
-            "The current-station checklist is the mandatory gate for reassignment and transfer.</div>",
-            unsafe_allow_html=True,
-        )
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    with tab_kb:
-        st.markdown("<div class='case-tab-scroll case-kb-tab'>", unsafe_allow_html=True)
-        st.markdown(
-            "<div class='case-actions-intro'>"
-            "<strong>Knowledge Base</strong>"
-            "<span>Case-aware HPE and Aruba guidance from Caseflow plus the shared HPE Knowledge Base/SOP repository. "
-            "No OpenAI API key is required.</span>"
-            "</div>",
-            unsafe_allow_html=True,
-        )
-
-        auto_query = case_kb_query(task)
-        kb_query = st.text_input(
-            "Knowledge Base Search",
-            value=auto_query,
-            placeholder="Search HPE, Aruba, licensing, devices, troubleshooting or SOPs...",
-            key=f"inline_kb_query_{task_id}",
-            label_visibility="collapsed",
-        )
-
-        kb_search_col, kb_results_col = st.columns([1.0, 1.45], gap="small")
-
-        with kb_search_col:
-            st.markdown("<div class='kb-column-card'>", unsafe_allow_html=True)
-            st.markdown(
-                "<div class='kb-column-heading'>Search & Case Match</div>",
-                unsafe_allow_html=True,
-            )
-            ask_col, match_col = st.columns(2, gap="small")
-            with ask_col:
-                kb_clicked = st.button(
-                    "✨ Ask Knowledge Base",
-                    type="primary",
-                    use_container_width=True,
-                    key=f"inline_kb_ask_{task_id}",
-                )
-            with match_col:
-                match_clicked = st.button(
-                    "↻ Match This Case",
-                    use_container_width=True,
-                    key=f"inline_kb_match_{task_id}",
-                )
-
-            active_query = auto_query if match_clicked else (text(kb_query).strip() or auto_query)
-            results = search_kb(
-                f"{active_query} {auto_query}" if kb_clicked else active_query,
-                limit=8,
-            )
-
-            st.markdown(
-                f"<div class='kb-query-summary'><strong>{len(results)}</strong> matching article(s)</div>",
-                unsafe_allow_html=True,
-            )
-
-            if results:
-                for index, result in enumerate(results, start=1):
-                    c = kb_content(result)
-                    preview = c[:420].rstrip() + "…" if len(c) > 420 else c
-                    st.markdown(
-                        f"<div class='kb-result-tile'>"
-                        f"<div class='kb-result-number'>{index}</div>"
-                        f"<div class='kb-result-copy'>"
-                        f"<div class='kb-result-title'>{html.escape(text(result.get('title')) or 'Knowledge Base Article')}</div>"
-                        f"<div class='kb-result-text'>{html.escape(preview).replace(chr(10), '<br>')}</div>"
-                        f"<div class='kb-meta'><span class='kb-source-pill'>{html.escape(text(result.get('category')) or 'Knowledge Base')}</span>"
-                        f"<span class='kb-source-pill'>{html.escape(text(result.get('source_type')) or text(result.get('source')) or 'SOP')}</span></div>"
-                        f"</div></div>",
-                        unsafe_allow_html=True,
-                    )
-            else:
-                st.info("No matching Knowledge Base/SOP article found. Try the exact product, model, acronym or issue.")
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        with kb_results_col:
-            st.markdown("<div class='kb-column-card kb-answer-column'>", unsafe_allow_html=True)
-            if results:
-                best = results[0]
-                content = kb_content(best)
-                st.markdown(
-                    f"<div class='kb-answer-card best'>"
-                    f"<div class='kb-answer-label'>BEST MATCH</div>"
-                    f"<div class='kb-expanded-title'>{html.escape(text(best.get('title')) or 'Knowledge Base Article')}</div>"
-                    f"<div class='kb-expanded-body'>{html.escape(content).replace(chr(10), '<br>')}</div>"
-                    f"<div class='kb-meta'><span class='kb-source-pill'>{html.escape(text(best.get('category')) or 'Knowledge Base')}</span>"
-                    f"<span class='kb-source-pill'>{html.escape(text(best.get('source_type')) or text(best.get('source')) or 'SOP')}</span></div>"
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
-                if text(best.get("url")):
-                    st.caption(f"Source: {text(best.get('url'))}")
-
-            question_key = f"kb_ai_question_{task_id}"
-            result_key = f"kb_ai_result_{task_id}"
-            if question_key not in st.session_state:
-                st.session_state[question_key] = "What should I verify before escalating this case?"
-
-            question = st.text_area(
-                "Ask for recommended guidance",
-                key=question_key,
-                height=110,
-                label_visibility="collapsed",
-                placeholder="Example: What should I verify before escalating this HPE/Aruba case?",
-            )
-            if st.button(
-                "Get Recommended Guidance",
-                type="primary",
-                use_container_width=True,
-                key=f"kb_get_guidance_{task_id}",
-            ):
-                retrieved = search_kb(f"{text(question)} {auto_query}", limit=8)
-                st.session_state[result_key] = local_kb_ai_answer(
-                    question,
-                    task,
-                    retrieved,
-                )
-
-            ai_result = st.session_state.get(result_key)
-            if ai_result:
-                answer_text = text(ai_result.get("answer"))
-                st.markdown(
-                    f"<div class='kb-recommendation'>"
-                    f"<div class='kb-recommendation-title'>KNOWLEDGE BASE ANSWER · {html.escape(text(ai_result.get('confidence')))}</div>"
-                    f"<div class='kb-recommendation-body'>{html.escape(answer_text).replace(chr(10), '<br>')}</div>"
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
-                sources = ai_result.get("sources", [])
-                if sources:
-                    pills = "".join(
-                        f"<span class='kb-source-pill'>{html.escape(text(d.get('title')) or 'KB Article')}</span>"
-                        for d in sources[:8]
-                    )
-                    st.markdown(
-                        f"<div class='kb-meta'><strong>Sources used:</strong> {pills}</div>",
-                        unsafe_allow_html=True,
-                    )
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        st.markdown("</div>", unsafe_allow_html=True)
 
     with tab_comm:
-        st.markdown("<div class='case-tab-scroll case-simple-tab'>", unsafe_allow_html=True)
         st.markdown("### Communication")
         communications = task.get("communications") or task.get("communication_history") or []
         if isinstance(communications, list) and communications:
@@ -5302,16 +4813,13 @@ def case_details(task_id):
                 else:
                     sender, body, stamp = "Caseflow User", text(item), ""
                 st.markdown(
-                    f"<div class='communication-card'><div class='communication-head'><strong>{html.escape(sender)}</strong>"
-                    f"<span>{html.escape(stamp)}</span></div><div>{html.escape(body)}</div></div>",
+                    f"<div class='communication-card'><div class='communication-head'><strong>{html.escape(sender)}</strong><span>{html.escape(stamp)}</span></div><div>{html.escape(body)}</div></div>",
                     unsafe_allow_html=True,
                 )
         else:
             st.info("No communication history is stored on this case.")
-        st.markdown("</div>", unsafe_allow_html=True)
 
     with tab_attach:
-        st.markdown("<div class='case-tab-scroll case-simple-tab'>", unsafe_allow_html=True)
         st.markdown("### Attachments")
         attachments = task.get("attachments") or task.get("files") or []
         if isinstance(attachments, list) and attachments:
@@ -5322,13 +4830,11 @@ def case_details(task_id):
                 else:
                     name, detail = text(item), ""
                 st.markdown(
-                    f"<div class='attachment-row'><span>▧ <strong>{html.escape(name)}</strong></span>"
-                    f"<span>{html.escape(detail)}</span></div>",
+                    f"<div class='attachment-row'><span>▧ <strong>{html.escape(name)}</strong></span><span>{html.escape(detail)}</span></div>",
                     unsafe_allow_html=True,
                 )
         else:
             st.info("No attachments are recorded for this case.")
-        st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("<div class='case-detail-footer'></div>", unsafe_allow_html=True)
 
