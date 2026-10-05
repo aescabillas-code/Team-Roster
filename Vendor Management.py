@@ -4861,369 +4861,437 @@ def case_details(task_id):
         unsafe_allow_html=True,
     )
 
-    tab_info, tab_actions, tab_kb, tab_comm, tab_attach = st.tabs([
-        "ⓘ  Case Information",
-        "◷  Case Actions",
-        "✦  Knowledge Base",
-        "✉  Communication",
-        "♧  Attachments",
-    ])
+    # Native Streamlit scroll container: this is the actual reliable scrollbar.
+    # Header/summary remain above it; all tabs and their complete content scroll inside it.
+    with st.container(height=500, border=False):
+        tab_info, tab_actions, tab_kb, tab_comm, tab_attach = st.tabs([
+            "ⓘ  Case Information",
+            "◷  Case Actions",
+            "✦  Knowledge Base",
+            "✉  Communication",
+            "♧  Attachments",
+        ])
 
-    # ---------------------------------------------------------------
-    # CASE INFORMATION TAB
-    # ---------------------------------------------------------------
-    with tab_info:
-        info_col, meta_col = st.columns([1.35, 1], gap="small")
-        with info_col:
-            st.markdown("<div class='case-card'>", unsafe_allow_html=True)
-            st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>♙</span>Case Information</div>", unsafe_allow_html=True)
-            rows = [
-                ("Case #", case_number),
-                ("Subject", subject),
-                ("Description", description),
-                ("Priority", priority_label.title()),
-                ("Assigned To", assigned_to),
-                ("Due Date", due),
-                ("Created Date", created),
-                ("Last Update", last_update),
-                ("Current Status", status),
-                ("Case Category", text(task.get("category")) or "—"),
-                ("Product / Device", text(task.get("product")) or related_system),
-                ("Client", account_name),
-                ("Related System", related_system),
-                ("Site / Location", text(task.get("site_location")) or "—"),
-                ("Reference Number", text(task.get("reference_number")) or "—"),
-                ("Vendor", vendor_name),
-            ]
-            for label, value in rows:
-                st.markdown(
-                    f"<div class='case-info-row'><span>{html.escape(label)}</span><strong>{html.escape(str(value))}</strong></div>",
-                    unsafe_allow_html=True,
-                )
-            if vendor_contact or vendor_email:
-                vendor_line = html.escape(vendor_contact or "—")
-                if vendor_email:
-                    vendor_line += " · " + html.escape(vendor_email)
-                st.markdown(
-                    f"<div class='case-info-row'><span>Vendor Contact</span><strong>{vendor_line}</strong></div>",
-                    unsafe_allow_html=True,
-                )
+        # ---------------------------------------------------------------
+        # CASE INFORMATION TAB
+        # ---------------------------------------------------------------
+        with tab_info:
+            info_col, meta_col = st.columns([1.35, 1], gap="small")
+            with info_col:
+                st.markdown("<div class='case-card'>", unsafe_allow_html=True)
+                st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>♙</span>Case Information</div>", unsafe_allow_html=True)
+                rows = [
+                    ("Case #", case_number),
+                    ("Subject", subject),
+                    ("Description", description),
+                    ("Priority", priority_label.title()),
+                    ("Assigned To", assigned_to),
+                    ("Due Date", due),
+                    ("Created Date", created),
+                    ("Last Update", last_update),
+                    ("Current Status", status),
+                    ("Case Category", text(task.get("category")) or "—"),
+                    ("Product / Device", text(task.get("product")) or related_system),
+                    ("Client", account_name),
+                    ("Related System", related_system),
+                    ("Site / Location", text(task.get("site_location")) or "—"),
+                    ("Reference Number", text(task.get("reference_number")) or "—"),
+                    ("Vendor", vendor_name),
+                ]
+                for label, value in rows:
+                    st.markdown(
+                        f"<div class='case-info-row'><span>{html.escape(label)}</span><strong>{html.escape(str(value))}</strong></div>",
+                        unsafe_allow_html=True,
+                    )
+                if vendor_contact or vendor_email:
+                    vendor_line = html.escape(vendor_contact or "—")
+                    if vendor_email:
+                        vendor_line += " · " + html.escape(vendor_email)
+                    st.markdown(
+                        f"<div class='case-info-row'><span>Vendor Contact</span><strong>{vendor_line}</strong></div>",
+                        unsafe_allow_html=True,
+                    )
+                st.markdown("</div>", unsafe_allow_html=True)
+
+            with meta_col:
+                st.markdown("<div class='case-card'>", unsafe_allow_html=True)
+                st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>✓</span>Resolution & Next Action</div>", unsafe_allow_html=True)
+                resolution = text(task.get("resolution"))
+                next_action = text(task.get("next_action"))
+                notes = text(task.get("notes"))
+                if resolution:
+                    st.markdown(f"<div class='resolution-label'>Current Resolution / Assessment</div><div class='resolution-value'>{html.escape(resolution)}</div>", unsafe_allow_html=True)
+                if next_action:
+                    st.markdown(f"<div class='resolution-label'>Recommended Next Action</div><div class='resolution-value'>{html.escape(next_action)}</div>", unsafe_allow_html=True)
+                if notes:
+                    st.markdown(f"<div class='resolution-label'>Case Notes</div><div class='resolution-value'>{html.escape(notes)}</div>", unsafe_allow_html=True)
+                if not any([resolution, next_action, notes]):
+                    st.caption("No resolution, next action, or notes are recorded for this case.")
+                st.markdown("</div>", unsafe_allow_html=True)
+
+            history = task.get("history") or []
+            st.markdown("<div class='case-card case-history-card'>", unsafe_allow_html=True)
+            st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>◷</span>Case History</div>", unsafe_allow_html=True)
+            if history:
+                for event in reversed(history[-10:]):
+                    if isinstance(event, dict):
+                        action = text(event.get("action") or event.get("event") or event.get("details")) or "Case updated"
+                        stamp = dt_display(event.get("timestamp")) or ""
+                        actor = text(event.get("user") or event.get("actor") or event.get("assigned_to")) or "System"
+                    else:
+                        action, stamp, actor = text(event), "", "System"
+                    st.markdown(
+                        f"<div class='history-row'><div class='history-dot'></div><div class='history-main'><div class='history-meta'>{html.escape(stamp)} <span>{html.escape(actor)}</span></div><div class='history-action'>{html.escape(action)}</div></div></div>",
+                        unsafe_allow_html=True,
+                    )
+            else:
+                st.info("No activity history is stored on this case.")
             st.markdown("</div>", unsafe_allow_html=True)
 
-        with meta_col:
-            st.markdown("<div class='case-card'>", unsafe_allow_html=True)
-            st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>✓</span>Resolution & Next Action</div>", unsafe_allow_html=True)
-            resolution = text(task.get("resolution"))
-            next_action = text(task.get("next_action"))
-            notes = text(task.get("notes"))
-            if resolution:
-                st.markdown(f"<div class='resolution-label'>Current Resolution / Assessment</div><div class='resolution-value'>{html.escape(resolution)}</div>", unsafe_allow_html=True)
-            if next_action:
-                st.markdown(f"<div class='resolution-label'>Recommended Next Action</div><div class='resolution-value'>{html.escape(next_action)}</div>", unsafe_allow_html=True)
-            if notes:
-                st.markdown(f"<div class='resolution-label'>Case Notes</div><div class='resolution-value'>{html.escape(notes)}</div>", unsafe_allow_html=True)
-            if not any([resolution, next_action, notes]):
-                st.caption("No resolution, next action, or notes are recorded for this case.")
-            st.markdown("</div>", unsafe_allow_html=True)
+        # ---------------------------------------------------------------
+        # CASE ACTIONS TAB — two-column operational workspace
+        # ---------------------------------------------------------------
+        with tab_actions:
+            action_col, checklist_col = st.columns([1, 1.35], gap="small")
+            stations = list(STATIONS.keys())
+            current = department if department in stations else "CARE"
 
-        history = task.get("history") or []
-        st.markdown("<div class='case-card case-history-card'>", unsafe_allow_html=True)
-        st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>◷</span>Case History</div>", unsafe_allow_html=True)
-        if history:
-            for event in reversed(history[-10:]):
-                if isinstance(event, dict):
-                    action = text(event.get("action") or event.get("event") or event.get("details")) or "Case updated"
-                    stamp = dt_display(event.get("timestamp")) or ""
-                    actor = text(event.get("user") or event.get("actor") or event.get("assigned_to")) or "System"
-                else:
-                    action, stamp, actor = text(event), "", "System"
-                st.markdown(
-                    f"<div class='history-row'><div class='history-dot'></div><div class='history-main'><div class='history-meta'>{html.escape(stamp)} <span>{html.escape(actor)}</span></div><div class='history-action'>{html.escape(action)}</div></div></div>",
-                    unsafe_allow_html=True,
+            with action_col:
+                st.markdown("<div class='case-card case-actions-card'>", unsafe_allow_html=True)
+                st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>◷</span>Case Action</div>", unsafe_allow_html=True)
+                st.markdown("<div class='action-readonly-label'>Current Status</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='action-readonly-value'>{html.escape(status)}</div>", unsafe_allow_html=True)
+                st.markdown("<div class='action-readonly-label'>Current Station</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='action-readonly-value'>{html.escape(station_name(current))}</div>", unsafe_allow_html=True)
+                st.markdown("<div class='action-readonly-label'>Current Assignee</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='action-readonly-value'>{html.escape(assigned_to)}</div>", unsafe_allow_html=True)
+
+                assignee_options = list(dict.fromkeys(CASEFLOW_ASSIGNEES + ([assigned_to] if assigned_to else [])))
+                new_assignee = st.selectbox(
+                    "Reassign case to",
+                    assignee_options,
+                    index=assignee_options.index(assigned_to) if assigned_to in assignee_options else 0,
+                    key=f"case_reassign_assignee_{task_id}",
                 )
-        else:
-            st.info("No activity history is stored on this case.")
-        st.markdown("</div>", unsafe_allow_html=True)
+                current_missing = checklist_missing(task, current)
+                if st.button("Reassign Case", use_container_width=True, key=f"case_reassign_{task_id}"):
+                    if new_assignee == assigned_to:
+                        st.warning("Choose a different assignee.")
+                    elif current_missing:
+                        st.error("Complete every item in the current-station checklist before reassigning this case.")
+                    else:
+                        ok, message = reassign_case(task, new_assignee)
+                        if ok:
+                            st.success(f"Case reassigned to {new_assignee}.")
+                            st.rerun()
+                        else:
+                            st.error(message or "Unable to reassign case.")
 
-    # ---------------------------------------------------------------
-    # CASE ACTIONS TAB — two-column operational workspace
-    # ---------------------------------------------------------------
-    with tab_actions:
-        action_col, checklist_col = st.columns([1, 1.35], gap="small")
-        stations = list(STATIONS.keys())
-        current = department if department in stations else "CARE"
-
-        with action_col:
-            st.markdown("<div class='case-card case-actions-card'>", unsafe_allow_html=True)
-            st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>◷</span>Case Action</div>", unsafe_allow_html=True)
-            st.markdown("<div class='action-readonly-label'>Current Status</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='action-readonly-value'>{html.escape(status)}</div>", unsafe_allow_html=True)
-            st.markdown("<div class='action-readonly-label'>Current Station</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='action-readonly-value'>{html.escape(station_name(current))}</div>", unsafe_allow_html=True)
-            st.markdown("<div class='action-readonly-label'>Current Assignee</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='action-readonly-value'>{html.escape(assigned_to)}</div>", unsafe_allow_html=True)
-
-            assignee_options = list(dict.fromkeys(CASEFLOW_ASSIGNEES + ([assigned_to] if assigned_to else [])))
-            new_assignee = st.selectbox(
-                "Reassign case to",
-                assignee_options,
-                index=assignee_options.index(assigned_to) if assigned_to in assignee_options else 0,
-                key=f"case_reassign_assignee_{task_id}",
-            )
-            current_missing = checklist_missing(task, current)
-            if st.button("Reassign Case", use_container_width=True, key=f"case_reassign_{task_id}"):
-                if new_assignee == assigned_to:
-                    st.warning("Choose a different assignee.")
-                elif current_missing:
-                    st.error("Complete every item in the current-station checklist before reassigning this case.")
-                else:
-                    ok, message = reassign_case(task, new_assignee)
-                    if ok:
-                        st.success(f"Case reassigned to {new_assignee}.")
+                destination = st.selectbox(
+                    "Transfer to station",
+                    stations,
+                    index=stations.index(current),
+                    format_func=station_name,
+                    key=f"case_transfer_destination_{task_id}",
+                )
+                if st.button("Transfer Case", type="primary", use_container_width=True, key=f"case_transfer_{task_id}"):
+                    if destination == current:
+                        st.warning("Choose a different station.")
+                    elif current_missing:
+                        missing_html = "<br>• ".join(html.escape(x) for x in current_missing[:8])
+                        st.error(f"Complete the current-station checklist before transfer:<br>• {missing_html}", unsafe_allow_html=True)
+                    elif transfer_case(task, destination):
+                        st.success(f"Case transferred to {station_name(destination)}.")
+                        st.session_state["show_case"] = False
+                        st.session_state["selected_case_id"] = None
                         st.rerun()
                     else:
-                        st.error(message or "Unable to reassign case.")
+                        st.error("Unable to transfer case.")
 
-            destination = st.selectbox(
-                "Transfer to station",
-                stations,
-                index=stations.index(current),
-                format_func=station_name,
-                key=f"case_transfer_destination_{task_id}",
-            )
-            if st.button("Transfer Case", type="primary", use_container_width=True, key=f"case_transfer_{task_id}"):
-                if destination == current:
-                    st.warning("Choose a different station.")
-                elif current_missing:
-                    missing_html = "<br>• ".join(html.escape(x) for x in current_missing[:8])
-                    st.error(f"Complete the current-station checklist before transfer:<br>• {missing_html}", unsafe_allow_html=True)
-                elif transfer_case(task, destination):
-                    st.success(f"Case transferred to {station_name(destination)}.")
-                    st.session_state["show_case"] = False
-                    st.session_state["selected_case_id"] = None
-                    st.rerun()
+                st.markdown(
+                    "<div class='case-actions-note'>Reassignment and station transfer are locked until every required item for the current station is checked.</div>",
+                    unsafe_allow_html=True,
+                )
+                st.markdown("</div>", unsafe_allow_html=True)
+
+            with checklist_col:
+                st.markdown("<div class='case-card'>", unsafe_allow_html=True)
+                st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>☑</span>Station Task Checklists</div>", unsafe_allow_html=True)
+                st.caption("Select a station to review or complete its required tasks. The checklist for the current station is the transfer/reassignment gate.")
+
+                selected_key = f"action_checklist_station_{task_id}"
+                if selected_key not in st.session_state or st.session_state[selected_key] not in stations:
+                    st.session_state[selected_key] = current
+                selected_check_station = st.session_state[selected_key]
+
+                status_cols = st.columns(5, gap="small")
+                for idx, station in enumerate(stations):
+                    station_items = get_case_station_checklist(task, station)
+                    complete = bool(station_items) and all(bool(x.get("checked")) for x in station_items)
+                    label = "✓" if complete else "•"
+                    button_label = f"{label} {station_name(station)}"
+                    with status_cols[idx]:
+                        if st.button(button_label, use_container_width=True, key=f"select_action_station_{task_id}_{station}"):
+                            st.session_state[selected_key] = station
+                            st.rerun()
+
+                selected_check_station = st.session_state[selected_key]
+                selected_items = get_case_station_checklist(task, selected_check_station)
+                selected_missing = [x.get("item") for x in selected_items if not bool(x.get("checked"))]
+                complete_class = "complete" if not selected_missing else "pending"
+                complete_text = "✓ Complete" if not selected_missing else f"{len(selected_missing)} item(s) remaining"
+                st.markdown(
+                    f"<div class='case-checklist-wrap'><div class='case-checklist-title'>{html.escape(station_name(selected_check_station))} Required Tasks</div>"
+                    f"<div class='case-checklist-sub'>Every task below must be completed before this case can leave the current station.</div>"
+                    f"<span class='case-checklist-status {complete_class}'>{html.escape(complete_text)}</span></div>",
+                    unsafe_allow_html=True,
+                )
+
+                for idx, item in enumerate(selected_items):
+                    check_key = f"case_checklist_{task_id}_{selected_check_station}_{idx}"
+                    if check_key not in st.session_state:
+                        st.session_state[check_key] = bool(item.get("checked"))
+                    st.checkbox(
+                        item.get("item") or f"Checklist item {idx + 1}",
+                        key=check_key,
+                        on_change=set_case_checklist_item,
+                        args=(task_id, selected_check_station, idx, check_key),
+                    )
+
+                add_key = f"case_checklist_new_{task_id}_{selected_check_station}"
+                add_item = st.text_input(
+                    "Add checklist item",
+                    key=add_key,
+                    placeholder=f"Add a {station_name(selected_check_station)}-specific task...",
+                )
+                if st.button("＋ Add Checklist Item", use_container_width=True, key=f"case_checklist_add_{task_id}_{selected_check_station}"):
+                    if append_case_checklist_item(task_id, selected_check_station, add_item):
+                        st.session_state.pop(add_key, None)
+                        st.success("Checklist item added.")
+                        st.rerun()
+                    else:
+                        st.warning("Enter a new checklist item.")
+                st.markdown("</div>", unsafe_allow_html=True)
+
+        # ---------------------------------------------------------------
+        # KNOWLEDGE BASE TAB — two-column clickable SOP reader
+        # ---------------------------------------------------------------
+        with tab_kb:
+            kb_left, kb_right = st.columns([0.9, 1.35], gap="small")
+            auto_query = case_kb_query(task)
+            selected_kb_key = f"selected_kb_doc_{task_id}"
+
+            with kb_left:
+                st.markdown("<div class='case-card kb-inline-card'>", unsafe_allow_html=True)
+                st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>✦</span>Case-Matched Knowledge Base</div>", unsafe_allow_html=True)
+                st.caption("Search the local Caseflow KB, SOP collection, and the shared HPE Knowledge Base. No OpenAI API key is required.")
+                query_key = f"kb_tab_query_{task_id}"
+                query = st.text_input(
+                    "Knowledge Base Search",
+                    value=auto_query,
+                    placeholder="Search product, model, issue, licensing, troubleshooting or SOP...",
+                    key=query_key,
+                    label_visibility="collapsed",
+                )
+                match_col, ask_col = st.columns(2, gap="small")
+                with match_col:
+                    match_clicked = st.button("↻ Match This Case", use_container_width=True, key=f"kb_match_tab_{task_id}")
+                with ask_col:
+                    ask_clicked = st.button("✨ Ask Knowledge Base", type="primary", use_container_width=True, key=f"kb_ask_tab_{task_id}")
+
+                active_query = auto_query if match_clicked else (text(query).strip() or auto_query)
+                results = search_kb(active_query, limit=8)
+                if ask_clicked:
+                    results = search_kb(f"{text(query)} {auto_query}", limit=8)
+
+                if results:
+                    if selected_kb_key not in st.session_state:
+                        st.session_state[selected_kb_key] = text(results[0].get("_id")) or text(results[0].get("title"))
+                    available_ids = {text(x.get("_id")) or text(x.get("title")) for x in results}
+                    if st.session_state[selected_kb_key] not in available_ids:
+                        st.session_state[selected_kb_key] = text(results[0].get("_id")) or text(results[0].get("title"))
+
+                    for idx, result in enumerate(results):
+                        rid = text(result.get("_id")) or text(result.get("title")) or str(idx)
+                        title = text(result.get("title")) or "Knowledge Base Article"
+                        category = text(result.get("category")) or "Knowledge Base"
+                        selected = rid == st.session_state[selected_kb_key]
+                        prefix = "★ BEST · " if idx == 0 else f"{idx + 1}. "
+                        if st.button(
+                            f"{prefix}{title}  ·  {category}",
+                            use_container_width=True,
+                            key=f"kb_tile_{task_id}_{idx}_{sha256(rid)[:10]}",
+                            type="primary" if selected else "secondary",
+                        ):
+                            st.session_state[selected_kb_key] = rid
+                            st.rerun()
                 else:
-                    st.error("Unable to transfer case.")
+                    st.info("No matching Knowledge Base/SOP article found. Try the exact product, model, acronym or issue.")
+                st.markdown("</div>", unsafe_allow_html=True)
 
-            st.markdown(
-                "<div class='case-actions-note'>Reassignment and station transfer are locked until every required item for the current station is checked.</div>",
-                unsafe_allow_html=True,
-            )
-            st.markdown("</div>", unsafe_allow_html=True)
+            with kb_right:
+                st.markdown("<div class='case-card kb-inline-card'>", unsafe_allow_html=True)
+                st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>✦</span>Recommended Answer / SOP</div>", unsafe_allow_html=True)
+                selected_doc = None
+                if results:
+                    selected_id = st.session_state.get(selected_kb_key)
+                    selected_doc = next(
+                        (doc for doc in results if (text(doc.get("_id")) or text(doc.get("title"))) == selected_id),
+                        results[0],
+                    )
+                    st.markdown(
+                        f"<div class='kb-answer-card best'><div class='kb-answer-label'>BEST MATCH / RECOMMENDED SOP</div>"
+                        f"<div class='kb-result-title'>{html.escape(text(selected_doc.get('title')) or 'Knowledge Base Article')}</div>"
+                        f"<div class='kb-result-text'>{html.escape(text(selected_doc.get('category')) or 'HPE / Aruba Guidance')}</div></div>",
+                        unsafe_allow_html=True,
+                    )
+                    full_content = kb_content(selected_doc)
+                    st.markdown(
+                        f"<div class='kb-full-sop'><div class='kb-full-sop-label'>Complete SOP / Answer</div>"
+                        f"<div class='kb-full-sop-text'>{html.escape(full_content).replace(chr(10), '<br>')}</div></div>",
+                        unsafe_allow_html=True,
+                    )
 
-        with checklist_col:
+                    # Always provide a deterministic best-answer recommendation based
+                    # on the retrieved SOP content and the actual case context.
+                    recommendation = local_kb_ai_answer(
+                        f"What is the best next action for this case? {case_kb_query(task)}",
+                        task,
+                        [selected_doc] + [doc for doc in results if doc is not selected_doc][:3],
+                    )
+                    answer = text(recommendation.get("answer"))
+                    st.markdown(
+                        f"<div class='kb-recommendation'><div class='kb-full-sop-label'>Best Possible Answer Recommendation · {html.escape(text(recommendation.get('confidence')))}</div>"
+                        f"<div class='kb-full-sop-text'>{html.escape(answer).replace(chr(10), '<br>')}</div></div>",
+                        unsafe_allow_html=True,
+                    )
+                    source = text(selected_doc.get("source")) or text(selected_doc.get("source_type"))
+                    if source:
+                        st.caption(f"Source: {source}")
+                else:
+                    st.info("Search for a matching SOP to see the complete guidance here.")
+                st.markdown("</div>", unsafe_allow_html=True)
+
+        # ---------------------------------------------------------------
+        # COMMUNICATION TAB
+        # ---------------------------------------------------------------
+        with tab_comm:
             st.markdown("<div class='case-card'>", unsafe_allow_html=True)
-            st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>☑</span>Station Task Checklists</div>", unsafe_allow_html=True)
-            st.caption("Select a station to review or complete its required tasks. The checklist for the current station is the transfer/reassignment gate.")
-
-            selected_key = f"action_checklist_station_{task_id}"
-            if selected_key not in st.session_state or st.session_state[selected_key] not in stations:
-                st.session_state[selected_key] = current
-            selected_check_station = st.session_state[selected_key]
-
-            status_cols = st.columns(5, gap="small")
-            for idx, station in enumerate(stations):
-                station_items = get_case_station_checklist(task, station)
-                complete = bool(station_items) and all(bool(x.get("checked")) for x in station_items)
-                label = "✓" if complete else "•"
-                button_label = f"{label} {station_name(station)}"
-                with status_cols[idx]:
-                    if st.button(button_label, use_container_width=True, key=f"select_action_station_{task_id}_{station}"):
-                        st.session_state[selected_key] = station
-                        st.rerun()
-
-            selected_check_station = st.session_state[selected_key]
-            selected_items = get_case_station_checklist(task, selected_check_station)
-            selected_missing = [x.get("item") for x in selected_items if not bool(x.get("checked"))]
-            complete_class = "complete" if not selected_missing else "pending"
-            complete_text = "✓ Complete" if not selected_missing else f"{len(selected_missing)} item(s) remaining"
-            st.markdown(
-                f"<div class='case-checklist-wrap'><div class='case-checklist-title'>{html.escape(station_name(selected_check_station))} Required Tasks</div>"
-                f"<div class='case-checklist-sub'>Every task below must be completed before this case can leave the current station.</div>"
-                f"<span class='case-checklist-status {complete_class}'>{html.escape(complete_text)}</span></div>",
-                unsafe_allow_html=True,
-            )
-
-            for idx, item in enumerate(selected_items):
-                check_key = f"case_checklist_{task_id}_{selected_check_station}_{idx}"
-                if check_key not in st.session_state:
-                    st.session_state[check_key] = bool(item.get("checked"))
-                st.checkbox(
-                    item.get("item") or f"Checklist item {idx + 1}",
-                    key=check_key,
-                    on_change=set_case_checklist_item,
-                    args=(task_id, selected_check_station, idx, check_key),
-                )
-
-            add_key = f"case_checklist_new_{task_id}_{selected_check_station}"
-            add_item = st.text_input(
-                "Add checklist item",
-                key=add_key,
-                placeholder=f"Add a {station_name(selected_check_station)}-specific task...",
-            )
-            if st.button("＋ Add Checklist Item", use_container_width=True, key=f"case_checklist_add_{task_id}_{selected_check_station}"):
-                if append_case_checklist_item(task_id, selected_check_station, add_item):
-                    st.session_state.pop(add_key, None)
-                    st.success("Checklist item added.")
-                    st.rerun()
-                else:
-                    st.warning("Enter a new checklist item.")
-            st.markdown("</div>", unsafe_allow_html=True)
-
-    # ---------------------------------------------------------------
-    # KNOWLEDGE BASE TAB — two-column clickable SOP reader
-    # ---------------------------------------------------------------
-    with tab_kb:
-        kb_left, kb_right = st.columns([0.9, 1.35], gap="small")
-        auto_query = case_kb_query(task)
-        selected_kb_key = f"selected_kb_doc_{task_id}"
-
-        with kb_left:
-            st.markdown("<div class='case-card kb-inline-card'>", unsafe_allow_html=True)
-            st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>✦</span>Case-Matched Knowledge Base</div>", unsafe_allow_html=True)
-            st.caption("Search the local Caseflow KB, SOP collection, and the shared HPE Knowledge Base. No OpenAI API key is required.")
-            query_key = f"kb_tab_query_{task_id}"
-            query = st.text_input(
-                "Knowledge Base Search",
-                value=auto_query,
-                placeholder="Search product, model, issue, licensing, troubleshooting or SOP...",
-                key=query_key,
-                label_visibility="collapsed",
-            )
-            match_col, ask_col = st.columns(2, gap="small")
-            with match_col:
-                match_clicked = st.button("↻ Match This Case", use_container_width=True, key=f"kb_match_tab_{task_id}")
-            with ask_col:
-                ask_clicked = st.button("✨ Ask Knowledge Base", type="primary", use_container_width=True, key=f"kb_ask_tab_{task_id}")
-
-            active_query = auto_query if match_clicked else (text(query).strip() or auto_query)
-            results = search_kb(active_query, limit=8)
-            if ask_clicked:
-                results = search_kb(f"{text(query)} {auto_query}", limit=8)
-
-            if results:
-                if selected_kb_key not in st.session_state:
-                    st.session_state[selected_kb_key] = text(results[0].get("_id")) or text(results[0].get("title"))
-                available_ids = {text(x.get("_id")) or text(x.get("title")) for x in results}
-                if st.session_state[selected_kb_key] not in available_ids:
-                    st.session_state[selected_kb_key] = text(results[0].get("_id")) or text(results[0].get("title"))
-
-                for idx, result in enumerate(results):
-                    rid = text(result.get("_id")) or text(result.get("title")) or str(idx)
-                    title = text(result.get("title")) or "Knowledge Base Article"
-                    category = text(result.get("category")) or "Knowledge Base"
-                    selected = rid == st.session_state[selected_kb_key]
-                    prefix = "★ BEST · " if idx == 0 else f"{idx + 1}. "
-                    if st.button(
-                        f"{prefix}{title}  ·  {category}",
-                        use_container_width=True,
-                        key=f"kb_tile_{task_id}_{idx}_{sha256(rid)[:10]}",
-                        type="primary" if selected else "secondary",
-                    ):
-                        st.session_state[selected_kb_key] = rid
-                        st.rerun()
+            st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>✉</span>Communication</div>", unsafe_allow_html=True)
+            communications = task.get("communications") or task.get("communication_history") or []
+            if isinstance(communications, list) and communications:
+                for item in reversed(communications[-20:]):
+                    if isinstance(item, dict):
+                        sender = text(item.get("sender") or item.get("user") or item.get("from")) or "Caseflow User"
+                        body = text(item.get("message") or item.get("body") or item.get("details")) or "—"
+                        stamp = dt_display(item.get("timestamp") or item.get("created_at"))
+                    else:
+                        sender, body, stamp = "Caseflow User", text(item), ""
+                    st.markdown(
+                        f"<div class='communication-card'><div class='communication-head'><strong>{html.escape(sender)}</strong><span>{html.escape(stamp)}</span></div><div>{html.escape(body)}</div></div>",
+                        unsafe_allow_html=True,
+                    )
             else:
-                st.info("No matching Knowledge Base/SOP article found. Try the exact product, model, acronym or issue.")
+                st.info("No communication history is stored on this case.")
             st.markdown("</div>", unsafe_allow_html=True)
 
-        with kb_right:
-            st.markdown("<div class='case-card kb-inline-card'>", unsafe_allow_html=True)
-            st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>✦</span>Recommended Answer / SOP</div>", unsafe_allow_html=True)
-            selected_doc = None
-            if results:
-                selected_id = st.session_state.get(selected_kb_key)
-                selected_doc = next(
-                    (doc for doc in results if (text(doc.get("_id")) or text(doc.get("title"))) == selected_id),
-                    results[0],
-                )
-                st.markdown(
-                    f"<div class='kb-answer-card best'><div class='kb-answer-label'>BEST MATCH / RECOMMENDED SOP</div>"
-                    f"<div class='kb-result-title'>{html.escape(text(selected_doc.get('title')) or 'Knowledge Base Article')}</div>"
-                    f"<div class='kb-result-text'>{html.escape(text(selected_doc.get('category')) or 'HPE / Aruba Guidance')}</div></div>",
-                    unsafe_allow_html=True,
-                )
-                full_content = kb_content(selected_doc)
-                st.markdown(
-                    f"<div class='kb-full-sop'><div class='kb-full-sop-label'>Complete SOP / Answer</div>"
-                    f"<div class='kb-full-sop-text'>{html.escape(full_content).replace(chr(10), '<br>')}</div></div>",
-                    unsafe_allow_html=True,
-                )
-
-                # Always provide a deterministic best-answer recommendation based
-                # on the retrieved SOP content and the actual case context.
-                recommendation = local_kb_ai_answer(
-                    f"What is the best next action for this case? {case_kb_query(task)}",
-                    task,
-                    [selected_doc] + [doc for doc in results if doc is not selected_doc][:3],
-                )
-                answer = text(recommendation.get("answer"))
-                st.markdown(
-                    f"<div class='kb-recommendation'><div class='kb-full-sop-label'>Best Possible Answer Recommendation · {html.escape(text(recommendation.get('confidence')))}</div>"
-                    f"<div class='kb-full-sop-text'>{html.escape(answer).replace(chr(10), '<br>')}</div></div>",
-                    unsafe_allow_html=True,
-                )
-                source = text(selected_doc.get("source")) or text(selected_doc.get("source_type"))
-                if source:
-                    st.caption(f"Source: {source}")
+        # ---------------------------------------------------------------
+        # ATTACHMENTS TAB
+        # ---------------------------------------------------------------
+        with tab_attach:
+            st.markdown("<div class='case-card'>", unsafe_allow_html=True)
+            st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>♧</span>Attachments</div>", unsafe_allow_html=True)
+            attachments = task.get("attachments") or task.get("files") or []
+            if isinstance(attachments, list) and attachments:
+                for item in attachments:
+                    if isinstance(item, dict):
+                        name = text(item.get("name") or item.get("filename") or item.get("file_name")) or "Attachment"
+                        detail = text(item.get("description") or item.get("type") or item.get("size"))
+                    else:
+                        name, detail = text(item), ""
+                    st.markdown(
+                        f"<div class='attachment-row'><span>▧ <strong>{html.escape(name)}</strong></span><span>{html.escape(detail)}</span></div>",
+                        unsafe_allow_html=True,
+                    )
             else:
-                st.info("Search for a matching SOP to see the complete guidance here.")
+                st.info("No attachments are recorded for this case.")
             st.markdown("</div>", unsafe_allow_html=True)
 
-    # ---------------------------------------------------------------
-    # COMMUNICATION TAB
-    # ---------------------------------------------------------------
-    with tab_comm:
-        st.markdown("<div class='case-card'>", unsafe_allow_html=True)
-        st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>✉</span>Communication</div>", unsafe_allow_html=True)
-        communications = task.get("communications") or task.get("communication_history") or []
-        if isinstance(communications, list) and communications:
-            for item in reversed(communications[-20:]):
-                if isinstance(item, dict):
-                    sender = text(item.get("sender") or item.get("user") or item.get("from")) or "Caseflow User"
-                    body = text(item.get("message") or item.get("body") or item.get("details")) or "—"
-                    stamp = dt_display(item.get("timestamp") or item.get("created_at"))
-                else:
-                    sender, body, stamp = "Caseflow User", text(item), ""
-                st.markdown(
-                    f"<div class='communication-card'><div class='communication-head'><strong>{html.escape(sender)}</strong><span>{html.escape(stamp)}</span></div><div>{html.escape(body)}</div></div>",
-                    unsafe_allow_html=True,
-                )
-        else:
-            st.info("No communication history is stored on this case.")
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("<div class='case-detail-footer'></div>", unsafe_allow_html=True)
 
-    # ---------------------------------------------------------------
-    # ATTACHMENTS TAB
-    # ---------------------------------------------------------------
-    with tab_attach:
-        st.markdown("<div class='case-card'>", unsafe_allow_html=True)
-        st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>♧</span>Attachments</div>", unsafe_allow_html=True)
-        attachments = task.get("attachments") or task.get("files") or []
-        if isinstance(attachments, list) and attachments:
-            for item in attachments:
-                if isinstance(item, dict):
-                    name = text(item.get("name") or item.get("filename") or item.get("file_name")) or "Attachment"
-                    detail = text(item.get("description") or item.get("type") or item.get("size"))
-                else:
-                    name, detail = text(item), ""
-                st.markdown(
-                    f"<div class='attachment-row'><span>▧ <strong>{html.escape(name)}</strong></span><span>{html.escape(detail)}</span></div>",
-                    unsafe_allow_html=True,
-                )
-        else:
-            st.info("No attachments are recorded for this case.")
-        st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("<div class='case-detail-footer'></div>", unsafe_allow_html=True)
+    # ============================================================
+    # DASHBOARD
+    # ============================================================
+    # REAL-TIME DASHBOARD
+    # The dashboard fragment refreshes once per second so MongoDB changes are
+    # reflected on the visible tiles/table without refreshing the entire app.
 
 
 # ============================================================
-# DASHBOARD
+# FINAL CASE DETAILS MODAL SHELL — NATIVE SCROLL CONTAINER
 # ============================================================
-# REAL-TIME DASHBOARD
-# The dashboard fragment refreshes once per second so MongoDB changes are
-# reflected on the visible tiles/table without refreshing the entire app.
-# Duration still updates browser-side every second for smooth per-second timing.
+st.markdown(r"""
+<style>
+/* Compact modal shell sized to the actual Caseflow desktop workspace. */
+div[data-testid="stDialog"] > div {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: translate(-50%, -50%) !important;
+    width: min(1080px, calc(100vw - 48px)) !important;
+    max-width: min(1080px, calc(100vw - 48px)) !important;
+    height: min(660px, calc(100vh - 32px)) !important;
+    max-height: calc(100vh - 32px) !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+}
+
+/* Never hide the native scrollbar of the Streamlit container. */
+div[data-testid="stDialog"] [data-testid="stVerticalBlock"] {
+    scrollbar-width: auto !important;
+}
+
+/* Remove the old zoom/oversizing behavior from the case-detail workspace. */
+div[data-testid="stDialog"] .case-detail-hero,
+div[data-testid="stDialog"] .case-summary-strip {
+    zoom: 1 !important;
+}
+
+/* Compact typography without shrinking the browser layout. */
+div[data-testid="stDialog"] .case-summary-cell span { font-size: 8px !important; }
+div[data-testid="stDialog"] .case-summary-cell strong { font-size: 9px !important; }
+div[data-testid="stDialog"] .case-assignee-copy span { font-size: 8px !important; }
+div[data-testid="stDialog"] .case-assignee-copy strong { font-size: 9px !important; }
+
+/* The native scroll container gets a clear scrollbar in Chromium/Edge. */
+div[data-testid="stDialog"] [data-testid="stVerticalBlock"]::-webkit-scrollbar {
+    width: 10px !important;
+}
+div[data-testid="stDialog"] [data-testid="stVerticalBlock"]::-webkit-scrollbar-track {
+    background: #edf2f7 !important;
+    border-radius: 8px !important;
+}
+div[data-testid="stDialog"] [data-testid="stVerticalBlock"]::-webkit-scrollbar-thumb {
+    background: #7f94aa !important;
+    border-radius: 8px !important;
+    border: 2px solid #edf2f7 !important;
+}
+
+@media (max-width: 900px) {
+    div[data-testid="stDialog"] > div {
+        width: calc(100vw - 12px) !important;
+        max-width: calc(100vw - 12px) !important;
+        height: calc(100vh - 12px) !important;
+        max-height: calc(100vh - 12px) !important;
+    }
+}
+</style>
+""", unsafe_allow_html=True)
+
+    # Duration still updates browser-side every second for smooth per-second timing.
 
 
 @st.fragment(run_every="1s")
