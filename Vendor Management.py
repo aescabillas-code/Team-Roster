@@ -2528,6 +2528,172 @@ div[data-testid="stDialog"] [data-testid="stHorizontalBlock"] > div { min-width:
 
 
 # ============================================================
+# CASE DETAILS — FINAL FIT / READABILITY OVERRIDES
+# ============================================================
+st.markdown(r"""
+<style>
+/* Keep the modal centered, compact, and fully usable on a normal screen. */
+div[data-testid="stDialog"] > div {
+    top:50% !important;
+    left:50% !important;
+    right:auto !important;
+    bottom:auto !important;
+    transform:translate(-50%,-50%) !important;
+    width:min(1260px, calc(100vw - 36px)) !important;
+    max-width:min(1260px, calc(100vw - 36px)) !important;
+    height:min(90vh, 820px) !important;
+    max-height:calc(100vh - 36px) !important;
+    overflow:hidden !important;
+}
+
+div[data-testid="stDialog"] [data-testid="stDialogContent"] {
+    height:calc(100% - 52px) !important;
+    max-height:calc(100% - 52px) !important;
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+    scrollbar-width:thin !important;
+    scrollbar-color:#9aaabd #edf2f7 !important;
+    padding:0 12px 12px 12px !important;
+}
+
+div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar {
+    width:9px !important;
+}
+div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar-track {
+    background:#edf2f7 !important;
+    border-radius:8px !important;
+}
+div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar-thumb {
+    background:#9aaabd !important;
+    border-radius:8px !important;
+    border:2px solid #edf2f7 !important;
+}
+
+div[data-testid="stDialog"] > div > div {
+    overflow:hidden !important;
+}
+
+/* Remove the aggressive zoom. Use the same compact text scale throughout the
+   three columns instead, so text remains crisp and clickable. */
+div[data-testid="stDialog"] [data-testid="stDialogContent"] > div {
+    zoom:1 !important;
+    width:100% !important;
+    max-width:100% !important;
+}
+
+/* Match the compact reference typography. */
+div[data-testid="stDialog"] .case-detail-hero { padding:5px 7px 4px !important; margin-bottom:5px !important; }
+div[data-testid="stDialog"] .case-detail-case-number { font-size:17px !important; }
+div[data-testid="stDialog"] .case-detail-subject { font-size:15px !important; }
+div[data-testid="stDialog"] .case-detail-description { font-size:10px !important; line-height:1.25 !important; }
+div[data-testid="stDialog"] .case-summary-cell > span { font-size:8.5px !important; }
+div[data-testid="stDialog"] .case-summary-cell > strong { font-size:10px !important; }
+div[data-testid="stDialog"] .case-info-row span { font-size:9px !important; }
+div[data-testid="stDialog"] .case-info-row strong { font-size:9.5px !important; line-height:1.25 !important; }
+div[data-testid="stDialog"] .case-card-heading { font-size:11px !important; }
+div[data-testid="stDialog"] .action-readonly-label { font-size:8.5px !important; }
+div[data-testid="stDialog"] .action-readonly-value { font-size:9.5px !important; }
+div[data-testid="stDialog"] .case-checklist-title { font-size:9.5px !important; }
+div[data-testid="stDialog"] .case-checklist-sub { font-size:8px !important; }
+div[data-testid="stDialog"] [data-testid="stCheckbox"] label { font-size:8.5px !important; }
+div[data-testid="stDialog"] .kb-result-title { font-size:10px !important; }
+div[data-testid="stDialog"] .kb-result-text { font-size:9px !important; line-height:1.3 !important; }
+
+/* Clickable KB result tiles. */
+div[data-testid="stDialog"] [class*="st-key-kb_tile_"] {
+    margin-top:5px !important;
+}
+div[data-testid="stDialog"] [class*="st-key-kb_tile_"] button {
+    width:100% !important;
+    min-height:52px !important;
+    height:auto !important;
+    text-align:left !important;
+    justify-content:flex-start !important;
+    white-space:pre-wrap !important;
+    line-height:1.25 !important;
+    font-size:9px !important;
+    font-weight:600 !important;
+    color:#172b52 !important;
+    background:#fff !important;
+    border:1px solid #dce5ef !important;
+    border-radius:8px !important;
+    padding:7px 9px !important;
+    box-shadow:none !important;
+}
+div[data-testid="stDialog"] [class*="st-key-kb_tile_"] button:hover {
+    border-color:#0879c9 !important;
+    background:#f6fbff !important;
+}
+
+div[data-testid="stDialog"] .kb-expanded-card {
+    background:#f8fbff !important;
+    border:1px solid #0879c9 !important;
+    border-radius:8px !important;
+    padding:9px !important;
+    margin:7px 0 !important;
+}
+div[data-testid="stDialog"] .kb-expanded-title {
+    color:#102041 !important;
+    font-size:11px !important;
+    font-weight:800 !important;
+    line-height:1.25 !important;
+}
+div[data-testid="stDialog"] .kb-expanded-label {
+    color:#0879c9 !important;
+    font-size:8px !important;
+    font-weight:850 !important;
+    letter-spacing:.35px !important;
+    margin-bottom:3px !important;
+}
+div[data-testid="stDialog"] .kb-expanded-body {
+    color:#334155 !important;
+    font-size:9px !important;
+    line-height:1.38 !important;
+    white-space:pre-wrap !important;
+}
+div[data-testid="stDialog"] .kb-recommendation {
+    background:#ecfbf4 !important;
+    border:1px solid #a8dfc6 !important;
+    border-left:4px solid #087b58 !important;
+    border-radius:7px !important;
+    padding:8px !important;
+    margin:6px 0 !important;
+}
+div[data-testid="stDialog"] .kb-recommendation-title {
+    color:#087b58 !important;
+    font-size:8px !important;
+    font-weight:850 !important;
+    letter-spacing:.35px !important;
+}
+div[data-testid="stDialog"] .kb-recommendation-body {
+    color:#1f4d3c !important;
+    font-size:9px !important;
+    line-height:1.35 !important;
+    margin-top:3px !important;
+}
+
+/* Keep the main three columns side-by-side and aligned at the top. */
+div[data-testid="stDialog"] .case-workspace-row [data-testid="stHorizontalBlock"] {
+    align-items:flex-start !important;
+}
+
+@media (max-width:900px) {
+    div[data-testid="stDialog"] > div {
+        width:calc(100vw - 20px) !important;
+        max-width:calc(100vw - 20px) !important;
+        height:calc(100vh - 20px) !important;
+        max-height:calc(100vh - 20px) !important;
+    }
+    div[data-testid="stDialog"] [data-testid="stDialogContent"] {
+        padding-left:8px !important;
+        padding-right:8px !important;
+    }
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+# ============================================================
 # TASK ENGINE
 # ============================================================
 
@@ -4701,34 +4867,103 @@ def case_details(task_id):
                 match_clicked = st.button("↻ Match This Case", use_container_width=True, key=f"inline_kb_match_{task_id}")
 
             active_query = auto_query if match_clicked else (text(kb_query).strip() or auto_query)
-            results = search_kb(f"{active_query} {auto_query}" if kb_clicked else active_query, limit=5)
+            results = search_kb(f"{active_query} {auto_query}" if kb_clicked else active_query, limit=6)
+
+            selected_key = f"kb_selected_{task_id}"
+            selected_id = text(st.session_state.get(selected_key, ""))
+            selected_doc = None
+            if selected_id:
+                for _doc in results:
+                    if text(_doc.get("_id")) == selected_id or text(_doc.get("title")) == selected_id:
+                        selected_doc = _doc
+                        break
+
             if results:
-                best = results[0]
-                content = kb_content(best)
-                if len(content) > 700:
-                    content = content[:700].rstrip() + "…"
-                st.markdown(
-                    f"<div class='kb-answer-card best'><div class='kb-answer-label'>BEST MATCH</div>"
-                    f"<div class='kb-result-title'>{html.escape(text(best.get('title')) or 'Knowledge Base Article')}</div>"
-                    f"<div class='kb-result-text'>{html.escape(content).replace(chr(10), '<br>')}</div>"
-                    f"<div class='kb-meta'><span class='kb-source-pill'>{html.escape(text(best.get('category')) or 'Knowledge Base')}</span>"
-                    f"<span class='kb-source-pill'>{html.escape(text(best.get('source_type')) or text(best.get('source')) or 'SOP')}</span></div></div>",
-                    unsafe_allow_html=True,
-                )
-                if text(best.get("url")):
-                    st.caption(f"Source: {text(best.get('url'))}")
-                for index, result in enumerate(results[1:], start=2):
-                    c = kb_content(result)
-                    c = c[:260].rstrip() + "…" if len(c) > 260 else c
+                # Every result is a real Streamlit button styled as a compact tile.
+                # Clicking any tile expands that SOP in-place.
+                for index, result in enumerate(results):
+                    title = text(result.get("title")) or "Knowledge Base Article"
+                    snippet = kb_content(result).replace("\n", " ").strip()
+                    snippet = snippet[:145].rstrip() + ("…" if len(snippet) > 145 else "")
+                    tile_label = f"{('BEST MATCH · ' if index == 0 else str(index + 1) + '. ')}{title}\n{snippet}"
+                    if st.button(
+                        tile_label,
+                        key=f"kb_tile_{task_id}_{index}",
+                        use_container_width=True,
+                    ):
+                        st.session_state[selected_key] = text(result.get("_id")) or title
+                        selected_doc = result
+                        st.rerun()
+
+                # Default to the best match so the agent immediately sees the
+                # strongest SOP, while still allowing any tile to be expanded.
+                if selected_doc is None:
+                    selected_doc = results[0]
+
+                # Full selected SOP / knowledge article.
+                if selected_doc:
+                    full_title = text(selected_doc.get("title")) or "Knowledge Base Article"
+                    category = text(selected_doc.get("category")) or "Knowledge Base"
+                    answer = text(selected_doc.get("answer"))
+                    steps = text(selected_doc.get("steps")) or text(selected_doc.get("sop")) or text(selected_doc.get("content"))
+                    question = text(selected_doc.get("question"))
+                    source = text(selected_doc.get("source")) or "HPE Knowledge Base"
+                    source_url = text(selected_doc.get("url"))
+
                     st.markdown(
-                        f"<div class='kb-answer-card'><div class='kb-result-title'>{index}. {html.escape(text(result.get('title')) or 'Related Article')}</div>"
-                        f"<div class='kb-result-text'>{html.escape(c).replace(chr(10), '<br>')}</div>"
-                        f"<div class='kb-meta'><span class='kb-source-pill'>{html.escape(text(result.get('category')) or 'Knowledge Base')}</span></div></div>",
+                        f"<div class='kb-expanded-card'>"
+                        f"<div class='kb-expanded-label'>SELECTED SOP / KNOWLEDGE ARTICLE</div>"
+                        f"<div class='kb-expanded-title'>{html.escape(full_title)}</div>"
+                        f"<div class='kb-meta'>{html.escape(category)} · {html.escape(source)}</div>"
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                    # Best possible deterministic recommendation based directly
+                    # on the selected SOP answer and procedure; no external LLM.
+                    recommendation = answer or kb_content(selected_doc)
+                    if recommendation:
+                        st.markdown(
+                            f"<div class='kb-recommendation'>"
+                            f"<div class='kb-recommendation-title'>BEST ANSWER / RECOMMENDATION</div>"
+                            f"<div class='kb-recommendation-body'>{html.escape(recommendation).replace(chr(10), '<br>')}</div>"
+                            f"</div>",
+                            unsafe_allow_html=True,
+                        )
+
+                    if question:
+                        st.markdown(
+                            f"<div class='kb-expanded-body'><strong>Knowledge question:</strong> {html.escape(question)}</div>",
+                            unsafe_allow_html=True,
+                        )
+                    if steps:
+                        st.markdown(
+                            f"<div class='kb-expanded-card'>"
+                            f"<div class='kb-expanded-label'>PROCEDURE / SOP STEPS</div>"
+                            f"<div class='kb-expanded-body'>{html.escape(steps).replace(chr(10), '<br>')}</div>"
+                            f"</div>",
+                            unsafe_allow_html=True,
+                        )
+                    if source_url:
+                        st.caption(f"Source: {source_url}")
+
+                    verify_text = (
+                        "Before acting, verify the current device/model, serial or identifier, customer/site context, "
+                        "entitlement or policy requirements, and the latest approved SOP. Escalate when the selected "
+                        "procedure does not fully match the case symptoms."
+                    )
+                    st.markdown(
+                        f"<div class='kb-expanded-card'>"
+                        f"<div class='kb-expanded-label'>VERIFY BEFORE ACTION</div>"
+                        f"<div class='kb-expanded-body'>{html.escape(verify_text)}</div>"
+                        f"</div>",
                         unsafe_allow_html=True,
                     )
             else:
                 st.info("No matching Knowledge Base/SOP article found. Try the exact product, model, acronym or issue.")
 
+            # Optional question-driven recommendation remains available below
+            # the clickable SOP results.
             question_key = f"kb_ai_question_{task_id}"
             result_key = f"kb_ai_result_{task_id}"
             if question_key not in st.session_state:
@@ -4736,9 +4971,9 @@ def case_details(task_id):
             question = st.text_area(
                 "Ask for recommended guidance",
                 key=question_key,
-                height=70,
+                height=58,
                 label_visibility="collapsed",
-                placeholder="Example: What should I verify before escalating this HPE/Aruba case?",
+                placeholder="Ask what to verify, troubleshoot, document or escalate...",
             )
             if st.button("Get Recommended Guidance", type="primary", use_container_width=True, key=f"kb_get_guidance_{task_id}"):
                 retrieved = search_kb(f"{text(question)} {auto_query}", limit=6)
@@ -4747,17 +4982,11 @@ def case_details(task_id):
             if ai_result:
                 answer_text = text(ai_result.get("answer"))
                 st.markdown(
-                    f"<div class='kb-answer-card best'><div class='kb-answer-label'>KNOWLEDGE BASE ANSWER · {html.escape(text(ai_result.get('confidence')))}</div>"
-                    f"<div class='kb-result-text'>{html.escape(answer_text).replace(chr(10), '<br>')}</div></div>",
+                    f"<div class='kb-recommendation'>"
+                    f"<div class='kb-recommendation-title'>KNOWLEDGE BASE RECOMMENDATION · {html.escape(text(ai_result.get('confidence')))}</div>"
+                    f"<div class='kb-recommendation-body'>{html.escape(answer_text).replace(chr(10), '<br>')}</div></div>",
                     unsafe_allow_html=True,
                 )
-                sources = ai_result.get("sources", [])
-                if sources:
-                    pills = "".join(
-                        f"<span class='kb-source-pill'>{html.escape(text(d.get('title')) or 'KB Article')}</span>"
-                        for d in sources[:6]
-                    )
-                    st.markdown(f"<div class='kb-meta'><strong>Sources used:</strong> {pills}</div>", unsafe_allow_html=True)
             st.markdown("</div>", unsafe_allow_html=True)
 
         # History and resolution stay below the three primary sections.
