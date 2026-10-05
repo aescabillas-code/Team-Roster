@@ -10,7 +10,7 @@ UI is designed to closely match the supplied dashboard reference:
 - Integrated live search bar
 - Five pastel station tiles
 - Borderless active-case table
-- Centered compact case-detail dialog with right vertical scrollbar
+- Centered compact case-detail dialog
 - Settings control only (no alert bell / no profile)
 - Admin Settings supports Excel case import and vendor synchronization
 - Real-time duration using the user's browser clock
@@ -398,6 +398,25 @@ def station_name(value):
 # ============================================================
 # PERSISTENT ONE-TIME ACCESS — DESKTOP + MOBILE BROWSER STORAGE
 # ============================================================
+# The access code is requested only once per browser profile.
+# A signed authorization token is stored in browser storage and is
+# NEVER placed in the URL or query string.
+#
+# Behavior:
+#   - ACCESS_CODE and TOKEN_SECRET are read only from Streamlit Secrets.
+#   - Successful access creates a signed token.
+#   - The browser stores that token in a durable first-party cookie and localStorage.
+#   - sessionStorage is used only as a fallback when persistent storage is blocked.
+#   - Refreshing/reopening the browser restores authorization automatically.
+#   - Changing ACCESS_CODE invalidates previously issued tokens.
+#   - Clearing browser access removes the stored authorization token.
+#
+# Required dependencies:
+#   itsdangerous
+#   streamlit-js-eval
+#
+# This intentionally follows the persistent authorization behavior used by
+# the Knowledge Base implementation.
 
 
 ACCESS_STORAGE_KEY = "hpe_caseflow_authorized_v1"
@@ -568,6 +587,9 @@ def _read_server_cookie_token():
 
 def _read_browser_token():
     """Read persistent authorization; prefer a server-visible cookie, then browser storage."""
+    # Cookies survive refreshes and closing/reopening the tab and are available
+    # to Streamlit on the next request. This avoids relying solely on the
+    # streamlit-js-eval iframe's localStorage origin.
     cookie_token = _read_server_cookie_token()
     if cookie_token:
         return cookie_token
@@ -637,6 +659,7 @@ def _save_browser_token(token: str):
             let saved = false;
 
 
+            // Durable first-party cookie. Secure is enabled automatically on HTTPS.
             try {{
                 const secure = window.location.protocol === 'https:' ? '; Secure' : '';
                 const cookie = cookieKey + '=' + encodeURIComponent(value) +
@@ -749,6 +772,9 @@ def _clear_browser_token():
 
 
 def browser_is_authorized():
+    """
+    Check Streamlit session state first, then persistent browser storage.
+    """
     if st.session_state.get(
         "access_authorized",
         False,
@@ -760,6 +786,8 @@ def browser_is_authorized():
 
 
     if token is None:
+        # The JS bridge has not returned yet. Do not incorrectly show
+        # the access-code form while the stored authorization is restoring.
         return None
 
 
@@ -775,6 +803,7 @@ def browser_is_authorized():
 
 
 def authorize_browser():
+    """Authorize immediately and persist the signed token in browser storage."""
     token = create_browser_token()
 
 
@@ -782,6 +811,8 @@ def authorize_browser():
         return False
 
 
+    # The current session becomes authorized immediately. The browser
+    # component writes the signed token independently.
     _save_browser_token(token)
 
 
@@ -795,6 +826,14 @@ def authorize_browser():
 
 
 def clear_token_access():
+    """
+    Clear authorization for this browser profile.
+
+
+    The authorization token is removed from localStorage/sessionStorage and
+    the current Streamlit session is reset. Existing authorization elsewhere
+    is governed by that browser's own stored token.
+    """
     st.session_state["access_authorized"] = False
     st.session_state["access_granted"] = False
     st.session_state.pop("access_token", None)
@@ -807,6 +846,9 @@ def clear_token_access():
 
 
 def access_gate():
+    """
+    One-time access-code gate with persistent desktop/mobile authorization.
+    """
     if URLSafeTimedSerializer is None or streamlit_js_eval is None:
         st.error(
             "Persistent browser authorization is not installed. "
@@ -950,7 +992,11 @@ defaults = {
     "simulation_until": 0.0,
     "simulation_case_id": None,
     "search": "",
+    # Kept for compatibility with existing session state; acknowledgement
+    # now stops tile flashing immediately.
     "station_warning_ack_until": {},
+    # Stations silenced after the user clicks their active warning tile.
+    # The station stays silenced until the current warning condition clears.
     "station_warning_silenced": set(),
 }
 
@@ -1026,6 +1072,9 @@ st.markdown(
     }
 
 
+    /* HEADER — CSS recreation of the supplied HPE Caseflow reference.
+       No uploaded image is used. The logo, teal field, diagonal wave,
+       search field and settings control are rendered as HTML/CSS. */
     .caseflow-header-shell,
     [class*="st-key-caseflow_header_shell"] {
         position:relative !important;
@@ -1096,6 +1145,11 @@ st.markdown(
     }
 
 
+    /* HEADER HIT-AREA FIX
+       Decorative/header layers must never sit above the native controls.
+       The search field and Settings gear receive their own full-size,
+       high-z-index hit areas so the entire visible control is clickable,
+       not just its lower portion. */
     [class*="st-key-caseflow_header_shell"] {
         isolation:isolate !important;
     }
@@ -1147,6 +1201,7 @@ st.markdown(
     }
 
 
+    /* Left HPE lockup */
     [class*="st-key-caseflow_header_shell"] .caseflow-brand {
         position:absolute !important;
         left:12px !important;
@@ -1230,6 +1285,7 @@ st.markdown(
     }
 
 
+    /* The Streamlit columns are used only as functional control hosts. */
     [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(1) {
         position:absolute !important;
         left:0 !important;
@@ -1363,6 +1419,9 @@ st.markdown(
     }
 
 
+    /* SEARCH */
+
+
     div[data-testid="stTextInput"] input {
         height:50px !important;
         border:1px solid #dce3ed !important;
@@ -1379,6 +1438,9 @@ st.markdown(
     }
 
 
+    /* TOP ICON BUTTONS */
+
+
     .top-icon button {
         height:50px !important;
         min-height:50px !important;
@@ -1390,6 +1452,8 @@ st.markdown(
     }
 
 
+    /* Keep fragment station switching visually clean. The selected tile is
+       updated on pointerdown before Streamlit performs its fragment rerun. */
     [data-testid="stStatusWidget"],
     [data-testid="stSpinner"],
     .stSpinner {
@@ -1398,6 +1462,7 @@ st.markdown(
     }
 
 
+    /* STATION TILES — reference visual + reliable full-card click target */
     [class*="st-key-station_wrap_care"], [class*="st-key-station_wrap_arch"],
     [class*="st-key-station_wrap_pet"], [class*="st-key-station_wrap_supply"],
     [class*="st-key-station_wrap_onsite"] { position:relative !important; min-height:184px !important; overflow:visible !important; }
@@ -1432,6 +1497,7 @@ st.markdown(
     }
 
 
+    /* Selected station = visibly thicker border in its own station color. */
     .station-card-visual.care.selected { border:3px solid #f24a61 !important; }
     .station-card-visual.arch.selected { border:3px solid #69b7e5 !important; }
     .station-card-visual.pet.selected { border:3px solid #70cda9 !important; }
@@ -1463,7 +1529,7 @@ st.markdown(
     .arch .station-warning.active, .pet .station-warning.active, .supply .station-warning.active, .onsite .station-warning.active { color:#53637f; }
     .station-sla-ref { position:absolute; left:24px; bottom:17px; font-size:12px; color:#53637f; }
     .station-sla-ref strong { color:#102041; }
-
+    /* Make the real button transparent and stretch it over the card. */
     [class*="st-key-station_wrap_care"] [class*="st-key-station_CARE"],
     [class*="st-key-station_wrap_arch"] [class*="st-key-station_ARCH"],
     [class*="st-key-station_wrap_pet"] [class*="st-key-station_PET"],
@@ -1482,7 +1548,7 @@ st.markdown(
         color:transparent !important; font-size:1px !important; opacity:0.001 !important;
         cursor:pointer !important; z-index:30 !important; pointer-events:auto !important;
     }
-
+    /* ACTIVE SLA WARNING: intentionally strong and unmistakable. */
     .station-card-visual.critical {
         border:2px solid #ef334f !important;
         animation:stationCardFlash .55s ease-in-out infinite alternate;
@@ -1551,14 +1617,15 @@ st.markdown(
         font-weight:800 !important;
         transition:color .25s ease, text-shadow .25s ease, opacity .25s ease;
     }
-
+    /* Duration color follows elapsed time in the CURRENT station SLA:
+       green = 0-50%, yellow = 50-80%, red = 80-100% and beyond. */
     .duration-warning-wrap.duration-green { color:#218137 !important; }
     .duration-warning-wrap.duration-yellow { color:#c58a00 !important; }
     .duration-warning-wrap.duration-red {
         color:#e51c3a !important;
         font-weight:900 !important;
     }
-
+    /* Final 20% still pulses to make an approaching breach unmistakable. */
     .duration-warning-wrap.duration-warning-active {
         color:#ef1738 !important;
         font-weight:900 !important;
@@ -1569,6 +1636,9 @@ st.markdown(
         from { opacity:.55; }
         to { opacity:1; }
     }
+
+
+    /* TABLE */
 
 
     .cases-title {
@@ -1632,6 +1702,7 @@ st.markdown(
     }
 
 
+    /* Case number is a compact cell button that stays inside its table row. */
     [class*="st-key-case_cell_"] {
         min-width:0 !important;
         width:100% !important;
@@ -1680,6 +1751,7 @@ st.markdown(
     }
 
 
+    /* Case-number cells inherit the pastel color of their current station. */
     [class*="st-key-case_cell_care_"] button {
         background:#fff0f2 !important;
         border-color:#f3a4b0 !important;
@@ -1845,7 +1917,28 @@ st.markdown(
     }
 
 
+
+
+    /* REFERENCE TABLE PANEL */
     .cases-panel { background:#fff;border-radius:18px;padding:16px 12px 18px;box-shadow:0 3px 18px rgba(29,55,96,.05); }
+
+
+    /* RIGHT-SIDE CASE DRAWER, matching the uploaded reference */
+    div[data-testid="stDialog"] > div { position:fixed !important;top:278px !important;right:14px !important;left:auto !important;transform:none !important;width:min(494px,calc(100vw - 28px)) !important;max-width:min(494px,calc(100vw - 28px)) !important;height:calc(100vh - 294px) !important;max-height:calc(100vh - 294px) !important;margin:0 !important;border-radius:18px !important;box-shadow:0 12px 36px rgba(25,42,76,.16) !important;overflow:hidden !important; }
+    div[data-testid="stDialog"] [data-testid="stDialogContent"] { padding-top:0 !important; }
+    div[data-testid="stDialog"] header { border-bottom:1px solid #edf0f5 !important; }
+    div[data-testid="stDialog"] > div > div { overflow-y:auto !important; }
+
+
+    /* DIALOG */
+
+
+    div[data-testid="stDialog"] > div {
+        border-radius:18px !important;
+    }
+
+
+    /* ALERT */
 
 
     .alert-card {
@@ -1880,6 +1973,9 @@ st.markdown(
     }
 
 
+    /* RESPONSIVE */
+
+
     @media(max-width:900px) {
         .brand-name {
             font-size:19px;
@@ -1892,6 +1988,9 @@ st.markdown(
     }
 
 
+
+
+    /* MOBILE LAYOUT — header, station cards and case table remain usable on phones. */
     @media(max-width:700px) {
         .block-container {
             padding:10px 10px 24px !important;
@@ -1973,6 +2072,7 @@ st.markdown(
         }
 
 
+        /* Turn the five station columns into a compact two-column mobile grid. */
         [data-testid="stHorizontalBlock"]:has([class*="st-key-station_wrap_care"]) {
             display:grid !important;
             grid-template-columns:repeat(2,minmax(0,1fr)) !important;
@@ -2032,6 +2132,8 @@ st.markdown(
         .station-pill { font-size:11px !important; padding:5px 10px !important; }
 
 
+        /* Keep the essential case fields visible and prevent the table from
+           becoming unusably narrow. Secondary fields are hidden on phones. */
         [data-testid="stHorizontalBlock"]:has([class*="st-key-case_cell_"]) > div:nth-child(4),
         [data-testid="stHorizontalBlock"]:has([class*="st-key-case_cell_"]) > div:nth-child(5) {
             display:none !important;
@@ -2056,6 +2158,29 @@ st.markdown(
         [class*="st-key-case_cell_"] button { font-size:9px !important; padding:3px 5px !important; }
         .priority-pill { font-size:8px !important; padding:4px 5px !important; }
         .duration-warning-wrap { font-size:9px !important; }
+
+
+        div[data-testid="stDialog"] > div {
+            top:8px !important;
+            right:8px !important;
+            left:8px !important;
+            width:calc(100vw - 16px) !important;
+            max-width:calc(100vw - 16px) !important;
+            height:calc(100vh - 16px) !important;
+            max-height:calc(100vh - 16px) !important;
+            border-radius:14px !important;
+        }
+
+        div[data-testid="stDialog"] [data-testid="stDialogContent"] {
+            overflow:hidden !important;
+            scrollbar-width:none !important;
+        }
+
+        div[data-testid="stDialog"] [data-testid="stDialogContent"] > div {
+            zoom:.68 !important;
+            width:147.06% !important;
+            max-width:147.06% !important;
+        }
     }
 
 
@@ -2066,11 +2191,16 @@ st.markdown(
 
 # ============================================================
 # CENTERED CASE DETAILS — visual override based on supplied reference image.
-# Modal fit with right vertical scrollbar when contents overflow.
+# This changes only the dialog presentation; the underlying Caseflow logic
+# remains unchanged.
 # ============================================================
 st.markdown(r"""
 <style>
-/* Center the Streamlit dialog and establish height constraints */
+/* Center the Streamlit dialog instead of rendering it as the old right drawer. */
+/* CASE DETAILS — compact fit-to-modal layout.
+   The complete workspace is scaled down slightly so the Case Information,
+   Case Actions and Knowledge Base columns fit inside the modal without
+   creating a vertical scrollbar. */
 div[data-testid="stDialog"] > div {
     position: fixed !important;
     top: 50% !important;
@@ -2087,42 +2217,23 @@ div[data-testid="stDialog"] > div {
     overflow: hidden !important;
     box-shadow: 0 18px 60px rgba(15,23,42,.28) !important;
     border: 1px solid #dbe4ef !important;
-    display: flex !important;
-    flex-direction: column !important;
 }
 
-/* Allow dialog content container to scroll vertically with a styled right scrollbar */
 div[data-testid="stDialog"] [data-testid="stDialogContent"] {
-    padding: 0 14px 14px 14px !important;
+    padding: 0 8px 6px 8px !important;
     height: calc(100% - 54px) !important;
     max-height: calc(100% - 54px) !important;
-    overflow-y: auto !important;
+    overflow: hidden !important;
+    overflow-y: hidden !important;
     overflow-x: hidden !important;
-    scrollbar-width: thin !important;
-    scrollbar-color: #b0c2d6 transparent !important;
+    scrollbar-width: none !important;
 }
 
-/* Custom WebKit scrollbar on the right side */
 div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar,
 div[data-testid="stDialog"] > div > div::-webkit-scrollbar {
-    display: block !important;
-    width: 7px !important;
-}
-
-div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar-track,
-div[data-testid="stDialog"] > div > div::-webkit-scrollbar-track {
-    background: transparent !important;
-}
-
-div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar-thumb,
-div[data-testid="stDialog"] > div > div::-webkit-scrollbar-thumb {
-    background: #b0c2d6 !important;
-    border-radius: 6px !important;
-}
-
-div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar-thumb:hover,
-div[data-testid="stDialog"] > div > div::-webkit-scrollbar-thumb:hover {
-    background: #8aa0be !important;
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
 }
 
 div[data-testid="stDialog"] header {
@@ -2131,7 +2242,6 @@ div[data-testid="stDialog"] header {
     padding: 5px 14px !important;
     background: linear-gradient(180deg,#f7fbff 0%,#edf4fb 100%) !important;
     border-bottom: 1px solid #dce5ef !important;
-    flex-shrink: 0 !important;
 }
 
 div[data-testid="stDialog"] header p {
@@ -2141,11 +2251,13 @@ div[data-testid="stDialog"] header p {
 }
 
 div[data-testid="stDialog"] > div > div {
-    overflow-y: auto !important;
+    overflow: hidden !important;
+    overflow-y: hidden !important;
     overflow-x: hidden !important;
+    scrollbar-width: none !important;
 }
 
-/* Scale workspace to fit modal proportions while allowing fluid flow */
+/* Scale the actual Case Details workspace, not the modal shell/header. */
 div[data-testid="stDialog"] [data-testid="stDialogContent"] > div {
     zoom: .78 !important;
     width: 128.205% !important;
@@ -2153,7 +2265,7 @@ div[data-testid="stDialog"] [data-testid="stDialogContent"] > div {
     box-sizing: border-box !important;
 }
 
-/* Compact the top summary so the three-column workspace gets more vertical room */
+/* Compact the top summary so the three-column workspace gets more vertical room. */
 div[data-testid="stDialog"] .case-detail-hero {
     margin: 0 0 5px 0 !important;
     padding: 4px 6px 3px 6px !important;
@@ -2183,6 +2295,8 @@ div[data-testid="stDialog"] [data-baseweb="tab"] {
     font-size: 10px !important;
 }
 
+
+/* Compact the three workspace columns so their full contents fit in the modal. */
 div[data-testid="stDialog"] .case-card {
     padding: 7px 9px !important;
     border-radius: 6px !important;
@@ -2272,6 +2386,9 @@ div[data-testid="stDialog"] .kb-answer-card {
     margin-bottom: 5px !important;
 }
 
+/* Streamlit renders raw HTML wrappers around separate widgets as empty
+   elements. Hide those empty shells so no stray blank boxes appear above
+   Case Information, Case Actions, or Knowledge Base. */
 div[data-testid="stDialog"] .case-card:empty {
     display: none !important;
 }
@@ -2320,6 +2437,7 @@ div[data-testid="stDialog"] .case-card:empty {
 .priority-text { color:#e51c3a !important; }
 .case-status-chip { display:inline-block; background:#ffe8b0; color:#8a5a00; border-radius:5px; padding:4px 10px; font-size:11px; }
 
+/* Make Streamlit tabs resemble the reference's compact navigation strip. */
 div[data-testid="stDialog"] [data-baseweb="tab-list"] { gap:0 !important; border-bottom:1px solid #dbe4ee !important; }
 div[data-testid="stDialog"] [data-baseweb="tab"] { padding:9px 15px !important; color:#334155 !important; font-size:12px !important; }
 div[data-testid="stDialog"] [aria-selected="true"] { color:#0879c9 !important; font-weight:800 !important; }
@@ -2387,6 +2505,7 @@ div[data-testid="stDialog"] [data-testid="stHorizontalBlock"] > div { min-width:
 .kb-result-text{color:#334155;font-size:10.5px;line-height:1.4;margin-top:4px}
 .kb-meta{margin-top:6px;color:#64748b;font-size:9px}
 .kb-source-pill{display:inline-block;background:#edf2f8;color:#5d6c82;border-radius:10px;padding:3px 7px;font-size:9px;font-weight:750;margin-right:4px}
+
 
 @media (max-width: 1100px) {
     div[data-testid="stDialog"] > div { width:calc(100vw - 24px) !important; max-width:calc(100vw - 24px) !important; height:calc(100vh - 24px) !important; max-height:calc(100vh - 24px) !important; }
@@ -2495,6 +2614,16 @@ def clear_task_cache():
 
 
 def calculate_state(task, now=None):
+    """
+    SLA is based on station_started_at.
+
+
+    Priority accounts are automatically critical.
+    Normal cases become critical at 20% remaining.
+    Medium begins at 50% remaining.
+    """
+
+
     now = now or utc_now()
 
 
@@ -2512,6 +2641,9 @@ def calculate_state(task, now=None):
     sla = config["sla_minutes"] * 60
 
 
+    # SLA duration is measured from the moment the case entered its
+    # current station. station_started_at is therefore authoritative.
+    # created_at is only a legacy-data fallback when that field is missing.
     started = as_utc(
         task.get("station_started_at")
         or task.get("created_at")
@@ -2539,6 +2671,8 @@ def calculate_state(task, now=None):
     )
 
 
+    # SLA warning is strictly time-based: final 20% BEFORE the SLA ends.
+    # Once elapsed time reaches the SLA, the case is past due instead.
     nearing_due = (remaining > 0) and (remaining <= sla * 0.20)
     past_due = remaining <= 0
 
@@ -2592,6 +2726,8 @@ def duration_string(seconds):
 
 
 MOCK_SUBJECTS = {
+    # These are deliberately aligned with the HPE/Aruba KB/SOP subjects so
+    # opening a mock case immediately demonstrates a meaningful KB match.
     "CARE": [
         "HPE ProLiant / iLO Alert Troubleshooting",
         "Aruba Central Device Offline",
@@ -2681,6 +2817,8 @@ MOCK_ACCOUNTS = [
 ]
 
 
+# Increment this whenever mock content/checklists change so the old demo
+# records are rebuilt with the new HPE/Aruba content.
 MOCK_DATA_VERSION = 16
 
 
@@ -2709,6 +2847,8 @@ def reset_mock_case_durations():
 def seed_mock_cases(force=False):
     existing = col(TASKS_COLLECTION).count_documents({"is_mock": True})
 
+    # Rebuild old demonstration data whenever the content version changes so
+    # new HPE/Aruba subjects, assignees and checklists actually appear.
     if existing and not force:
         old_version = col(TASKS_COLLECTION).count_documents({
             "is_mock": True,
@@ -2886,6 +3026,14 @@ def acknowledge_station_alerts(station):
 
 
 def scan_alerts(tasks):
+    """Create missing alerts with minimal MongoDB round trips.
+
+
+    Alert evaluation is intentionally throttled because Duration is updated
+    entirely in the browser. Rapid station clicks should not cause repeated
+    MongoDB alert reads/writes while preserving alert creation on normal
+    dashboard interactions.
+    """
     now_epoch = time.time()
     last_scan = float(st.session_state.get("_last_alert_scan", 0.0) or 0.0)
     if now_epoch - last_scan < ALERT_SCAN_MIN_INTERVAL:
@@ -3084,6 +3232,13 @@ def sync_vendor_excel(uploaded_file):
 
 
 def import_cases_excel(uploaded_file, replace_existing_excel=False):
+    """Import case records from an Excel workbook into Tasks_Collection.
+
+
+    The workbook mirrors the case fields used by the dashboard. Existing records
+    with the same Case # are updated, while new Case # values are inserted.
+    Imported rows are tagged source_type='excel' so they can be replaced safely.
+    """
     try:
         df = pd.read_excel(uploaded_file)
 
@@ -3303,6 +3458,7 @@ def _default_station_checklist(station):
 
 
 def get_case_station_checklist(task, station=None):
+    """Return the persisted checklist for a station, falling back to defaults."""
     station = station_name(station or task.get("department"))
     stored = task.get("station_checklists") or {}
     items = stored.get(station) if isinstance(stored, dict) else None
@@ -3362,6 +3518,8 @@ def save_case_station_checklist(task_id, station, items):
 
 
 def set_case_checklist_item(task_id, station, index, checked):
+    # Streamlit callbacks pass the widget key so the current checkbox value
+    # can be read from session_state at callback time.
     if isinstance(checked, str) and checked in st.session_state:
         checked = st.session_state.get(checked, False)
     station = station_name(station)
@@ -3500,6 +3658,9 @@ def transfer_case(task, destination):
 # ============================================================
 
 
+# CSS/HTML recreation of the supplied HPE Caseflow reference.
+# The uploaded image itself is NOT used. Search and Settings remain native
+# Streamlit controls so all existing functionality is preserved.
 with st.container(key="caseflow_header_shell"):
 
 
@@ -3547,6 +3708,8 @@ with st.container(key="caseflow_header_shell"):
 
 
 # ============================================================
+
+
 # SETTINGS DIALOG
 # ============================================================
 
@@ -3626,6 +3789,11 @@ if st.session_state["show_settings"]:
             ])
 
 
+            # -----------------------------------------------
+            # CASE EXCEL IMPORT
+            # -----------------------------------------------
+
+
             with tabs[0]:
                 st.markdown("### Case Data")
                 st.caption(
@@ -3689,6 +3857,11 @@ if st.session_state["show_settings"]:
                 )
 
 
+            # -----------------------------------------------
+            # EXTERNAL SYNC
+            # -----------------------------------------------
+
+
             with tabs[1]:
 
 
@@ -3736,6 +3909,11 @@ if st.session_state["show_settings"]:
                             st.error(msg)
 
 
+            # -----------------------------------------------
+            # ACCESS CONTROL
+            # -----------------------------------------------
+
+
             with tabs[2]:
 
 
@@ -3763,6 +3941,11 @@ if st.session_state["show_settings"]:
                         "All access tokens cleared. "
                         "Users must enter the access code again."
                     )
+
+
+            # -----------------------------------------------
+            # SIMULATION
+            # -----------------------------------------------
 
 
             with tabs[3]:
@@ -4019,8 +4202,16 @@ def kb_score(query, doc):
 
 @st.cache_data(ttl=30, show_spinner=False)
 def load_kb_documents():
+    """Load Caseflow KB/SOP records plus the shared HPE Knowledge Base.
+
+    The standalone HPE Knowledge Base stores AI-ready records in the HPE
+    database using `Knowledge base` and `Knowledge base Documents`.  Caseflow
+    consumes those records read-only so the Case Details panel can surface the
+    same SOP content without requiring a second API or a duplicate KB.
+    """
     docs = []
 
+    # Caseflow-local KB/SOP collections.
     for collection_name in [KB_COLLECTION, SOP_COLLECTION]:
         try:
             docs.extend(list(col(collection_name).find({}, {
@@ -4032,6 +4223,9 @@ def load_kb_documents():
         except Exception:
             pass
 
+    # Shared standalone HPE Knowledge Base.  It is optional: if the same
+    # MongoDB cluster/secret is not available, Caseflow simply keeps using its
+    # local KB without breaking the dashboard.
     try:
         uri = text(st.secrets.get("MONGODB_URI", ""))
         if not uri:
@@ -4097,6 +4291,8 @@ def load_kb_documents():
     except Exception:
         pass
 
+    # De-duplicate shared/local records by title + source while preserving the
+    # first (usually richer) record.
     unique = []
     seen = set()
     for doc in docs:
@@ -4172,6 +4368,17 @@ seed_demo_kb()
 
 @st.dialog("Case Details", width="large")
 def case_details(task_id):
+    """Centered, scrollable Case Details dialog.
+
+    Layout order inside Case Information is intentionally:
+        1. Case Information
+        2. Case Actions
+        3. Knowledge Base
+
+    Knowledge Base is no longer a separate tab before Communication.  It is
+    the last panel in the main Case Information view so the agent can review
+    the case, complete the station checklist, and then use the matching SOP.
+    """
     try:
         from bson import ObjectId
         task = col(TASKS_COLLECTION).find_one({"_id": ObjectId(task_id)})
@@ -4222,6 +4429,9 @@ def case_details(task_id):
     vendor_contact = text((vendor or {}).get("contact_name")) or text((vendor or {}).get("primary_contact")) or text(task.get("vendor_contact"))
     vendor_email = text((vendor or {}).get("email")) or text(task.get("vendor_email"))
 
+    # ---------------------------------------------------------------
+    # TOP SUMMARY
+    # ---------------------------------------------------------------
     st.markdown(
         f"""
         <div class="case-detail-hero">
@@ -4284,9 +4494,16 @@ def case_details(task_id):
     ])
 
     with tab_info:
+        # =============================================================
+        # THREE-COLUMN CASE WORKSPACE
+        # Case Information | Case Actions | Knowledge Base
+        # =============================================================
         info_col, actions_col, kb_col = st.columns([1.02, 1.02, 1.16], gap="small")
 
         with info_col:
+            # =============================================================
+            # 1. CASE INFORMATION
+            # =============================================================
             st.markdown("<div class='case-card'>", unsafe_allow_html=True)
             st.markdown(
                 "<div class='case-card-heading'><span class='case-heading-icon'>♙</span>Case Information</div>",
@@ -4323,7 +4540,12 @@ def case_details(task_id):
                 )
             st.markdown("</div>", unsafe_allow_html=True)
 
+
+
         with actions_col:
+            # =============================================================
+            # 2. CASE ACTIONS
+            # =============================================================
             st.markdown("<div class='case-card case-actions-card' style='margin-top:9px;'>", unsafe_allow_html=True)
             st.markdown(
                 "<div class='case-card-heading'><span class='case-heading-icon'>◷</span>Case Actions</div>",
@@ -4342,6 +4564,8 @@ def case_details(task_id):
             if current not in stations:
                 current = "CARE"
 
+            # Checklist station selector lets the user maintain a checklist for
+            # every station. Transfer/reassignment always validates the CURRENT one.
             checklist_station = st.selectbox(
                 "Checklist station",
                 stations,
@@ -4369,6 +4593,8 @@ def case_details(task_id):
                     unsafe_allow_html=True,
                 )
 
+            # Each checkbox writes immediately to MongoDB, so the transfer gate
+            # remains reliable even if the dialog reruns between clicks.
             for idx, item in enumerate(checklist_items):
                 check_key = f"case_checklist_{task_id}_{checklist_station}_{idx}"
                 if check_key not in st.session_state:
@@ -4447,7 +4673,12 @@ def case_details(task_id):
                 else:
                     st.error("Unable to transfer case.")
 
+
+
         with kb_col:
+            # =============================================================
+            # 3. KNOWLEDGE BASE — intentionally LAST
+            # =============================================================
             st.markdown("<div class='case-card kb-inline-card' style='margin-top:9px;'>", unsafe_allow_html=True)
             st.markdown(
                 "<div class='case-card-heading'><span class='case-heading-icon'>✦</span>Knowledge Base</div>",
@@ -4529,6 +4760,7 @@ def case_details(task_id):
                     st.markdown(f"<div class='kb-meta'><strong>Sources used:</strong> {pills}</div>", unsafe_allow_html=True)
             st.markdown("</div>", unsafe_allow_html=True)
 
+        # History and resolution stay below the three primary sections.
         history = task.get("history") or []
         st.markdown("<div class='case-card case-history-card'>", unsafe_allow_html=True)
         st.markdown(
@@ -4610,6 +4842,10 @@ def case_details(task_id):
 # ============================================================
 # DASHBOARD
 # ============================================================
+# REAL-TIME DASHBOARD
+# The dashboard fragment refreshes once per second so MongoDB changes are
+# reflected on the visible tiles/table without refreshing the entire app.
+# Duration still updates browser-side every second for smooth per-second timing.
 
 
 @st.fragment(run_every="1s")
@@ -4630,12 +4866,16 @@ def dashboard_fragment():
     )
 
 
+    # Alerts are evaluated during the same lightweight 1-second fragment
+    # refresh, keeping the visible dashboard and Alert_Collection synchronized.
     scan_alerts(tasks)
 
 
     now = utc_now()
 
 
+    # Compute each case state once and group cases by station in the same pass.
+    # This avoids repeated full-list scans every time a station is clicked.
     states = {}
     tasks_by_station = {station: [] for station in STATIONS}
     states_by_station = {station: [] for station in STATIONS}
@@ -4664,7 +4904,24 @@ def dashboard_fragment():
         station_states = states_by_station[station]
 
 
+        # Tile flashing is based ONLY on elapsed time in the CURRENT station.
+        # A priority account is still marked CRITICAL and can generate alerts,
+        # but it must NOT make a station tile blink by itself.
+        #
+        # "Nearing due" means the case has entered the final 20% of the
+        # station SLA, while it has not yet breached the SLA.
+        #
+        # The duration clock itself starts at station_started_at. When a case
+        # is transferred, transfer_case() resets station_started_at to the
+        # transfer time, so the SLA clock starts over in the destination
+        # station.
         sla_seconds = STATIONS[station]["sla_minutes"] * 60
+        # A station warning is triggered by any case that has reached
+        # the warning threshold OR has already breached the station SLA.
+        # This keeps the visual warning tied to the same cases that receive
+        # the red duration indicator in the table.
+        # Nearing due = final 20% of the SLA, strictly BEFORE breach.
+        # Past due = SLA has already elapsed.
         nearing = sum(
             1
             for state in station_states
@@ -4675,6 +4932,9 @@ def dashboard_fragment():
             for state in station_states
             if state.get("past_due", False)
         )
+        # A tile flashes ONLY while at least one case is in the final
+        # 20% of this station's SLA. Priority-account status alone does not
+        # trigger the tile animation.
         warning_ack_until = st.session_state.setdefault(
             "station_warning_ack_until",
             {},
@@ -4698,6 +4958,9 @@ def dashboard_fragment():
         now_epoch = time.time()
 
 
+        # A warning tile flashes only until the user clicks it.
+        # Clicking the tile silences the flashing immediately and keeps it
+        # silent until the current nearing-due condition clears.
         flash_tile = (
             nearing > 0
             and station not in warning_silenced
@@ -4728,7 +4991,13 @@ def dashboard_fragment():
             )
 
 
+            # The visual card remains the reference design. A transparent
+            # Streamlit button is layered over the entire card so ONE click
+            # anywhere on the tile changes the station filter.
             with st.container(key=f"station_wrap_{slug}"):
+                # Keep this HTML as one physical markdown line. Streamlit's
+                # Markdown parser can otherwise interpret indented multiline
+                # HTML as a code block and expose the raw tags.
                 station_html = (
                     f'<div class="station-card-visual {slug}{critical_class}{selected_class}" '
                     f'data-station="{html.escape(station)}" '
@@ -4753,11 +5022,17 @@ def dashboard_fragment():
                     use_container_width=True,
                 ):
                     if nearing > 0:
+                        # Stop the tile warning immediately on click.
+                        # Keep it silent until the current nearing-due condition
+                        # clears and a new warning cycle begins.
                         warning_ack_until[station] = 0.0
                         warning_silenced.add(station)
                         acknowledge_station_alerts(station)
 
 
+                    # A single click changes the filter and reruns ONLY
+                    # the dashboard fragment. This keeps station switching
+                    # fast without refreshing the rest of the application.
                     st.session_state["selected_station"] = station
                     st.rerun(scope="fragment")
 
@@ -4995,6 +5270,8 @@ def dashboard_fragment():
                     key=f"case_{task_id}",
                     use_container_width=True,
                 ):
+                    # Open the dialog directly from the user's click.
+                    # There is no periodic dashboard rerun.
                     case_details(task_id)
 
 
@@ -5126,6 +5403,8 @@ def dashboard_fragment():
         with row[5]:
 
 
+            # For the reference UI, the operational status
+            # remains separate from SLA priority.
             st.markdown(
                 f"""
                 <div class="case-row">
@@ -5148,18 +5427,26 @@ def dashboard_fragment():
         with row[6]:
 
 
+            # Duration is the time spent in the CURRENT station.
+            # station_started_at is reset whenever the case enters/transfers
+            # into a station. Legacy records without it fall back to created_at.
             started = iso_z(
                 task.get("station_started_at")
                 or task.get("created_at")
             )
 
 
+            # Browser-side timer:
+            # duration changes every second according to the user's own
+            # PC/browser clock and does not require a Streamlit rerun.
             sla_for_case = STATIONS.get(
                 case_station,
                 STATIONS["CARE"],
             )["sla_minutes"] * 60
 
 
+            # Duration color follows elapsed SLA progress:
+            # green 0-50%, yellow 50-80%, red 80-100% and past due.
             warning_threshold_seconds = sla_for_case * 0.80
             elapsed_ratio = (state["elapsed"] / sla_for_case) if sla_for_case else 1.0
             if elapsed_ratio < 0.50:
@@ -5179,6 +5466,8 @@ def dashboard_fragment():
             )
 
 
+            # The visual warning is handled entirely by browser-side JS so
+            # the Duration can blink without rerunning the dashboard.
             st.markdown(
                 f"""
                 <div class="case-row"
@@ -5268,56 +5557,64 @@ def dashboard_fragment():
             }
 
 
-            document.querySelectorAll(
-                '[class*="st-key-station_"] button'
-            ).forEach(function (button) {
-                if (button.__fastStationBound) return;
-                button.__fastStationBound = true;
-                button.addEventListener("pointerdown", function () {
-                    const keyHost = button.closest('[class*="st-key-station_"]');
-                    if (!keyHost) return;
-                    const match = keyHost.className.match(/st-key-station_([^ ]+)/);
-                    const stationMap = {
-                        CARE:"CARE", ARCH:"ARCH", PET:"PET",
-                        SUPPLY:"SUPPLY CHAIN", ONSITE:"ONSITE"
-                    };
-                    const station = match ? stationMap[match[1].toUpperCase()] : null;
-                    if (!station) return;
-                    document.querySelectorAll(
-                        ".station-card-visual[data-station]"
-                    ).forEach(function (card) {
-                        const isSelected =
-                            card.getAttribute("data-station") === station;
-
-
-                        card.classList.toggle("selected", isSelected);
-
-
-                        if (isSelected) {
-                            card.classList.remove("critical");
-                            card.classList.add("warning-muted");
-                            const icon = card.querySelector(".station-alert-icon");
-                            if (icon) {
-                                icon.style.animation = "none";
-                                icon.style.opacity = "1";
-                            }
-                            card.style.animation = "none";
-                        }
-                    });
-
-
-                    requestAnimationFrame(function () {
+            /* Make the selected station respond visually BEFORE the
+                   Streamlit fragment finishes rerendering. */
+                document.querySelectorAll(
+                    '[class*="st-key-station_"] button'
+                ).forEach(function (button) {
+                    if (button.__fastStationBound) return;
+                    button.__fastStationBound = true;
+                    button.addEventListener("pointerdown", function () {
+                        const keyHost = button.closest('[class*="st-key-station_"]');
+                        if (!keyHost) return;
+                        const match = keyHost.className.match(/st-key-station_([^ ]+)/);
+                        const stationMap = {
+                            CARE:"CARE", ARCH:"ARCH", PET:"PET",
+                            SUPPLY:"SUPPLY CHAIN", ONSITE:"ONSITE"
+                        };
+                        const station = match ? stationMap[match[1].toUpperCase()] : null;
+                        if (!station) return;
                         document.querySelectorAll(
-                            '[data-testid="stStatusWidget"], ' +
-                            '[data-testid="stSpinner"], ' +
-                            '.stSpinner'
-                        ).forEach(function (el) {
-                            el.style.opacity = "0";
-                            el.style.pointerEvents = "none";
+                            ".station-card-visual[data-station]"
+                        ).forEach(function (card) {
+                            const isSelected =
+                                card.getAttribute("data-station") === station;
+
+
+                            card.classList.toggle("selected", isSelected);
+
+
+                            /* Stop flashing immediately — do not wait for the
+                               fragment rerender. */
+                            if (isSelected) {
+                                card.classList.remove("critical");
+                                card.classList.add("warning-muted");
+                                const icon = card.querySelector(".station-alert-icon");
+                                if (icon) {
+                                    icon.style.animation = "none";
+                                    icon.style.opacity = "1";
+                                }
+                                card.style.animation = "none";
+                            }
                         });
-                    });
-                }, {passive:true});
-            });
+
+
+                        /* Give the browser one paint before Streamlit starts
+                           replacing the fragment. This makes the visual tile
+                           switch feel immediate instead of waiting on Python. */
+                        requestAnimationFrame(function () {
+                            document.querySelectorAll(
+                                '[data-testid="stStatusWidget"], ' +
+                                '[data-testid="stSpinner"], ' +
+                                '.stSpinner'
+                            ).forEach(function (el) {
+                                el.style.opacity = "0";
+                                el.style.pointerEvents = "none";
+                            });
+                        });
+                    }, {passive:true});
+                });
+            }
 
 
             updateDurations();
@@ -5350,11 +5647,18 @@ def dashboard_fragment():
 # ============================================================
 
 
+# Seed before the first dashboard render so the first view already
+# contains the mock cases. This check runs once per normal app render
+# and does not create a background refresh loop.
+# Seed/mock migration is cached as a resource so normal fragment reruns
+# do not repeatedly query MongoDB for the mock-data count.
 seed_mock_cases()
 
 
 
 
+# Render the live dashboard. The fragment itself refreshes every second,
+# while the rest of the application remains untouched.
 dashboard_fragment()
 
 
