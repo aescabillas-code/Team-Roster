@@ -4215,7 +4215,10 @@ def case_details(task_id):
     visible_station = "FULFILLMENT" if station == "ONSITE" else station
     status = text(task.get("status")) or "Open"
     description = text(task.get("description")) or text(task.get("issue")) or "No description available."
-    priority = get_dynamic_priority(task)
+    # CaseFlow uses calculate_state() as the authoritative live SLA/priority engine.
+    # Do not call the legacy get_dynamic_priority() helper here because it is not
+    # part of this build.
+    priority = str(state.get("status") or "LOW").title()
     countdown_txt, countdown_color, is_overdue = calculate_countdown(task.get("due_date"))
     elapsed_txt = duration_string(state.get("elapsed", 0))
     assigned_to = text(task.get("assigned_to")) or "Unassigned"
