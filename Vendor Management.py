@@ -2195,8 +2195,8 @@ div[data-testid="stDialog"] > div {
     transform: translate(-50%, -50%) !important;
     width: min(1380px, calc(100vw - 24px)) !important;
     max-width: min(1380px, calc(100vw - 24px)) !important;
-    height: calc(100vh - 24px) !important;
-    max-height: calc(100vh - 24px) !important;
+    height: min(88vh, 820px) !important;
+    max-height: calc(100vh - 36px) !important;
     margin: 0 !important;
     border-radius: 12px !important;
     overflow: hidden !important;
@@ -2206,39 +2206,72 @@ div[data-testid="stDialog"] > div {
 
 div[data-testid="stDialog"] [data-testid="stDialogContent"] {
     padding: 0 10px 12px 10px !important;
+    max-height: calc(100vh - 92px) !important;
+    overflow-y: scroll !important;
+    overflow-x: hidden !important;
+    scrollbar-width: auto !important;
+    scrollbar-gutter: stable !important;
+}
+
+div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar {
+    width: 10px !important;
+}
+
+div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar-track {
+    background: #eef2f7 !important;
+    border-radius: 8px !important;
+}
+
+div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar-thumb {
+    background: #9aabbc !important;
+    border-radius: 8px !important;
+    border: 2px solid #eef2f7 !important;
+}
+
+div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar-thumb:hover {
+    background: #71869b !important;
 }
 
 div[data-testid="stDialog"] header {
-    min-height: 62px !important;
-    padding: 8px 14px !important;
+    min-height: 54px !important;
+    padding: 6px 14px !important;
     background: linear-gradient(180deg,#f7fbff 0%,#edf4fb 100%) !important;
     border-bottom: 1px solid #dce5ef !important;
 }
 
 div[data-testid="stDialog"] header p {
-    font-size: 24px !important;
+    font-size: 21px !important;
     font-weight: 800 !important;
     color: #102041 !important;
 }
 
 div[data-testid="stDialog"] > div > div {
     overflow-y: auto !important;
-    scrollbar-width: thin;
+    overflow-x: hidden !important;
+    scrollbar-width: auto !important;
+    scrollbar-gutter: stable !important;
+}
+
+/* Streamlit renders raw HTML wrappers around separate widgets as empty
+   elements. Hide those empty shells so no stray blank boxes appear above
+   Case Information, Case Actions, or Knowledge Base. */
+div[data-testid="stDialog"] .case-card:empty {
+    display: none !important;
 }
 
 .case-detail-hero {
     margin: 0 0 8px 0;
-    padding: 10px 8px 6px 8px;
+    padding: 7px 8px 5px 8px;
     background: #fff;
 }
 .case-detail-title-row { display:flex; justify-content:space-between; gap:20px; align-items:flex-start; }
 .case-detail-title-left { display:flex; gap:12px; min-width:0; flex:1; }
 .case-folder-icon { color:#0879c9; font-size:30px; line-height:1; margin-top:2px; }
-.case-detail-case-number { color:#0d1937; font-size:23px; font-weight:850; line-height:1.15; }
+.case-detail-case-number { color:#0d1937; font-size:20px; font-weight:850; line-height:1.15; }
 .case-copy-icon { color:#0879c9; font-size:18px; margin-left:7px; }
 .case-priority-badge { margin-left:12px; vertical-align:middle; font-size:12px !important; padding:6px 15px !important; }
-.case-detail-subject { color:#0d1937; font-size:21px; font-weight:800; margin-top:5px; }
-.case-detail-description { color:#334155; font-size:12.5px; line-height:1.45; margin-top:3px; max-width:850px; }
+.case-detail-subject { color:#0d1937; font-size:18px; font-weight:800; margin-top:5px; }
+.case-detail-description { color:#334155; font-size:11.5px; line-height:1.35; margin-top:3px; max-width:850px; }
 .case-detail-timing { display:flex; align-items:stretch; gap:0; min-width:600px; }
 .case-timing-item { display:flex; align-items:flex-start; gap:7px; padding:2px 22px; border-left:1px solid #dfe6ee; position:relative; }
 .case-timing-item:first-child { border-left:0; }
@@ -2257,8 +2290,8 @@ div[data-testid="stDialog"] > div > div {
     background:#f4f8fc;
     border:1px solid #e2eaf2;
     border-radius:8px;
-    padding:9px 6px;
-    margin:4px 0 8px;
+    padding:7px 6px;
+    margin:3px 0 6px;
 }
 .case-summary-cell { padding:2px 13px; border-left:1px solid #cbd6e2; min-width:0; }
 .case-summary-cell:first-child { border-left:0; }
