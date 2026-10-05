@@ -1880,11 +1880,270 @@ st.markdown(
 
     /* DIALOG */
 
-
     div[data-testid="stDialog"] > div {
         border-radius:18px !important;
+        background:#ffffff !important;
     }
 
+    div[data-testid="stDialog"] header {
+        background:#ffffff !important;
+        min-height:72px !important;
+        padding:0 28px !important;
+        display:flex !important;
+        align-items:center !important;
+    }
+
+    div[data-testid="stDialog"] header h1,
+    div[data-testid="stDialog"] header [data-testid="stMarkdownContainer"] {
+        color:#10284a !important;
+        font-size:28px !important;
+        font-weight:850 !important;
+        letter-spacing:-.4px !important;
+    }
+
+    div[data-testid="stDialog"] [data-testid="stDialogContent"] {
+        background:#ffffff !important;
+        padding:0 28px 28px !important;
+    }
+
+    .case-detail-statusbar {
+        display:flex;
+        align-items:center;
+        justify-content:flex-start;
+        gap:12px;
+        min-height:38px;
+        margin:0 0 10px;
+        border-top:1px solid #edf0f5;
+        padding-top:14px;
+    }
+
+    .case-detail-critical,
+    .case-detail-status {
+        display:inline-flex;
+        align-items:center;
+        gap:7px;
+        min-height:34px;
+        padding:7px 15px;
+        border-radius:12px;
+        font-size:14px;
+        font-weight:850;
+        line-height:1;
+        white-space:nowrap;
+    }
+
+    .case-detail-critical {
+        background:#ffe4e9;
+        color:#e51c3a;
+    }
+
+    .case-detail-critical-dot {
+        width:19px;
+        height:19px;
+        border-radius:50%;
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        background:#ef334f;
+        color:#ffffff;
+        font-size:12px;
+        font-weight:900;
+    }
+
+    .case-detail-status {
+        background:#dff0ff;
+        color:#1774c8;
+    }
+
+    .case-detail-case-row {
+        display:flex;
+        align-items:center;
+        gap:12px;
+        flex-wrap:wrap;
+        margin-top:2px;
+    }
+
+    .case-detail-number {
+        color:#10284a;
+        font-size:25px;
+        font-weight:900;
+        letter-spacing:-.3px;
+    }
+
+    .case-detail-subject {
+        color:#122442;
+        font-size:20px;
+        font-weight:800;
+        line-height:1.25;
+        margin-top:9px;
+    }
+
+    .case-detail-description {
+        color:#718099;
+        font-size:14px;
+        line-height:1.55;
+        margin-top:10px;
+        padding-bottom:17px;
+        border-bottom:1px solid #edf0f5;
+    }
+
+    .detail-grid {
+        display:grid;
+        grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+        margin-top:0;
+        border-bottom:1px solid #edf0f5;
+    }
+
+    .detail-grid-col {
+        padding:12px 22px 13px 0;
+    }
+
+    .detail-grid-col.right {
+        padding:12px 0 13px 22px;
+        border-left:1px solid #edf0f5;
+    }
+
+    .detail-field {
+        margin:0 0 17px;
+    }
+
+    .detail-label {
+        color:#718099;
+        font-size:13px;
+        line-height:1.25;
+        margin-bottom:6px;
+    }
+
+    .detail-value {
+        color:#182b4c;
+        font-size:15px;
+        font-weight:650;
+        line-height:1.35;
+    }
+
+    .detail-value.red {
+        color:#e51c3a;
+        font-weight:850;
+    }
+
+    .detail-pill {
+        display:inline-flex;
+        align-items:center;
+        gap:6px;
+        padding:7px 12px;
+        border-radius:15px;
+        font-size:13px;
+        font-weight:850;
+        line-height:1;
+        white-space:nowrap;
+    }
+
+    .detail-pill.red {
+        background:#ffe4e9;
+        color:#e51c3a;
+    }
+
+    .detail-pill.blue {
+        background:#dff0ff;
+        color:#1774c8;
+    }
+
+    .detail-pill.purple {
+        background:#f7ddff;
+        color:#b83cc9;
+    }
+
+    .detail-assignee {
+        display:flex;
+        align-items:center;
+        gap:10px;
+    }
+
+    .detail-assignee-avatar {
+        width:43px;
+        height:43px;
+        min-width:43px;
+        border-radius:50%;
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        background:#7545df;
+        color:#ffffff;
+        font-size:13px;
+        font-weight:900;
+    }
+
+    .detail-section-title {
+        color:#122442;
+        font-size:16px;
+        font-weight:850;
+        margin:16px 0 8px;
+    }
+
+    .detail-information-card {
+        background:#f8fafc;
+        border:1px solid #e6ebf2;
+        border-radius:15px;
+        padding:14px 16px 4px;
+        margin-top:12px;
+    }
+
+    .vendor-card {
+        background:#f4f7fb;
+        border:1px solid #e5eaf1;
+        border-radius:16px;
+        padding:18px 18px 16px;
+        margin:16px 0 14px;
+    }
+
+    .vendor-heading {
+        display:flex;
+        align-items:center;
+        gap:10px;
+        color:#122442;
+        font-size:16px;
+        font-weight:850;
+        margin-bottom:13px;
+    }
+
+    .vendor-heading-link {
+        margin-left:auto;
+        color:#3d8fe7;
+        font-size:12px;
+        font-weight:750;
+        text-decoration:underline;
+    }
+
+    .vendor-icon {
+        width:29px;
+        height:29px;
+        border:2px solid #64758f;
+        border-radius:7px;
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        color:#64758f;
+        font-size:14px;
+    }
+
+    .vendor-grid {
+        display:grid;
+        grid-template-columns:150px minmax(0,1fr);
+        column-gap:12px;
+        row-gap:8px;
+    }
+
+    .vendor-key {
+        color:#718099;
+        font-size:12px;
+        font-weight:650;
+    }
+
+    .vendor-value {
+        color:#33435d;
+        font-size:13px;
+        font-weight:650;
+        overflow-wrap:anywhere;
+    }
 
     /* ALERT */
 
@@ -1956,6 +2215,67 @@ st.markdown(
 
 
     @media(max-width:700px) {
+        div[data-testid="stDialog"] > div {
+            top:10px !important;
+            right:10px !important;
+            left:10px !important;
+            width:calc(100vw - 20px) !important;
+            max-width:calc(100vw - 20px) !important;
+            height:calc(100vh - 20px) !important;
+            max-height:calc(100vh - 20px) !important;
+            border-radius:16px !important;
+        }
+
+        div[data-testid="stDialog"] header {
+            min-height:62px !important;
+            padding:0 18px !important;
+        }
+
+        div[data-testid="stDialog"] header h1,
+        div[data-testid="stDialog"] header [data-testid="stMarkdownContainer"] {
+            font-size:22px !important;
+        }
+
+        div[data-testid="stDialog"] [data-testid="stDialogContent"] {
+            padding:0 18px 22px !important;
+        }
+
+        .detail-grid {
+            grid-template-columns:1fr;
+        }
+
+        .detail-grid-col,
+        .detail-grid-col.right {
+            padding:12px 0 0;
+            border-left:0;
+        }
+
+        .detail-grid-col.right {
+            border-top:1px solid #edf0f5;
+        }
+
+        .vendor-grid {
+            grid-template-columns:1fr;
+            row-gap:3px;
+            margin-bottom:10px;
+        }
+
+        .vendor-key {
+            margin-top:6px;
+        }
+
+        .case-detail-number {
+            font-size:21px;
+        }
+
+        .case-detail-subject {
+            font-size:17px;
+        }
+
+        .case-detail-description {
+            font-size:13px;
+        }
+
         .block-container {
             padding:10px 10px 24px !important;
         }
@@ -3883,27 +4203,40 @@ def case_details(task_id):
     # Reference header
     # -------------------------
 
+    # Keep the Streamlit dialog's native title/close control and use the
+    # content area for the case-specific status and identity. This avoids
+    # duplicating the dialog title while keeping the reference layout.
+    visible_station = "FULFILLMENT" if station == "ONSITE" else station
+    assigned_to = text(task.get("assigned_to")) or "Unassigned"
+    assigned_parts = [part for part in assigned_to.split() if part]
+    initials = "".join(part[0] for part in assigned_parts[:2]).upper() or "—"
+    time_value_class = "detail-value red" if critical else "detail-value"
+
+    critical_badge = (
+        '<span class="case-detail-critical">'
+        '<span class="case-detail-critical-dot">!</span>Critical</span>'
+        if critical else
+        f'<span class="case-detail-status">{html.escape(status)}</span>'
+    )
+
     st.markdown(
         f"""
-        <div class="detail-header">
-            <div class="detail-header-title">Case Details</div>
-            {
-                '<span class="detail-critical"><span class="detail-critical-dot">!</span>Critical</span>'
-                if critical else
-                f'<span class="detail-pill blue">{html.escape(state["status"].title())}</span>'
-            }
+        <div class="case-detail-statusbar">
+            {critical_badge}
+            <span class="case-detail-status">{html.escape(status)}</span>
         </div>
 
-        <div class="detail-case-title">
-            {html.escape(text(task.get("case_number")))}
-            <span class="detail-status">{html.escape(status)}</span>
+        <div class="case-detail-case-row">
+            <div class="case-detail-number">
+                {html.escape(text(task.get("case_number")) or "—")}
+            </div>
         </div>
 
-        <div class="detail-subject">
-            {html.escape(text(task.get("subject")))}
+        <div class="case-detail-subject">
+            {html.escape(text(task.get("subject")) or "No subject available.")}
         </div>
 
-        <div class="detail-description">
+        <div class="case-detail-description">
             {html.escape(description)}
         </div>
         """,
@@ -3939,28 +4272,29 @@ def case_details(task_id):
                         <span class="detail-pill"
                               style="background:{STATIONS.get(station,STATIONS["CARE"])["soft"]};
                                      color:{STATIONS.get(station,STATIONS["CARE"])["accent"]}">
-                            {html.escape(station)}
+                            {html.escape(visible_station)}
                         </span>
                     </div>
                 </div>
 
                 <div class="detail-field">
                     <div class="detail-label">Assigned To</div>
-                    <div class="detail-value">
-                        {html.escape(text(task.get("assigned_to")) or "Unassigned")}
+                    <div class="detail-value detail-assignee">
+                        <span class="detail-assignee-avatar">{html.escape(initials)}</span>
+                        <span>{html.escape(assigned_to)}</span>
                     </div>
                 </div>
 
                 <div class="detail-field">
                     <div class="detail-label">Due Date</div>
-                    <div class="detail-value red">
+                    <div class="{time_value_class}">
                         {html.escape(dt_display(task.get("due_date")))}
                     </div>
                 </div>
 
                 <div class="detail-field">
                     <div class="detail-label">Duration</div>
-                    <div class="detail-value red">
+                    <div class="{time_value_class}">
                         {duration_string(state["elapsed"])}
                     </div>
                 </div>
@@ -3983,7 +4317,7 @@ def case_details(task_id):
                         {html.escape(
                             text(task.get("case_type"))
                             or text(task.get("category"))
-                            or station
+                            or visible_station
                             or "—"
                         )}
                     </div>
@@ -4034,7 +4368,8 @@ def case_details(task_id):
     detail_items = [item for item in detail_items if item[1]]
 
     if detail_items:
-        st.markdown("### Case Information")
+        st.markdown('<div class="detail-section-title">Case Information</div>', unsafe_allow_html=True)
+        st.markdown('<div class="detail-information-card">', unsafe_allow_html=True)
         cols = st.columns(2)
         for index, (label, value) in enumerate(detail_items):
             with cols[index % 2]:
@@ -4064,6 +4399,8 @@ def case_details(task_id):
             st.markdown("**Case Notes**")
             st.caption(notes)
 
+        st.markdown('</div>', unsafe_allow_html=True)
+
     # -------------------------
     # Vendor reference card
     # -------------------------
@@ -4072,45 +4409,55 @@ def case_details(task_id):
 
     st.markdown(
         '<div class="vendor-card"><div class="vendor-heading">'
-        '<span class="vendor-icon">⌂</span>Vendor Information'
+        '<span class="vendor-icon">⌂</span>'
+        '<span>Vendor Information</span>'
         '</div>',
         unsafe_allow_html=True,
     )
 
+    # Prefer the synchronized vendor record. If no record exists yet, still
+    # show the vendor carried by the case so the Case Details panel reflects
+    # the actual task instead of displaying an empty vendor section.
     if vendor:
-
         items = {
             k: v for k, v in vendor.items()
             if k not in {"_id", "vendor_key", "synced_at"} and text(v)
         }
-
-        if items:
-            markup = ""
-            for key, value in items.items():
-                markup += (
-                    f'<div class="vendor-key">{html.escape(key.replace("_"," ").title())}</div>'
-                    f'<div class="vendor-value">{html.escape(text(value))}</div>'
-                )
-
-            st.markdown(
-                f'<div class="vendor-grid">{markup}</div>',
-                unsafe_allow_html=True,
-            )
-        else:
-            st.markdown(
-                '<div class="kb-empty">Vendor record is empty.</div>',
-                unsafe_allow_html=True,
-            )
-
     else:
+        items = {}
+        case_vendor = text(task.get("vendor"))
+        if case_vendor:
+            items["vendor_name"] = case_vendor
+            items["record_status"] = "Case vendor — vendor contact record not synchronized"
+
+    if items:
+        markup = ""
+        preferred_order = [
+            "vendor", "vendor_name", "vendor_id", "contact_name",
+            "contact_person", "phone", "contact_number", "email",
+            "address", "site_location", "account_name", "record_status",
+        ]
+        ordered_keys = [k for k in preferred_order if k in items]
+        ordered_keys += [k for k in items if k not in ordered_keys]
+
+        for key in ordered_keys:
+            value = items[key]
+            label = key.replace("_", " ").title()
+            markup += (
+                f'<div class="vendor-key">{html.escape(label)}</div>'
+                f'<div class="vendor-value">{html.escape(text(value))}</div>'
+            )
 
         st.markdown(
-            """
-            <div class="vendor-grid">
-                <div class="vendor-key">Vendor Name</div>
-                <div class="vendor-value">No synchronized vendor record</div>
-            </div>
-            """,
+            f'<div class="vendor-grid">{markup}</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            '<div class="vendor-grid">'
+            '<div class="vendor-key">Vendor Name</div>'
+            '<div class="vendor-value">No vendor information is attached to this case.</div>'
+            '</div>',
             unsafe_allow_html=True,
         )
 
