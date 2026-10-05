@@ -155,6 +155,62 @@ STATIONS = {
 }
 
 
+# Required completion checklist for every station.
+# A case cannot be reassigned or transferred until every checked-in item
+# for its CURRENT station is completed. Custom items may be added per case.
+STATION_CHECKLISTS = {
+    "CARE": [
+        "Confirm the HPE/Aruba product, model and serial number.",
+        "Capture the exact alert, error message or customer symptom.",
+        "Complete the applicable remote/basic troubleshooting checks.",
+        "Verify support, entitlement or contract context when applicable.",
+        "Record customer contact, site and required reference information.",
+        "Document the assessment and recommended next action.",
+    ],
+    "ARCH": [
+        "Confirm the case/reference number and customer record.",
+        "Identify the required HPE/Aruba document, entitlement or record.",
+        "Locate and validate the source record against the request.",
+        "Attach or record the retrieved reference/document details.",
+        "Confirm the information is complete and appropriate for release.",
+        "Document the retrieval result and next action.",
+    ],
+    "PET": [
+        "Confirm the HPE/Aruba device, platform and management system.",
+        "Capture model, serial number, hostname or endpoint identifier.",
+        "Verify the requested configuration, policy or access requirement.",
+        "Review the relevant HPE/Aruba management or event details.",
+        "Validate the proposed change before applying or escalating it.",
+        "Document the result, evidence and next action.",
+    ],
+    "SUPPLY CHAIN": [
+        "Validate the purchase order, sales order or shipment reference.",
+        "Confirm the HPE/Aruba product, part number and quantity.",
+        "Verify shipment status, tracking and expected delivery date.",
+        "Confirm destination site and receiving contact.",
+        "Document any delivery, inventory or fulfillment exception.",
+        "Record the supplier/partner action and next step.",
+    ],
+    "ONSITE": [
+        "Confirm the HPE/Aruba device model and serial number.",
+        "Verify site address, onsite contact and access requirements.",
+        "Confirm remote troubleshooting and onsite scope of work.",
+        "Verify replacement part, equipment or technician requirement.",
+        "Document onsite findings, work completed and evidence.",
+        "Confirm the case is ready for closure or the next station.",
+    ],
+}
+
+CASEFLOW_ASSIGNEES = [
+    "June John Cruz",
+    "Arianne May Escabillas",
+    "Jonathan Gaspar",
+    "Kenjie Locsin",
+    "Lucille Layug",
+    "Karen Sabile",
+]
+
+
 STATUS_ORDER = {
     "BREACHED": 0,
     "CRITICAL": 1,
@@ -2137,10 +2193,10 @@ div[data-testid="stDialog"] > div {
     right: auto !important;
     bottom: auto !important;
     transform: translate(-50%, -50%) !important;
-    width: min(1180px, calc(100vw - 48px)) !important;
-    max-width: min(1180px, calc(100vw - 48px)) !important;
-    height: min(760px, calc(100vh - 48px)) !important;
-    max-height: calc(100vh - 48px) !important;
+    width: min(1380px, calc(100vw - 24px)) !important;
+    max-width: min(1380px, calc(100vw - 24px)) !important;
+    height: calc(100vh - 24px) !important;
+    max-height: calc(100vh - 24px) !important;
     margin: 0 !important;
     border-radius: 12px !important;
     overflow: hidden !important;
@@ -2250,6 +2306,14 @@ div[data-testid="stDialog"] [aria-selected="true"] { color:#0879c9 !important; f
 .attachment-row { display:flex; justify-content:space-between; gap:12px; padding:10px 12px; border:1px solid #e2e8f0; border-radius:7px; margin-bottom:7px; color:#172b52; font-size:12px; }
 .attachment-row > span:last-child { color:#64748b; font-size:10px; }
 .case-detail-footer { height:3px; }
+.case-checklist-wrap { margin-top:9px; background:#f7fbff; border:1px solid #dce8f3; border-radius:7px; padding:9px; }
+.case-checklist-title { color:#102041; font-size:12px; font-weight:850; margin-bottom:3px; }
+.case-checklist-sub { color:#64748b; font-size:9.5px; line-height:1.35; margin-bottom:7px; }
+.case-checklist-status { display:inline-flex; align-items:center; gap:5px; border-radius:999px; padding:4px 8px; font-size:9px; font-weight:800; margin-bottom:7px; }
+.case-checklist-status.complete { background:#dcf8df; color:#218137; }
+.case-checklist-status.pending { background:#fff1d6; color:#a56a00; }
+.case-actions-note { color:#64748b; font-size:9.5px; line-height:1.35; margin:5px 0 8px; }
+.case-action-divider { height:1px; background:#e8eef4; margin:9px 0; }
 .kb-inline-card { overflow:hidden; }
 .kb-mini-best { background:#f3f8ff; border:1px solid #bcd8f2; border-left:4px solid #0879c9; border-radius:7px; padding:9px; margin:5px 0 7px; }
 .kb-mini-label { color:#0879c9; font-size:9px; font-weight:850; letter-spacing:.5px; }
@@ -2492,276 +2556,203 @@ def duration_string(seconds):
 
 
 MOCK_SUBJECTS = {
+    # These are deliberately aligned with the HPE/Aruba KB/SOP subjects so
+    # opening a mock case immediately demonstrates a meaningful KB match.
     "CARE": [
-        "Guest room AC not working",
-        "Water leak in restroom",
-        "Housekeeping request – extra towels",
-        "Door lock not functioning",
-        "TV no signal",
+        "HPE ProLiant / iLO Alert Troubleshooting",
+        "Aruba Central Device Offline",
+        "HPE Alletra Storage Capacity Warning",
+        "Aruba ClearPass Endpoint Profiling",
+        "HPE Licensing Portal Access",
     ],
     "ARCH": [
-        "Archive retrieval request",
-        "Document indexing issue",
-        "Historical record access",
-        "Archive metadata correction",
-        "Retention request",
+        "HPE IMC Licensing",
+        "AirWave Licensing",
+        "ArubaOS / AOS Licensing",
+        "HPE iLO 6 User Guide - Configuration Reference",
+        "HPE Gen11 Server Setup and Configuration Guide",
     ],
     "PET": [
-        "Pet registration inquiry",
-        "Pet policy clarification",
-        "Pet service request",
-        "Animal facility issue",
-        "Pet account update",
+        "Aruba ClearPass Endpoint Profiling",
+        "Aruba Central Device Offline",
+        "Aruba Switch Configuration Guide",
+        "ArubaOS / AOS Licensing",
+        "HPE Intelligent Management Center (IMC) Licensing",
     ],
     "SUPPLY CHAIN": [
-        "Missing shipment",
-        "Purchase order mismatch",
-        "Supplier delivery delay",
-        "Inventory discrepancy",
-        "Replacement request",
+        "HPE ProLiant Hardware Replacement",
+        "Aruba CX Switch Onsite Support",
+        "HPE Alletra Storage Hardware Support",
+        "Aruba AP Hardware / Replacement Support",
+        "HPE Licensing Entitlement Verification",
     ],
     "ONSITE": [
-        "Onsite technician request",
-        "Hardware replacement",
-        "Network equipment issue",
-        "Site access request",
-        "Installation support",
+        "HPE ProLiant / iLO Alert Troubleshooting",
+        "Aruba CX Switch Onsite Support",
+        "HPE Gen11 Server Setup and Configuration Guide",
+        "HPE iLO 6 User Guide - Configuration Reference",
+        "Aruba Switch Configuration Guide",
     ],
 }
 
 
-MOCK_NAMES = [
-    "John Dela Cruz",
-    "Maria Santos",
-    "Anna Reyes",
-    "Carlo Banaag",
-    "Liza Tan",
-]
+MOCK_CASE_CONTEXT = {
+    "CARE": [
+        {"product": "HPE ProLiant DL380 Gen11", "category": "HPE Compute", "issue": "iLO hardware alert requires triage.", "next_action": "Capture iLO event details, serial number and hardware health before escalation."},
+        {"product": "Aruba AP-515", "category": "Aruba Networking", "issue": "Device is showing offline in Aruba Central.", "next_action": "Verify last-seen time, uplink, power and device connectivity path."},
+        {"product": "HPE Alletra", "category": "HPE Storage", "issue": "Storage capacity warning reported by the array.", "next_action": "Capture array/site, current capacity and recent capacity trend."},
+        {"product": "Aruba ClearPass", "category": "Aruba Security", "issue": "Endpoint profiling does not match the expected policy.", "next_action": "Capture endpoint identifier, authentication method and enforcement profile."},
+        {"product": "HPE Licensing Portal", "category": "HPE Licensing", "issue": "Customer cannot access licensing entitlement information.", "next_action": "Validate account, entitlement and exact portal error."},
+    ],
+    "ARCH": [
+        {"product": "HPE IMC", "category": "HPE Networking", "issue": "Customer requested IMC license capacity documentation.", "next_action": "Verify edition, current managed-device count and target node count."},
+        {"product": "Aruba AirWave", "category": "Aruba Networking", "issue": "License record needs validation for an AirWave environment.", "next_action": "Review the AirWave License page and record current license/device counts."},
+        {"product": "ArubaOS / AOS", "category": "Aruba Licensing", "issue": "Customer needs the correct licensing model for managed devices.", "next_action": "Identify deployment model and device class before validating Foundation/Advanced licensing."},
+        {"product": "HPE iLO 6", "category": "HPE Compute", "issue": "Customer requested iLO configuration reference material.", "next_action": "Retrieve the applicable iLO 6 guide and confirm server generation."},
+        {"product": "HPE ProLiant Gen11", "category": "HPE Compute", "issue": "Customer requested Gen11 setup/configuration documentation.", "next_action": "Validate server model and retrieve the applicable setup guide."},
+    ],
+    "PET": [
+        {"product": "Aruba ClearPass", "category": "Aruba Security", "issue": "Endpoint authentication/profiling request requires review.", "next_action": "Review request/event details and confirm classification before policy changes."},
+        {"product": "Aruba Central", "category": "Aruba Networking", "issue": "Managed device appears offline.", "next_action": "Confirm serial number, site, last-seen time and connectivity path."},
+        {"product": "Aruba CX Switch", "category": "Aruba Networking", "issue": "Switch configuration guidance is required.", "next_action": "Confirm switch model and applicable AOS-CX configuration requirement."},
+        {"product": "ArubaOS / AOS", "category": "Aruba Licensing", "issue": "License tier needs validation for an Aruba deployment.", "next_action": "Identify AP, switch, gateway or controller model and deployment architecture."},
+        {"product": "HPE IMC", "category": "HPE Networking", "issue": "Managed-device license capacity requires verification.", "next_action": "Verify the included 50-device capacity and required additional nodes."},
+    ],
+    "SUPPLY CHAIN": [
+        {"product": "HPE ProLiant", "category": "HPE Compute", "issue": "Replacement hardware shipment is pending.", "next_action": "Validate part number, shipment reference, destination and expected delivery."},
+        {"product": "Aruba CX Switch", "category": "Aruba Networking", "issue": "Switch replacement shipment requires fulfillment validation.", "next_action": "Confirm model, quantity, PO/shipment reference and destination site."},
+        {"product": "HPE Alletra", "category": "HPE Storage", "issue": "Storage hardware delivery is delayed.", "next_action": "Verify tracking, receiving contact and supplier exception details."},
+        {"product": "Aruba AP", "category": "Aruba Networking", "issue": "AP inventory or replacement quantity needs reconciliation.", "next_action": "Validate part numbers, quantities and receiving records."},
+        {"product": "HPE Licensing", "category": "HPE Licensing", "issue": "Entitlement fulfillment requires validation.", "next_action": "Confirm customer account, entitlement and licensing reference."},
+    ],
+    "ONSITE": [
+        {"product": "HPE ProLiant DL380 Gen11", "category": "HPE Compute", "issue": "Onsite support is required for an iLO/hardware alert.", "next_action": "Confirm model, serial, site access and remote troubleshooting before dispatch."},
+        {"product": "Aruba CX Switch", "category": "Aruba Networking", "issue": "Onsite technician support is required for the switch.", "next_action": "Confirm switch model, serial, site contact and replacement/technician scope."},
+        {"product": "HPE ProLiant Gen11", "category": "HPE Compute", "issue": "Server setup/configuration support is required onsite.", "next_action": "Confirm server generation, installation scope and site access requirements."},
+        {"product": "HPE iLO 6", "category": "HPE Compute", "issue": "Onsite configuration assistance is requested for iLO 6.", "next_action": "Validate server model and capture the required iLO configuration scope."},
+        {"product": "Aruba CX Switch", "category": "Aruba Networking", "issue": "Switch configuration support is required onsite.", "next_action": "Confirm AOS-CX version, model, site details and configuration objective."},
+    ],
+}
+
+
+MOCK_NAMES = CASEFLOW_ASSIGNEES
 
 
 MOCK_ACCOUNTS = [
-    "Marriott Hotel",
-    "Hilton Group",
-    "Accenture",
-    "Microsoft",
-    "Acme Corporation",
+    "HPE Aruba Networking Demo Lab",
+    "Enterprise Customer - BGC",
+    "Enterprise Customer - Makati",
+    "Enterprise Customer - Cavite",
+    "Enterprise Customer - Quezon City",
 ]
 
 
-# Increment this when the structure/timing of demonstration cases changes.
-# Version 11 resets existing demonstration cases to 00:00:00 on first load.
-MOCK_DATA_VERSION = 11
-
-
+# Increment this whenever mock content/checklists change so the old demo
+# records are rebuilt with the new HPE/Aruba content.
+MOCK_DATA_VERSION = 16
 
 
 def reset_mock_case_durations():
-    """Reset every seeded mock case to zero elapsed duration.
-
-
-    The reset is persisted in MongoDB so the browser-side live timer starts
-    from 00:00:00 for every mock case after the next dashboard refresh.
-    """
+    """Reset every seeded mock case to zero elapsed duration."""
     reset_now = utc_now()
-
-
     result = col(TASKS_COLLECTION).update_many(
-        {
-            "is_mock": True,
-            "case_number": {"$not": {"$regex": "^SIM-"}},
-        },
-        {
-            "$set": {
-                "created_at": reset_now,
-                "station_started_at": reset_now,
-                "last_update": reset_now,
-                "mock_data_version": MOCK_DATA_VERSION,
-            }
-        },
+        {"is_mock": True, "case_number": {"$not": {"$regex": "^SIM-"}}},
+        {"$set": {
+            "created_at": reset_now,
+            "station_started_at": reset_now,
+            "last_update": reset_now,
+            "mock_data_version": MOCK_DATA_VERSION,
+        }},
     )
-
-
-    # Give each station a fresh SLA window.
     for station, config in STATIONS.items():
         col(TASKS_COLLECTION).update_many(
-            {
-                "is_mock": True,
-                "case_number": {"$not": {"$regex": "^SIM-"}},
-                "department": station,
-            },
-            {
-                "$set": {
-                    "due_date": reset_now + timedelta(
-                        minutes=config["sla_minutes"]
-                    ),
-                }
-            },
+            {"is_mock": True, "case_number": {"$not": {"^SIM-": {}}}, "department": station},
+            {"$set": {"due_date": reset_now + timedelta(minutes=config["sla_minutes"])}},
         )
-
-
     clear_task_cache()
     return result.modified_count
 
 
-
-
 @st.cache_resource(show_spinner=False)
 def seed_mock_cases(force=False):
-    existing = col(TASKS_COLLECTION).count_documents(
-        {"is_mock": True}
-    )
+    existing = col(TASKS_COLLECTION).count_documents({"is_mock": True})
 
-
-    # One-time migration for mock data created by an earlier version.
-    # This resets demonstration durations to 00:00:00 without doing so
-    # again on every normal Streamlit rerun.
+    # Rebuild old demonstration data whenever the content version changes so
+    # new HPE/Aruba subjects, assignees and checklists actually appear.
     if existing and not force:
-        reset_filter = {
+        old_version = col(TASKS_COLLECTION).count_documents({
             "is_mock": True,
             "mock_data_version": {"$ne": MOCK_DATA_VERSION},
             "case_number": {"$not": {"$regex": "^SIM-"}},
-        }
-        needs_reset = col(TASKS_COLLECTION).count_documents(reset_filter)
-
-
-        if needs_reset:
-            # Reset every demonstration case from one common timestamp.
-            # update_many is substantially faster than one database write per case.
-            reset_now = utc_now()
-            col(TASKS_COLLECTION).update_many(
-                reset_filter,
-                {"$set": {
-                    "created_at": reset_now,
-                    "station_started_at": reset_now,
-                    "due_date": reset_now + timedelta(days=2),
-                    "last_update": reset_now,
-                    "mock_data_version": MOCK_DATA_VERSION,
-                }},
-            )
-            clear_task_cache()
-
-
-        return existing
-
+        })
+        if old_version:
+            col(TASKS_COLLECTION).delete_many({"is_mock": True})
+            existing = 0
+        else:
+            return existing
 
     if force:
-        col(TASKS_COLLECTION).delete_many(
-            {"is_mock": True}
-        )
-
+        col(TASKS_COLLECTION).delete_many({"is_mock": True})
 
     now = utc_now()
     docs = []
-
-
     case_index = 1
 
-
     for station, config in STATIONS.items():
-
-
         subjects = MOCK_SUBJECTS[station]
-        target_count = {
-            "CARE": 12,
-            "ARCH": 8,
-            "PET": 6,
-            "SUPPLY CHAIN": 5,
-            "ONSITE": 4,
-        }[station]
-
-
-        for i in range(target_count):
-
-
-            subject = subjects[i % len(subjects)]
+        contexts = MOCK_CASE_CONTEXT[station]
+        for i in range(5):
+            subject = subjects[i]
+            context = contexts[i]
             account = MOCK_ACCOUNTS[i % len(MOCK_ACCOUNTS)]
-
-
-            # Mock cases intentionally start at zero duration.
-            # The browser timer then increments from 00:00:00.
-            # Priority-account behavior is still preserved for alert/status testing.
-            priority_account = (
-                i == 0
-            )
-
-
+            priority_account = i == 0
             started = now
-
-
-            # All mock cases use a common demonstration due date:
-            # exactly two days from the time the mock dataset is seeded.
-            due = now + timedelta(days=2)
-
-
+            due = now + timedelta(minutes=config["sla_minutes"])
+            checklist = {
+                station: [
+                    {"item": item, "checked": False}
+                    for item in STATION_CHECKLISTS[station]
+                ]
+            }
             docs.append({
-                "case_number": (
-                    f"{station[:3].upper()}"
-                    f"-2026-{case_index:04d}"
-                ),
+                "case_number": f"{station[:3].upper()}-2026-{case_index:04d}",
                 "subject": subject,
-                "priority": (
-                    "Critical"
-                    if priority_account
-                    else "Medium"
-                    if i == 1
-                    else "Low"
-                ),
-                "account_priority": (
-                    "Yes"
-                    if priority_account
-                    else "No"
-                ),
-                "assigned_to": MOCK_NAMES[
-                    i % len(MOCK_NAMES)
-                ],
+                "priority": "Critical" if priority_account else ("Medium" if i == 1 else "Low"),
+                "account_priority": "Yes" if priority_account else "No",
+                "assigned_to": MOCK_NAMES[i % len(MOCK_NAMES)],
                 "department": station,
                 "account_name": account,
-                "vendor": (
-                    "CoolTech Solutions"
-                    if i % 2 == 0
-                    else "HPE Partner Services"
-                ),
-                "issue": subject,
+                "vendor": "HPE Services" if i % 2 == 0 else "Aruba Networking Services",
+                "issue": context["issue"],
                 "description": (
-                    f"Mock task for {station}. "
-                    "This record was created for dashboard demonstration."
+                    f"HPE/Aruba demonstration case for {station_name(station)}. "
+                    f"Device: {context['product']}. {context['issue']} "
+                    "The case is intentionally aligned with a Knowledge Base/SOP topic "
+                    "so the integrated guidance panel can demonstrate retrieval."
                 ),
-                "status": (
-                    "In Progress"
-                    if i % 2 == 0
-                    else "Open"
-                ),
+                "product": context["product"],
+                "category": context["category"],
+                "related_system": context["product"],
+                "resolution": "Pending current-station checklist completion and SOP-guided assessment.",
+                "next_action": context["next_action"],
+                "notes": "HPE/Aruba mock case for Caseflow + Knowledge Base demonstration.",
+                "status": "In Progress" if i % 2 == 0 else "Open",
                 "created_at": started,
                 "station_started_at": started,
                 "due_date": due,
                 "last_update": now,
-                "notes": "Mock demonstration case.",
                 "active": True,
                 "is_mock": True,
                 "mock_data_version": MOCK_DATA_VERSION,
-                "history": [
-                    {
-                        "action": (
-                            f"Case entered {station}"
-                        ),
-                        "timestamp": started,
-                    }
-                ],
+                "station_checklists": checklist,
+                "history": [{"action": f"Case entered {station_name(station)}", "timestamp": started}],
             })
-
-
             case_index += 1
 
-
     if docs:
-        col(TASKS_COLLECTION).insert_many(
-            docs
-        )
-
-
+        col(TASKS_COLLECTION).insert_many(docs)
+    clear_task_cache()
     return len(docs)
-
-
 
 
 # ============================================================
@@ -3284,11 +3275,159 @@ def find_vendor(task):
 
 
 # ============================================================
+# CASE CHECKLIST / ASSIGNMENT
+# ============================================================
+
+
+def _default_station_checklist(station):
+    station = station_name(station)
+    return [
+        {"item": item, "checked": False}
+        for item in STATION_CHECKLISTS.get(station, [])
+    ]
+
+
+def get_case_station_checklist(task, station=None):
+    """Return the persisted checklist for a station, falling back to defaults."""
+    station = station_name(station or task.get("department"))
+    stored = task.get("station_checklists") or {}
+    items = stored.get(station) if isinstance(stored, dict) else None
+    if not isinstance(items, list) or not items:
+        return _default_station_checklist(station)
+
+    normalized = []
+    for item in items:
+        if isinstance(item, dict):
+            label = text(item.get("item") or item.get("label"))
+            if label:
+                normalized.append({"item": label, "checked": bool(item.get("checked"))})
+        else:
+            label = text(item)
+            if label:
+                normalized.append({"item": label, "checked": False})
+    return normalized or _default_station_checklist(station)
+
+
+def checklist_complete(task, station=None):
+    items = get_case_station_checklist(task, station)
+    return bool(items) and all(bool(item.get("checked")) for item in items)
+
+
+def checklist_missing(task, station=None):
+    return [
+        text(item.get("item"))
+        for item in get_case_station_checklist(task, station)
+        if not bool(item.get("checked"))
+    ]
+
+
+def save_case_station_checklist(task_id, station, items):
+    station = station_name(station)
+    clean_items = []
+    for item in items:
+        label = text(item.get("item") or item.get("label")) if isinstance(item, dict) else text(item)
+        if label:
+            clean_items.append({
+                "item": label,
+                "checked": bool(item.get("checked")) if isinstance(item, dict) else False,
+            })
+
+    try:
+        from bson import ObjectId
+        col(TASKS_COLLECTION).update_one(
+            {"_id": ObjectId(str(task_id))},
+            {"$set": {
+                f"station_checklists.{station}": clean_items,
+                "last_update": utc_now(),
+            }},
+        )
+        clear_task_cache()
+        return True
+    except Exception:
+        return False
+
+
+def set_case_checklist_item(task_id, station, index, checked):
+    # Streamlit callbacks pass the widget key so the current checkbox value
+    # can be read from session_state at callback time.
+    if isinstance(checked, str) and checked in st.session_state:
+        checked = st.session_state.get(checked, False)
+    station = station_name(station)
+    try:
+        from bson import ObjectId
+        task = col(TASKS_COLLECTION).find_one({"_id": ObjectId(str(task_id))})
+        if not task:
+            return False
+        items = get_case_station_checklist(task, station)
+        if index < 0 or index >= len(items):
+            return False
+        items[index]["checked"] = bool(checked)
+        return save_case_station_checklist(task_id, station, items)
+    except Exception:
+        return False
+
+
+def append_case_checklist_item(task_id, station, label):
+    label = text(label)
+    if not label:
+        return False
+    station = station_name(station)
+    try:
+        from bson import ObjectId
+        task = col(TASKS_COLLECTION).find_one({"_id": ObjectId(str(task_id))})
+        if not task:
+            return False
+        items = get_case_station_checklist(task, station)
+        if any(text(x.get("item")).lower() == label.lower() for x in items):
+            return False
+        items.append({"item": label, "checked": False})
+        return save_case_station_checklist(task_id, station, items)
+    except Exception:
+        return False
+
+
+def reassign_case(task, assignee):
+    assignee = text(assignee)
+    current = station_name(task.get("department"))
+    if not assignee or assignee == text(task.get("assigned_to")):
+        return False, "Choose a different assignee."
+    missing = checklist_missing(task, current)
+    if missing:
+        return False, "Complete the current-station checklist before reassigning this case."
+    try:
+        from bson import ObjectId
+        now = utc_now()
+        history = list(task.get("history") or [])
+        history.append({
+            "action": f"Reassigned within {current} from {text(task.get('assigned_to')) or 'Unassigned'} to {assignee}",
+            "timestamp": now,
+            "assigned_to": assignee,
+        })
+        result = col(TASKS_COLLECTION).update_one(
+            {"_id": ObjectId(str(task["_id"]))},
+            {"$set": {
+                "assigned_to": assignee,
+                "last_update": now,
+                "history": history[-50:],
+            }},
+        )
+        clear_task_cache()
+        return result.modified_count > 0, ""
+    except Exception as exc:
+        return False, f"Unable to reassign case: {exc}"
+
+
+# ============================================================
 # CASE TRANSFER
 # ============================================================
 
 
 def transfer_case(task, destination):
+    current_station = station_name(task.get("department"))
+    missing = checklist_missing(task, current_station)
+    if missing:
+        return False
+
     now = utc_now()
 
 
@@ -3891,19 +4030,111 @@ def kb_score(query, doc):
     return score
 
 
+@st.cache_data(ttl=30, show_spinner=False)
 def load_kb_documents():
+    """Load Caseflow KB/SOP records plus the shared HPE Knowledge Base.
+
+    The standalone HPE Knowledge Base stores AI-ready records in the HPE
+    database using `Knowledge base` and `Knowledge base Documents`.  Caseflow
+    consumes those records read-only so the Case Details panel can surface the
+    same SOP content without requiring a second API or a duplicate KB.
+    """
     docs = []
+
+    # Caseflow-local KB/SOP collections.
     for collection_name in [KB_COLLECTION, SOP_COLLECTION]:
         try:
             docs.extend(list(col(collection_name).find({}, {
                 "_id": 1, "title": 1, "subject": 1, "question": 1,
                 "keywords": 1, "category": 1, "answer": 1, "content": 1,
                 "body": 1, "summary": 1, "description": 1, "resolution": 1,
-                "sop": 1, "source": 1, "source_type": 1, "url": 1,
+                "sop": 1, "steps": 1, "source": 1, "source_type": 1, "url": 1,
             }).limit(1000)))
         except Exception:
             pass
-    return docs
+
+    # Shared standalone HPE Knowledge Base.  It is optional: if the same
+    # MongoDB cluster/secret is not available, Caseflow simply keeps using its
+    # local KB without breaking the dashboard.
+    try:
+        uri = text(st.secrets.get("MONGODB_URI", ""))
+        if not uri:
+            uri = text(os.getenv("MONGO_URI", ""))
+        if not uri:
+            try:
+                uri = text(st.secrets.get("mongo", {}).get("uri", ""))
+            except Exception:
+                uri = ""
+
+        if uri:
+            shared_client = MongoClient(
+                uri,
+                serverSelectionTimeoutMS=2500,
+                connectTimeoutMS=2500,
+                socketTimeoutMS=5000,
+            )
+            shared_db = shared_client["HPE"]
+
+            for record in shared_db["Knowledge base"].find({}, {
+                "_id": 1, "kb_id": 1, "family": 1, "topic": 1,
+                "question": 1, "answer": 1, "steps": 1,
+                "keywords": 1, "source": 1, "source_url": 1,
+            }).sort("created_at", -1).limit(1500):
+                docs.append({
+                    "_id": f"hpe-kb:{text(record.get('kb_id')) or text(record.get('_id'))}",
+                    "title": text(record.get("topic")) or text(record.get("question")) or text(record.get("kb_id")) or "HPE Knowledge Base Article",
+                    "subject": text(record.get("question")),
+                    "question": text(record.get("question")),
+                    "keywords": record.get("keywords") or [],
+                    "category": text(record.get("family")) or "HPE Knowledge Base",
+                    "answer": text(record.get("answer")),
+                    "content": text(record.get("steps")),
+                    "steps": text(record.get("steps")),
+                    "source": text(record.get("source")) or "HPE Knowledge Base",
+                    "source_type": "shared_hpe_kb",
+                    "url": text(record.get("source_url")),
+                })
+
+            for record in shared_db["Knowledge base Documents"].find({}, {
+                "_id": 1, "doc_id": 1, "title": 1, "filename": 1,
+                "family": 1, "topic": 1, "source_url": 1,
+                "content": 1, "doc_type": 1,
+            }).sort("created_at", -1).limit(1000):
+                docs.append({
+                    "_id": f"hpe-doc:{text(record.get('doc_id')) or text(record.get('_id'))}",
+                    "title": text(record.get("title")) or text(record.get("filename")) or "HPE Knowledge Document",
+                    "subject": text(record.get("topic")),
+                    "question": text(record.get("topic")),
+                    "keywords": [text(record.get("family")), text(record.get("topic"))],
+                    "category": text(record.get("family")) or "HPE Knowledge Base",
+                    "content": text(record.get("content")),
+                    "answer": text(record.get("content")),
+                    "source": text(record.get("filename")) or "HPE Knowledge Base Document",
+                    "source_type": "shared_hpe_document",
+                    "url": text(record.get("source_url")),
+                })
+
+            try:
+                shared_client.close()
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    # De-duplicate shared/local records by title + source while preserving the
+    # first (usually richer) record.
+    unique = []
+    seen = set()
+    for doc in docs:
+        key = (
+            text(doc.get("title")).strip().lower(),
+            text(doc.get("source")).strip().lower(),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(doc)
+    return unique
 
 
 def search_kb(query, limit=5):
@@ -3967,12 +4198,16 @@ seed_demo_kb()
 
 @st.dialog("Case Details", width="large")
 def case_details(task_id):
-    """Centered Case Details dialog.
+    """Centered, scrollable Case Details dialog.
 
-    The visual structure follows the supplied Case Details reference image,
-    while all values/actions continue to use the ORIGINAL Caseflow task schema,
-    SLA engine, vendor lookup, transfer logic, communication records,
-    attachment records, and history records.
+    Layout order inside Case Information is intentionally:
+        1. Case Information
+        2. Case Actions
+        3. Knowledge Base
+
+    Knowledge Base is no longer a separate tab before Communication.  It is
+    the last panel in the main Case Information view so the agent can review
+    the case, complete the station checklist, and then use the matching SOP.
     """
     try:
         from bson import ObjectId
@@ -3988,7 +4223,6 @@ def case_details(task_id):
             st.rerun()
         return
 
-    # ORIGINAL Caseflow engine — this remains the authoritative live SLA/priority calculation.
     state = calculate_state(task)
     status = text(task.get("status", "Open")) or "Open"
     department = station_name(task.get("department"))
@@ -4023,20 +4257,18 @@ def case_details(task_id):
     vendor = find_vendor(task)
     vendor_name = text((vendor or {}).get("vendor_name")) or text(task.get("vendor")) or "No synchronized vendor record"
     vendor_contact = text((vendor or {}).get("contact_name")) or text((vendor or {}).get("primary_contact")) or text(task.get("vendor_contact"))
-    vendor_email = text((vendor or {}).get("email")) or text((vendor or {}).get("vendor_email"))
-    vendor_phone = text((vendor or {}).get("phone")) or text((vendor or {}).get("contact_number"))
-    vendor_address = text((vendor or {}).get("address")) or text((vendor or {}).get("location"))
+    vendor_email = text((vendor or {}).get("email")) or text(task.get("vendor_email"))
 
-    # ------------------------------------------------------------------
-    # TOP SUMMARY — mirrors the supplied reference layout.
-    # ------------------------------------------------------------------
+    # ---------------------------------------------------------------
+    # TOP SUMMARY
+    # ---------------------------------------------------------------
     st.markdown(
         f"""
         <div class="case-detail-hero">
             <div class="case-detail-title-row">
                 <div class="case-detail-title-left">
                     <div class="case-folder-icon">▣</div>
-                    <div>
+                    <div class="case-detail-copy">
                         <div class="case-detail-case-number">
                             {html.escape(case_number)}
                             <span class="case-copy-icon">▢</span>
@@ -4067,9 +4299,6 @@ def case_details(task_id):
         unsafe_allow_html=True,
     )
 
-    # ------------------------------------------------------------------
-    # SUMMARY STRIP — all values come from the original case record/state.
-    # ------------------------------------------------------------------
     st.markdown(
         f"""
         <div class="case-summary-strip">
@@ -4088,128 +4317,267 @@ def case_details(task_id):
         unsafe_allow_html=True,
     )
 
-    tab_info, tab_kb, tab_comm, tab_attach = st.tabs([
+    tab_info, tab_comm, tab_attach = st.tabs([
         "ⓘ  Case Information",
-        "✦  Knowledge Base",
         "✉  Communication",
         "♧  Attachments",
     ])
 
-    # ------------------------------------------------------------------
-    # CASE INFORMATION — main view closely follows the uploaded image.
-    # ------------------------------------------------------------------
     with tab_info:
-        left, middle, right = st.columns([1.05, 1.05, 1.05], gap="small")
-
-        with left:
-            st.markdown("<div class='case-card'>", unsafe_allow_html=True)
+        # =============================================================
+        # 1. CASE INFORMATION
+        # =============================================================
+        st.markdown("<div class='case-card'>", unsafe_allow_html=True)
+        st.markdown(
+            "<div class='case-card-heading'><span class='case-heading-icon'>♙</span>Case Information</div>",
+            unsafe_allow_html=True,
+        )
+        rows = [
+            ("Case #", case_number),
+            ("Subject", subject),
+            ("Description", description),
+            ("Priority", priority_label.title()),
+            ("Assigned To", assigned_to),
+            ("Due Date", due),
+            ("Created Date", created),
+            ("Last Update", last_update),
+            ("Current Status", status),
+            ("Case Category", text(task.get("category")) or "—"),
+            ("Product / Device", text(task.get("product")) or related_system),
+            ("Client", account_name),
+            ("Related System", related_system),
+            ("Site / Location", text(task.get("site_location")) or "—"),
+            ("Reference Number", text(task.get("reference_number")) or "—"),
+            ("Vendor", vendor_name),
+        ]
+        for label, value in rows:
             st.markdown(
-                "<div class='case-card-heading'><span class='case-heading-icon'>♙</span>Case Information</div>",
+                f"<div class='case-info-row'><span>{html.escape(label)}</span><strong>{html.escape(str(value))}</strong></div>",
                 unsafe_allow_html=True,
             )
-            rows = [
-                ("Case #", case_number),
-                ("Subject", subject),
-                ("Description", description),
-                ("Priority", priority_label.title()),
-                ("Assigned To", assigned_to),
-                ("Due Date", due),
-                ("Created Date", created),
-                ("Last Update", last_update),
-                ("Current Status", status),
-                ("Case Category", text(task.get("category")) or "—"),
-                ("Client", account_name),
-                ("Related System", related_system),
-                ("Site / Location", text(task.get("site_location")) or "—"),
-                ("Reference Number", text(task.get("reference_number")) or "—"),
-            ]
-            for label, value in rows:
-                st.markdown(
-                    f"<div class='case-info-row'><span>{html.escape(label)}</span><strong>{html.escape(str(value))}</strong></div>",
-                    unsafe_allow_html=True,
-                )
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        with middle:
-            st.markdown("<div class='case-card kb-inline-card'>", unsafe_allow_html=True)
+        if vendor_contact or vendor_email:
             st.markdown(
-                "<div class='case-card-heading'><span class='case-heading-icon'>✦</span>Knowledge Base</div>",
+                f"<div class='case-info-row'><span>Vendor Contact</span><strong>{html.escape(vendor_contact or '—')}" 
+                f"{(' · ' + html.escape(vendor_email)) if vendor_email else ''}</strong></div>",
                 unsafe_allow_html=True,
             )
-            auto_query = case_kb_query(task)
-            kb_query = st.text_input(
-                "Knowledge Base Search",
-                value=auto_query,
-                placeholder="Search HPE, Aruba, licensing, devices, troubleshooting...",
-                key=f"inline_kb_query_{task_id}",
-                label_visibility="collapsed",
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        # =============================================================
+        # 2. CASE ACTIONS
+        # =============================================================
+        st.markdown("<div class='case-card case-actions-card' style='margin-top:9px;'>", unsafe_allow_html=True)
+        st.markdown(
+            "<div class='case-card-heading'><span class='case-heading-icon'>◷</span>Case Actions</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown("<div class='action-readonly-label'>Current Status</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='action-readonly-value'>{html.escape(status)}</div>", unsafe_allow_html=True)
+        st.markdown("<div class='action-readonly-label'>Current Station</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='action-readonly-value'>{html.escape(station_name(department))}</div>", unsafe_allow_html=True)
+        st.markdown("<div class='action-readonly-label'>Current Assignee</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='action-readonly-value'>{html.escape(assigned_to)}</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        stations = list(STATIONS.keys())
+        current = station_name(task.get("department")) or "CARE"
+        if current not in stations:
+            current = "CARE"
+
+        # Checklist station selector lets the user maintain a checklist for
+        # every station. Transfer/reassignment always validates the CURRENT one.
+        checklist_station = st.selectbox(
+            "Checklist station",
+            stations,
+            index=stations.index(current),
+            format_func=station_name,
+            key=f"checklist_station_{task_id}",
+        )
+        checklist_items = get_case_station_checklist(task, checklist_station)
+        current_missing = checklist_missing(task, current)
+        current_complete = not current_missing
+
+        if checklist_station == current:
+            badge_class = "complete" if current_complete else "pending"
+            badge_text = "✓ Checklist complete" if current_complete else f"{len(current_missing)} item(s) remaining"
+            st.markdown(
+                f"<div class='case-checklist-wrap'><div class='case-checklist-title'>Required {html.escape(station_name(current))} Checklist</div>"
+                f"<div class='case-checklist-sub'>Every item must be completed before this case can be reassigned or transferred to another station.</div>"
+                f"<span class='case-checklist-status {badge_class}'>{html.escape(badge_text)}</span></div>",
+                unsafe_allow_html=True,
             )
-            kb_search, kb_match = st.columns(2)
-            with kb_search:
-                kb_clicked = st.button("✨ Ask", use_container_width=True, key=f"inline_kb_ask_{task_id}")
-            with kb_match:
-                match_clicked = st.button("↻ Match", use_container_width=True, key=f"inline_kb_match_{task_id}")
-            active_query = auto_query if match_clicked else (text(kb_query).strip() or auto_query)
-            results = search_kb(f"{active_query} {auto_query}", limit=3)
-            if results:
-                best = results[0]
-                content = kb_content(best)
-                if len(content) > 420:
-                    content = content[:420].rstrip() + "…"
-                st.markdown(
-                    f"<div class='kb-mini-best'><div class='kb-mini-label'>BEST MATCH</div><div class='kb-mini-title'>{html.escape(text(best.get('title')) or 'Knowledge Base Article')}</div><div class='kb-mini-text'>{html.escape(content)}</div><div class='kb-mini-meta'>{html.escape(text(best.get('category')) or 'Knowledge Base')}</div></div>",
-                    unsafe_allow_html=True,
-                )
-                for result in results[1:]:
-                    c=kb_content(result); c=c[:180].rstrip()+"…" if len(c)>180 else c
-                    st.markdown(f"<div class='kb-mini-result'><strong>{html.escape(text(result.get('title')) or 'Related Article')}</strong><span>{html.escape(c)}</span></div>", unsafe_allow_html=True)
+        else:
+            st.markdown(
+                f"<div class='case-checklist-wrap'><div class='case-checklist-title'>{html.escape(station_name(checklist_station))} Checklist</div>"
+                f"<div class='case-checklist-sub'>This is the checklist for the selected station. The current {html.escape(station_name(current))} checklist remains the gate for transfer.</div></div>",
+                unsafe_allow_html=True,
+            )
+
+        # Each checkbox writes immediately to MongoDB, so the transfer gate
+        # remains reliable even if the dialog reruns between clicks.
+        for idx, item in enumerate(checklist_items):
+            check_key = f"case_checklist_{task_id}_{checklist_station}_{idx}"
+            if check_key not in st.session_state:
+                st.session_state[check_key] = bool(item.get("checked"))
+            st.checkbox(
+                item.get("item") or f"Checklist item {idx + 1}",
+                key=check_key,
+                on_change=set_case_checklist_item,
+                args=(task_id, checklist_station, idx, check_key),
+            )
+
+        add_key = f"case_checklist_new_{task_id}_{checklist_station}"
+        add_item = st.text_input(
+            "Add checklist item",
+            key=add_key,
+            placeholder=f"Add a {station_name(checklist_station)}-specific completion item...",
+        )
+        if st.button("＋ Add Checklist Item", use_container_width=True, key=f"case_checklist_add_{task_id}_{checklist_station}"):
+            if append_case_checklist_item(task_id, checklist_station, add_item):
+                st.session_state.pop(add_key, None)
+                st.success("Checklist item added.")
+                st.rerun()
             else:
-                st.caption("No matching Knowledge Base article found.")
-            st.markdown("</div>", unsafe_allow_html=True)
+                st.warning("Enter a new checklist item.")
 
-        with right:
-            st.markdown("<div class='case-card case-actions-card'>", unsafe_allow_html=True)
-            st.markdown(
-                "<div class='case-card-heading'><span class='case-heading-icon'>◷</span>Case Actions</div>",
-                unsafe_allow_html=True,
-            )
-            st.markdown("<div class='action-readonly-label'>Current Status</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='action-readonly-value'>{html.escape(status)}</div>", unsafe_allow_html=True)
-            st.markdown("<div class='action-readonly-label'>Current Station</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='action-readonly-value'>{html.escape(department or '—')}</div>", unsafe_allow_html=True)
-            st.markdown("<div class='action-readonly-label'>Assigned To</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='action-readonly-value'>{html.escape(assigned_to)}</div>", unsafe_allow_html=True)
+        st.markdown("<div class='case-action-divider'></div>", unsafe_allow_html=True)
 
-            stations = list(STATIONS.keys())
-            current = text(task.get("department")) or "CARE"
-            if current not in stations:
-                current = "CARE"
-            destination = st.selectbox(
-                "Reassign / Transfer To",
-                stations,
-                index=stations.index(current),
-                format_func=station_name,
-                key=f"case_transfer_destination_{task_id}",
-            )
-            st.caption("Uses the original Caseflow transfer function. Duration resets when the case enters the destination station.")
-            if st.button(
-                f"Transfer to {station_name(destination)}",
-                type="primary",
-                use_container_width=True,
-                key=f"case_transfer_{task_id}",
-            ):
-                if destination == current:
-                    st.warning("Choose a different station.")
-                elif transfer_case(task, destination):
-                    st.success(f"Case transferred to {station_name(destination)}.")
-                    st.session_state["show_case"] = False
-                    st.session_state["selected_case_id"] = None
+        assignee_options = list(dict.fromkeys(CASEFLOW_ASSIGNEES + ([assigned_to] if assigned_to else [])))
+        new_assignee = st.selectbox(
+            "Reassign case to",
+            assignee_options,
+            index=assignee_options.index(assigned_to) if assigned_to in assignee_options else 0,
+            key=f"case_reassign_assignee_{task_id}",
+        )
+        if st.button("Reassign Case", use_container_width=True, key=f"case_reassign_{task_id}"):
+            if new_assignee == assigned_to:
+                st.warning("Choose a different assignee.")
+            elif not current_complete:
+                st.error("Complete every item in the current-station checklist before reassigning this case.")
+            else:
+                ok, message = reassign_case(task, new_assignee)
+                if ok:
+                    st.success(f"Case reassigned to {new_assignee}.")
                     st.rerun()
                 else:
-                    st.error("Unable to transfer case.")
-            st.markdown("</div>", unsafe_allow_html=True)
+                    st.error(message or "Unable to reassign case.")
 
-        # Bottom history row, matching the reference composition.
+        destination = st.selectbox(
+            "Transfer to next station",
+            stations,
+            index=stations.index(current),
+            format_func=station_name,
+            key=f"case_transfer_destination_{task_id}",
+        )
+        st.markdown(
+            "<div class='case-actions-note'>Duration resets when the case enters the destination station. "
+            "The current-station checklist is a mandatory transfer gate.</div>",
+            unsafe_allow_html=True,
+        )
+        if st.button(
+            f"Transfer to {station_name(destination)}",
+            type="primary",
+            use_container_width=True,
+            key=f"case_transfer_{task_id}",
+        ):
+            if destination == current:
+                st.warning("Choose a different station.")
+            elif not current_complete:
+                missing_html = "<br>• ".join(html.escape(x) for x in current_missing[:8])
+                st.error(f"Complete the current-station checklist before transfer:<br>• {missing_html}", unsafe_allow_html=True)
+            elif transfer_case(task, destination):
+                st.success(f"Case transferred to {station_name(destination)}.")
+                st.session_state["show_case"] = False
+                st.session_state["selected_case_id"] = None
+                st.rerun()
+            else:
+                st.error("Unable to transfer case.")
+
+        # =============================================================
+        # 3. KNOWLEDGE BASE — intentionally LAST
+        # =============================================================
+        st.markdown("<div class='case-card kb-inline-card' style='margin-top:9px;'>", unsafe_allow_html=True)
+        st.markdown(
+            "<div class='case-card-heading'><span class='case-heading-icon'>✦</span>Knowledge Base</div>",
+            unsafe_allow_html=True,
+        )
+        st.caption("Case-aware HPE and Aruba guidance from Caseflow plus the shared HPE Knowledge Base/SOP repository. No OpenAI API key is required.")
+
+        auto_query = case_kb_query(task)
+        kb_query = st.text_input(
+            "Knowledge Base Search",
+            value=auto_query,
+            placeholder="Search HPE, Aruba, licensing, devices, troubleshooting or SOPs...",
+            key=f"inline_kb_query_{task_id}",
+            label_visibility="collapsed",
+        )
+        kb_search, kb_match = st.columns(2)
+        with kb_search:
+            kb_clicked = st.button("✨ Ask Knowledge Base", type="primary", use_container_width=True, key=f"inline_kb_ask_{task_id}")
+        with kb_match:
+            match_clicked = st.button("↻ Match This Case", use_container_width=True, key=f"inline_kb_match_{task_id}")
+
+        active_query = auto_query if match_clicked else (text(kb_query).strip() or auto_query)
+        results = search_kb(f"{active_query} {auto_query}" if kb_clicked else active_query, limit=5)
+        if results:
+            best = results[0]
+            content = kb_content(best)
+            if len(content) > 700:
+                content = content[:700].rstrip() + "…"
+            st.markdown(
+                f"<div class='kb-answer-card best'><div class='kb-answer-label'>BEST MATCH</div>"
+                f"<div class='kb-result-title'>{html.escape(text(best.get('title')) or 'Knowledge Base Article')}</div>"
+                f"<div class='kb-result-text'>{html.escape(content).replace(chr(10), '<br>')}</div>"
+                f"<div class='kb-meta'><span class='kb-source-pill'>{html.escape(text(best.get('category')) or 'Knowledge Base')}</span>"
+                f"<span class='kb-source-pill'>{html.escape(text(best.get('source_type')) or text(best.get('source')) or 'SOP')}</span></div></div>",
+                unsafe_allow_html=True,
+            )
+            if text(best.get("url")):
+                st.caption(f"Source: {text(best.get('url'))}")
+            for index, result in enumerate(results[1:], start=2):
+                c = kb_content(result)
+                c = c[:260].rstrip() + "…" if len(c) > 260 else c
+                st.markdown(
+                    f"<div class='kb-answer-card'><div class='kb-result-title'>{index}. {html.escape(text(result.get('title')) or 'Related Article')}</div>"
+                    f"<div class='kb-result-text'>{html.escape(c).replace(chr(10), '<br>')}</div>"
+                    f"<div class='kb-meta'><span class='kb-source-pill'>{html.escape(text(result.get('category')) or 'Knowledge Base')}</span></div></div>",
+                    unsafe_allow_html=True,
+                )
+        else:
+            st.info("No matching Knowledge Base/SOP article found. Try the exact product, model, acronym or issue.")
+
+        question_key = f"kb_ai_question_{task_id}"
+        result_key = f"kb_ai_result_{task_id}"
+        if question_key not in st.session_state:
+            st.session_state[question_key] = "What should I verify before escalating this case?"
+        question = st.text_area(
+            "Ask for recommended guidance",
+            key=question_key,
+            height=70,
+            label_visibility="collapsed",
+            placeholder="Example: What should I verify before escalating this HPE/Aruba case?",
+        )
+        if st.button("Get Recommended Guidance", type="primary", use_container_width=True, key=f"kb_get_guidance_{task_id}"):
+            retrieved = search_kb(f"{text(question)} {auto_query}", limit=6)
+            st.session_state[result_key] = local_kb_ai_answer(question, task, retrieved)
+        ai_result = st.session_state.get(result_key)
+        if ai_result:
+            answer_text = text(ai_result.get("answer"))
+            st.markdown(
+                f"<div class='kb-answer-card best'><div class='kb-answer-label'>KNOWLEDGE BASE ANSWER · {html.escape(text(ai_result.get('confidence')))}</div>"
+                f"<div class='kb-result-text'>{html.escape(answer_text).replace(chr(10), '<br>')}</div></div>",
+                unsafe_allow_html=True,
+            )
+            sources = ai_result.get("sources", [])
+            if sources:
+                pills = "".join(
+                    f"<span class='kb-source-pill'>{html.escape(text(d.get('title')) or 'KB Article')}</span>"
+                    for d in sources[:6]
+                )
+                st.markdown(f"<div class='kb-meta'><strong>Sources used:</strong> {pills}</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        # History and resolution stay below the three primary sections.
         history = task.get("history") or []
         st.markdown("<div class='case-card case-history-card'>", unsafe_allow_html=True)
         st.markdown(
@@ -4250,59 +4618,6 @@ def case_details(task_id):
             st.caption("No resolution, next action, or notes are recorded for this case.")
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # ------------------------------------------------------------------
-    # INTEGRATED KNOWLEDGE BASE — replaces the vendor tab in Case Details.
-    # ------------------------------------------------------------------
-    with tab_kb:
-        st.markdown("### ✦ Integrated Knowledge Base")
-        st.caption("Case-aware HPE and Aruba guidance from the local Knowledge Base and SOP collections. No OpenAI API key is required.")
-
-        auto_query = case_kb_query(task)
-        kb_query = st.text_area(
-            "Ask Knowledge Base",
-            value=auto_query,
-            placeholder="Ask about this case, licensing, HPE devices, Aruba networking, troubleshooting or SOPs...",
-            key=f"kb_query_{task_id}",
-            height=72,
-            label_visibility="collapsed",
-        )
-        kb1, kb2 = st.columns([2,1])
-        with kb1:
-            search_clicked = st.button("✨ Ask Knowledge Base", type="primary", use_container_width=True, key=f"kb_search_{task_id}")
-        with kb2:
-            case_match_clicked = st.button("↻ Case Match", use_container_width=True, key=f"kb_case_match_{task_id}")
-
-        active_query = auto_query if case_match_clicked else (text(kb_query).strip() or auto_query)
-        results = search_kb(f"{active_query} {auto_query}" if search_clicked else active_query, limit=5)
-        if results:
-            best=results[0]
-            st.markdown(f"<div class='kb-answer-card best'><div class='kb-answer-label'>BEST MATCH</div><div class='kb-result-title'>{html.escape(text(best.get('title')) or 'Knowledge Base Article')}</div><div class='kb-result-text'>{html.escape(kb_content(best))}</div><div class='kb-meta'><span class='kb-source-pill'>{html.escape(text(best.get('category')) or 'Knowledge Base')}</span></div></div>", unsafe_allow_html=True)
-            for index,result in enumerate(results[1:],start=2):
-                c=kb_content(result); c=c[:420].rstrip()+"…" if len(c)>420 else c
-                st.markdown(f"<div class='kb-answer-card'><div class='kb-result-title'>{index}. {html.escape(text(result.get('title')) or 'Knowledge Base Article')}</div><div class='kb-result-text'>{html.escape(c)}</div><div class='kb-meta'><span class='kb-source-pill'>{html.escape(text(result.get('category')) or 'Knowledge Base')}</span></div></div>", unsafe_allow_html=True)
-        else:
-            st.info("No matching Knowledge Base article found.")
-
-        question_key=f"kb_ai_question_{task_id}"
-        result_key=f"kb_ai_result_{task_id}"
-        if question_key not in st.session_state:
-            st.session_state[question_key]="What are the recommended next steps for this case?"
-        st.markdown("### ✨ Ask Knowledge Base")
-        question=st.text_area("Question", key=question_key, height=70, label_visibility="collapsed", placeholder="Example: What should I verify before escalating this case?")
-        if st.button("Get Recommended Guidance", type="primary", use_container_width=True, key=f"kb_get_guidance_{task_id}"):
-            retrieved=search_kb(f"{text(question)} {auto_query}", limit=6)
-            st.session_state[result_key]=local_kb_ai_answer(question, task, retrieved)
-        ai_result=st.session_state.get(result_key)
-        if ai_result:
-            st.markdown(f"<div class='kb-answer-card best'><div class='kb-answer-label'>KNOWLEDGE BASE ANSWER · {html.escape(text(ai_result.get('confidence')))}</div><div class='kb-result-text'>{html.escape(text(ai_result.get('answer'))).replace(chr(10),'<br>')}</div></div>", unsafe_allow_html=True)
-            sources=ai_result.get('sources',[])
-            if sources:
-                pills=''.join(f"<span class='kb-source-pill'>{html.escape(text(d.get('title')) or 'KB Article')}</span>" for d in sources[:6])
-                st.markdown(f"<div class='kb-meta'><strong>Sources used:</strong> {pills}</div>", unsafe_allow_html=True)
-
-    # ------------------------------------------------------------------
-    # COMMUNICATION — original stored records only.
-    # ------------------------------------------------------------------
     with tab_comm:
         st.markdown("### Communication")
         communications = task.get("communications") or task.get("communication_history") or []
@@ -4321,9 +4636,6 @@ def case_details(task_id):
         else:
             st.info("No communication history is stored on this case.")
 
-    # ------------------------------------------------------------------
-    # ATTACHMENTS — original stored records only.
-    # ------------------------------------------------------------------
     with tab_attach:
         st.markdown("### Attachments")
         attachments = task.get("attachments") or task.get("files") or []
