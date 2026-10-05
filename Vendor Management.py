@@ -4863,7 +4863,7 @@ def case_details(task_id):
 
     # Native Streamlit scroll container: this is the actual reliable scrollbar.
     # Header/summary remain above it; all tabs and their complete content scroll inside it.
-    with st.container(height=500, border=False):
+    with st.container(height=380, border=False):
         tab_info, tab_actions, tab_kb, tab_comm, tab_attach = st.tabs([
             "ⓘ  Case Information",
             "◷  Case Actions",
@@ -5251,7 +5251,7 @@ div[data-testid="stDialog"] > div {
 
 /* Never hide the native scrollbar of the Streamlit container. */
 div[data-testid="stDialog"] [data-testid="stVerticalBlock"] {
-    scrollbar-width: auto !important;
+    scrollbar-width: thin !important;
 }
 
 /* Remove the old zoom/oversizing behavior from the case-detail workspace. */
@@ -5266,18 +5266,26 @@ div[data-testid="stDialog"] .case-summary-cell strong { font-size: 9px !importan
 div[data-testid="stDialog"] .case-assignee-copy span { font-size: 8px !important; }
 div[data-testid="stDialog"] .case-assignee-copy strong { font-size: 9px !important; }
 
-/* The native scroll container gets a clear scrollbar in Chromium/Edge. */
+/* Sleek, thin, semi-transparent scrollbar for the ACTUAL native Streamlit scroll container. */
+div[data-testid="stDialog"] [data-testid="stVerticalBlock"] {
+    scrollbar-width: thin !important;
+    scrollbar-color: rgba(71, 85, 105, .42) transparent !important;
+}
 div[data-testid="stDialog"] [data-testid="stVerticalBlock"]::-webkit-scrollbar {
-    width: 10px !important;
+    width: 5px !important;
+    height: 5px !important;
 }
 div[data-testid="stDialog"] [data-testid="stVerticalBlock"]::-webkit-scrollbar-track {
-    background: #edf2f7 !important;
-    border-radius: 8px !important;
+    background: transparent !important;
+    border: 0 !important;
 }
 div[data-testid="stDialog"] [data-testid="stVerticalBlock"]::-webkit-scrollbar-thumb {
-    background: #7f94aa !important;
-    border-radius: 8px !important;
-    border: 2px solid #edf2f7 !important;
+    background: rgba(71, 85, 105, .42) !important;
+    border-radius: 999px !important;
+    border: 0 !important;
+}
+div[data-testid="stDialog"] [data-testid="stVerticalBlock"]::-webkit-scrollbar-thumb:hover {
+    background: rgba(30, 41, 59, .62) !important;
 }
 
 @media (max-width: 900px) {
