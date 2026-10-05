@@ -5952,6 +5952,230 @@ if (
 
 
 
+
+# ============================================================
+# CASE DETAILS — FINAL FUNCTIONAL COMPACT/SCROLL OVERRIDE
+# ============================================================
+st.markdown(r"""
+<style>
+div[data-testid="stDialog"] > div {
+    position:fixed !important;
+    top:50% !important;
+    left:50% !important;
+    right:auto !important;
+    bottom:auto !important;
+    transform:translate(-50%,-50%) !important;
+    width:min(1400px, calc(100vw - 20px)) !important;
+    max-width:min(1400px, calc(100vw - 20px)) !important;
+    height:min(94vh, 900px) !important;
+    max-height:calc(100vh - 20px) !important;
+    min-height:0 !important;
+    margin:0 !important;
+    overflow:hidden !important;
+}
+div[data-testid="stDialog"] [data-testid="stDialogContent"] {
+    box-sizing:border-box !important;
+    height:calc(94vh - 56px) !important;
+    max-height:calc(94vh - 56px) !important;
+    min-height:0 !important;
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+    padding:2px 10px 10px 10px !important;
+    scrollbar-width:thin !important;
+    scrollbar-color:#8fa2b5 #edf2f7 !important;
+}
+div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar { width:9px !important; }
+div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar-track {
+    background:#edf2f7 !important; border-radius:8px !important;
+}
+div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar-thumb {
+    background:#8fa2b5 !important; border:2px solid #edf2f7 !important; border-radius:8px !important;
+}
+div[data-testid="stDialog"] > div > div {
+    min-height:0 !important;
+    overflow:visible !important;
+}
+div[data-testid="stDialog"] [data-testid="stDialogContent"] > div {
+    width:100% !important; max-width:100% !important; zoom:1 !important;
+}
+
+/* Header */
+div[data-testid="stDialog"] header {
+    min-height:44px !important; height:44px !important; padding:2px 12px !important;
+}
+div[data-testid="stDialog"] header p {
+    font-size:18px !important; line-height:1.1 !important; font-weight:800 !important; margin:0 !important;
+}
+
+/* Top case summary */
+div[data-testid="stDialog"] .case-detail-hero {
+    margin:0 0 3px 0 !important; padding:3px 5px !important;
+}
+div[data-testid="stDialog"] .case-folder-icon { font-size:18px !important; margin-right:4px !important; }
+div[data-testid="stDialog"] .case-detail-case-number {
+    font-size:12px !important; line-height:1.15 !important; font-weight:800 !important;
+}
+div[data-testid="stDialog"] .case-detail-subject {
+    font-size:10px !important; line-height:1.15 !important; font-weight:750 !important; margin-top:1px !important;
+}
+div[data-testid="stDialog"] .case-detail-description {
+    font-size:8px !important; line-height:1.2 !important; margin-top:2px !important;
+}
+div[data-testid="stDialog"] .case-detail-timing { gap:5px !important; }
+div[data-testid="stDialog"] .case-timing-item { padding:2px 5px !important; min-height:0 !important; }
+div[data-testid="stDialog"] .case-timing-item > span,
+div[data-testid="stDialog"] .case-timing-item span { font-size:7px !important; }
+div[data-testid="stDialog"] .case-timing-item strong {
+    font-size:8px !important; line-height:1.15 !important;
+}
+div[data-testid="stDialog"] .case-due-badge {
+    font-size:6.5px !important; padding:2px 4px !important;
+}
+
+/* Summary strip */
+div[data-testid="stDialog"] .case-summary-strip {
+    margin:0 0 3px 0 !important; min-height:34px !important;
+}
+div[data-testid="stDialog"] .case-summary-cell {
+    min-height:34px !important; padding:3px 5px !important;
+}
+div[data-testid="stDialog"] .case-summary-cell > span {
+    font-size:6.8px !important; line-height:1.05 !important;
+}
+div[data-testid="stDialog"] .case-summary-cell > strong {
+    font-size:8px !important; line-height:1.15 !important;
+}
+div[data-testid="stDialog"] .case-avatar {
+    width:20px !important; height:20px !important; min-width:20px !important; font-size:7px !important;
+}
+div[data-testid="stDialog"] .case-status-chip,
+div[data-testid="stDialog"] .case-priority-badge {
+    font-size:6.8px !important; padding:2px 4px !important;
+}
+
+/* Tabs */
+div[data-testid="stDialog"] [data-baseweb="tab"] {
+    font-size:8px !important; line-height:1 !important; padding:5px 7px !important;
+}
+div[data-testid="stDialog"] [data-baseweb="tab-list"] {
+    min-height:27px !important; gap:3px !important; margin:0 0 3px 0 !important;
+}
+
+/* Primary sections */
+div[data-testid="stDialog"] .case-card {
+    margin:0 0 5px 0 !important; padding:5px 6px !important;
+}
+div[data-testid="stDialog"] .case-card-heading {
+    font-size:9px !important; line-height:1.15 !important; margin:0 0 4px 0 !important;
+}
+div[data-testid="stDialog"] .case-heading-icon { font-size:9px !important; }
+div[data-testid="stDialog"] .case-info-row {
+    min-height:14px !important; padding:1px 0 !important; gap:5px !important;
+}
+div[data-testid="stDialog"] .case-info-row span {
+    font-size:7.5px !important; line-height:1.15 !important;
+}
+div[data-testid="stDialog"] .case-info-row strong {
+    font-size:8px !important; line-height:1.2 !important;
+}
+
+/* Actions/checklist */
+div[data-testid="stDialog"] .action-readonly-label {
+    font-size:7px !important; line-height:1.1 !important; margin-top:2px !important;
+}
+div[data-testid="stDialog"] .action-readonly-value {
+    font-size:8px !important; line-height:1.15 !important; min-height:20px !important; padding:4px 6px !important;
+}
+div[data-testid="stDialog"] [data-testid="stSelectbox"] label,
+div[data-testid="stDialog"] [data-testid="stTextInput"] label,
+div[data-testid="stDialog"] [data-testid="stTextArea"] label {
+    font-size:7px !important;
+}
+div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"],
+div[data-testid="stDialog"] [data-testid="stTextInput"] input {
+    min-height:25px !important; height:25px !important; font-size:8px !important;
+}
+div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] * { font-size:8px !important; }
+div[data-testid="stDialog"] [data-testid="stCheckbox"] { margin:0 !important; padding:0 !important; }
+div[data-testid="stDialog"] [data-testid="stCheckbox"] label {
+    font-size:7.5px !important; line-height:1.2 !important;
+}
+div[data-testid="stDialog"] .case-checklist-wrap { padding:5px !important; margin:4px 0 !important; }
+div[data-testid="stDialog"] .case-checklist-title { font-size:8px !important; }
+div[data-testid="stDialog"] .case-checklist-sub { font-size:6.8px !important; line-height:1.2 !important; }
+div[data-testid="stDialog"] .case-checklist-status { font-size:6.8px !important; padding:2px 4px !important; }
+div[data-testid="stDialog"] .case-action-divider { margin:4px 0 !important; }
+
+/* Knowledge Base */
+div[data-testid="stDialog"] .kb-inline-card { margin-top:0 !important; }
+div[data-testid="stDialog"] .kb-result-title {
+    font-size:8.5px !important; line-height:1.2 !important; font-weight:700 !important;
+}
+div[data-testid="stDialog"] .kb-result-text {
+    font-size:7.5px !important; line-height:1.25 !important;
+}
+div[data-testid="stDialog"] [class*="st-key-kb_tile_"] { margin:2px 0 !important; }
+div[data-testid="stDialog"] [class*="st-key-kb_tile_"] button {
+    min-height:38px !important; height:auto !important; width:100% !important;
+    padding:5px 7px !important; margin:0 !important;
+    text-align:left !important; justify-content:flex-start !important;
+    white-space:pre-wrap !important; overflow:hidden !important; text-overflow:clip !important;
+    line-height:1.2 !important; font-size:7.5px !important; font-weight:650 !important;
+    color:#172b52 !important; background:#fff !important;
+    border:1px solid #dce5ef !important; border-radius:6px !important; box-shadow:none !important;
+}
+div[data-testid="stDialog"] [class*="st-key-kb_tile_"] button:hover,
+div[data-testid="stDialog"] [class*="st-key-kb_tile_"] button:focus {
+    border-color:#0879c9 !important; background:#f6fbff !important;
+}
+div[data-testid="stDialog"] .kb-expanded-card {
+    padding:6px !important; margin:4px 0 !important; border-radius:6px !important;
+}
+div[data-testid="stDialog"] .kb-expanded-label {
+    font-size:6.5px !important; line-height:1.1 !important; margin-bottom:2px !important;
+}
+div[data-testid="stDialog"] .kb-expanded-title {
+    font-size:9px !important; line-height:1.2 !important;
+}
+div[data-testid="stDialog"] .kb-expanded-body {
+    font-size:7.5px !important; line-height:1.3 !important;
+}
+div[data-testid="stDialog"] .kb-recommendation {
+    padding:6px !important; margin:4px 0 !important; border-radius:6px !important;
+}
+div[data-testid="stDialog"] .kb-recommendation-title {
+    font-size:6.5px !important; line-height:1.1 !important;
+}
+div[data-testid="stDialog"] .kb-recommendation-body {
+    font-size:7.5px !important; line-height:1.3 !important; margin-top:2px !important;
+}
+div[data-testid="stDialog"] .kb-expanded-body,
+div[data-testid="stDialog"] .kb-recommendation-body {
+    overflow-wrap:anywhere !important; word-break:normal !important;
+}
+
+/* Compact KB controls */
+div[data-testid="stDialog"] .kb-inline-card [data-testid="stTextInput"] input {
+    font-size:8px !important; height:25px !important; min-height:25px !important;
+}
+div[data-testid="stDialog"] .kb-inline-card button {
+    font-size:7.5px !important; min-height:27px !important; height:27px !important; padding:3px 6px !important;
+}
+
+@media (max-width:900px) {
+    div[data-testid="stDialog"] > div {
+        width:calc(100vw - 12px) !important; max-width:calc(100vw - 12px) !important;
+        height:calc(100vh - 12px) !important; max-height:calc(100vh - 12px) !important;
+    }
+    div[data-testid="stDialog"] [data-testid="stDialogContent"] {
+        height:calc(100vh - 56px) !important; max-height:calc(100vh - 56px) !important;
+        padding-left:6px !important; padding-right:6px !important;
+    }
+}
+</style>
+""", unsafe_allow_html=True)
+
+
 # ============================================================
 # FOOTER
 # ============================================================
