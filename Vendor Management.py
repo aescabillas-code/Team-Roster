@@ -2170,6 +2170,17 @@ st.markdown(
             max-height:calc(100vh - 16px) !important;
             border-radius:14px !important;
         }
+
+        div[data-testid="stDialog"] [data-testid="stDialogContent"] {
+            overflow:hidden !important;
+            scrollbar-width:none !important;
+        }
+
+        div[data-testid="stDialog"] [data-testid="stDialogContent"] > div {
+            zoom:.68 !important;
+            width:147.06% !important;
+            max-width:147.06% !important;
+        }
     }
 
 
@@ -2186,6 +2197,10 @@ st.markdown(
 st.markdown(r"""
 <style>
 /* Center the Streamlit dialog instead of rendering it as the old right drawer. */
+/* CASE DETAILS — compact fit-to-modal layout.
+   The complete workspace is scaled down slightly so the Case Information,
+   Case Actions and Knowledge Base columns fit inside the modal without
+   creating a vertical scrollbar. */
 div[data-testid="stDialog"] > div {
     position: fixed !important;
     top: 50% !important;
@@ -2193,10 +2208,10 @@ div[data-testid="stDialog"] > div {
     right: auto !important;
     bottom: auto !important;
     transform: translate(-50%, -50%) !important;
-    width: min(1380px, calc(100vw - 24px)) !important;
-    max-width: min(1380px, calc(100vw - 24px)) !important;
-    height: min(88vh, 820px) !important;
-    max-height: calc(100vh - 36px) !important;
+    width: min(1400px, calc(100vw - 28px)) !important;
+    max-width: min(1400px, calc(100vw - 28px)) !important;
+    height: min(94vh, 900px) !important;
+    max-height: calc(100vh - 28px) !important;
     margin: 0 !important;
     border-radius: 12px !important;
     overflow: hidden !important;
@@ -2205,51 +2220,170 @@ div[data-testid="stDialog"] > div {
 }
 
 div[data-testid="stDialog"] [data-testid="stDialogContent"] {
-    padding: 0 10px 12px 10px !important;
-    max-height: calc(100vh - 92px) !important;
-    overflow-y: scroll !important;
+    padding: 0 8px 6px 8px !important;
+    height: calc(100% - 54px) !important;
+    max-height: calc(100% - 54px) !important;
+    overflow: hidden !important;
+    overflow-y: hidden !important;
     overflow-x: hidden !important;
-    scrollbar-width: auto !important;
-    scrollbar-gutter: stable !important;
+    scrollbar-width: none !important;
 }
 
-div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar {
-    width: 10px !important;
-}
-
-div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar-track {
-    background: #eef2f7 !important;
-    border-radius: 8px !important;
-}
-
-div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar-thumb {
-    background: #9aabbc !important;
-    border-radius: 8px !important;
-    border: 2px solid #eef2f7 !important;
-}
-
-div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar-thumb:hover {
-    background: #71869b !important;
+div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar,
+div[data-testid="stDialog"] > div > div::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
 }
 
 div[data-testid="stDialog"] header {
-    min-height: 54px !important;
-    padding: 6px 14px !important;
+    min-height: 50px !important;
+    height: 50px !important;
+    padding: 5px 14px !important;
     background: linear-gradient(180deg,#f7fbff 0%,#edf4fb 100%) !important;
     border-bottom: 1px solid #dce5ef !important;
 }
 
 div[data-testid="stDialog"] header p {
-    font-size: 21px !important;
+    font-size: 20px !important;
     font-weight: 800 !important;
     color: #102041 !important;
 }
 
 div[data-testid="stDialog"] > div > div {
-    overflow-y: auto !important;
+    overflow: hidden !important;
+    overflow-y: hidden !important;
     overflow-x: hidden !important;
-    scrollbar-width: auto !important;
-    scrollbar-gutter: stable !important;
+    scrollbar-width: none !important;
+}
+
+/* Scale the actual Case Details workspace, not the modal shell/header. */
+div[data-testid="stDialog"] [data-testid="stDialogContent"] > div {
+    zoom: .78 !important;
+    width: 128.205% !important;
+    max-width: 128.205% !important;
+    box-sizing: border-box !important;
+}
+
+/* Compact the top summary so the three-column workspace gets more vertical room. */
+div[data-testid="stDialog"] .case-detail-hero {
+    margin: 0 0 5px 0 !important;
+    padding: 4px 6px 3px 6px !important;
+}
+div[data-testid="stDialog"] .case-folder-icon { font-size: 25px !important; }
+div[data-testid="stDialog"] .case-detail-case-number { font-size: 17px !important; }
+div[data-testid="stDialog"] .case-detail-subject { font-size: 15px !important; margin-top: 3px !important; }
+div[data-testid="stDialog"] .case-detail-description { font-size: 10px !important; line-height: 1.25 !important; }
+div[data-testid="stDialog"] .case-detail-timing { min-width: 520px !important; }
+div[data-testid="stDialog"] .case-timing-item { padding: 1px 14px !important; }
+div[data-testid="stDialog"] .case-timing-item span { font-size: 9px !important; }
+div[data-testid="stDialog"] .case-timing-item strong { font-size: 11px !important; }
+div[data-testid="stDialog"] .case-timing-icon { font-size: 16px !important; }
+
+div[data-testid="stDialog"] .case-summary-strip {
+    padding: 4px 5px !important;
+    margin: 2px 0 4px !important;
+}
+div[data-testid="stDialog"] .case-summary-cell { padding: 1px 9px !important; }
+div[data-testid="stDialog"] .case-summary-cell > span { font-size: 8px !important; margin-bottom: 2px !important; }
+div[data-testid="stDialog"] .case-summary-cell > strong { font-size: 10px !important; }
+div[data-testid="stDialog"] .case-avatar { width: 28px !important; height: 28px !important; font-size: 10px !important; }
+div[data-testid="stDialog"] .case-status-chip { padding: 3px 7px !important; font-size: 9px !important; }
+
+div[data-testid="stDialog"] [data-baseweb="tab"] {
+    padding: 6px 11px !important;
+    font-size: 10px !important;
+}
+
+
+/* Compact the three workspace columns so their full contents fit in the modal. */
+div[data-testid="stDialog"] .case-card {
+    padding: 7px 9px !important;
+    border-radius: 6px !important;
+}
+div[data-testid="stDialog"] .case-card-heading {
+    font-size: 11px !important;
+    padding-bottom: 5px !important;
+    margin-bottom: 4px !important;
+    gap: 5px !important;
+}
+div[data-testid="stDialog"] .case-heading-icon {
+    font-size: 15px !important;
+}
+div[data-testid="stDialog"] .case-info-row {
+    grid-template-columns: 95px minmax(0,1fr) !important;
+    gap: 5px !important;
+    padding: 3px 0 !important;
+    line-height: 1.15 !important;
+}
+div[data-testid="stDialog"] .case-info-row span { font-size: 8.5px !important; }
+div[data-testid="stDialog"] .case-info-row strong { font-size: 9px !important; }
+
+div[data-testid="stDialog"] .action-readonly-label {
+    font-size: 8px !important;
+    margin-top: 3px !important;
+}
+div[data-testid="stDialog"] .action-readonly-value {
+    font-size: 9px !important;
+    padding: 5px 7px !important;
+    margin-top: 2px !important;
+}
+div[data-testid="stDialog"] .case-checklist-wrap {
+    margin-top: 5px !important;
+    padding: 6px !important;
+}
+div[data-testid="stDialog"] .case-checklist-title {
+    font-size: 9px !important;
+}
+div[data-testid="stDialog"] .case-checklist-sub {
+    font-size: 7.5px !important;
+    line-height: 1.2 !important;
+}
+div[data-testid="stDialog"] .case-checklist-status {
+    font-size: 7.5px !important;
+    padding: 2px 5px !important;
+}
+div[data-testid="stDialog"] [data-testid="stCheckbox"] {
+    min-height: 22px !important;
+}
+div[data-testid="stDialog"] [data-testid="stCheckbox"] label {
+    font-size: 8px !important;
+    line-height: 1.1 !important;
+}
+div[data-testid="stDialog"] [data-testid="stTextInput"] input {
+    height: 28px !important;
+    min-height: 28px !important;
+    font-size: 9px !important;
+}
+div[data-testid="stDialog"] [data-testid="stSelectbox"] {
+    font-size: 9px !important;
+}
+div[data-testid="stDialog"] [data-testid="stSelectbox"] input,
+div[data-testid="stDialog"] [data-testid="stSelectbox"] button {
+    min-height: 28px !important;
+    height: 28px !important;
+    font-size: 9px !important;
+}
+div[data-testid="stDialog"] button {
+    min-height: 28px !important;
+    height: auto !important;
+    padding: 4px 8px !important;
+    font-size: 9px !important;
+}
+div[data-testid="stDialog"] .kb-inline-card {
+    padding: 7px 8px !important;
+}
+div[data-testid="stDialog"] .kb-inline-card .stCaption,
+div[data-testid="stDialog"] .kb-inline-card [data-testid="stCaptionContainer"] {
+    font-size: 8px !important;
+    line-height: 1.2 !important;
+}
+div[data-testid="stDialog"] .kb-result-title {
+    font-size: 9px !important;
+}
+div[data-testid="stDialog"] .kb-answer-card {
+    padding: 7px !important;
+    margin-bottom: 5px !important;
 }
 
 /* Streamlit renders raw HTML wrappers around separate widgets as empty
