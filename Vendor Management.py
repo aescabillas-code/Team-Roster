@@ -2335,45 +2335,45 @@ def duration_string(seconds):
 
 MOCK_SUBJECTS = {
     "CARE": [
-        "Guest room AC not working",
-        "Water leak in restroom",
-        "Housekeeping request – extra towels",
-        "Door lock not functioning",
-        "TV no signal",
+        "HPE ProLiant DL380 Gen11 iLO alert",
+        "Aruba AP-515 client connectivity issue",
+        "HPE Alletra storage capacity warning",
+        "Aruba Central device showing offline",
+        "HPE StoreEasy file access issue",
     ],
     "ARCH": [
-        "Archive retrieval request",
-        "Document indexing issue",
-        "Historical record access",
-        "Archive metadata correction",
-        "Retention request",
+        "HPE support contract record retrieval",
+        "Aruba Central audit export retrieval",
+        "HPE licensing entitlement archive request",
+        "ArubaOS-CX configuration archive request",
+        "HPE warranty and support document retrieval",
     ],
     "PET": [
-        "Pet registration inquiry",
-        "Pet policy clarification",
-        "Pet service request",
-        "Animal facility issue",
-        "Pet account update",
+        "Aruba ClearPass endpoint profiling issue",
+        "HPE OneView server profile request",
+        "Aruba Central group configuration request",
+        "HPE iLO user access issue",
+        "Aruba switch port policy request",
     ],
     "SUPPLY CHAIN": [
-        "Missing shipment",
-        "Purchase order mismatch",
-        "Supplier delivery delay",
-        "Inventory discrepancy",
-        "Replacement request",
+        "HPE ProLiant shipment not received",
+        "Aruba CX switch purchase order mismatch",
+        "HPE storage delivery delay",
+        "Aruba AP inventory discrepancy",
+        "HPE replacement part fulfillment request",
     ],
     "ONSITE": [
-        "Fulfillment technician request",
-        "Hardware replacement",
-        "Network equipment issue",
-        "Site access request",
-        "Installation support",
+        "HPE ProLiant server hardware replacement",
+        "Aruba CX switch onsite support",
+        "Aruba AP installation support",
+        "HPE Alletra storage installation",
+        "Aruba ClearPass appliance onsite support",
     ],
 }
 
 MOCK_NAMES = ["John Dela Cruz", "Maria Santos", "Anna Reyes", "Carlo Banaag", "Liza Tan"]
-MOCK_ACCOUNTS = ["Marriott Hotel", "Hilton Group", "Accenture", "Microsoft", "Acme Corporation"]
-MOCK_DATA_VERSION = 14
+MOCK_ACCOUNTS = ["HPE Aruba Networking Demo Lab", "Enterprise Customer - BGC", "Enterprise Customer - Makati", "Enterprise Customer - Cavite", "Enterprise Customer - Quezon City"]
+MOCK_DATA_VERSION = 15
 
 # Rich demonstration information shown inside Case Details.
 MOCK_CASE_DETAILS = {
@@ -2408,6 +2408,65 @@ MOCK_CASE_DETAILS = {
         {"case_type":"Site Access","category":"Field Services","contact_name":"Carlo Banaag","contact_number":"+63 917 555 0544","email":"carlo.banaag@example.com","site_location":"Quezon City Corporate Office","product":"Fulfillment Support Visit","serial_number":"N/A","reference_number":"ONS-ACC-004","issue":"Scheduled fulfillment support requires updated visitor access information.","description":"Customer changed the site access window and needs the technician visit details updated.","resolution":"Pending access confirmation.","next_action":"Confirm the new access window, site contact and visitor requirements.","notes":"Do not dispatch without confirmed site access."},
         {"case_type":"Installation Support","category":"Deployment / Field Services","contact_name":"Liza Tan","contact_number":"+63 917 555 0545","email":"liza.tan@example.com","site_location":"Pasig Technology Center","product":"HPE Compute System","serial_number":"CMP-ONS-005","reference_number":"ONS-INS-005","issue":"Customer needs fulfillment assistance during a new equipment installation.","description":"Equipment is scheduled for installation and the customer requested support for physical setup and validation.","resolution":"Pending installation scheduling.","next_action":"Confirm equipment availability, site readiness, installation window and required technician skills.","notes":"Coordinate with the customer before confirming the appointment."}],
 }
+
+
+# Ensure every demonstration record is explicitly HPE / Aruba focused while
+# retaining the complete contact, site, reference, resolution and notes fields.
+HPE_ARUBA_MOCK_CONTEXT = {
+    "CARE": [
+        ("HPE ProLiant DL380 Gen11", "Server / iLO", "Verify iLO health, hardware event logs and current support entitlement before escalation."),
+        ("Aruba AP-515", "Wireless / Access Point", "Validate AP status in Aruba Central, client association details and RF/SSID configuration."),
+        ("HPE Alletra Storage", "Storage", "Check capacity, alerts and storage health in the approved management interface."),
+        ("Aruba Central", "Cloud Network Management", "Verify device connectivity, last-seen status and the applicable site/group configuration."),
+        ("HPE StoreEasy", "File Storage", "Validate storage connectivity, file-service status and the affected client path."),
+    ],
+    "ARCH": [
+        ("HPE Support Contract", "Support / Entitlement Records", "Confirm the contract identifier, customer entitlement and applicable support period."),
+        ("Aruba Central", "Audit / Configuration Records", "Retrieve the applicable audit or configuration record and preserve the requested date range."),
+        ("HPE Licensing", "Licensing / Entitlement Records", "Validate the entitlement identifier, product family and historical licensing record."),
+        ("ArubaOS-CX", "Network Configuration Archive", "Confirm switch identity, configuration timestamp and the approved archive record."),
+        ("HPE Warranty", "Warranty / Support Records", "Validate the serial number and retrieve the applicable warranty or support documentation."),
+    ],
+    "PET": [
+        ("Aruba ClearPass", "Network Access Control", "Validate endpoint identity, profiling attributes and the applicable ClearPass policy."),
+        ("HPE OneView", "Server Management", "Confirm the server profile, enclosure context and the requested OneView configuration."),
+        ("Aruba Central", "Network Configuration", "Check the group configuration, device assignment and requested policy change."),
+        ("HPE iLO", "Server Remote Management", "Validate the affected iLO account, authorization and current security configuration."),
+        ("Aruba CX Switch", "Switch Port Policy", "Confirm the switch, port, VLAN and access policy before making a configuration change."),
+    ],
+    "SUPPLY CHAIN": [
+        ("HPE ProLiant", "Enterprise Server Shipment", "Validate the purchase order, shipment reference, serial information and expected delivery date."),
+        ("Aruba CX Switch", "Network Hardware Procurement", "Compare the purchase order, requested model, quantity and supplier invoice."),
+        ("HPE Alletra Storage", "Enterprise Storage Shipment", "Confirm the shipment reference, destination, carrier status and revised ETA."),
+        ("Aruba AP", "Wireless Hardware Inventory", "Reconcile physical quantity, serial information and inventory records."),
+        ("HPE Replacement Part", "Spare Parts / Fulfillment", "Validate entitlement, replacement part number, shipment status and approved fulfillment route."),
+    ],
+    "ONSITE": [
+        ("HPE ProLiant Server", "Server / Field Services", "Validate entitlement, replacement part availability, serial number and technician dispatch window."),
+        ("Aruba CX Switch", "Network / Field Services", "Confirm topology, affected ports, configuration backup and site access before dispatch."),
+        ("Aruba AP", "Wireless / Installation", "Confirm mounting location, cabling, Aruba Central assignment and installation window."),
+        ("HPE Alletra Storage", "Storage / Field Services", "Validate hardware details, installation prerequisites, site readiness and technician skills."),
+        ("Aruba ClearPass", "Network Access Control / Field Services", "Confirm appliance details, network prerequisites, site access and implementation window."),
+    ],
+}
+
+for _station, _details in MOCK_CASE_DETAILS.items():
+    for _i, _detail in enumerate(_details):
+        _product, _category, _next_action = HPE_ARUBA_MOCK_CONTEXT[_station][_i]
+        _subject = MOCK_SUBJECTS[_station][_i]
+        _detail["product"] = _product
+        _detail["category"] = _category
+        _detail["issue"] = _subject
+        _detail["description"] = (
+            f"HPE / Aruba demonstration case: {_subject}. "
+            f"Customer requires support for {_product}. "
+            "The case includes the customer contact, site, reference and device information needed for triage."
+        )
+        _detail["resolution"] = "Pending HPE / Aruba support validation and approved troubleshooting workflow."
+        _detail["next_action"] = _next_action
+        _detail["notes"] = (
+            f"Mock HPE / Aruba case for {_station}. Verify the serial/reference details and consult the integrated Knowledge Base before escalation."
+        )
 
 
 def reset_mock_case_durations():
@@ -2479,7 +2538,7 @@ def seed_mock_cases():
             priority = i == 0
             detail = MOCK_CASE_DETAILS[station][i]
             account = MOCK_ACCOUNTS[i % len(MOCK_ACCOUNTS)]
-            vendor = "CoolTech Solutions" if i % 2 == 0 else "HPE Partner Services"
+            vendor = "HPE Services" if i % 2 == 0 else "Aruba Networking Services"
 
             docs.append({
                 "case_number": f"{station[:3].upper()}-2026-{number:04d}",
