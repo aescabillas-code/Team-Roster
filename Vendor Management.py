@@ -2837,6 +2837,61 @@ div[data-testid="stDialog"] [data-testid="stHorizontalBlock"] > div {
         border-top:0 !important;
     }
 }
+
+/* FINAL CASE DETAILS SCROLL FIX
+   The previous compact overrides explicitly hid the scroll surface.
+   Keep the modal compact, but make the dialog content itself the scroll area. */
+div[data-testid="stDialog"] > div {
+    overflow:hidden !important;
+}
+
+div[data-testid="stDialog"] > div > div {
+    height:calc(100% - 48px) !important;
+    max-height:calc(100% - 48px) !important;
+    min-height:0 !important;
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+    scrollbar-width:thin !important;
+    scrollbar-color:#7f94aa #edf2f7 !important;
+}
+
+div[data-testid="stDialog"] > div > div::-webkit-scrollbar {
+    width:10px !important;
+    display:block !important;
+}
+
+div[data-testid="stDialog"] > div > div::-webkit-scrollbar-track {
+    background:#edf2f7 !important;
+    border-radius:8px !important;
+}
+
+div[data-testid="stDialog"] > div > div::-webkit-scrollbar-thumb {
+    background:#7f94aa !important;
+    border-radius:8px !important;
+    border:2px solid #edf2f7 !important;
+}
+
+/* Do not hide the scrollbar on the nested Streamlit content element. */
+div[data-testid="stDialog"] [data-testid="stDialogContent"] {
+    height:auto !important;
+    max-height:none !important;
+    min-height:0 !important;
+    overflow:visible !important;
+    overflow-y:visible !important;
+    overflow-x:visible !important;
+    scrollbar-width:auto !important;
+}
+
+/* Preserve the compact 1366x768 desktop proportion while leaving enough
+   height for the user to scroll through complete case information. */
+@media (min-width:1121px) {
+    div[data-testid="stDialog"] > div {
+        width:min(1080px,calc(100vw - 72px)) !important;
+        max-width:min(1080px,calc(100vw - 72px)) !important;
+        height:min(680px,calc(100vh - 48px)) !important;
+        max-height:calc(100vh - 48px) !important;
+    }
+}
 </style>
 """, unsafe_allow_html=True)
 
