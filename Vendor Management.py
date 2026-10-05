@@ -2120,7 +2120,153 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# ============================================================
+# CENTERED CASE DETAILS — visual override based on supplied reference image.
+# This changes only the dialog presentation; the underlying Caseflow logic
+# remains unchanged.
+# ============================================================
+st.markdown(r"""
+<style>
+/* Center the Streamlit dialog instead of rendering it as the old right drawer. */
+div[data-testid="stDialog"] > div {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: translate(-50%, -50%) !important;
+    width: min(1500px, calc(100vw - 32px)) !important;
+    max-width: min(1500px, calc(100vw - 32px)) !important;
+    height: min(920px, calc(100vh - 32px)) !important;
+    max-height: calc(100vh - 32px) !important;
+    margin: 0 !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    box-shadow: 0 18px 60px rgba(15,23,42,.28) !important;
+    border: 1px solid #dbe4ef !important;
+}
 
+div[data-testid="stDialog"] [data-testid="stDialogContent"] {
+    padding: 0 10px 12px 10px !important;
+}
+
+div[data-testid="stDialog"] header {
+    min-height: 62px !important;
+    padding: 8px 14px !important;
+    background: linear-gradient(180deg,#f7fbff 0%,#edf4fb 100%) !important;
+    border-bottom: 1px solid #dce5ef !important;
+}
+
+div[data-testid="stDialog"] header p {
+    font-size: 24px !important;
+    font-weight: 800 !important;
+    color: #102041 !important;
+}
+
+div[data-testid="stDialog"] > div > div {
+    overflow-y: auto !important;
+    scrollbar-width: thin;
+}
+
+.case-detail-hero {
+    margin: 0 0 8px 0;
+    padding: 10px 8px 6px 8px;
+    background: #fff;
+}
+.case-detail-title-row { display:flex; justify-content:space-between; gap:20px; align-items:flex-start; }
+.case-detail-title-left { display:flex; gap:12px; min-width:0; flex:1; }
+.case-folder-icon { color:#0879c9; font-size:30px; line-height:1; margin-top:2px; }
+.case-detail-case-number { color:#0d1937; font-size:23px; font-weight:850; line-height:1.15; }
+.case-copy-icon { color:#0879c9; font-size:18px; margin-left:7px; }
+.case-priority-badge { margin-left:12px; vertical-align:middle; font-size:12px !important; padding:6px 15px !important; }
+.case-detail-subject { color:#0d1937; font-size:21px; font-weight:800; margin-top:5px; }
+.case-detail-description { color:#334155; font-size:12.5px; line-height:1.45; margin-top:3px; max-width:850px; }
+.case-detail-timing { display:flex; align-items:stretch; gap:0; min-width:600px; }
+.case-timing-item { display:flex; align-items:flex-start; gap:7px; padding:2px 22px; border-left:1px solid #dfe6ee; position:relative; }
+.case-timing-item:first-child { border-left:0; }
+.case-timing-item > div { display:flex; flex-direction:column; }
+.case-timing-item span { font-size:10px; color:#526078; }
+.case-timing-item strong { color:#102041; font-size:12.5px; white-space:nowrap; margin-top:2px; }
+.case-timing-icon { color:#0879c9 !important; font-size:20px !important; line-height:1 !important; }
+.case-timing-item.due .case-timing-icon { color:#e51c3a !important; }
+.case-timing-item.due strong { color:#d9213d; }
+.case-due-badge { display:inline-block; align-self:center; background:#ffdfe4; color:#dc1938 !important; border-radius:6px; padding:5px 8px; font-size:10px !important; font-weight:800; margin-left:6px; white-space:nowrap; }
+.case-due-badge.overdue { background:#ffe3e3; color:#b91c1c !important; }
+
+.case-summary-strip {
+    display:grid;
+    grid-template-columns:1.25fr 1fr 1.05fr 1.3fr 1.05fr 1.2fr 1.2fr;
+    background:#f4f8fc;
+    border:1px solid #e2eaf2;
+    border-radius:8px;
+    padding:9px 6px;
+    margin:4px 0 8px;
+}
+.case-summary-cell { padding:2px 13px; border-left:1px solid #cbd6e2; min-width:0; }
+.case-summary-cell:first-child { border-left:0; }
+.case-summary-cell > span { display:block; color:#334155; font-size:10px; margin-bottom:3px; }
+.case-summary-cell > strong { display:block; color:#0d1937; font-size:12px; line-height:1.25; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.case-assignee { display:flex; align-items:center; gap:8px; }
+.case-assignee > div:last-child { min-width:0; }
+.case-avatar { width:34px; height:34px; border-radius:50%; background:#94a8bf; color:#fff; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; flex:none; }
+.priority-text { color:#e51c3a !important; }
+.case-status-chip { display:inline-block; background:#ffe8b0; color:#8a5a00; border-radius:5px; padding:4px 10px; font-size:11px; }
+
+/* Make Streamlit tabs resemble the reference's compact navigation strip. */
+div[data-testid="stDialog"] [data-baseweb="tab-list"] { gap:0 !important; border-bottom:1px solid #dbe4ee !important; }
+div[data-testid="stDialog"] [data-baseweb="tab"] { padding:9px 15px !important; color:#334155 !important; font-size:12px !important; }
+div[data-testid="stDialog"] [aria-selected="true"] { color:#0879c9 !important; font-weight:800 !important; }
+
+.case-card { background:#fff; border:1px solid #e1e8f0; border-radius:7px; padding:10px 13px; box-shadow:0 1px 3px rgba(15,23,42,.025); min-height:100%; }
+.case-card-heading { display:flex; align-items:center; gap:8px; color:#102041; font-size:14px; font-weight:800; border-bottom:1px solid #e6edf4; padding-bottom:8px; margin-bottom:7px; }
+.case-heading-icon { color:#0879c9; font-size:20px; }
+.case-info-row { display:grid; grid-template-columns:125px minmax(0,1fr); gap:8px; padding:5px 0; border-bottom:1px solid #edf1f5; line-height:1.3; }
+.case-info-row:last-child { border-bottom:0; }
+.case-info-row span { color:#526078; font-size:11.5px; }
+.case-info-row strong { color:#172b52; font-size:11.8px; font-weight:600; word-break:break-word; }
+.vendor-brand { color:#172b52; font-size:19px; font-weight:850; padding:4px 0 8px; }
+.quick-actions { margin-top:11px; background:#e7f7f5; border-radius:7px; padding:9px; }
+.quick-actions-title { color:#0b766e; font-size:12px; font-weight:800; margin-bottom:8px; }
+.quick-actions-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:5px; }
+.quick-actions-grid div { background:#fff; border:1px solid #d8e6e9; border-radius:5px; padding:7px 4px; text-align:center; color:#0879c9; font-size:10px; font-weight:700; }
+.action-readonly-label { color:#526078; font-size:10px; margin-top:6px; }
+.action-readonly-value { border:1px solid #d8e1ea; border-radius:5px; background:#f8fafc; color:#172b52; font-size:12px; padding:7px 9px; margin-top:3px; }
+.case-actions-card [data-testid="stSelectbox"] { margin-top:5px; }
+.case-history-card { margin-top:9px; }
+.history-row { display:flex; gap:10px; position:relative; padding:7px 0; }
+.history-dot { width:13px; height:13px; border-radius:50%; background:#0879c9; flex:none; margin-top:4px; box-shadow:0 0 0 3px #e7f2fb; }
+.history-main { border-bottom:1px solid #edf1f5; padding-bottom:7px; flex:1; }
+.history-meta { color:#64748b; font-size:10px; }
+.history-meta span { margin-left:12px; color:#334155; font-weight:600; }
+.history-action { color:#172b52; font-size:12px; margin-top:3px; }
+.case-resolution-card { margin-top:9px; }
+.resolution-label { color:#526078; font-size:10px; font-weight:800; margin-top:6px; }
+.resolution-value { color:#172b52; font-size:12px; line-height:1.45; background:#f8fafc; border:1px solid #e3eaf1; border-radius:5px; padding:8px; margin-top:3px; }
+.communication-card { border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px; margin-bottom:8px; background:#fafcfe; color:#334155; font-size:12px; line-height:1.45; }
+.communication-head { display:flex; justify-content:space-between; gap:12px; margin-bottom:5px; color:#172b52; }
+.communication-head span { color:#64748b; font-size:10px; }
+.attachment-row { display:flex; justify-content:space-between; gap:12px; padding:10px 12px; border:1px solid #e2e8f0; border-radius:7px; margin-bottom:7px; color:#172b52; font-size:12px; }
+.attachment-row > span:last-child { color:#64748b; font-size:10px; }
+.case-detail-footer { height:3px; }
+
+@media (max-width: 1100px) {
+    div[data-testid="stDialog"] > div { width:calc(100vw - 20px) !important; max-width:calc(100vw - 20px) !important; height:calc(100vh - 20px) !important; max-height:calc(100vh - 20px) !important; }
+    .case-detail-title-row { flex-direction:column; }
+    .case-detail-timing { min-width:0; width:100%; }
+    .case-summary-strip { grid-template-columns:repeat(3,1fr); }
+    .case-summary-cell:nth-child(4) { border-left:0; }
+}
+@media (max-width: 760px) {
+    .case-detail-case-number { font-size:19px; }
+    .case-detail-subject { font-size:17px; }
+    .case-detail-timing { display:grid; grid-template-columns:1fr; }
+    .case-timing-item { border-left:0; border-top:1px solid #e5eaf0; padding:7px 4px; }
+    .case-summary-strip { grid-template-columns:repeat(2,1fr); }
+    .case-summary-cell { border-left:0; border-top:1px solid #d7e0e9; }
+    .case-summary-cell:nth-child(-n+2) { border-top:0; }
+}
+</style>
+""", unsafe_allow_html=True)
 
 
 # ============================================================
@@ -3678,16 +3824,14 @@ if st.session_state["show_alerts"]:
 
 
 
-@st.dialog(
-    "📁 Case Details",
-    width="large",
-)
+@st.dialog("Case Details", width="large")
 def case_details(task_id):
-    """Template-style Case Details UI using the ORIGINAL Caseflow data/functions.
+    """Centered Case Details dialog.
 
-    Important: this modal is presentation-only. CaseFlow's original MongoDB
-    schema, SLA engine, transfer logic, duration logic, and state management
-    remain unchanged.
+    The visual structure follows the supplied Case Details reference image,
+    while all values/actions continue to use the ORIGINAL Caseflow task schema,
+    SLA engine, vendor lookup, transfer logic, communication records,
+    attachment records, and history records.
     """
     try:
         from bson import ObjectId
@@ -3697,19 +3841,27 @@ def case_details(task_id):
 
     if not task:
         st.error("Case not found.")
-        if st.button("Close", use_container_width=True):
+        if st.button("Close", use_container_width=True, key=f"case_missing_close_{task_id}"):
             st.session_state["show_case"] = False
             st.session_state["selected_case_id"] = None
             st.rerun()
         return
 
-    # ORIGINAL Caseflow engine — do not replace with template priority logic.
+    # ORIGINAL Caseflow engine — this remains the authoritative live SLA/priority calculation.
     state = calculate_state(task)
     status = text(task.get("status", "Open")) or "Open"
     department = station_name(task.get("department"))
     case_number = text(task.get("case_number")) or "—"
     subject = text(task.get("subject")) or text(task.get("issue")) or "No subject available."
     description = text(task.get("description")) or text(task.get("issue")) or "No description available."
+    assigned_to = text(task.get("assigned_to")) or "Unassigned"
+    account_name = text(task.get("account_name")) or "—"
+    case_type = text(task.get("case_type")) or text(task.get("category")) or "—"
+    related_system = text(task.get("related_system")) or text(task.get("product")) or "—"
+    last_update = dt_display(task.get("last_update")) or "—"
+    created = dt_display(task.get("created_at")) or "—"
+    due = dt_display(task.get("due_date")) or "—"
+    elapsed = duration_string(state.get("elapsed", 0))
 
     priority_label = "CRITICAL" if state.get("priority_account") else str(state.get("status") or "LOW").upper()
     priority_class = {
@@ -3719,119 +3871,254 @@ def case_details(task_id):
         "LOW": "badge-low",
     }.get(priority_label, "badge-low")
 
+    remaining = state.get("remaining", 0)
+    if remaining <= 0:
+        due_badge = f"Overdue by {duration_string(abs(remaining))}"
+        due_class = "case-due-badge overdue"
+    else:
+        due_badge = f"Due in {duration_string(remaining)}"
+        due_class = "case-due-badge"
+
+    vendor = find_vendor(task)
+    vendor_name = text((vendor or {}).get("vendor_name")) or text(task.get("vendor")) or "No synchronized vendor record"
+    vendor_contact = text((vendor or {}).get("contact_name")) or text((vendor or {}).get("primary_contact")) or text(task.get("vendor_contact"))
+    vendor_email = text((vendor or {}).get("email")) or text((vendor or {}).get("vendor_email"))
+    vendor_phone = text((vendor or {}).get("phone")) or text((vendor or {}).get("contact_number"))
+    vendor_address = text((vendor or {}).get("address")) or text((vendor or {}).get("location"))
+
     # ------------------------------------------------------------------
-    # TEMPLATE-STYLE HEADER
+    # TOP SUMMARY — mirrors the supplied reference layout.
     # ------------------------------------------------------------------
     st.markdown(
         f"""
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:18px;margin-top:-6px;">
-          <div style="min-width:0;">
-            <div style="font-size:11px;font-weight:800;letter-spacing:.08em;color:#64748B;text-transform:uppercase;">CASE NUMBER</div>
-            <div style="font-size:24px;font-weight:850;color:#102041;line-height:1.15;margin-top:3px;">{html.escape(case_number)}</div>
-            <div style="font-size:13px;color:#64748B;margin-top:6px;">{html.escape(subject)}</div>
-          </div>
-          <div style="text-align:right;white-space:nowrap;">
-            <span class="badge {priority_class}">{html.escape(priority_label)}</span>
-            <div style="font-size:11px;color:#64748B;margin-top:8px;">{html.escape(status)}</div>
-          </div>
+        <div class="case-detail-hero">
+            <div class="case-detail-title-row">
+                <div class="case-detail-title-left">
+                    <div class="case-folder-icon">▣</div>
+                    <div>
+                        <div class="case-detail-case-number">
+                            {html.escape(case_number)}
+                            <span class="case-copy-icon">▢</span>
+                            <span class="badge {priority_class} case-priority-badge">{html.escape(priority_label.title())}</span>
+                        </div>
+                        <div class="case-detail-subject">{html.escape(subject)}</div>
+                        <div class="case-detail-description">{html.escape(description)}</div>
+                    </div>
+                </div>
+                <div class="case-detail-timing">
+                    <div class="case-timing-item">
+                        <span class="case-timing-icon">▣</span>
+                        <div><span>Created</span><strong>{html.escape(created)}</strong></div>
+                    </div>
+                    <div class="case-timing-item due">
+                        <span class="case-timing-icon">▣</span>
+                        <div><span>Due Date</span><strong>{html.escape(due)}</strong></div>
+                        <span class="{due_class}">{html.escape(due_badge)}</span>
+                    </div>
+                    <div class="case-timing-item">
+                        <span class="case-timing-icon">◷</span>
+                        <div><span>Total Elapsed</span><strong>{html.escape(elapsed)}</strong></div>
+                    </div>
+                </div>
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    # Live values still come from the original Caseflow calculate_state().
-    m1, m2, m3, m4 = st.columns(4)
-    with m1:
-        st.caption("CURRENT STATION")
-        st.markdown(f"**{html.escape(department or '—')}**")
-    with m2:
-        st.caption("ASSIGNED TO")
-        st.markdown(f"**{html.escape(text(task.get('assigned_to')) or 'Unassigned')}**")
-    with m3:
-        st.caption("DUE")
-        st.markdown(f"**{html.escape(dt_display(task.get('due_date')) or '—')}**")
-    with m4:
-        st.caption("ELAPSED")
-        st.markdown(f"**{html.escape(duration_string(state.get('elapsed', 0)))}**")
+    # ------------------------------------------------------------------
+    # SUMMARY STRIP — all values come from the original case record/state.
+    # ------------------------------------------------------------------
+    st.markdown(
+        f"""
+        <div class="case-summary-strip">
+            <div class="case-summary-cell case-assignee">
+                <div class="case-avatar">{html.escape(''.join([p[:1] for p in assigned_to.split()[:2]]) or '—')}</div>
+                <div><span>Assigned To</span><strong>{html.escape(assigned_to)}</strong></div>
+            </div>
+            <div class="case-summary-cell"><span>Priority</span><strong class="priority-text">{html.escape(priority_label.title())}</strong></div>
+            <div class="case-summary-cell"><span>Current Status</span><strong><span class="case-status-chip">{html.escape(status)}</span></strong></div>
+            <div class="case-summary-cell"><span>Last Update</span><strong>{html.escape(last_update)}</strong></div>
+            <div class="case-summary-cell"><span>Case Type</span><strong>{html.escape(case_type)}</strong></div>
+            <div class="case-summary-cell"><span>Account</span><strong>{html.escape(account_name)}</strong></div>
+            <div class="case-summary-cell"><span>Related System</span><strong>{html.escape(related_system)}</strong></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    st.markdown("<hr style='border:0;border-top:1px solid #E2E8F0;margin:8px 0 14px;'>", unsafe_allow_html=True)
-
-    tab_info, tab_vendor, tab_comm, tab_attach, tab_actions = st.tabs([
-        "Case Information",
-        "Vendor Information",
-        "Communication",
-        "Attachments",
-        "Actions & History",
+    tab_info, tab_vendor, tab_comm, tab_attach = st.tabs([
+        "ⓘ  Case Information",
+        "♧  Vendor Information",
+        "✉  Communication",
+        "♧  Attachments",
     ])
 
     # ------------------------------------------------------------------
-    # CASE INFORMATION — display existing original fields only
+    # CASE INFORMATION — main view closely follows the uploaded image.
     # ------------------------------------------------------------------
     with tab_info:
-        st.markdown("### Case Information")
-        info_items = [
-            ("Account Name", text(task.get("account_name"))),
-            ("Case Type", text(task.get("case_type"))),
-            ("Category", text(task.get("category"))),
-            ("Product / Service", text(task.get("product"))),
-            ("Serial Number", text(task.get("serial_number"))),
-            ("Reference Number", text(task.get("reference_number"))),
-            ("Contact Name", text(task.get("contact_name"))),
-            ("Contact Number", text(task.get("contact_number"))),
-            ("Email", text(task.get("email"))),
-            ("Site / Location", text(task.get("site_location"))),
-            ("RMA Number", text(task.get("rma_number"))),
-            ("RMA Reason", text(task.get("rma_reason"))),
-            ("RMA Status", text(task.get("rma_status"))),
-            ("Return Status", text(task.get("return_status"))),
-            ("Replacement Status", text(task.get("replacement_status"))),
-            ("Created By", text(task.get("created_by"))),
-            ("Created", dt_display(task.get("created_at"))),
-            ("Last Update", dt_display(task.get("last_update"))),
-        ]
-        info_items = [(k, v) for k, v in info_items if v]
-        if info_items:
-            cols = st.columns(2)
-            for i, (label, value) in enumerate(info_items):
-                with cols[i % 2]:
-                    st.markdown(
-                        f"<div style='padding:9px 0;border-bottom:1px solid #EEF2F7;'><div style='font-size:10px;font-weight:800;letter-spacing:.06em;color:#64748B;text-transform:uppercase;'>{html.escape(label)}</div><div style='font-size:13px;color:#17233C;margin-top:3px;'>{html.escape(str(value))}</div></div>",
-                        unsafe_allow_html=True,
-                    )
+        left, middle, right = st.columns([1.05, 1.05, 1.05], gap="small")
 
-        st.markdown("### Description")
-        st.info(description)
+        with left:
+            st.markdown("<div class='case-card'>", unsafe_allow_html=True)
+            st.markdown(
+                "<div class='case-card-heading'><span class='case-heading-icon'>♙</span>Case Information</div>",
+                unsafe_allow_html=True,
+            )
+            rows = [
+                ("Case #", case_number),
+                ("Subject", subject),
+                ("Description", description),
+                ("Priority", priority_label.title()),
+                ("Assigned To", assigned_to),
+                ("Due Date", due),
+                ("Created Date", created),
+                ("Last Update", last_update),
+                ("Current Status", status),
+                ("Case Category", text(task.get("category")) or "—"),
+                ("Client", account_name),
+                ("Related System", related_system),
+                ("Site / Location", text(task.get("site_location")) or "—"),
+                ("Reference Number", text(task.get("reference_number")) or "—"),
+            ]
+            for label, value in rows:
+                st.markdown(
+                    f"<div class='case-info-row'><span>{html.escape(label)}</span><strong>{html.escape(str(value))}</strong></div>",
+                    unsafe_allow_html=True,
+                )
+            st.markdown("</div>", unsafe_allow_html=True)
 
+        with middle:
+            st.markdown("<div class='case-card'>", unsafe_allow_html=True)
+            st.markdown(
+                "<div class='case-card-heading'><span class='case-heading-icon'>▥</span>Vendor Information</div>",
+                unsafe_allow_html=True,
+            )
+            st.markdown(f"<div class='vendor-brand'>{html.escape(vendor_name)}</div>", unsafe_allow_html=True)
+            vendor_rows = [
+                ("Primary Contact", vendor_contact or "—"),
+                ("Email", vendor_email or "—"),
+                ("Phone", vendor_phone or "—"),
+                ("Alternate Contact", text((vendor or {}).get("alternate_contact")) or "—"),
+                ("Alternate Email", text((vendor or {}).get("alternate_email")) or "—"),
+                ("Address", vendor_address or "—"),
+            ]
+            for label, value in vendor_rows:
+                st.markdown(
+                    f"<div class='case-info-row vendor-row'><span>{html.escape(label)}</span><strong>{html.escape(str(value))}</strong></div>",
+                    unsafe_allow_html=True,
+                )
+
+            st.markdown(
+                """
+                <div class="quick-actions">
+                    <div class="quick-actions-title">＋ Quick Actions</div>
+                    <div class="quick-actions-grid">
+                        <div>✉ Copy Email</div><div>☎ Copy Phone</div><div>▣ View Record</div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        with right:
+            st.markdown("<div class='case-card case-actions-card'>", unsafe_allow_html=True)
+            st.markdown(
+                "<div class='case-card-heading'><span class='case-heading-icon'>◷</span>Case Actions</div>",
+                unsafe_allow_html=True,
+            )
+            st.markdown("<div class='action-readonly-label'>Current Status</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='action-readonly-value'>{html.escape(status)}</div>", unsafe_allow_html=True)
+            st.markdown("<div class='action-readonly-label'>Current Station</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='action-readonly-value'>{html.escape(department or '—')}</div>", unsafe_allow_html=True)
+            st.markdown("<div class='action-readonly-label'>Assigned To</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='action-readonly-value'>{html.escape(assigned_to)}</div>", unsafe_allow_html=True)
+
+            stations = list(STATIONS.keys())
+            current = text(task.get("department")) or "CARE"
+            if current not in stations:
+                current = "CARE"
+            destination = st.selectbox(
+                "Reassign / Transfer To",
+                stations,
+                index=stations.index(current),
+                format_func=station_name,
+                key=f"case_transfer_destination_{task_id}",
+            )
+            st.caption("Uses the original Caseflow transfer function. Duration resets when the case enters the destination station.")
+            if st.button(
+                f"Transfer to {station_name(destination)}",
+                type="primary",
+                use_container_width=True,
+                key=f"case_transfer_{task_id}",
+            ):
+                if destination == current:
+                    st.warning("Choose a different station.")
+                elif transfer_case(task, destination):
+                    st.success(f"Case transferred to {station_name(destination)}.")
+                    st.session_state["show_case"] = False
+                    st.session_state["selected_case_id"] = None
+                    st.rerun()
+                else:
+                    st.error("Unable to transfer case.")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        # Bottom history row, matching the reference composition.
+        history = task.get("history") or []
+        st.markdown("<div class='case-card case-history-card'>", unsafe_allow_html=True)
+        st.markdown(
+            "<div class='case-card-heading'><span class='case-heading-icon'>◷</span>Case History</div>",
+            unsafe_allow_html=True,
+        )
+        if history:
+            for event in reversed(history[-10:]):
+                if isinstance(event, dict):
+                    action = text(event.get("action") or event.get("event") or event.get("details")) or "Case updated"
+                    stamp = dt_display(event.get("timestamp")) or ""
+                    actor = text(event.get("user") or event.get("actor") or event.get("assigned_to")) or "System"
+                else:
+                    action, stamp, actor = text(event), "", "System"
+                st.markdown(
+                    f"<div class='history-row'><div class='history-dot'></div><div class='history-main'><div class='history-meta'>{html.escape(stamp)} <span>{html.escape(actor)}</span></div><div class='history-action'>{html.escape(action)}</div></div></div>",
+                    unsafe_allow_html=True,
+                )
+        else:
+            st.info("No activity history is stored on this case.")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        st.markdown("<div class='case-card case-resolution-card'>", unsafe_allow_html=True)
+        st.markdown(
+            "<div class='case-card-heading'><span class='case-heading-icon'>✓</span>Resolution & Next Action</div>",
+            unsafe_allow_html=True,
+        )
         resolution = text(task.get("resolution"))
         next_action = text(task.get("next_action"))
         notes = text(task.get("notes"))
         if resolution:
-            st.markdown("**Current Resolution / Assessment**")
-            st.info(resolution)
+            st.markdown(f"<div class='resolution-label'>Current Resolution / Assessment</div><div class='resolution-value'>{html.escape(resolution)}</div>", unsafe_allow_html=True)
         if next_action:
-            st.markdown("**Recommended Next Action**")
-            st.success(next_action)
+            st.markdown(f"<div class='resolution-label'>Recommended Next Action</div><div class='resolution-value'>{html.escape(next_action)}</div>", unsafe_allow_html=True)
         if notes:
-            st.markdown("**Case Notes**")
-            st.caption(notes)
+            st.markdown(f"<div class='resolution-label'>Case Notes</div><div class='resolution-value'>{html.escape(notes)}</div>", unsafe_allow_html=True)
+        if not any([resolution, next_action, notes]):
+            st.caption("No resolution, next action, or notes are recorded for this case.")
+        st.markdown("</div>", unsafe_allow_html=True)
 
     # ------------------------------------------------------------------
-    # VENDOR INFORMATION — original find_vendor() behavior
+    # VENDOR TAB — preserves original vendor lookup data.
     # ------------------------------------------------------------------
     with tab_vendor:
-        st.markdown("### 🏢 Vendor Information")
-        vendor = find_vendor(task)
+        st.markdown("### Vendor Information")
         if vendor:
-            items = {
-                k: v for k, v in vendor.items()
-                if k not in {"_id", "vendor_key", "synced_at"} and text(v)
-            }
+            items = {k: v for k, v in vendor.items() if k not in {"_id", "vendor_key", "synced_at"} and text(v)}
             if items:
                 cols = st.columns(2)
                 for i, (key, value) in enumerate(items.items()):
                     with cols[i % 2]:
                         st.markdown(
-                            f"<div style='padding:9px 0;border-bottom:1px solid #EEF2F7;'><div style='font-size:10px;font-weight:800;color:#64748B;text-transform:uppercase;'>{html.escape(key.replace('_',' '))}</div><div style='font-size:13px;color:#17233C;margin-top:3px;'>{html.escape(text(value))}</div></div>",
+                            f"<div class='case-info-row'><span>{html.escape(key.replace('_',' ').title())}</span><strong>{html.escape(text(value))}</strong></div>",
                             unsafe_allow_html=True,
                         )
             else:
@@ -3840,10 +4127,10 @@ def case_details(task_id):
             st.info("No matching vendor information found. Upload the vendor Excel file from Settings.")
 
     # ------------------------------------------------------------------
-    # COMMUNICATION — display existing original record if present
+    # COMMUNICATION — original stored records only.
     # ------------------------------------------------------------------
     with tab_comm:
-        st.markdown("### ✉ Communication")
+        st.markdown("### Communication")
         communications = task.get("communications") or task.get("communication_history") or []
         if isinstance(communications, list) and communications:
             for item in reversed(communications[-20:]):
@@ -3854,17 +4141,17 @@ def case_details(task_id):
                 else:
                     sender, body, stamp = "Caseflow User", text(item), ""
                 st.markdown(
-                    f"<div style='border:1px solid #E2E8F0;border-radius:10px;padding:11px 13px;margin-bottom:9px;background:#FAFCFE;'><div style='display:flex;justify-content:space-between;gap:12px;'><strong style='font-size:12px;color:#17233C;'>{html.escape(sender)}</strong><span style='font-size:10px;color:#64748B;'>{html.escape(stamp)}</span></div><div style='font-size:13px;color:#334155;margin-top:6px;white-space:pre-wrap;'>{html.escape(body)}</div></div>",
+                    f"<div class='communication-card'><div class='communication-head'><strong>{html.escape(sender)}</strong><span>{html.escape(stamp)}</span></div><div>{html.escape(body)}</div></div>",
                     unsafe_allow_html=True,
                 )
         else:
             st.info("No communication history is stored on this case.")
 
     # ------------------------------------------------------------------
-    # ATTACHMENTS — display existing original record if present
+    # ATTACHMENTS — original stored records only.
     # ------------------------------------------------------------------
     with tab_attach:
-        st.markdown("### 📎 Attachments")
+        st.markdown("### Attachments")
         attachments = task.get("attachments") or task.get("files") or []
         if isinstance(attachments, list) and attachments:
             for item in attachments:
@@ -3874,61 +4161,13 @@ def case_details(task_id):
                 else:
                     name, detail = text(item), ""
                 st.markdown(
-                    f"<div style='display:flex;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid #E2E8F0;border-radius:8px;margin-bottom:7px;'><span>📎 <strong>{html.escape(name)}</strong></span><span style='color:#64748B;font-size:11px;'>{html.escape(detail)}</span></div>",
+                    f"<div class='attachment-row'><span>▧ <strong>{html.escape(name)}</strong></span><span>{html.escape(detail)}</span></div>",
                     unsafe_allow_html=True,
                 )
         else:
             st.info("No attachments are recorded for this case.")
 
-    # ------------------------------------------------------------------
-    # ACTIONS / TRANSFER / HISTORY — ORIGINAL FUNCTIONS
-    # ------------------------------------------------------------------
-    with tab_actions:
-        st.markdown("### Transfer Case")
-        stations = list(STATIONS.keys())
-        current = station_name(task.get("department"))
-        destination = st.selectbox(
-            "Destination",
-            stations,
-            index=(stations.index(current) if current in stations else 0),
-            key=f"case_transfer_destination_{task_id}",
-        )
-        st.caption("Duration resets when the case enters the destination station.")
-
-        if st.button(
-            f"Transfer to {station_name(destination)}",
-            type="primary",
-            use_container_width=True,
-            key=f"case_transfer_{task_id}",
-        ):
-            if destination == current:
-                st.warning("Choose a different station.")
-            elif transfer_case(task, destination):
-                st.success(f"Case transferred to {station_name(destination)}.")
-                st.session_state["show_case"] = False
-                st.session_state["selected_case_id"] = None
-                st.rerun()
-            else:
-                st.error("Unable to transfer case.")
-
-        history = task.get("history") or []
-        if history:
-            st.markdown("### Activity History")
-            for event in reversed(history[-15:]):
-                if isinstance(event, dict):
-                    action = text(event.get("action") or event.get("event") or event.get("details")) or "Case updated"
-                    stamp = dt_display(event.get("timestamp"))
-                else:
-                    action, stamp = text(event), ""
-                st.markdown(f"**• {html.escape(action)}**")
-                if stamp:
-                    st.caption(stamp)
-
-        st.markdown("---")
-        if st.button("✕ Close Case Details", use_container_width=True, key=f"close_case_{task_id}"):
-            st.session_state["show_case"] = False
-            st.session_state["selected_case_id"] = None
-            st.rerun()
+    st.markdown("<div class='case-detail-footer'></div>", unsafe_allow_html=True)
 
 
 # ============================================================
