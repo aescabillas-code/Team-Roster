@@ -1005,6 +1005,7 @@ defaults = {
     # The station stays silenced until the current warning condition clears.
     "station_warning_silenced": set(),
     "station_warning_latched": set(),
+    "war_room_open_cases": set(),
 }
 
 
@@ -3897,8 +3898,7 @@ def save_case_station_checklist(task_id, station, items):
 
 
 def set_case_checklist_item(task_id, station, index, checked):
-    # Streamlit callbacks pass the widget key so the current checkbox value
-    # can be read from session_state at callback time.
+    """Persist checklist changes and log newly completed items in history and case notes."""
     if isinstance(checked, str) and checked in st.session_state:
         checked = st.session_state.get(checked, False)
     station = station_name(station)
@@ -3910,8 +3910,26 @@ def set_case_checklist_item(task_id, station, index, checked):
         items = get_case_station_checklist(task, station)
         if index < 0 or index >= len(items):
             return False
+        was_checked = bool(items[index].get("checked"))
         items[index]["checked"] = bool(checked)
-        return save_case_station_checklist(task_id, station, items)
+        now = utc_now()
+        update_set = {f"station_checklists.{station}": items, "last_update": now}
+        if bool(checked) and not was_checked:
+            label = text(items[index].get("item")) or f"Checklist item {index + 1}"
+            history = list(task.get("history") or [])
+            history.append({
+                "action": f"Completed {station_display_name(station)} checklist item:\n• {label}",
+                "timestamp": now,
+                "user": text(task.get("assigned_to")) or "Caseflow User",
+            })
+            update_set["history"] = history[-50:]
+            existing_note = text(task.get("notes"))
+            bullet = f"• {label}"
+            if bullet not in existing_note.splitlines():
+                update_set["notes"] = (existing_note + "\n" + bullet).strip()
+        col(TASKS_COLLECTION).update_one({"_id": ObjectId(str(task_id))}, {"$set": update_set})
+        clear_task_cache()
+        return True
     except Exception:
         return False
 
@@ -5014,6 +5032,7 @@ def case_details(task_id):
     description = text(task.get("description")) or text(task.get("issue")) or "No description available."
     assigned_to = text(task.get("assigned_to")) or "Unassigned"
     account_name = text(task.get("account_name")) or "—"
+    account_priority_label = "HIGH" if is_priority(task.get("account_priority")) else "STANDARD"
     case_type = text(task.get("case_type")) or text(task.get("category")) or "—"
     related_system = text(task.get("related_system")) or text(task.get("product")) or "—"
     last_update = dt_display(task.get("last_update")) or "—"
@@ -5058,7 +5077,7 @@ def case_details(task_id):
                             <span class="badge {priority_class} case-priority-badge">{html.escape(priority_label.title())}</span>
                         </div>
                         <div class="case-detail-subject">{html.escape(subject)}</div>
-                        <div class="case-detail-description">{html.escape(description)}</div>
+                        <div class="case-detail-account">Account: <strong>{html.escape(account_name)}</strong> &nbsp;•&nbsp; Account Priority: <strong>{html.escape(account_priority_label)}</strong></div>
                     </div>
                 </div>
                 <div class="case-detail-timing">
@@ -5094,7 +5113,6 @@ def case_details(task_id):
             <div class="case-summary-cell"><span>Current Status</span><strong><span class="case-status-chip">{html.escape(status)}</span></strong></div>
             <div class="case-summary-cell"><span>Last Update</span><strong>{html.escape(last_update)}</strong></div>
             <div class="case-summary-cell"><span>Case Type</span><strong>{html.escape(case_type)}</strong></div>
-            <div class="case-summary-cell"><span>Account</span><strong>{html.escape(account_name)}</strong></div>
             <div class="case-summary-cell"><span>Related System</span><strong>{html.escape(related_system)}</strong></div>
         </div>
         """,
@@ -5276,40 +5294,23 @@ def case_details(task_id):
                 st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>☑</span>Station Task Checklists</div>", unsafe_allow_html=True)
                 st.caption("Select a station to review or complete its required tasks. The checklist for the current station is the transfer/reassignment gate.")
 
-                selected_key = f"action_checklist_station_{task_id}"
-                if selected_key not in st.session_state or st.session_state[selected_key] not in stations:
-                    st.session_state[selected_key] = current
-                selected_check_station = st.session_state[selected_key]
+                # Only the checklist for the case's CURRENT station is shown.
+                # Station-switch tiles are intentionally removed.
+                selected_check_station = current
 
-                status_cols = st.columns(5, gap="small")
-                for idx, station in enumerate(stations):
-                    station_items = get_case_station_checklist(task, station)
-                    complete = bool(station_items) and all(bool(x.get("checked")) for x in station_items)
-                    button_label = station_display_name(station)
-                    with status_cols[idx]:
-                        if st.button(
-                            button_label,
-                            use_container_width=True,
-                            key=f"select_action_station_{task_id}_{station}",
-                            type="primary" if selected_check_station == station else "secondary",
-                        ):
-                            st.session_state[selected_key] = station
-                            st.rerun()
-
-                selected_check_station = st.session_state[selected_key]
-                selected_items = get_case_station_checklist(task, selected_check_station)
+                selected_items = get_case_station_checklist(task, current)
                 selected_missing = [x.get("item") for x in selected_items if not bool(x.get("checked"))]
                 complete_class = "complete" if not selected_missing else "pending"
                 complete_text = "✓ Complete" if not selected_missing else f"{len(selected_missing)} item(s) remaining"
                 st.markdown(
-                    f"<div class='case-checklist-wrap'><div class='case-checklist-title'>{html.escape(station_display_name(selected_check_station))} Required Tasks</div>"
+                    f"<div class='case-checklist-wrap'><div class='case-checklist-title'>{html.escape(station_display_name(current))} Required Tasks</div>"
                     f"<div class='case-checklist-sub'>Every task below must be completed before this case can leave the current station.</div>"
                     f"<span class='case-checklist-status {complete_class}'>{html.escape(complete_text)}</span></div>",
                     unsafe_allow_html=True,
                 )
 
                 for idx, item in enumerate(selected_items):
-                    check_key = f"case_checklist_{task_id}_{selected_check_station}_{idx}"
+                    check_key = f"case_checklist_{task_id}_{current}_{idx}"
                     if check_key not in st.session_state:
                         st.session_state[check_key] = bool(item.get("checked"))
 
@@ -5319,28 +5320,28 @@ def case_details(task_id):
                             item.get("item") or f"Checklist item {idx + 1}",
                             key=check_key,
                             on_change=set_case_checklist_item,
-                            args=(task_id, selected_check_station, idx, check_key),
+                            args=(task_id, current, idx, check_key),
                         )
                     with remove_col:
                         if st.button(
                             "×",
-                            key=f"case_checklist_remove_{task_id}_{selected_check_station}_{idx}",
+                            key=f"case_checklist_remove_{task_id}_{current}_{idx}",
                             help="Remove this checklist item",
                         ):
-                            if remove_case_checklist_item(task_id, selected_check_station, idx):
+                            if remove_case_checklist_item(task_id, current, idx):
                                 st.session_state.pop(check_key, None)
                                 st.rerun()
                             else:
                                 st.error("Unable to remove this checklist item.")
 
-                add_key = f"case_checklist_new_{task_id}_{selected_check_station}"
+                add_key = f"case_checklist_new_{task_id}_{current}"
                 add_item = st.text_input(
                     "Add checklist item",
                     key=add_key,
-                    placeholder=f"Add a {station_display_name(selected_check_station)}-specific task...",
+                    placeholder=f"Add a {station_display_name(current)}-specific task...",
                 )
-                if st.button("＋ Add Checklist Item", use_container_width=True, key=f"case_checklist_add_{task_id}_{selected_check_station}"):
-                    if append_case_checklist_item(task_id, selected_check_station, add_item):
+                if st.button("＋ Add Checklist Item", use_container_width=True, key=f"case_checklist_add_{task_id}_{current}"):
+                    if append_case_checklist_item(task_id, current, add_item):
                         st.session_state.pop(add_key, None)
                         st.success("Checklist item added.")
                         st.rerun()
@@ -5523,22 +5524,10 @@ def case_details(task_id):
                 )
 
                 st.markdown(
-                    f"<div class='kb-full-sop'><div class='kb-full-sop-label'>EXACT ANSWER</div>"
+                    f"<div class='kb-full-sop'><div class='kb-full-sop-label'>SOP GUIDANCE</div>"
                     f"<div class='kb-rich-content'>{kb_rich_html(kb_content(selected_doc))}</div></div>",
                     unsafe_allow_html=True,
                 )
-
-                recommendation = local_kb_ai_answer(
-                    f"What is the best next action for this case? {active_query} {case_kb_query(task)}",
-                    task,
-                    [selected_doc] + [doc for doc in results if doc is not selected_doc][:3],
-                )
-                st.markdown(
-                    f"<div class='kb-recommendation'><div class='kb-full-sop-label'>RECOMMENDED GUIDANCE</div>"
-                    f"<div class='kb-rich-content'>{kb_rich_html(recommendation.get('answer'))}</div></div>",
-                    unsafe_allow_html=True,
-                )
-
                 steps = selected_doc.get("steps")
                 if steps:
                     st.markdown("<div class='kb-sop-list-title'>Approved steps</div>", unsafe_allow_html=True)
@@ -5571,16 +5560,57 @@ def case_details(task_id):
             participants_preview = list(dict.fromkeys(CASEFLOW_ASSIGNEES + ([assigned_to] if assigned_to else [])))
             participant_preview = participants_preview[:5] or [assigned_to]
             participant_html = "".join(f"<span class='war-room-avatar'>{html.escape((text(name) or '?')[:1].upper())}</span>" for name in participant_preview if text(name))
+            war_room_open = task_id in st.session_state.setdefault("war_room_open_cases", set())
+
+            if st.button(
+                f"LIVE WAR ROOM  •  {case_number}  •  {len(participant_preview)} attendees",
+                use_container_width=True,
+                key=f"war_room_tile_{task_id}",
+                type="secondary",
+            ):
+                if war_room_open:
+                    st.session_state["war_room_open_cases"].discard(task_id)
+                else:
+                    st.session_state["war_room_open_cases"].add(task_id)
+                st.rerun()
+
             st.markdown(
-                f"<div class='war-room-mock'>"
-                f"<div class='war-room-top'><div><span class='war-room-live-dot'></span><b>LIVE WAR ROOM</b><span class='war-room-case'>{html.escape(case_number)}</span></div><span class='war-room-status'>ACTIVE</span></div>"
+                f"<div class='war-room-mock war-room-clickable'>"
+                f"<div class='war-room-top'><div><span class='war-room-live-dot'></span><b>LIVE WAR ROOM</b><span class='war-room-case'>{html.escape(case_number)}</span></div><span class='war-room-status'>{'OPEN' if war_room_open else 'READY'}</span></div>"
                 f"<div class='war-room-grid'>"
                 f"<div><div class='war-room-label'>CURRENT FOCUS</div><div class='war-room-focus'>{html.escape(subject)}</div><div class='war-room-muted'>{html.escape(station_display_name(department))} · {html.escape(priority_label.title())}</div></div>"
-                f"<div><div class='war-room-label'>PARTICIPANTS</div><div class='war-room-avatars'>{participant_html}</div><div class='war-room-muted'>{len(participant_preview)} people in collaboration</div></div>"
+                f"<div><div class='war-room-label'>ATTENDEES</div><div class='war-room-avatars'>{participant_html}</div><div class='war-room-muted'>{len(participant_preview)} available participants</div></div>"
                 f"<div><div class='war-room-label'>MOST RECENT UPDATE</div><div class='war-room-update'>{html.escape(latest_text[:190])}</div><div class='war-room-muted'>by {html.escape(latest_actor)}</div></div>"
                 f"</div></div>",
                 unsafe_allow_html=True,
             )
+
+            if war_room_open:
+                fake_link = f"https://caseflow.local/war-room/{html.escape(case_number)}"
+                attendees_html = "".join(f"<li>{html.escape(text(name))}</li>" for name in participant_preview if text(name))
+                st.markdown(
+                    f"<div class='war-room-expanded'>"
+                    f"<div class='war-room-expanded-title'>Current attendees</div>"
+                    f"<ul class='war-room-attendees'>{attendees_html}</ul>"
+                    f"<div class='war-room-expanded-title'>War Room Link</div>"
+                    f"<div class='war-room-link-mock'>{fake_link}</div>"
+                    f"<div class='war-room-expanded-note'>Mock link for Caseflow visualization. Replace with the approved Teams/Meet/Zoom link when a real war room is created.</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+                if st.button("Close War Room", use_container_width=True, key=f"close_war_room_{task_id}"):
+                    try:
+                        from bson import ObjectId
+                        now = utc_now()
+                        history = list(task.get("history") or [])
+                        history.append({"action": f"War Room closed for {case_number}.", "timestamp": now, "user": assigned_to or "Caseflow User"})
+                        col(TASKS_COLLECTION).update_one({"_id": ObjectId(str(task_id))}, {"$set": {"history": history[-50:], "last_update": now}})
+                        clear_task_cache()
+                    except Exception as exc:
+                        st.error(f"Unable to close the war room: {exc}")
+                    else:
+                        st.session_state["war_room_open_cases"].discard(task_id)
+                        st.rerun()
 
             meeting_link_key = f"meeting_link_{task_id}"
             meeting_tags_key = f"meeting_tags_{task_id}"
@@ -7233,5 +7263,71 @@ div[data-testid="stDialog"] .war-room-avatar {
 div[data-testid="stDialog"] [class*="st-key-select_action_station_"] button { min-height:32px !important; height:32px !important; padding:4px 7px !important; font-size:10px !important; }
 div[data-testid="stDialog"] [class*="st-key-case_checklist_remove_"] button { width:24px !important; min-width:24px !important; height:24px !important; min-height:24px !important; font-size:15px !important; }
 
+</style>
+''', unsafe_allow_html=True)
+
+
+st.markdown(r'''
+<style>
+/* FINAL CASE DETAILS REFINEMENT */
+div[data-testid="stDialog"] [data-testid="stDialogHeader"] { padding:6px 18px 4px !important; min-height:34px !important; }
+div[data-testid="stDialog"] [data-testid="stDialogHeader"] h2 { font-size:18px !important; line-height:1.05 !important; margin:0 !important; padding:0 !important; }
+div[data-testid="stDialog"] [data-testid="stDialogContent"] { padding-top:4px !important; padding-bottom:4px !important; }
+div[data-testid="stDialog"] .case-detail-hero { margin:0 0 3px !important; padding:2px 4px 2px !important; }
+div[data-testid="stDialog"] .case-folder-icon { font-size:19px !important; }
+div[data-testid="stDialog"] .case-detail-case-number { font-size:14px !important; line-height:1.05 !important; }
+div[data-testid="stDialog"] .case-detail-subject { font-size:11.5px !important; margin-top:2px !important; line-height:1.15 !important; }
+div[data-testid="stDialog"] .case-detail-account { color:#526078 !important; font-size:9px !important; line-height:1.2 !important; margin-top:2px !important; }
+div[data-testid="stDialog"] .case-detail-account strong { color:#102041 !important; }
+div[data-testid="stDialog"] .case-detail-timing { min-width:460px !important; }
+div[data-testid="stDialog"] .case-timing-item { padding:1px 10px !important; }
+div[data-testid="stDialog"] .case-timing-item span { font-size:8px !important; }
+div[data-testid="stDialog"] .case-timing-item strong { font-size:9px !important; }
+div[data-testid="stDialog"] .case-timing-icon { font-size:12px !important; }
+div[data-testid="stDialog"] .case-assignee-copy { display:flex !important; flex-direction:column !important; gap:1px !important; }
+div[data-testid="stDialog"] .case-assignee-copy span { font-size:8px !important; line-height:1 !important; margin:0 !important; }
+div[data-testid="stDialog"] .case-assignee-copy strong { font-size:9px !important; line-height:1.1 !important; font-weight:600 !important; }
+div[data-testid="stDialog"] .case-summary-strip { margin:1px 0 2px !important; padding:3px 4px !important; }
+div[data-testid="stDialog"] .case-summary-cell { padding:1px 7px !important; }
+/* Compact dropdown labels and controls */
+div[data-testid="stDialog"] [data-testid="stSelectbox"], div[data-testid="stDialog"] [data-testid="stSelectbox"] > div { margin:0 !important; padding:0 !important; }
+div[data-testid="stDialog"] [data-testid="stSelectbox"] label { font-size:8px !important; line-height:1 !important; margin:0 0 1px !important; padding:0 !important; }
+div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] > div { min-height:27px !important; height:27px !important; padding:0 6px !important; }
+div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] span { font-size:8.5px !important; line-height:25px !important; }
+/* Current station only */
+div[data-testid="stDialog"] .case-checklist-wrap { margin:3px 0 4px !important; padding:5px 6px !important; }
+div[data-testid="stDialog"] .case-checklist-title { font-size:9px !important; }
+div[data-testid="stDialog"] .case-checklist-sub { font-size:7.5px !important; margin:1px 0 !important; }
+div[data-testid="stDialog"] [data-testid="stCheckbox"] { min-height:19px !important; margin:0 !important; padding:0 !important; }
+div[data-testid="stDialog"] [data-testid="stCheckbox"] label { font-size:9px !important; line-height:1.1 !important; margin:0 !important; padding:0 !important; }
+/* KB tiles and white reader */
+div[data-testid="stDialog"] .kb-sop-list-title { margin:5px 0 2px !important; font-size:8px !important; }
+div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] { margin:0 0 2px !important; padding:0 !important; }
+div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] button { min-height:23px !important; height:23px !important; padding:2px 6px !important; margin:0 !important; font-size:8px !important; line-height:1.05 !important; border-radius:4px !important; }
+div[data-testid="stDialog"] .kb-selected-sop { margin-top:4px !important; padding:6px 8px !important; }
+div[data-testid="stDialog"] .kb-selected-sop-title { font-size:10px !important; line-height:1.15 !important; }
+div[data-testid="stDialog"] .kb-selected-sop-meta { font-size:7.5px !important; margin-top:2px !important; }
+div[data-testid="stDialog"] .kb-full-sop { margin-top:3px !important; padding:7px 8px !important; }
+div[data-testid="stDialog"] .kb-full-sop-label { font-size:7px !important; margin-bottom:3px !important; }
+div[data-testid="stDialog"] .kb-rich-content { font-size:9px !important; line-height:1.3 !important; }
+div[data-testid="stDialog"] .kb-rich-content p { margin:0 0 4px !important; }
+div[data-testid="stDialog"] .kb-rich-content ul, div[data-testid="stDialog"] .kb-rich-content ol { margin:2px 0 5px 15px !important; padding:0 !important; }
+div[data-testid="stDialog"] .kb-rich-content li { margin:0 0 2px !important; padding-left:1px !important; }
+/* Remove nested fixed scrollbar; use dialog native scroll surface. */
+div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] { height:auto !important; max-height:none !important; overflow:visible !important; }
+/* War room */
+div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] { margin:2px 0 4px !important; }
+div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] button { min-height:30px !important; height:30px !important; padding:4px 8px !important; font-size:9px !important; font-weight:800 !important; color:#0b625b !important; background:#e9faf6 !important; border:1px solid #9eddd2 !important; border-radius:6px !important; }
+div[data-testid="stDialog"] .war-room-mock { margin:0 0 4px !important; padding:5px 7px !important; border-radius:6px !important; }
+div[data-testid="stDialog"] .war-room-top { font-size:8px !important; }
+div[data-testid="stDialog"] .war-room-grid { gap:5px !important; margin-top:4px !important; }
+div[data-testid="stDialog"] .war-room-focus, div[data-testid="stDialog"] .war-room-update { font-size:8px !important; }
+div[data-testid="stDialog"] .war-room-muted { font-size:7px !important; }
+div[data-testid="stDialog"] .war-room-expanded { background:#f8fcfb !important; border:1px solid #cde8e3 !important; border-radius:6px !important; padding:7px 8px !important; margin:0 0 4px !important; }
+div[data-testid="stDialog"] .war-room-expanded-title { font-size:8px !important; font-weight:850 !important; color:#0b625b !important; margin:0 0 2px !important; }
+div[data-testid="stDialog"] .war-room-attendees { margin:0 0 5px 15px !important; padding:0 !important; font-size:8px !important; line-height:1.25 !important; }
+div[data-testid="stDialog"] .war-room-link-mock { font-size:8px !important; color:#0879c9 !important; word-break:break-all !important; background:#fff !important; border:1px solid #dbe5ed !important; border-radius:4px !important; padding:4px 5px !important; }
+div[data-testid="stDialog"] .war-room-expanded-note { font-size:7px !important; color:#64748b !important; margin-top:3px !important; line-height:1.25 !important; }
+div[data-testid="stDialog"] [class*="st-key-close_war_room_"] button { min-height:25px !important; height:25px !important; padding:2px 6px !important; font-size:8px !important; margin:0 !important; }
 </style>
 ''', unsafe_allow_html=True)
