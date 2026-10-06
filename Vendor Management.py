@@ -8018,5 +8018,25 @@ div[data-testid="stDialog"] [data-testid="stTabs"] [role="tab"] span {
     font-size:10px !important;
     line-height:1.1 !important;
 }
+
+/* ============================================================
+   FONT-SIZE-ONLY PATCH — 2026-10-06
+   User requested ONLY:
+   1) Knowledge Base search section: one smaller uniform font size.
+   2) Case Actions + Collaboration sections: one smaller uniform font size.
+   No spacing, layout, color, functionality, or control-size changes.
+   ============================================================ */
+
+/* 1. KNOWLEDGE BASE SEARCH SECTION */
+div[data-testid="stDialog"] [role="tabpanel"]:has(.kb-panel-intro) * {
+    font-size:9px !important;
+}
+
+/* 2. CASE ACTIONS + COLLABORATION SECTIONS */
+div[data-testid="stDialog"] [role="tabpanel"]:has(.case-checklist-wrap) *,
+div[data-testid="stDialog"] [role="tabpanel"]:has(.meeting-panel) * {
+    font-size:9px !important;
+}
+
 </style>
 """, unsafe_allow_html=True)
