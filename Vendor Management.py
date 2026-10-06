@@ -1004,6 +1004,7 @@ defaults = {
     # Stations silenced after the user clicks their active warning tile.
     # The station stays silenced until the current warning condition clears.
     "station_warning_silenced": set(),
+    "station_warning_latched": set(),
 }
 
 
@@ -1471,10 +1472,10 @@ st.markdown(
     /* STATION TILES — reference visual + reliable full-card click target */
     [class*="st-key-station_wrap_care"], [class*="st-key-station_wrap_arch"],
     [class*="st-key-station_wrap_pet"], [class*="st-key-station_wrap_supply"],
-    [class*="st-key-station_wrap_onsite"] { position:relative !important; min-height:184px !important; overflow:visible !important; }
+    [class*="st-key-station_wrap_onsite"] { position:relative !important; min-height:150px !important; overflow:visible !important; }
     .station-card-visual {
-        position:relative; z-index:1; height:184px; min-height:184px; box-sizing:border-box;
-        border-radius:13px; padding:18px 24px; overflow:hidden;
+        position:relative; z-index:1; height:150px; min-height:150px; box-sizing:border-box;
+        border-radius:11px; padding:13px 17px; overflow:hidden;
         color:#102041;
     }
     .station-card-visual {
@@ -1510,8 +1511,8 @@ st.markdown(
     .station-card-visual.supply.selected { border:3px solid #a07de2 !important; }
     .station-card-visual.onsite.selected { border:3px solid #e0b94f !important; }
     .station-icon-circle {
-        width:64px; height:64px; border-radius:50%; display:flex; align-items:center; justify-content:center;
-        font-size:30px; font-weight:900; position:absolute; left:24px; top:18px;
+        width:48px; height:48px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+        font-size:23px; font-weight:900; position:absolute; left:17px; top:13px;
         background:rgba(255,255,255,.48);
     }
     .care .station-icon-circle { color:#e51c3a; background:#ffd7df; }
@@ -1519,21 +1520,21 @@ st.markdown(
     .pet .station-icon-circle { color:#087b58; background:#bff1df; }
     .supply .station-icon-circle { color:#5d2ac9; background:#dfceff; }
     .onsite .station-icon-circle { color:#c98700; background:#ffe5a8; }
-    .station-copy { position:absolute; left:112px; top:29px; }
-    .station-card-title { font-size:18px; font-weight:850; line-height:1.1; letter-spacing:-.3px; }
-    .station-count-line { display:flex; align-items:baseline; gap:6px; margin-top:8px; }
-    .station-count { font-size:32px; line-height:1; font-weight:900; }
-    .station-active { font-size:12px; color:#53637f; }
+    .station-copy { position:absolute; left:78px; top:21px; }
+    .station-card-title { font-size:14px; font-weight:850; line-height:1.1; letter-spacing:-.15px; }
+    .station-count-line { display:flex; align-items:baseline; gap:4px; margin-top:5px; }
+    .station-count { font-size:25px; line-height:1; font-weight:900; }
+    .station-active { font-size:9px; color:#53637f; }
     .care .station-count { color:#e51c3a; }
     .arch .station-count { color:#0879c9; }
     .pet .station-count { color:#087b58; }
     .supply .station-count { color:#5d2ac9; }
     .onsite .station-count { color:#c98700; }
-    .station-arrow { position:absolute; right:20px; top:31px; font-size:25px; font-weight:300; color:#30466b; }
-    .station-warning { position:absolute; left:24px; bottom:39px; font-size:12px; font-weight:750; color:#53637f; }
+    .station-arrow { position:absolute; right:14px; top:21px; font-size:21px; font-weight:300; color:#30466b; }
+    .station-warning { position:absolute; left:17px; bottom:27px; font-size:9px; font-weight:750; color:#53637f; }
     .station-warning.active { color:#d33a4e; }
     .arch .station-warning.active, .pet .station-warning.active, .supply .station-warning.active, .onsite .station-warning.active { color:#53637f; }
-    .station-sla-ref { position:absolute; left:24px; bottom:17px; font-size:12px; color:#53637f; }
+    .station-sla-ref { position:absolute; left:17px; bottom:10px; font-size:9px; color:#53637f; }
     .station-sla-ref strong { color:#102041; }
     /* Make the real button transparent and stretch it over the card. */
     [class*="st-key-station_wrap_care"] [class*="st-key-station_CARE"],
@@ -1542,14 +1543,14 @@ st.markdown(
     [class*="st-key-station_wrap_supply"] [class*="st-key-station_SUPPLY"],
     [class*="st-key-station_wrap_onsite"] [class*="st-key-station_ONSITE"] {
         position:absolute !important; inset:0 !important; z-index:50 !important;
-        width:100% !important; height:184px !important;
+        width:100% !important; height:150px !important;
     }
     [class*="st-key-station_wrap_care"] [class*="st-key-station_CARE"] button,
     [class*="st-key-station_wrap_arch"] [class*="st-key-station_ARCH"] button,
     [class*="st-key-station_wrap_pet"] [class*="st-key-station_PET"] button,
     [class*="st-key-station_wrap_supply"] [class*="st-key-station_SUPPLY"] button,
     [class*="st-key-station_wrap_onsite"] [class*="st-key-station_ONSITE"] button {
-        position:absolute !important; inset:0 !important; width:100% !important; height:184px !important;
+        position:absolute !important; inset:0 !important; width:100% !important; height:150px !important;
         background:transparent !important; border:0 !important; box-shadow:none !important;
         color:transparent !important; font-size:1px !important; opacity:0.001 !important;
         cursor:pointer !important; z-index:30 !important; pointer-events:auto !important;
@@ -4765,6 +4766,190 @@ def seed_demo_kb():
         pass
 
 
+def _kb_inline_format(value):
+    """Small, dependency-free markdown-like formatter for KB text."""
+    value = html.escape(text(value))
+    parts = value.split("**")
+    if len(parts) == 1:
+        return value
+    out = []
+    for idx, part in enumerate(parts):
+        if idx % 2:
+            out.append(f"<strong>{part}</strong>")
+        else:
+            out.append(part)
+    return "".join(out)
+
+
+def kb_rich_html(content):
+    """Render KB/SOP content as readable HTML with real headings and lists."""
+    lines = text(content).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    html_lines = []
+    in_ul = False
+    in_ol = False
+
+    def close_lists():
+        nonlocal in_ul, in_ol
+        if in_ul:
+            html_lines.append("</ul>")
+            in_ul = False
+        if in_ol:
+            html_lines.append("</ol>")
+            in_ol = False
+
+    for raw in lines:
+        line = text(raw).strip()
+        if not line:
+            close_lists()
+            continue
+        if line.startswith("### "):
+            close_lists()
+            html_lines.append(f"<div class='kb-content-heading'>{_kb_inline_format(line[4:])}</div>")
+            continue
+        if line.startswith("## "):
+            close_lists()
+            html_lines.append(f"<div class='kb-content-heading'>{_kb_inline_format(line[3:])}</div>")
+            continue
+        if line.startswith("# "):
+            close_lists()
+            html_lines.append(f"<div class='kb-content-heading'>{_kb_inline_format(line[2:])}</div>")
+            continue
+        if line.startswith("- ") or line.startswith("• "):
+            if in_ol:
+                html_lines.append("</ol>")
+                in_ol = False
+            if not in_ul:
+                html_lines.append("<ul>")
+                in_ul = True
+            html_lines.append(f"<li>{_kb_inline_format(line[2:])}</li>")
+            continue
+        numbered = line.split(". ", 1)
+        if len(numbered) == 2 and numbered[0].isdigit():
+            if in_ul:
+                html_lines.append("</ul>")
+                in_ul = False
+            if not in_ol:
+                html_lines.append("<ol>")
+                in_ol = True
+            html_lines.append(f"<li>{_kb_inline_format(numbered[1])}</li>")
+            continue
+        close_lists()
+        html_lines.append(f"<p>{_kb_inline_format(line)}</p>")
+
+    close_lists()
+    return "".join(html_lines)
+
+
+def _case_update_events(task):
+    """Return timestamped human-readable updates from the case record."""
+    events = []
+    history = task.get("history") or []
+    if isinstance(history, list):
+        for item in history:
+            if isinstance(item, dict):
+                stamp = as_utc(item.get("timestamp") or item.get("created_at") or item.get("updated_at"))
+                detail = text(item.get("action") or item.get("event") or item.get("details"))
+                actor = text(item.get("user") or item.get("actor") or item.get("assigned_to"))
+                if detail:
+                    events.append((stamp or datetime.min.replace(tzinfo=timezone.utc), detail, actor))
+
+    action_log = task.get("case_action_log") or []
+    if isinstance(action_log, list):
+        for item in action_log:
+            if isinstance(item, dict):
+                stamp = as_utc(item.get("timestamp") or item.get("created_at"))
+                plan = text(item.get("action_plan"))
+                note = text(item.get("note"))
+                detail = " · ".join(x for x in [plan, note] if x)
+                actor = text(item.get("logged_by"))
+                if detail:
+                    events.append((stamp or datetime.min.replace(tzinfo=timezone.utc), detail, actor))
+
+    communications = task.get("communications") or task.get("communication_history") or []
+    if isinstance(communications, list):
+        for item in communications:
+            if isinstance(item, dict):
+                stamp = as_utc(item.get("timestamp") or item.get("created_at"))
+                detail = text(item.get("message") or item.get("body") or item.get("details"))
+                actor = text(item.get("sender") or item.get("user") or item.get("from"))
+            else:
+                stamp = None
+                detail = text(item)
+                actor = ""
+            if detail:
+                events.append((stamp or datetime.min.replace(tzinfo=timezone.utc), detail, actor))
+
+    meetings = task.get("meetings") or []
+    if isinstance(meetings, list):
+        for item in meetings:
+            if isinstance(item, dict):
+                stamp = as_utc(item.get("timestamp") or item.get("created_at"))
+                detail = text(item.get("actions") or item.get("details"))
+                actor = text(item.get("recorded_by"))
+                if detail:
+                    events.append((stamp or datetime.min.replace(tzinfo=timezone.utc), detail, actor))
+
+    fallback = as_utc(task.get("last_update") or task.get("updated_at") or task.get("created_at"))
+    if fallback:
+        events.append((fallback, "Case record updated.", "Caseflow"))
+    return events
+
+
+def automated_case_assessment(task, state):
+    """Build a read-only assessment from the most recent case update and SLA state."""
+    events = _case_update_events(task)
+    latest = max(events, key=lambda x: x[0]) if events else None
+    station = station_display_name(task.get("department")) or "Current station"
+    status = text(state.get("status") or task.get("status") or "OPEN").upper()
+    if state.get("past_due"):
+        lead = f"SLA breached in {station}."
+    elif state.get("nearing_due"):
+        lead = f"SLA nearing due in {station}."
+    elif status in {"RESOLVED", "CLOSED", "COMPLETED"}:
+        lead = f"Case is {status.lower()} in {station}."
+    else:
+        lead = f"Case remains {status.lower()} in {station}."
+    if latest:
+        detail = latest[1].replace("\n", " ").strip()
+        if len(detail) > 320:
+            detail = detail[:317].rstrip() + "…"
+        actor = f" · {latest[2]}" if latest[2] else ""
+        return f"{lead} Most recent update: {detail}{actor}."
+    return f"{lead} No detailed update has been recorded yet."
+
+
+def build_case_suggestions(task, documents, limit=4):
+    """Create case-specific suggested questions from the strongest KB matches."""
+    suggestions = []
+    seen = set()
+    case_context = case_kb_query(task)
+    for doc in documents:
+        score = kb_score(case_context, doc)
+        if score <= 0:
+            continue
+        question = text(doc.get("question"))
+        title = text(doc.get("title")) or "this issue"
+        candidates = [
+            question,
+            f"What are the recommended steps for {title}?",
+            f"What information should I capture for {title}?",
+            f"What should I verify before escalating {title}?",
+        ]
+        for candidate in candidates:
+            candidate = " ".join(candidate.split())
+            if len(candidate) < 12:
+                continue
+            key = candidate.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            suggestions.append(candidate)
+            break
+        if len(suggestions) >= limit:
+            break
+    return suggestions
+
+
 def local_kb_ai_answer(question, task, documents):
     question = text(question).strip()
     if not question:
@@ -4801,7 +4986,7 @@ def case_details(task_id):
       1. Case Information
       2. Case Actions
       3. Knowledge Base
-      4. Communication
+      4. Collaboration
       5. Attachments
 
     The original MongoDB task model, SLA engine, checklist gate, transfer logic,
@@ -4917,13 +5102,14 @@ def case_details(task_id):
     )
 
     # Native Streamlit scroll container: this is the actual reliable scrollbar.
-    # Header/summary remain above it; all tabs and their complete content scroll inside it.
-    with st.container(height=500, border=False, key=f"case_detail_scroll_{task_id}"):
+    # Use the dialog's native scroll surface. A fixed-height nested container
+    # created the double/offset scrollbar seen in the reference screenshot.
+    with st.container(border=False, key=f"case_detail_scroll_{task_id}"):
         tab_info, tab_actions, tab_kb, tab_comm, tab_attach = st.tabs([
             "ⓘ  Case Information",
             "◷  Case Actions",
             "✦  Knowledge Base",
-            "✉  Communication",
+            "✉  Collaboration",
             "♧  Attachments",
         ])
 
@@ -4971,7 +5157,7 @@ def case_details(task_id):
             with meta_col:
                 st.markdown("<div class='case-card'>", unsafe_allow_html=True)
                 st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>✓</span>Resolution & Next Action</div>", unsafe_allow_html=True)
-                resolution = text(task.get("resolution"))
+                resolution = automated_case_assessment(task, state)
                 action_log = task.get("case_action_log") or []
                 latest_action_log = action_log[-1] if isinstance(action_log, list) and action_log and isinstance(action_log[-1], dict) else {}
                 # The bottom Case Actions log is the source of truth for the
@@ -5212,138 +5398,99 @@ def case_details(task_id):
             st.markdown("</div>", unsafe_allow_html=True)
 
         # ---------------------------------------------------------------
-        # KNOWLEDGE BASE TAB — visual match to the supplied HPE KB reference
+        # KNOWLEDGE BASE TAB — CASE-MATCHED READER
         # ---------------------------------------------------------------
         with tab_kb:
-            # Product-family strip from the supplied Knowledge Base reference.
-            family_data = [
-                ("▣", "Compute", "ProLiant, iLO, Alletra", "HPE Compute"),
-                ("▦", "Networking", "Aruba Central, CX, AirWave", "Aruba Networking"),
-                ("▤", "Storage", "Alletra, StoreEasy", "HPE Storage"),
-                ("▰", "Software & Licensing", "Licensing, IMC, AOS", "HPE Licensing"),
-                ("◆", "Security", "ClearPass, NAC, Policy", "Aruba Security"),
-                ("⚙", "Support & Tools", "Support, Portal, Tools", "Support & Tools"),
-            ]
-            family_cols = st.columns(6, gap="small")
-            for idx, (icon, title, subtitle, family_query) in enumerate(family_data):
-                with family_cols[idx]:
-                    if st.button(
-                        f"{icon}  {title}\n{subtitle}",
-                        use_container_width=True,
-                        key=f"kb_family_{task_id}_{idx}",
-                    ):
-                        st.session_state[f"kb_family_query_{task_id}"] = family_query
-                        st.rerun()
-
-            family_query = text(st.session_state.get(f"kb_family_query_{task_id}"))
             auto_query = case_kb_query(task)
             query_key = f"kb_reference_query_{task_id}"
-            query_default = family_query or auto_query
+            suggestions_key = f"kb_suggestions_visible_{task_id}"
+            selected_kb_key = f"selected_kb_doc_{task_id}"
+            if suggestions_key not in st.session_state:
+                st.session_state[suggestions_key] = True
+
+            st.markdown(
+                "<div class='kb-panel-intro'><div class='kb-panel-title'>Knowledge Base</div>"
+                "<div class='kb-panel-sub'>Case-matched HPE and Aruba guidance. Results are ranked from the current case issue, product, station and category.</div></div>",
+                unsafe_allow_html=True,
+            )
+
             query = st.text_input(
                 "Knowledge Base Search",
-                value=query_default,
-                placeholder="Search the Knowledge Base...",
+                value=auto_query,
+                placeholder="Search the current case issue, product or SOP...",
                 key=query_key,
                 label_visibility="collapsed",
             )
             search_col, clear_col = st.columns([8, 1], gap="small")
             with search_col:
-                search_clicked = st.button("Search Knowledge Base  →", type="primary", use_container_width=True, key=f"kb_reference_search_{task_id}")
+                search_clicked = st.button(
+                    "Search Knowledge Base  →",
+                    type="primary",
+                    use_container_width=True,
+                    key=f"kb_reference_search_{task_id}",
+                )
             with clear_col:
-                if st.button("×", use_container_width=True, key=f"kb_reference_clear_{task_id}", help="Clear Knowledge Base search"):
-                    st.session_state.pop(f"kb_family_query_{task_id}", None)
-                    st.session_state.pop(query_key, None)
-                    st.rerun()
+                clear_clicked = st.button(
+                    "×",
+                    use_container_width=True,
+                    key=f"kb_reference_clear_{task_id}",
+                    help="Clear the Knowledge Base search",
+                )
 
-            suggested_questions = [
-                "What licensing model should I check for ArubaOS and Aruba Central managed AOS devices?",
-                "What are the main ClearPass licensing concepts and how do I activate them?",
-                "What information is needed for an HPE licensing escalation?",
-                "How does HPE IMC licensing work?",
-                "How do I check and manage licensing capacity in HPE Aruba Networking AirWave?",
-                "How do I add and validate an AirWave license?",
-                "What licenses are used with ArubaOS (AOS) and how are they consumed?",
-                "How do I add a ClearPass Policy Manager platform license?",
-                "How do I onboard a standalone AOS-S switch in HPE Aruba Networking Central?",
-                "How do I use the HPE Knowledge Base?",
-            ]
-            st.markdown("<div class='kb-suggested-title'>Suggested questions</div>", unsafe_allow_html=True)
-            question_cols = st.columns(2, gap="small")
-            for idx, question in enumerate(suggested_questions):
-                with question_cols[idx % 2]:
-                    if st.button(question, use_container_width=True, key=f"kb_suggested_{task_id}_{idx}"):
-                        st.session_state[query_key] = question
-                        st.rerun()
+            if clear_clicked:
+                st.session_state.pop(query_key, None)
+                st.session_state[suggestions_key] = True
+                active_query = auto_query
+            else:
+                active_query = text(query).strip() or auto_query
 
-            active_query = text(query).strip() or auto_query
+            # Suggested questions are generated ONLY from this case's strongest matches.
+            # They disappear as soon as the user selects one or submits a search.
+            case_match_results = search_kb(auto_query, limit=6)
+            suggestion_clicked = False
+            if st.session_state.get(suggestions_key, True) and case_match_results and not search_clicked:
+                suggestions = build_case_suggestions(task, case_match_results, limit=4)
+                if suggestions:
+                    st.markdown("<div class='kb-suggested-title'>Suggested questions for this case</div>", unsafe_allow_html=True)
+                    question_cols = st.columns(2, gap="small")
+                    for idx, suggested in enumerate(suggestions):
+                        with question_cols[idx % 2]:
+                            if st.button(
+                                suggested,
+                                use_container_width=True,
+                                key=f"kb_suggested_{task_id}_{idx}",
+                            ):
+                                active_query = suggested
+                                suggestion_clicked = True
+                                st.session_state[suggestions_key] = False
+
             if search_clicked:
                 active_query = text(query).strip() or auto_query
+                st.session_state[suggestions_key] = False
+            elif suggestion_clicked:
+                st.session_state[suggestions_key] = False
+
             results = search_kb(active_query, limit=8)
 
             if not results:
-                st.info("No matching Knowledge Base/SOP article found. Try a product, model, acronym, licensing term or issue.")
+                st.info("No matching Knowledge Base/SOP article was found for this case. Try the product, model, acronym or exact issue.")
             else:
-                selected_kb_key = f"selected_kb_doc_{task_id}"
+                # Submit or a suggested question always selects the highest match.
                 available_ids = {text(x.get("_id")) or text(x.get("title")) for x in results}
-                if st.session_state.get(selected_kb_key) not in available_ids:
-                    st.session_state[selected_kb_key] = text(results[0].get("_id")) or text(results[0].get("title"))
-                selected_id = st.session_state[selected_kb_key]
-                selected_doc = next((doc for doc in results if (text(doc.get("_id")) or text(doc.get("title"))) == selected_id), results[0])
+                stored_selected = st.session_state.get(selected_kb_key)
+                if stored_selected not in available_ids or search_clicked or suggestion_clicked:
+                    stored_selected = text(results[0].get("_id")) or text(results[0].get("title"))
+                    st.session_state[selected_kb_key] = stored_selected
 
-                st.markdown("<div class='kb-exact-answer-card'>", unsafe_allow_html=True)
-                st.markdown(
-                    f"<div class='kb-exact-answer-label'>✓  EXACT ANSWER</div>"
-                    f"<div class='kb-exact-answer-title'>{html.escape(text(selected_doc.get('title')) or 'Knowledge Base Article')}</div>",
-                    unsafe_allow_html=True,
+                selected_doc = next(
+                    (doc for doc in results if (text(doc.get("_id")) or text(doc.get("title"))) == stored_selected),
+                    results[0],
                 )
-                answer_tab, steps_tab, related_tab = st.tabs(["＋ Answer", "⚒ Troubleshooting steps", "↗ Related knowledge"])
-                with answer_tab:
-                    full_content = kb_content(selected_doc)
-                    st.markdown(
-                        f"<div class='kb-reference-answer'>{html.escape(full_content).replace(chr(10), '<br>')}</div>",
-                        unsafe_allow_html=True,
-                    )
-                    st.markdown("<div class='kb-reference-subhead'>Key points</div>", unsafe_allow_html=True)
-                    recommendation = local_kb_ai_answer(
-                        f"What is the best next action for this case? {case_kb_query(task)}",
-                        task,
-                        [selected_doc] + [doc for doc in results if doc is not selected_doc][:3],
-                    )
-                    answer = text(recommendation.get("answer"))
-                    st.markdown(
-                        f"<div class='kb-reference-answer'>{html.escape(answer).replace(chr(10), '<br>')}</div>",
-                        unsafe_allow_html=True,
-                    )
-                    source = text(selected_doc.get("source")) or text(selected_doc.get("source_type"))
-                    if source:
-                        st.markdown(f"<div class='kb-reference-source'>Source: {html.escape(source)}</div>", unsafe_allow_html=True)
-                with steps_tab:
-                    steps = [
-                        "Confirm the environment, product/model and required identifier.",
-                        "Capture the exact alert, error, licensing or customer symptom.",
-                        "Verify entitlement, configuration or support context before changing anything.",
-                        "Complete the applicable approved troubleshooting steps.",
-                        "Record evidence, outcome and the next action in Case Actions.",
-                    ]
-                    for idx, step in enumerate(steps, 1):
-                        st.markdown(f"<div class='kb-step'><span>{idx}</span><div>{html.escape(step)}</div></div>", unsafe_allow_html=True)
-                with related_tab:
-                    for idx, doc in enumerate(results[:6]):
-                        rid = text(doc.get("_id")) or text(doc.get("title")) or str(idx)
-                        title = text(doc.get("title")) or "Knowledge Base Article"
-                        category = text(doc.get("category")) or "Knowledge Base"
-                        if st.button(f"{idx + 1}. {title} · {category}", use_container_width=True, key=f"kb_related_{task_id}_{idx}_{sha256(rid)[:10]}"):
-                            st.session_state[selected_kb_key] = rid
-                            st.rerun()
-                st.markdown("<div class='kb-media-label'>RELATED VISUALS & MEDIA</div>", unsafe_allow_html=True)
-                st.markdown(
-                    "<div class='kb-media-placeholder'>HPE / Aruba Knowledge Base media and approved reference visuals appear here when they are attached to the selected SOP.</div>",
-                    unsafe_allow_html=True,
-                )
-                st.markdown("</div>", unsafe_allow_html=True)
 
-                st.markdown("<div class='kb-sop-list-title'>Matching SOPs</div>", unsafe_allow_html=True)
-                for idx, result in enumerate(results):
+                # Keep the matching-SOP list inside the same dialog. Clicking a
+                # result changes the selected document without closing the modal.
+                st.markdown("<div class='kb-sop-list-title'>Matching SOPs for this case</div>", unsafe_allow_html=True)
+                for idx, result in enumerate(results[:6]):
                     rid = text(result.get("_id")) or text(result.get("title")) or str(idx)
                     title = text(result.get("title")) or "Knowledge Base Article"
                     category = text(result.get("category")) or "Knowledge Base"
@@ -5355,14 +5502,57 @@ def case_details(task_id):
                         type="primary" if selected else "secondary",
                     ):
                         st.session_state[selected_kb_key] = rid
-                        st.rerun()
+                        st.session_state[suggestions_key] = False
+                        selected_doc = result
+
+                # Resolve the final selection after button interaction so the
+                # clicked SOP is rendered immediately and only once.
+                selected_id = st.session_state.get(selected_kb_key)
+                selected_doc = next(
+                    (doc for doc in results if (text(doc.get("_id")) or text(doc.get("title"))) == selected_id),
+                    results[0],
+                )
+
+                st.markdown(
+                    f"<div class='kb-selected-sop'>"
+                    f"<div class='kb-selected-label'>{'BEST MATCH FOR THIS CASE' if selected_doc is results[0] else 'SELECTED SOP'}</div>"
+                    f"<div class='kb-selected-sop-title'>{html.escape(text(selected_doc.get('title')) or 'Knowledge Base Article')}</div>"
+                    f"<div class='kb-selected-sop-meta'>{html.escape(text(selected_doc.get('category')) or 'HPE Knowledge Base')} · {html.escape(text(selected_doc.get('source')) or text(selected_doc.get('source_type')) or 'Caseflow')}</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+
+                st.markdown(
+                    f"<div class='kb-full-sop'><div class='kb-full-sop-label'>EXACT ANSWER</div>"
+                    f"<div class='kb-rich-content'>{kb_rich_html(kb_content(selected_doc))}</div></div>",
+                    unsafe_allow_html=True,
+                )
+
+                recommendation = local_kb_ai_answer(
+                    f"What is the best next action for this case? {active_query} {case_kb_query(task)}",
+                    task,
+                    [selected_doc] + [doc for doc in results if doc is not selected_doc][:3],
+                )
+                st.markdown(
+                    f"<div class='kb-recommendation'><div class='kb-full-sop-label'>RECOMMENDED GUIDANCE</div>"
+                    f"<div class='kb-rich-content'>{kb_rich_html(recommendation.get('answer'))}</div></div>",
+                    unsafe_allow_html=True,
+                )
+
+                steps = selected_doc.get("steps")
+                if steps:
+                    st.markdown("<div class='kb-sop-list-title'>Approved steps</div>", unsafe_allow_html=True)
+                    st.markdown(
+                        f"<div class='kb-full-sop'><div class='kb-rich-content'>{kb_rich_html(steps)}</div></div>",
+                        unsafe_allow_html=True,
+                    )
 
         # ---------------------------------------------------------------
         # COMMUNICATION TAB
         # ---------------------------------------------------------------
         with tab_comm:
             st.markdown("<div class='case-card communication-workspace-card'>", unsafe_allow_html=True)
-            st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>✉</span>Communication</div>", unsafe_allow_html=True)
+            st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>✦</span>Collaboration</div>", unsafe_allow_html=True)
 
             # -----------------------------------------------------------
             # WAR ROOM / MEETING RECORD
@@ -5372,6 +5562,23 @@ def case_details(task_id):
                 "<div class='meeting-panel-title'>War Room / Meeting</div>"
                 "<div class='meeting-panel-sub'>Create a meeting record, add the war-room link, tag participants, record attendance and capture agreed actions.</div>"
                 "</div>",
+                unsafe_allow_html=True,
+            )
+            latest_events = _case_update_events(task)
+            latest_event = max(latest_events, key=lambda x: x[0]) if latest_events else None
+            latest_text = text(latest_event[1]) if latest_event else "No live update has been recorded yet."
+            latest_actor = text(latest_event[2]) if latest_event and latest_event[2] else "Caseflow"
+            participants_preview = list(dict.fromkeys(CASEFLOW_ASSIGNEES + ([assigned_to] if assigned_to else [])))
+            participant_preview = participants_preview[:5] or [assigned_to]
+            participant_html = "".join(f"<span class='war-room-avatar'>{html.escape((text(name) or '?')[:1].upper())}</span>" for name in participant_preview if text(name))
+            st.markdown(
+                f"<div class='war-room-mock'>"
+                f"<div class='war-room-top'><div><span class='war-room-live-dot'></span><b>LIVE WAR ROOM</b><span class='war-room-case'>{html.escape(case_number)}</span></div><span class='war-room-status'>ACTIVE</span></div>"
+                f"<div class='war-room-grid'>"
+                f"<div><div class='war-room-label'>CURRENT FOCUS</div><div class='war-room-focus'>{html.escape(subject)}</div><div class='war-room-muted'>{html.escape(station_display_name(department))} · {html.escape(priority_label.title())}</div></div>"
+                f"<div><div class='war-room-label'>PARTICIPANTS</div><div class='war-room-avatars'>{participant_html}</div><div class='war-room-muted'>{len(participant_preview)} people in collaboration</div></div>"
+                f"<div><div class='war-room-label'>MOST RECENT UPDATE</div><div class='war-room-update'>{html.escape(latest_text[:190])}</div><div class='war-room-muted'>by {html.escape(latest_actor)}</div></div>"
+                f"</div></div>",
                 unsafe_allow_html=True,
             )
 
@@ -5639,14 +5846,30 @@ div[data-testid="stDialog"] .meeting-record {
     line-height:1.35 !important;
 }
 
-/* Station buttons: clean names only — no bullet/check prefix. */
+/* Station buttons: compact checklist station switcher. */
 div[data-testid="stDialog"] [class*="st-key-select_action_station_"] button {
-    font-size:11px !important;
-    font-weight:650 !important;
-    min-height:34px !important;
-    height:34px !important;
-    padding:5px 10px !important;
-    border-radius:8px !important;
+    font-size:9.5px !important;
+    font-weight:700 !important;
+    min-height:28px !important;
+    height:28px !important;
+    padding:3px 7px !important;
+    border-radius:6px !important;
+    line-height:1 !important;
+    white-space:nowrap !important;
+}
+
+/* Tight checklist rows so the required-task list stays compact. */
+div[data-testid="stDialog"] .case-card [data-testid="stCheckbox"] {
+    margin-top:-5px !important;
+    margin-bottom:-8px !important;
+}
+div[data-testid="stDialog"] .case-card [data-testid="stCheckbox"] label {
+    font-size:10px !important;
+    line-height:1.2 !important;
+}
+div[data-testid="stDialog"] .case-card [class*="st-key-case_checklist_remove_"] {
+    margin-top:-6px !important;
+    margin-bottom:-8px !important;
 }
 
 /* Checklist delete control. */
@@ -5918,24 +6141,30 @@ def dashboard_fragment():
             "station_warning_silenced",
             set(),
         )
+        warning_latched = st.session_state.setdefault(
+            "station_warning_latched",
+            set(),
+        )
 
 
-        if nearing == 0:
-            warning_ack_until.pop(station, None)
+        warning_condition = (nearing > 0 or past_due > 0)
+        if warning_condition and station not in warning_silenced:
+            warning_latched.add(station)
+        elif not warning_condition:
+            # A silenced warning cycle is cleared only after the underlying
+            # warning condition has cleared, allowing a future warning to latch.
             warning_silenced.discard(station)
 
 
-        ack_until = float(
-            warning_ack_until.get(station, 0.0) or 0.0
-        )
+        ack_until = 0.0
         now_epoch = time.time()
 
 
-        # A warning tile flashes only until the user clicks it.
-        # Clicking the tile silences the flashing immediately and keeps it
-        # silent until the current nearing-due condition clears.
+        # Once a station starts flashing, the alert remains latched until the
+        # user clicks that station tile. It does not stop merely because the
+        # case crosses from nearing-due into breached.
         flash_tile = (
-            nearing > 0
+            station in warning_latched
             and station not in warning_silenced
         )
 
@@ -5984,7 +6213,7 @@ def dashboard_fragment():
                     f'<span class="station-active">Active Cases</span>'
                     f'</div></div>'
                     f'<div class="station-arrow">›</div>'
-                    f'<div class="station-warning{" active" if nearing > 0 else ""}">◷ &nbsp; {nearing} nearing due{("  •  " + str(past_due) + " past due") if past_due else ""}</div>'
+                    f'<div class="station-warning{" active" if warning_condition else ""}">◷ &nbsp; {nearing} nearing due{("  •  " + str(past_due) + " past due") if past_due else ""}</div>'
                     f'<div class="station-sla-ref">◷ &nbsp; Max Timeframe: <strong>{html.escape(sla_text)}</strong></div>'
                     f'</div>'
                 )
@@ -5994,12 +6223,13 @@ def dashboard_fragment():
                     key=f"station_{station}",
                     use_container_width=True,
                 ):
-                    if nearing > 0:
-                        # Stop the tile warning immediately on click.
-                        # Keep it silent until the current nearing-due condition
-                        # clears and a new warning cycle begins.
+                    if station in warning_latched or warning_condition:
+                        # Stop the tile warning immediately on click. The latch
+                        # is cleared here; it will only start again on a future
+                        # warning cycle after the underlying condition clears.
                         warning_ack_until[station] = 0.0
                         warning_silenced.add(station)
+                        warning_latched.discard(station)
                         acknowledge_station_alerts(station)
 
 
@@ -6519,14 +6749,8 @@ def dashboard_fragment():
                 const nowMs = Date.now();
 
 
-                document.querySelectorAll('.station-card-visual[data-warning-stop]').forEach(function (card) {
-                    const stopAt = Number(card.getAttribute("data-warning-stop") || "0") * 1000;
-                    if (stopAt > 0 && nowMs >= stopAt) {
-                        card.classList.remove("critical");
-                        const icon = card.querySelector(".station-alert-icon");
-                        if (icon) icon.classList.add("warning-muted");
-                    }
-                });
+                // Flashing is latched server-side and may only be stopped by
+                // clicking the station tile. Do not time it out in the browser.
             }
 
 
@@ -6770,11 +6994,11 @@ div[data-testid="stDialog"] .action-readonly-value,
 div[data-testid="stDialog"] .resolution-value { font-size:11px !important; }
 
 /* Compact select/dropdown controls so they do not consume large vertical space. */
-div[data-testid="stDialog"] [data-testid="stSelectbox"] { margin:3px 0 4px !important; }
-div[data-testid="stDialog"] [data-testid="stSelectbox"] label { font-size:10px !important; margin-bottom:2px !important; }
-div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] > div { min-height:32px !important; height:32px !important; padding-top:0 !important; padding-bottom:0 !important; border-radius:6px !important; }
-div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] span { font-size:10.5px !important; line-height:30px !important; }
-div[data-testid="stDialog"] [data-testid="stSelectbox"] svg { width:14px !important; height:14px !important; }
+div[data-testid="stDialog"] [data-testid="stSelectbox"] { margin:1px 0 2px !important; }
+div[data-testid="stDialog"] [data-testid="stSelectbox"] label { font-size:9px !important; margin-bottom:1px !important; line-height:1.1 !important; }
+div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] > div { min-height:28px !important; height:28px !important; padding-top:0 !important; padding-bottom:0 !important; border-radius:5px !important; }
+div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] span { font-size:9.5px !important; line-height:26px !important; }
+div[data-testid="stDialog"] [data-testid="stSelectbox"] svg { width:12px !important; height:12px !important; }
 
 /* Logged action plan / note card. */
 div[data-testid="stDialog"] .case-action-log-card { margin-top:9px !important; padding:9px 11px !important; }
@@ -6784,37 +7008,226 @@ div[data-testid="stDialog"] .action-log-meta { color:#64748b !important; font-si
 div[data-testid="stDialog"] .resolution-log-meta { color:#64748b !important; font-size:9px !important; margin-top:5px !important; }
 
 /* ============================================================
-   KNOWLEDGE BASE — MATCH THE SUPPLIED REFERENCE IMAGE
+   KNOWLEDGE BASE — CLEAN WHITE CASE-MATCHED READER
    ============================================================ */
-div[data-testid="stDialog"] .kb-exact-answer-card {
-    border:1px solid #00a98f !important;
-    border-radius:8px !important;
+div[data-testid="stDialog"] .kb-panel-intro {
     background:#fff !important;
-    padding:9px 10px 10px !important;
-    margin-top:8px !important;
+    border:1px solid #e3eaf1 !important;
+    border-radius:7px !important;
+    padding:8px 10px !important;
+    margin-bottom:7px !important;
 }
-div[data-testid="stDialog"] .kb-exact-answer-label { color:#00a98f !important; font-size:8px !important; font-weight:900 !important; letter-spacing:.5px !important; }
-div[data-testid="stDialog"] .kb-exact-answer-title { color:#17445b !important; font-size:11px !important; font-weight:800 !important; margin-top:2px !important; }
-div[data-testid="stDialog"] .kb-exact-answer-card [data-baseweb="tab-list"] { border-bottom:1px solid #00a98f !important; margin-top:8px !important; }
-div[data-testid="stDialog"] .kb-exact-answer-card [data-baseweb="tab"] { background:#dff7f4 !important; color:#008f80 !important; border:1px solid #00a98f !important; border-bottom:0 !important; border-radius:6px 6px 0 0 !important; font-size:8px !important; font-weight:800 !important; padding:6px 8px !important; }
-div[data-testid="stDialog"] .kb-exact-answer-card [aria-selected="true"] { background:#fff !important; color:#007b71 !important; }
-div[data-testid="stDialog"] .kb-reference-answer { color:#334155 !important; font-size:10px !important; line-height:1.45 !important; padding:7px 3px !important; }
-div[data-testid="stDialog"] .kb-reference-subhead { color:#008f80 !important; font-size:8px !important; font-weight:900 !important; text-transform:uppercase !important; margin:7px 0 2px !important; }
-div[data-testid="stDialog"] .kb-reference-source { color:#64748b !important; font-size:8px !important; margin-top:5px !important; }
-div[data-testid="stDialog"] .kb-step { display:flex !important; gap:7px !important; align-items:flex-start !important; padding:7px 4px !important; border-bottom:1px solid #edf2f5 !important; color:#334155 !important; font-size:10px !important; }
-div[data-testid="stDialog"] .kb-step span { width:19px !important; height:19px !important; border-radius:50% !important; background:#00a98f !important; color:#fff !important; display:flex !important; align-items:center !important; justify-content:center !important; flex:none !important; font-size:9px !important; font-weight:800 !important; }
-div[data-testid="stDialog"] .kb-media-label { color:#008f80 !important; font-size:8px !important; font-weight:900 !important; margin:8px 0 4px !important; }
-div[data-testid="stDialog"] .kb-media-placeholder { border:1px solid #d6e4e8 !important; border-radius:6px !important; background:#f7fbfc !important; color:#64748b !important; padding:12px !important; font-size:9px !important; text-align:center !important; }
-div[data-testid="stDialog"] .kb-suggested-title { color:#008f80 !important; font-size:8px !important; font-weight:900 !important; text-transform:uppercase !important; text-align:center !important; margin:8px 0 4px !important; }
-div[data-testid="stDialog"] [class*="st-key-kb_suggested_"] button { border:0 !important; background:transparent !important; color:#008f80 !important; font-size:8px !important; line-height:1.25 !important; padding:3px 5px !important; min-height:22px !important; height:auto !important; white-space:normal !important; }
-div[data-testid="stDialog"] [class*="st-key-kb_family_"] button { height:48px !important; min-height:48px !important; padding:5px 6px !important; border:1.5px solid #00a98f !important; border-radius:8px !important; background:#fff !important; color:#17445b !important; font-size:8px !important; line-height:1.15 !important; text-align:left !important; box-shadow:0 1px 3px rgba(0,0,0,.04) !important; }
-div[data-testid="stDialog"] [class*="st-key-kb_family_"] button:hover { background:#effcf9 !important; }
-div[data-testid="stDialog"] [class*="st-key-kb_reference_query_"] input { height:34px !important; min-height:34px !important; border:1px solid #00a98f !important; border-radius:6px !important; font-size:10px !important; box-shadow:none !important; }
-div[data-testid="stDialog"] [class*="st-key-kb_reference_search_"] button { height:34px !important; min-height:34px !important; border-radius:6px !important; background:#00a98f !important; border-color:#00a98f !important; font-size:9px !important; }
-div[data-testid="stDialog"] [class*="st-key-kb_reference_clear_"] button { height:34px !important; min-height:34px !important; border-radius:6px !important; font-size:13px !important; }
-div[data-testid="stDialog"] .kb-sop-list-title { color:#008f80 !important; font-size:9px !important; font-weight:900 !important; margin:9px 0 4px !important; }
-div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] button,
-div[data-testid="stDialog"] [class*="st-key-kb_related_"] button { min-height:30px !important; height:30px !important; padding:5px 8px !important; border-radius:6px !important; font-size:9px !important; text-align:left !important; }
+div[data-testid="stDialog"] .kb-panel-title {
+    color:#102041 !important;
+    font-size:12px !important;
+    font-weight:850 !important;
+}
+div[data-testid="stDialog"] .kb-panel-sub {
+    color:#64748b !important;
+    font-size:9.5px !important;
+    line-height:1.35 !important;
+    margin-top:2px !important;
+}
+div[data-testid="stDialog"] .kb-suggested-title {
+    color:#008f80 !important;
+    font-size:8px !important;
+    font-weight:850 !important;
+    letter-spacing:.45px !important;
+    text-transform:uppercase !important;
+    margin:6px 0 3px !important;
+}
+div[data-testid="stDialog"] [class*="st-key-kb_suggested_"] button {
+    border:1px solid #dce8e7 !important;
+    background:#fff !important;
+    color:#176b67 !important;
+    font-size:9px !important;
+    line-height:1.2 !important;
+    padding:5px 7px !important;
+    min-height:27px !important;
+    height:auto !important;
+    white-space:normal !important;
+    text-align:left !important;
+    border-radius:6px !important;
+}
+div[data-testid="stDialog"] [class*="st-key-kb_suggested_"] button:hover {
+    background:#f2fbf9 !important;
+    border-color:#00a98f !important;
+}
+div[data-testid="stDialog"] .kb-selected-sop {
+    padding:8px 10px !important;
+    border-left:3px solid #00a98f !important;
+    border-top:1px solid #e1e8ee !important;
+    border-right:1px solid #e1e8ee !important;
+    border-bottom:1px solid #e1e8ee !important;
+    background:#fff !important;
+    border-radius:6px !important;
+    margin-top:7px !important;
+}
+div[data-testid="stDialog"] .kb-selected-label {
+    color:#008f80 !important;
+    font-size:8px !important;
+    font-weight:900 !important;
+    letter-spacing:.45px !important;
+}
+div[data-testid="stDialog"] .kb-selected-sop-title {
+    color:#102041 !important;
+    font-size:12px !important;
+    line-height:1.25 !important;
+    font-weight:800 !important;
+    margin-top:2px !important;
+}
+div[data-testid="stDialog"] .kb-selected-sop-meta {
+    color:#64748b !important;
+    font-size:8.5px !important;
+    line-height:1.3 !important;
+    margin-top:3px !important;
+}
+div[data-testid="stDialog"] .kb-full-sop,
+div[data-testid="stDialog"] .kb-recommendation {
+    padding:9px 11px !important;
+    background:#fff !important;
+    border:1px solid #e0e7ee !important;
+    border-radius:6px !important;
+    margin-top:6px !important;
+    color:#263957 !important;
+}
+div[data-testid="stDialog"] .kb-recommendation {
+    background:#fbfefd !important;
+    border-left:3px solid #00a98f !important;
+}
+div[data-testid="stDialog"] .kb-full-sop-label {
+    font-size:8px !important;
+    font-weight:850 !important;
+    letter-spacing:.45px !important;
+    color:#087b71 !important;
+    margin-bottom:5px !important;
+}
+div[data-testid="stDialog"] .kb-rich-content {
+    color:#263957 !important;
+    font-size:10px !important;
+    line-height:1.45 !important;
+}
+div[data-testid="stDialog"] .kb-rich-content p {
+    margin:0 0 6px !important;
+}
+div[data-testid="stDialog"] .kb-rich-content p:last-child {
+    margin-bottom:0 !important;
+}
+div[data-testid="stDialog"] .kb-rich-content ul,
+div[data-testid="stDialog"] .kb-rich-content ol {
+    margin:2px 0 7px 17px !important;
+    padding:0 !important;
+}
+div[data-testid="stDialog"] .kb-rich-content li {
+    margin:0 0 3px !important;
+    padding-left:2px !important;
+}
+div[data-testid="stDialog"] .kb-content-heading {
+    color:#008f80 !important;
+    font-size:9px !important;
+    font-weight:850 !important;
+    letter-spacing:.25px !important;
+    margin:7px 0 3px !important;
+}
+div[data-testid="stDialog"] .kb-content-heading:first-child {
+    margin-top:0 !important;
+}
+div[data-testid="stDialog"] .kb-sop-list-title {
+    color:#102041 !important;
+    font-size:9px !important;
+    font-weight:850 !important;
+    margin:8px 0 4px !important;
+}
+div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] button {
+    min-height:28px !important;
+    height:28px !important;
+    padding:4px 7px !important;
+    border-radius:5px !important;
+    font-size:9px !important;
+    line-height:1.15 !important;
+    text-align:left !important;
+}
+
+/* Collaboration / war room mockup. */
+div[data-testid="stDialog"] .war-room-mock {
+    background:#fff !important;
+    border:1px solid #dbe5ed !important;
+    border-radius:8px !important;
+    padding:8px 10px !important;
+    margin:0 0 9px !important;
+}
+div[data-testid="stDialog"] .war-room-top {
+    display:flex !important;
+    justify-content:space-between !important;
+    align-items:center !important;
+    gap:8px !important;
+    color:#102041 !important;
+    font-size:9px !important;
+}
+div[data-testid="stDialog"] .war-room-live-dot {
+    display:inline-block !important;
+    width:7px !important;
+    height:7px !important;
+    border-radius:50% !important;
+    background:#00a98f !important;
+    margin-right:5px !important;
+}
+div[data-testid="stDialog"] .war-room-case {
+    color:#64748b !important;
+    margin-left:7px !important;
+    font-weight:600 !important;
+}
+div[data-testid="stDialog"] .war-room-status {
+    color:#087b71 !important;
+    background:#e7faf5 !important;
+    border-radius:999px !important;
+    padding:3px 6px !important;
+    font-size:7.5px !important;
+    font-weight:850 !important;
+}
+div[data-testid="stDialog"] .war-room-grid {
+    display:grid !important;
+    grid-template-columns:1.3fr .8fr 1.4fr !important;
+    gap:8px !important;
+    margin-top:7px !important;
+}
+div[data-testid="stDialog"] .war-room-label {
+    color:#64748b !important;
+    font-size:7px !important;
+    font-weight:850 !important;
+    letter-spacing:.35px !important;
+}
+div[data-testid="stDialog"] .war-room-focus,
+div[data-testid="stDialog"] .war-room-update {
+    color:#243858 !important;
+    font-size:9px !important;
+    line-height:1.25 !important;
+    margin-top:2px !important;
+}
+div[data-testid="stDialog"] .war-room-muted {
+    color:#7a8798 !important;
+    font-size:7.5px !important;
+    margin-top:2px !important;
+}
+div[data-testid="stDialog"] .war-room-avatars {
+    display:flex !important;
+    align-items:center !important;
+    margin-top:3px !important;
+}
+div[data-testid="stDialog"] .war-room-avatar {
+    width:22px !important;
+    height:22px !important;
+    border-radius:50% !important;
+    display:inline-flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    margin-right:-3px !important;
+    background:#dff5ef !important;
+    color:#087b71 !important;
+    border:2px solid #fff !important;
+    font-size:8px !important;
+    font-weight:850 !important;
+}
 
 /* Compact station buttons and checklist controls. */
 div[data-testid="stDialog"] [class*="st-key-select_action_station_"] button { min-height:32px !important; height:32px !important; padding:4px 7px !important; font-size:10px !important; }
