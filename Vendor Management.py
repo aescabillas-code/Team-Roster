@@ -3402,60 +3402,6 @@ def acknowledge_station_alerts(station):
     )
 
 
-def station_warning_signature(station_tasks, station_states):
-    ids = []
-    for task, state in zip(station_tasks, station_states):
-        if state.get("nearing_due") or state.get("past_due"):
-            ids.append(str(task.get("_id")))
-    return sha256("|".join(sorted(ids))) if ids else ""
-
-
-def load_station_warning_acknowledgements():
-    try:
-        docs = col(ALERT_COLLECTION).find(
-            {"alert_type": "STATION_TILE", "acknowledged": True, "active": True},
-            {"station": 1, "warning_signature": 1},
-        )
-        return {
-            (station_name(d.get("station")), text(d.get("warning_signature")))
-            for d in docs
-            if text(d.get("station")) and text(d.get("warning_signature"))
-        }
-    except Exception:
-        return set()
-
-
-def persist_station_warning_ack(station, signature):
-    if not signature:
-        return
-    try:
-        col(ALERT_COLLECTION).update_one(
-            {"alert_type": "STATION_TILE", "station": station, "warning_signature": signature},
-            {
-                "$set": {
-                    "acknowledged": True,
-                    "active": True,
-                    "acknowledged_at": utc_now(),
-                },
-                "$setOnInsert": {
-                    "created_at": utc_now(),
-                    "message": f"Station warning acknowledged for {station}.",
-                },
-            },
-            upsert=True,
-        )
-    except Exception:
-        pass
-
-
-def clear_station_warning_cycle(station):
-    try:
-        col(ALERT_COLLECTION).update_many(
-            {"alert_type": "STATION_TILE", "station": station, "active": True},
-            {"$set": {"active": False}},
-        )
-    except Exception:
-        pass
 
 
 def scan_alerts(tasks):
@@ -3784,8 +3730,9 @@ def import_cases_excel(uploaded_file, replace_existing_excel=False):
 
 
             priority = text(row.get("priority")) or "Low"
-            raw_account_priority = text(row.get("account_priority"))
-            account_priority = raw_account_priority or "No"
+            account_priority = (
+                "Yes" if is_priority(row.get("account_priority")) else "No"
+            )
 
 
             active = parse_bool(row.get("active"), True)
@@ -3924,7 +3871,6 @@ def checklist_missing(task, station=None):
 
 
 def save_case_station_checklist(task_id, station, items):
-    """Persist checklist state and log a completed station checklist once per cycle."""
     station = station_name(station)
     clean_items = []
     for item in items:
@@ -3937,43 +3883,13 @@ def save_case_station_checklist(task_id, station, items):
 
     try:
         from bson import ObjectId
-        now = utc_now()
-        oid = ObjectId(str(task_id))
-        existing = col(TASKS_COLLECTION).find_one(
-            {"_id": oid},
-            {"history": 1, "notes": 1}
-        ) or {}
-
-        completed = [x["item"] for x in clean_items if x.get("checked")]
-        all_complete = bool(clean_items) and len(completed) == len(clean_items)
-        history = list(existing.get("history") or [])
-        marker = f"Station checklist completed — {station}"
-        already_logged = any(
-            isinstance(event, dict) and text(event.get("action")).startswith(marker)
-            for event in history[-30:]
+        col(TASKS_COLLECTION).update_one(
+            {"_id": ObjectId(str(task_id))},
+            {"$set": {
+                f"station_checklists.{station}": clean_items,
+                "last_update": utc_now(),
+            }},
         )
-
-        update_doc = {
-            f"station_checklists.{station}": clean_items,
-            "last_update": now,
-        }
-
-        if all_complete and not already_logged:
-            bullet_text = "\n".join(f"• {item}" for item in completed)
-            checklist_note = f"{station_display_name(station)} checklist completed:\n{bullet_text}"
-            history.append({
-                "action": f"{marker}:\n{bullet_text}",
-                "timestamp": now,
-                "actor": "Caseflow",
-            })
-            previous_note = text(existing.get("notes"))
-            update_doc["notes"] = (
-                f"{previous_note}\n\n{checklist_note}" if previous_note else checklist_note
-            )
-            update_doc["current_update"] = checklist_note
-            update_doc["history"] = history[-50:]
-
-        col(TASKS_COLLECTION).update_one({"_id": oid}, {"$set": update_doc})
         clear_task_cache()
         return True
     except Exception:
@@ -5100,8 +5016,6 @@ def case_details(task_id):
     account_name = text(task.get("account_name")) or "—"
     case_type = text(task.get("case_type")) or text(task.get("category")) or "—"
     related_system = text(task.get("related_system")) or text(task.get("product")) or "—"
-    account_priority_value = text(task.get("account_priority")) or "Normal"
-    account_priority_label = "High" if is_priority(account_priority_value) else account_priority_value.title()
     last_update = dt_display(task.get("last_update")) or "—"
     created = dt_display(task.get("created_at")) or "—"
     due = dt_display(task.get("due_date")) or "—"
@@ -5144,7 +5058,7 @@ def case_details(task_id):
                             <span class="badge {priority_class} case-priority-badge">{html.escape(priority_label.title())}</span>
                         </div>
                         <div class="case-detail-subject">{html.escape(subject)}</div>
-                        <div class="case-detail-account-line"><span>Account</span><strong>{html.escape(account_name)}</strong><span>Account Priority</span><strong class="account-priority-value">{html.escape(account_priority_label)}</strong></div>
+                        <div class="case-detail-description">{html.escape(description)}</div>
                     </div>
                 </div>
                 <div class="case-detail-timing">
@@ -5172,11 +5086,15 @@ def case_details(task_id):
     st.markdown(
         f"""
         <div class="case-summary-strip">
-            <div class="case-summary-cell"><span>Assigned To</span><strong>{html.escape(assigned_to)}</strong></div>
+            <div class="case-summary-cell case-assignee">
+                <div class="case-avatar">{html.escape(initials.upper())}</div>
+                <div class="case-assignee-copy"><span>Assigned To</span><strong>{html.escape(assigned_to)}</strong></div>
+            </div>
             <div class="case-summary-cell"><span>Priority</span><strong class="priority-text">{html.escape(priority_label.title())}</strong></div>
             <div class="case-summary-cell"><span>Current Status</span><strong><span class="case-status-chip">{html.escape(status)}</span></strong></div>
             <div class="case-summary-cell"><span>Last Update</span><strong>{html.escape(last_update)}</strong></div>
             <div class="case-summary-cell"><span>Case Type</span><strong>{html.escape(case_type)}</strong></div>
+            <div class="case-summary-cell"><span>Account</span><strong>{html.escape(account_name)}</strong></div>
             <div class="case-summary-cell"><span>Related System</span><strong>{html.escape(related_system)}</strong></div>
         </div>
         """,
@@ -5206,9 +5124,8 @@ def case_details(task_id):
                 rows = [
                     ("Case #", case_number),
                     ("Subject", subject),
+                    ("Description", description),
                     ("Priority", priority_label.title()),
-                    ("Account", account_name),
-                    ("Account Priority", account_priority_label),
                     ("Assigned To", assigned_to),
                     ("Due Date", due),
                     ("Created Date", created),
@@ -5216,6 +5133,7 @@ def case_details(task_id):
                     ("Current Status", status),
                     ("Case Category", text(task.get("category")) or "—"),
                     ("Product / Device", text(task.get("product")) or related_system),
+                    ("Client", account_name),
                     ("Related System", related_system),
                     ("Site / Location", text(task.get("site_location")) or "—"),
                     ("Reference Number", text(task.get("reference_number")) or "—"),
@@ -5273,7 +5191,7 @@ def case_details(task_id):
                     else:
                         action, stamp, actor = text(event), "", "System"
                     st.markdown(
-                        f"<div class='history-row'><div class='history-dot'></div><div class='history-main'><div class='history-meta'>{html.escape(stamp)} <span>{html.escape(actor)}</span></div><div class='history-action'>{html.escape(action).replace(chr(10), '<br>')}</div></div></div>",
+                        f"<div class='history-row'><div class='history-dot'></div><div class='history-main'><div class='history-meta'>{html.escape(stamp)} <span>{html.escape(actor)}</span></div><div class='history-action'>{html.escape(action)}</div></div></div>",
                         unsafe_allow_html=True,
                     )
             else:
@@ -5358,8 +5276,27 @@ def case_details(task_id):
                 st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>☑</span>Station Task Checklists</div>", unsafe_allow_html=True)
                 st.caption("Select a station to review or complete its required tasks. The checklist for the current station is the transfer/reassignment gate.")
 
-                # Only show the checklist for the case's CURRENT station.
-                selected_check_station = current
+                selected_key = f"action_checklist_station_{task_id}"
+                if selected_key not in st.session_state or st.session_state[selected_key] not in stations:
+                    st.session_state[selected_key] = current
+                selected_check_station = st.session_state[selected_key]
+
+                status_cols = st.columns(5, gap="small")
+                for idx, station in enumerate(stations):
+                    station_items = get_case_station_checklist(task, station)
+                    complete = bool(station_items) and all(bool(x.get("checked")) for x in station_items)
+                    button_label = station_display_name(station)
+                    with status_cols[idx]:
+                        if st.button(
+                            button_label,
+                            use_container_width=True,
+                            key=f"select_action_station_{task_id}_{station}",
+                            type="primary" if selected_check_station == station else "secondary",
+                        ):
+                            st.session_state[selected_key] = station
+                            st.rerun()
+
+                selected_check_station = st.session_state[selected_key]
                 selected_items = get_case_station_checklist(task, selected_check_station)
                 selected_missing = [x.get("item") for x in selected_items if not bool(x.get("checked"))]
                 complete_class = "complete" if not selected_missing else "pending"
@@ -5586,8 +5523,19 @@ def case_details(task_id):
                 )
 
                 st.markdown(
-                    f"<div class='kb-full-sop'><div class='kb-full-sop-label'>BEST MATCH — ANSWER</div>"
+                    f"<div class='kb-full-sop'><div class='kb-full-sop-label'>EXACT ANSWER</div>"
                     f"<div class='kb-rich-content'>{kb_rich_html(kb_content(selected_doc))}</div></div>",
+                    unsafe_allow_html=True,
+                )
+
+                recommendation = local_kb_ai_answer(
+                    f"What is the best next action for this case? {active_query} {case_kb_query(task)}",
+                    task,
+                    [selected_doc] + [doc for doc in results if doc is not selected_doc][:3],
+                )
+                st.markdown(
+                    f"<div class='kb-recommendation'><div class='kb-full-sop-label'>RECOMMENDED GUIDANCE</div>"
+                    f"<div class='kb-rich-content'>{kb_rich_html(recommendation.get('answer'))}</div></div>",
                     unsafe_allow_html=True,
                 )
 
@@ -5623,54 +5571,16 @@ def case_details(task_id):
             participants_preview = list(dict.fromkeys(CASEFLOW_ASSIGNEES + ([assigned_to] if assigned_to else [])))
             participant_preview = participants_preview[:5] or [assigned_to]
             participant_html = "".join(f"<span class='war-room-avatar'>{html.escape((text(name) or '?')[:1].upper())}</span>" for name in participant_preview if text(name))
-            war_room_open_key = f"war_room_open_{task_id}"
-            if war_room_open_key not in st.session_state:
-                st.session_state[war_room_open_key] = False
-
-            # Exact visible tile is clickable; details appear only after opening.
-            with st.container(key=f"war_room_tile_{task_id}"):
-                st.markdown(
-                    f"<div class='war-room-mock war-room-clickable'>"
-                    f"<div class='war-room-top'><div><span class='war-room-live-dot'></span><b>LIVE WAR ROOM</b><span class='war-room-case'>{html.escape(case_number)}</span></div><span class='war-room-status'>{'OPEN' if st.session_state[war_room_open_key] else 'CLICK TO EXPAND'}</span></div>"
-                    f"<div class='war-room-collapsed-line'>{html.escape(subject)} <span>· {html.escape(station_display_name(department))}</span></div>"
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
-                if st.button("Open War Room", use_container_width=True, key=f"open_war_room_{task_id}"):
-                    st.session_state[war_room_open_key] = True
-                    st.rerun()
-
-            if st.session_state.get(war_room_open_key):
-                mock_link = f"https://meet.caseflow.local/war-room/{html.escape(case_number, quote=True)}"
-                st.markdown(
-                    f"<div class='war-room-expanded'>"
-                    f"<div class='war-room-expanded-head'><b>WAR ROOM DETAILS</b><span>ACTIVE</span></div>"
-                    f"<div class='war-room-expanded-grid'>"
-                    f"<div><div class='war-room-label'>CURRENT ATTENDEES</div><div class='war-room-avatars'>{participant_html}</div><div class='war-room-muted'>{len(participant_preview)} people in collaboration</div></div>"
-                    f"<div><div class='war-room-label'>WAR ROOM LINK</div><a class='war-room-link' href='{mock_link}' target='_blank' rel='noopener noreferrer'>Open mock war room</a></div>"
-                    f"</div></div>",
-                    unsafe_allow_html=True,
-                )
-                if st.button("Close War Room", use_container_width=True, key=f"close_war_room_{task_id}"):
-                    try:
-                        from bson import ObjectId
-                        now = utc_now()
-                        attendees_text = ", ".join(text(x) for x in participant_preview if text(x)) or "None"
-                        history = list(task.get("history") or [])
-                        history.append({
-                            "action": f"War Room closed:\n• Attendees: {attendees_text}\n• Link: {mock_link}",
-                            "timestamp": now,
-                            "actor": assigned_to or "Caseflow",
-                        })
-                        col(TASKS_COLLECTION).update_one(
-                            {"_id": ObjectId(str(task_id))},
-                            {"$set": {"history": history[-50:], "last_update": now}},
-                        )
-                        clear_task_cache()
-                        st.session_state[war_room_open_key] = False
-                        st.rerun()
-                    except Exception as exc:
-                        st.error(f"Unable to close war room: {exc}")
+            st.markdown(
+                f"<div class='war-room-mock'>"
+                f"<div class='war-room-top'><div><span class='war-room-live-dot'></span><b>LIVE WAR ROOM</b><span class='war-room-case'>{html.escape(case_number)}</span></div><span class='war-room-status'>ACTIVE</span></div>"
+                f"<div class='war-room-grid'>"
+                f"<div><div class='war-room-label'>CURRENT FOCUS</div><div class='war-room-focus'>{html.escape(subject)}</div><div class='war-room-muted'>{html.escape(station_display_name(department))} · {html.escape(priority_label.title())}</div></div>"
+                f"<div><div class='war-room-label'>PARTICIPANTS</div><div class='war-room-avatars'>{participant_html}</div><div class='war-room-muted'>{len(participant_preview)} people in collaboration</div></div>"
+                f"<div><div class='war-room-label'>MOST RECENT UPDATE</div><div class='war-room-update'>{html.escape(latest_text[:190])}</div><div class='war-room-muted'>by {html.escape(latest_actor)}</div></div>"
+                f"</div></div>",
+                unsafe_allow_html=True,
+            )
 
             meeting_link_key = f"meeting_link_{task_id}"
             meeting_tags_key = f"meeting_tags_{task_id}"
@@ -6182,7 +6092,7 @@ def dashboard_fragment():
     # --------------------------------------------------------
 
 
-    station_cols = st.columns(5, gap="small")
+    station_cols = st.columns(5)
 
 
     for index, station in enumerate(STATIONS):
@@ -6221,45 +6131,40 @@ def dashboard_fragment():
         # A tile flashes ONLY while at least one case is in the final
         # 20% of this station's SLA. Priority-account status alone does not
         # trigger the tile animation.
-        warning_ack_until = st.session_state.setdefault("station_warning_ack_until", {})
-        warning_silenced = st.session_state.setdefault("station_warning_silenced", set())
-        warning_latched = st.session_state.setdefault("station_warning_latched", set())
-
-        warning_condition = (nearing > 0 or past_due > 0)
-        warning_signature = station_warning_signature(station_tasks, station_states)
-
-        persistent_acks = st.session_state.get("_station_warning_ack_cache")
-        cache_at = float(st.session_state.get("_station_warning_ack_cache_at", 0.0) or 0.0)
-        if persistent_acks is None or (time.time() - cache_at) > 1.0:
-            persistent_acks = load_station_warning_acknowledgements()
-            st.session_state["_station_warning_ack_cache"] = persistent_acks
-            st.session_state["_station_warning_ack_cache_at"] = time.time()
-
-        persisted_ack = (
-            warning_condition
-            and bool(warning_signature)
-            and (station, warning_signature) in persistent_acks
+        warning_ack_until = st.session_state.setdefault(
+            "station_warning_ack_until",
+            {},
         )
 
-        if warning_condition and not persisted_ack:
+
+        warning_silenced = st.session_state.setdefault(
+            "station_warning_silenced",
+            set(),
+        )
+        warning_latched = st.session_state.setdefault(
+            "station_warning_latched",
+            set(),
+        )
+
+
+        warning_condition = (nearing > 0 or past_due > 0)
+        if warning_condition and station not in warning_silenced:
             warning_latched.add(station)
+        elif not warning_condition:
+            # A silenced warning cycle is cleared only after the underlying
+            # warning condition has cleared, allowing a future warning to latch.
             warning_silenced.discard(station)
-        elif warning_condition and persisted_ack:
-            warning_silenced.add(station)
-            warning_latched.discard(station)
-        else:
-            warning_silenced.discard(station)
-            warning_latched.discard(station)
-            clear_station_warning_cycle(station)
+
 
         ack_until = 0.0
         now_epoch = time.time()
 
-        # Acknowledgement is tied to the exact warning trigger set. A browser
-        # refresh cannot resurrect it; a new trigger signature can.
+
+        # Once a station starts flashing, the alert remains latched until the
+        # user clicks that station tile. It does not stop merely because the
+        # case crosses from nearing-due into breached.
         flash_tile = (
-            warning_condition
-            and station in warning_latched
+            station in warning_latched
             and station not in warning_silenced
         )
 
@@ -6319,16 +6224,12 @@ def dashboard_fragment():
                     use_container_width=True,
                 ):
                     if station in warning_latched or warning_condition:
+                        # Stop the tile warning immediately on click. The latch
+                        # is cleared here; it will only start again on a future
+                        # warning cycle after the underlying condition clears.
                         warning_ack_until[station] = 0.0
                         warning_silenced.add(station)
                         warning_latched.discard(station)
-                        if warning_signature:
-                            persist_station_warning_ack(station, warning_signature)
-                            st.session_state["_station_warning_ack_cache"] = (
-                                set(st.session_state.get("_station_warning_ack_cache") or set())
-                                | {(station, warning_signature)}
-                            )
-                            st.session_state["_station_warning_ack_cache_at"] = time.time()
                         acknowledge_station_alerts(station)
 
 
@@ -7334,120 +7235,3 @@ div[data-testid="stDialog"] [class*="st-key-case_checklist_remove_"] button { wi
 
 </style>
 ''', unsafe_allow_html=True)
-
-st.markdown(r"""
-<style>
-/* Case Details: tighter header and enough height to reach the bottom. */
-div[data-testid="stDialog"] > div { height:min(88vh,700px) !important; max-height:calc(100vh - 20px) !important; }
-div[data-testid="stDialog"] header { min-height:42px !important; height:42px !important; padding:2px 12px !important; }
-div[data-testid="stDialog"] header p { font-size:15px !important; line-height:18px !important; margin:0 !important; }
-div[data-testid="stDialog"] [data-testid="stDialogContent"] {
-    height:calc(100% - 42px) !important; max-height:calc(100% - 42px) !important;
-    padding:0 8px 24px 8px !important; overflow-y:auto !important; overflow-x:hidden !important;
-    scrollbar-width:thin !important; scrollbar-color:#8fa3b9 #edf2f7 !important;
-}
-div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar { width:8px !important; display:block !important; }
-div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar-track { background:#edf2f7 !important; }
-div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar-thumb { background:#8fa3b9 !important; border-radius:8px !important; }
-div[data-testid="stDialog"] .case-detail-hero { margin:0 !important; padding:3px 5px 2px !important; }
-div[data-testid="stDialog"] .case-detail-case-number { font-size:14px !important; }
-div[data-testid="stDialog"] .case-detail-subject { font-size:12px !important; margin:1px 0 0 !important; }
-div[data-testid="stDialog"] .case-detail-account-line {
-    display:flex !important; align-items:center !important; flex-wrap:wrap !important; gap:3px 7px !important;
-    margin-top:3px !important; color:#64748b !important; font-size:8px !important; line-height:1.2 !important;
-}
-div[data-testid="stDialog"] .case-detail-account-line strong { color:#172b52 !important; font-size:8.5px !important; font-weight:700 !important; }
-div[data-testid="stDialog"] .account-priority-value { color:#d33a4e !important; }
-div[data-testid="stDialog"] .case-summary-strip {
-    grid-template-columns:1.15fr 1fr 1fr 1.25fr 1fr 1.1fr !important; padding:3px 4px !important; margin:1px 0 3px !important;
-}
-div[data-testid="stDialog"] .case-summary-cell { padding:1px 6px !important; }
-div[data-testid="stDialog"] .case-summary-cell > span { font-size:7.5px !important; line-height:1 !important; margin:0 0 1px !important; }
-div[data-testid="stDialog"] .case-summary-cell > strong { font-size:8.5px !important; line-height:1.05 !important; }
-
-/* Compact dropdowns with essentially no vertical widget margin. */
-div[data-testid="stDialog"] .case-actions-card [data-testid="stSelectbox"] { margin:1px 0 !important; }
-div[data-testid="stDialog"] [data-testid="stSelectbox"] > div { margin:0 !important; padding:0 !important; }
-div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] { min-height:25px !important; height:25px !important; margin:0 !important; }
-div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] > div { min-height:25px !important; height:25px !important; padding-top:0 !important; padding-bottom:0 !important; }
-div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] span { font-size:8.5px !important; line-height:25px !important; }
-div[data-testid="stDialog"] [data-testid="stSelectbox"] svg { width:10px !important; height:10px !important; }
-div[data-testid="stDialog"] .action-readonly-label { font-size:7.5px !important; margin:1px 0 !important; }
-div[data-testid="stDialog"] .action-readonly-value { font-size:8.5px !important; padding:4px 6px !important; margin:0 !important; }
-
-/* Current-station checklist only, with compact rows. */
-div[data-testid="stDialog"] .case-checklist-wrap { margin-top:4px !important; padding:5px 6px !important; }
-div[data-testid="stDialog"] .case-checklist-title { font-size:8.5px !important; margin-bottom:2px !important; }
-div[data-testid="stDialog"] .case-checklist-sub { font-size:7px !important; line-height:1.1 !important; margin-bottom:4px !important; }
-div[data-testid="stDialog"] .case-checklist-status { font-size:7px !important; padding:2px 5px !important; margin-bottom:3px !important; }
-div[data-testid="stDialog"] [data-testid="stCheckbox"] { min-height:18px !important; margin:0 !important; padding:0 !important; }
-div[data-testid="stDialog"] [data-testid="stCheckbox"] label { font-size:7.8px !important; line-height:1.05 !important; padding:0 !important; margin:0 !important; }
-div[data-testid="stDialog"] [class*="st-key-case_checklist_remove_"] button { min-height:18px !important; height:18px !important; width:18px !important; min-width:18px !important; padding:0 !important; font-size:11px !important; }
-
-/* KB: white background, readable body, smaller questions/tiles, one answer only. */
-div[data-testid="stDialog"] .kb-panel-intro,
-div[data-testid="stDialog"] .kb-full-sop,
-div[data-testid="stDialog"] .kb-selected-sop { background:#fff !important; }
-div[data-testid="stDialog"] .kb-panel-intro { padding:6px 8px !important; margin-bottom:4px !important; }
-div[data-testid="stDialog"] .kb-panel-title { font-size:10px !important; }
-div[data-testid="stDialog"] .kb-panel-sub { font-size:8px !important; line-height:1.25 !important; }
-div[data-testid="stDialog"] .kb-suggested-title { font-size:6.8px !important; margin:4px 0 2px !important; }
-div[data-testid="stDialog"] [class*="st-key-kb_suggested_"] { margin:1px 0 !important; }
-div[data-testid="stDialog"] [class*="st-key-kb_suggested_"] button { min-height:23px !important; padding:3px 5px !important; font-size:7.4px !important; line-height:1.1 !important; border-radius:5px !important; }
-div[data-testid="stDialog"] .kb-sop-list-title { font-size:7.5px !important; margin:5px 0 2px !important; }
-div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] { margin:1px 0 !important; }
-div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] button { min-height:24px !important; height:24px !important; padding:3px 6px !important; font-size:7.6px !important; line-height:1.05 !important; border-radius:4px !important; }
-div[data-testid="stDialog"] .kb-selected-sop { padding:6px 8px !important; margin-top:4px !important; }
-div[data-testid="stDialog"] .kb-selected-label { font-size:6.8px !important; }
-div[data-testid="stDialog"] .kb-selected-sop-title { font-size:9px !important; line-height:1.15 !important; }
-div[data-testid="stDialog"] .kb-selected-sop-meta { font-size:7px !important; margin-top:2px !important; }
-div[data-testid="stDialog"] .kb-full-sop { margin-top:4px !important; padding:7px 8px !important; border:1px solid #dfe7ee !important; }
-div[data-testid="stDialog"] .kb-full-sop-label { font-size:7px !important; margin-bottom:4px !important; }
-div[data-testid="stDialog"] .kb-rich-content { color:#263957 !important; font-size:8.5px !important; line-height:1.38 !important; }
-div[data-testid="stDialog"] .kb-rich-content p { margin:0 0 4px !important; }
-div[data-testid="stDialog"] .kb-rich-content ul,
-div[data-testid="stDialog"] .kb-rich-content ol { margin:2px 0 5px 15px !important; padding:0 !important; }
-div[data-testid="stDialog"] .kb-rich-content li { margin:0 0 2px !important; padding-left:1px !important; }
-div[data-testid="stDialog"] .kb-content-heading { font-size:8px !important; margin:5px 0 2px !important; }
-div[data-testid="stDialog"] .kb-recommendation { display:none !important; }
-
-/* War Room exact-tile click + expansion. */
-div[data-testid="stDialog"] .war-room-mock { position:relative !important; padding:7px 9px !important; margin:0 0 5px !important; cursor:pointer !important; border:1px solid #d7e5e4 !important; }
-div[data-testid="stDialog"] .war-room-mock:hover { border-color:#00a98f !important; box-shadow:0 2px 8px rgba(0,169,143,.10) !important; }
-div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] { position:relative !important; overflow:visible !important; }
-div[data-testid="stDialog"] [class*="st-key-open_war_room_"] { position:absolute !important; inset:0 !important; z-index:20 !important; margin:0 !important; padding:0 !important; }
-div[data-testid="stDialog"] [class*="st-key-open_war_room_"] button { position:absolute !important; inset:0 !important; width:100% !important; height:100% !important; min-height:100% !important; opacity:0 !important; padding:0 !important; margin:0 !important; border:0 !important; background:transparent !important; cursor:pointer !important; }
-div[data-testid="stDialog"] .war-room-collapsed-line { color:#243858 !important; font-size:8px !important; line-height:1.2 !important; margin-top:4px !important; }
-div[data-testid="stDialog"] .war-room-collapsed-line span { color:#7a8798 !important; }
-div[data-testid="stDialog"] .war-room-expanded { background:#f8fcfb !important; border:1px solid #cfe6e1 !important; border-radius:7px !important; padding:7px 8px !important; margin:2px 0 5px !important; }
-div[data-testid="stDialog"] .war-room-expanded-head { display:flex !important; justify-content:space-between !important; color:#0b625b !important; font-size:8px !important; }
-div[data-testid="stDialog"] .war-room-expanded-head span { background:#dff7f2 !important; border-radius:999px !important; padding:2px 5px !important; font-size:6.5px !important; }
-div[data-testid="stDialog"] .war-room-expanded-grid { display:grid !important; grid-template-columns:1fr 1fr !important; gap:8px !important; margin-top:5px !important; }
-div[data-testid="stDialog"] .war-room-link { color:#007e72 !important; font-size:8px !important; font-weight:700 !important; text-decoration:underline !important; }
-div[data-testid="stDialog"] [class*="st-key-close_war_room_"] button { min-height:24px !important; height:24px !important; padding:3px 6px !important; font-size:7.5px !important; margin-bottom:5px !important; }
-
-/* Station tiles: smaller; original full-card overlay architecture is untouched. */
-[class*="st-key-station_wrap_care"],
-[class*="st-key-station_wrap_arch"],
-[class*="st-key-station_wrap_pet"],
-[class*="st-key-station_wrap_supply"],
-[class*="st-key-station_wrap_onsite"] { min-height:118px !important; }
-.station-card-visual { height:118px !important; min-height:118px !important; padding:9px 12px !important; border-radius:9px !important; }
-[class*="st-key-station_wrap_care"] [class*="st-key-station_CARE"] button,
-[class*="st-key-station_wrap_arch"] [class*="st-key-station_ARCH"] button,
-[class*="st-key-station_wrap_pet"] [class*="st-key-station_PET"] button,
-[class*="st-key-station_wrap_supply"] [class*="st-key-station_SUPPLY"] button,
-[class*="st-key-station_wrap_onsite"] [class*="st-key-station_ONSITE"] button { height:118px !important; }
-.station-icon-circle { width:38px !important; height:38px !important; left:12px !important; top:9px !important; font-size:18px !important; }
-.station-copy { left:60px !important; top:15px !important; }
-.station-card-title { font-size:11px !important; }
-.station-count-line { margin-top:3px !important; }
-.station-count { font-size:20px !important; }
-.station-active { font-size:8px !important; }
-.station-arrow { right:10px !important; top:15px !important; font-size:17px !important; }
-.station-warning { left:12px !important; bottom:22px !important; font-size:7.5px !important; }
-.station-sla-ref { left:12px !important; bottom:8px !important; font-size:7.5px !important; }
-.station-alert-icon { right:40px !important; top:15px !important; width:27px !important; height:27px !important; font-size:17px !important; }
-</style>
-
-""", unsafe_allow_html=True)
