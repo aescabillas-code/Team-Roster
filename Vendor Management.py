@@ -7928,16 +7928,32 @@ div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] [class*="st-key-war
     color:transparent !important;
     cursor:pointer !important;
 }
-/* Keep one scrollable surface and make its height fit the viewport. */
+/* CASE DETAILS — RESTORE THE NATIVE SCROLLBAR.
+   This is the single scroll surface inside the dialog. */
 div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
-    height:auto !important;
-    max-height:none !important;
-    min-height:0 !important;
-    overflow:visible !important;
-    overflow-x:visible !important;
-    overscroll-behavior:auto !important;
+    height:calc(100vh - 185px) !important;
+    max-height:calc(100vh - 185px) !important;
+    min-height:220px !important;
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+    overscroll-behavior:contain !important;
+    scrollbar-width:thin !important;
+    scrollbar-color:rgba(71,85,105,.48) transparent !important;
     padding-bottom:18px !important;
     box-sizing:border-box !important;
+}
+div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar {
+    width:7px !important;
+}
+div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar-track {
+    background:transparent !important;
+}
+div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar-thumb {
+    background:rgba(71,85,105,.48) !important;
+    border-radius:999px !important;
+}
+div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar-thumb:hover {
+    background:rgba(30,41,59,.68) !important;
 }
 </style>
 
@@ -7945,14 +7961,14 @@ div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
 
 st.markdown(r"""
 <style>
-/* CASE DETAILS — compact Knowledge Base SOP list */
-div[data-testid="stDialog"] [data-testid="stVerticalBlock"]:has([class*="st-key-kb_sop_list_"]) {
-    gap:2px !important;
-    row-gap:2px !important;
-}
+/* CASE DETAILS — ONLY tighten the vertical space between Matching SOP tiles.
+   Do NOT change the parent dialog/vertical-block gap, because that affects
+   unrelated Case Details content. */
 div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] {
-    margin:0 !important;
-    padding:0 !important;
+    margin-top:-5px !important;
+    margin-bottom:-5px !important;
+    padding-top:0 !important;
+    padding-bottom:0 !important;
     min-height:0 !important;
 }
 div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] > div {
