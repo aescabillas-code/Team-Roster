@@ -116,10 +116,10 @@ ACCOUNT_PRIORITY_COLLECTION = "Account_Priority_Collection"
 
 
 # Performance tuning: short cache keeps station switches responsive while preserving near-real-time data.
-TASK_CACHE_TTL = 0.5
+TASK_CACHE_TTL = 2.0
 # Alert scans are lightweight and run in a dedicated 1-second fragment.
 # Duration itself remains browser-side, while Alert_Collection is kept near real time.
-ALERT_SCAN_MIN_INTERVAL = 1.0
+ALERT_SCAN_MIN_INTERVAL = 2.0
 
 
 STATIONS = {
@@ -274,6 +274,9 @@ def initialize_indexes():
     try:
         col(TASKS_COLLECTION).create_index(
             [("active", ASCENDING), ("department", ASCENDING)]
+        )
+        col(TASKS_COLLECTION).create_index(
+            [("active", ASCENDING), ("station_started_at", ASCENDING)]
         )
         col(TASKS_COLLECTION).create_index(
             [("case_number", ASCENDING)]
@@ -2933,11 +2936,7 @@ def task_projection():
         "status": 1,
         "last_update": 1,
         "account_name": 1,
-        "vendor": 1,
         "issue": 1,
-        "description": 1,
-        "notes": 1,
-        "history": 1,
         "station_warning_ack_trigger": 1,
         "station_warning_acknowledged_at": 1,
         "active": 1,
@@ -5060,6 +5059,7 @@ def case_kb_query(task):
     ] if x)
 
 
+@st.cache_resource(show_spinner=False)
 def seed_demo_kb():
     try:
         if col(KB_COLLECTION).count_documents({}) or col(SOP_COLLECTION).count_documents({}):
@@ -5466,6 +5466,12 @@ def case_details(task_id):
     # Use the dialog's native scroll surface. A fixed-height nested container
     # created the double/offset scrollbar seen in the reference screenshot.
     with st.container(border=False, key=f"case_detail_scroll_{task_id}"):
+        # Focusable marker lets keyboard users use PageDown/ArrowDown while the
+        # native dialog content remains the single scroll surface.
+        st.markdown(
+            f"<div class='case-scroll-keyboard-marker' tabindex='0' aria-label='Case Details scroll area' data-case-scroll-marker='{html.escape(str(task_id))}'></div>",
+            unsafe_allow_html=True,
+        )
         tab_info, tab_actions, tab_kb, tab_comm, tab_attach = st.tabs([
             "ⓘ  Case Information",
             "◷  Case Actions",
@@ -6429,9 +6435,10 @@ div[data-testid="stDialog"] [data-testid="stVerticalBlock"]::-webkit-scrollbar-t
 """, unsafe_allow_html=True)
 
     # Duration still updates browser-side every second for smooth per-second timing.
+    # Backend/dashboard polling is intentionally 2 seconds to keep the app responsive.
 
 
-@st.fragment(run_every="1s")
+@st.fragment(run_every="2s")
 def dashboard_fragment():
 
 
@@ -7355,678 +7362,242 @@ st.markdown(
 st.markdown(r'''
 <style>
 /* ============================================================
-   CASEFLOW FINAL UI PATCH — 2026-10-06
+   CASEFLOW v5 — FINAL CASE DETAILS SCROLL + SPACING OVERRIDE
    ============================================================ */
-/* Use one real scroll surface for Case Details. Do not apply scrollbar
-   styling to every nested Streamlit vertical block. */
-div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
-    height:500px !important;
-    max-height:500px !important;
+
+/* Stable modal viewport. */
+div[data-testid="stDialog"] > div {
+    width:min(1080px, calc(100vw - 40px)) !important;
+    max-width:min(1080px, calc(100vw - 40px)) !important;
+    height:min(720px, calc(100vh - 24px)) !important;
+    max-height:calc(100vh - 24px) !important;
+    overflow:hidden !important;
+    box-sizing:border-box !important;
+}
+
+/* The native dialog content is the one and only scroll surface. */
+div[data-testid="stDialog"] [data-testid="stDialogContent"] {
+    display:block !important;
+    box-sizing:border-box !important;
+    height:calc(100% - 34px) !important;
+    max-height:calc(100vh - 58px) !important;
+    min-height:0 !important;
     overflow-y:auto !important;
     overflow-x:hidden !important;
     overscroll-behavior:contain !important;
+    -webkit-overflow-scrolling:touch !important;
     scrollbar-width:thin !important;
-    scrollbar-color:rgba(71,85,105,.42) transparent !important;
+    scrollbar-color:#7f94aa #edf2f7 !important;
+    scroll-behavior:auto !important;
+    touch-action:auto !important;
 }
-div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar { width:5px !important; height:5px !important; }
-div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar-track { background:transparent !important; }
-div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar-thumb { background:rgba(71,85,105,.42) !important; border-radius:999px !important; }
-div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar-thumb:hover { background:rgba(30,41,59,.62) !important; }
-
-/* Uniform Case Details body typography. Only the dialog header, hero case
-   number/subject and card headings receive a larger type scale. */
-div[data-testid="stDialog"] .case-detail-description,
-div[data-testid="stDialog"] .case-timing-item,
-div[data-testid="stDialog"] .case-summary-cell,
-div[data-testid="stDialog"] .case-info-row,
-div[data-testid="stDialog"] .action-readonly-value,
-div[data-testid="stDialog"] .resolution-value,
-div[data-testid="stDialog"] .resolution-log-meta,
-div[data-testid="stDialog"] .case-checklist-sub,
-div[data-testid="stDialog"] .case-actions-note,
-div[data-testid="stDialog"] .case-action-log-card,
-div[data-testid="stDialog"] .communication-card,
-div[data-testid="stDialog"] .meeting-record,
-div[data-testid="stDialog"] .attachment-row,
-div[data-testid="stDialog"] .kb-reference-answer,
-div[data-testid="stDialog"] .kb-step {
-    font-size:11px !important;
-    line-height:1.4 !important;
+div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar {
+    width:9px !important;
+    display:block !important;
 }
-div[data-testid="stDialog"] .case-detail-case-number { font-size:16px !important; }
-div[data-testid="stDialog"] .case-detail-subject { font-size:13px !important; }
-div[data-testid="stDialog"] .case-card-heading { font-size:12px !important; font-weight:800 !important; }
-div[data-testid="stDialog"] .case-info-row span,
-div[data-testid="stDialog"] .action-readonly-label,
-div[data-testid="stDialog"] .resolution-label { font-size:10px !important; }
-div[data-testid="stDialog"] .case-info-row strong,
-div[data-testid="stDialog"] .action-readonly-value,
-div[data-testid="stDialog"] .resolution-value { font-size:11px !important; }
-
-/* Compact select/dropdown controls so they do not consume large vertical space. */
-div[data-testid="stDialog"] [data-testid="stSelectbox"] { margin:1px 0 2px !important; }
-div[data-testid="stDialog"] [data-testid="stSelectbox"] label { font-size:9px !important; margin-bottom:1px !important; line-height:1.1 !important; }
-div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] > div { min-height:28px !important; height:28px !important; padding-top:0 !important; padding-bottom:0 !important; border-radius:5px !important; }
-div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] span { font-size:9.5px !important; line-height:26px !important; }
-div[data-testid="stDialog"] [data-testid="stSelectbox"] svg { width:12px !important; height:12px !important; }
-
-/* Logged action plan / note card. */
-div[data-testid="stDialog"] .case-action-log-card { margin-top:9px !important; padding:9px 11px !important; }
-div[data-testid="stDialog"] .action-log-history-title { font-size:10px !important; font-weight:800 !important; color:#102041 !important; margin:8px 0 5px !important; }
-div[data-testid="stDialog"] .action-log-entry { border:1px solid #e1e8f0 !important; background:#fbfdff !important; border-radius:6px !important; padding:7px 8px !important; margin-bottom:5px !important; font-size:10px !important; line-height:1.35 !important; color:#334155 !important; }
-div[data-testid="stDialog"] .action-log-meta { color:#64748b !important; font-size:9px !important; margin-bottom:3px !important; }
-div[data-testid="stDialog"] .resolution-log-meta { color:#64748b !important; font-size:9px !important; margin-top:5px !important; }
-
-/* ============================================================
-   KNOWLEDGE BASE — CLEAN WHITE CASE-MATCHED READER
-   ============================================================ */
-div[data-testid="stDialog"] .kb-panel-intro {
-    background:#fff !important;
-    border:1px solid #e3eaf1 !important;
-    border-radius:7px !important;
-    padding:8px 10px !important;
-    margin-bottom:7px !important;
-}
-div[data-testid="stDialog"] .kb-panel-title {
-    color:#102041 !important;
-    font-size:12px !important;
-    font-weight:850 !important;
-}
-div[data-testid="stDialog"] .kb-panel-sub {
-    color:#64748b !important;
-    font-size:9.5px !important;
-    line-height:1.35 !important;
-    margin-top:2px !important;
-}
-div[data-testid="stDialog"] .kb-suggested-title {
-    color:#008f80 !important;
-    font-size:8px !important;
-    font-weight:850 !important;
-    letter-spacing:.45px !important;
-    text-transform:uppercase !important;
-    margin:6px 0 3px !important;
-}
-div[data-testid="stDialog"] [class*="st-key-kb_suggested_"] button {
-    border:1px solid #dce8e7 !important;
-    background:#fff !important;
-    color:#176b67 !important;
-    font-size:9px !important;
-    line-height:1.2 !important;
-    padding:5px 7px !important;
-    min-height:27px !important;
-    height:auto !important;
-    white-space:normal !important;
-    text-align:left !important;
-    border-radius:6px !important;
-}
-div[data-testid="stDialog"] [class*="st-key-kb_suggested_"] button:hover {
-    background:#f2fbf9 !important;
-    border-color:#00a98f !important;
-}
-div[data-testid="stDialog"] .kb-selected-sop {
-    padding:8px 10px !important;
-    border-left:3px solid #00a98f !important;
-    border-top:1px solid #e1e8ee !important;
-    border-right:1px solid #e1e8ee !important;
-    border-bottom:1px solid #e1e8ee !important;
-    background:#fff !important;
-    border-radius:6px !important;
-    margin-top:7px !important;
-}
-div[data-testid="stDialog"] .kb-selected-label {
-    color:#008f80 !important;
-    font-size:8px !important;
-    font-weight:900 !important;
-    letter-spacing:.45px !important;
-}
-div[data-testid="stDialog"] .kb-selected-sop-title {
-    color:#102041 !important;
-    font-size:12px !important;
-    line-height:1.25 !important;
-    font-weight:800 !important;
-    margin-top:2px !important;
-}
-div[data-testid="stDialog"] .kb-selected-sop-meta {
-    color:#64748b !important;
-    font-size:8.5px !important;
-    line-height:1.3 !important;
-    margin-top:3px !important;
-}
-div[data-testid="stDialog"] .kb-full-sop,
-div[data-testid="stDialog"] .kb-recommendation {
-    padding:9px 11px !important;
-    background:#fff !important;
-    border:1px solid #e0e7ee !important;
-    border-radius:6px !important;
-    margin-top:6px !important;
-    color:#263957 !important;
-}
-div[data-testid="stDialog"] .kb-recommendation {
-    background:#fbfefd !important;
-    border-left:3px solid #00a98f !important;
-}
-div[data-testid="stDialog"] .kb-full-sop-label {
-    font-size:8px !important;
-    font-weight:850 !important;
-    letter-spacing:.45px !important;
-    color:#087b71 !important;
-    margin-bottom:5px !important;
-}
-div[data-testid="stDialog"] .kb-rich-content {
-    color:#263957 !important;
-    font-size:10px !important;
-    line-height:1.45 !important;
-}
-div[data-testid="stDialog"] .kb-rich-content p {
-    margin:0 0 6px !important;
-}
-div[data-testid="stDialog"] .kb-rich-content p:last-child {
-    margin-bottom:0 !important;
-}
-div[data-testid="stDialog"] .kb-rich-content ul,
-div[data-testid="stDialog"] .kb-rich-content ol {
-    margin:2px 0 7px 17px !important;
-    padding:0 !important;
-}
-div[data-testid="stDialog"] .kb-rich-content li {
-    margin:0 0 3px !important;
-    padding-left:2px !important;
-}
-div[data-testid="stDialog"] .kb-content-heading {
-    color:#008f80 !important;
-    font-size:9px !important;
-    font-weight:850 !important;
-    letter-spacing:.25px !important;
-    margin:7px 0 3px !important;
-}
-div[data-testid="stDialog"] .kb-content-heading:first-child {
-    margin-top:0 !important;
-}
-div[data-testid="stDialog"] .kb-sop-list-title {
-    color:#102041 !important;
-    font-size:9px !important;
-    font-weight:850 !important;
-    margin:8px 0 4px !important;
-}
-div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] button {
-    min-height:28px !important;
-    height:28px !important;
-    padding:4px 7px !important;
-    border-radius:5px !important;
-    font-size:9px !important;
-    line-height:1.15 !important;
-    text-align:left !important;
-}
-
-/* Collaboration / war room mockup. */
-div[data-testid="stDialog"] .war-room-mock {
-    background:#fff !important;
-    border:1px solid #dbe5ed !important;
+div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar-track {
+    background:#edf2f7 !important;
     border-radius:8px !important;
-    padding:8px 10px !important;
-    margin:0 0 9px !important;
 }
-div[data-testid="stDialog"] .war-room-top {
-    display:flex !important;
-    justify-content:space-between !important;
-    align-items:center !important;
-    gap:8px !important;
-    color:#102041 !important;
-    font-size:9px !important;
+div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar-thumb {
+    background:#7f94aa !important;
+    border-radius:8px !important;
+    border:2px solid #edf2f7 !important;
 }
-div[data-testid="stDialog"] .war-room-live-dot {
-    display:inline-block !important;
-    width:7px !important;
-    height:7px !important;
-    border-radius:50% !important;
-    background:#00a98f !important;
-    margin-right:5px !important;
-}
-div[data-testid="stDialog"] .war-room-case {
-    color:#64748b !important;
-    margin-left:7px !important;
-    font-weight:600 !important;
-}
-div[data-testid="stDialog"] .war-room-status {
-    color:#087b71 !important;
-    background:#e7faf5 !important;
-    border-radius:999px !important;
-    padding:3px 6px !important;
-    font-size:7.5px !important;
-    font-weight:850 !important;
-}
-div[data-testid="stDialog"] .war-room-grid {
-    display:grid !important;
-    grid-template-columns:1.3fr .8fr 1.4fr !important;
-    gap:8px !important;
-    margin-top:7px !important;
-}
-div[data-testid="stDialog"] .war-room-label {
-    color:#64748b !important;
-    font-size:7px !important;
-    font-weight:850 !important;
-    letter-spacing:.35px !important;
-}
-div[data-testid="stDialog"] .war-room-focus,
-div[data-testid="stDialog"] .war-room-update {
-    color:#243858 !important;
-    font-size:9px !important;
-    line-height:1.25 !important;
-    margin-top:2px !important;
-}
-div[data-testid="stDialog"] .war-room-muted {
-    color:#7a8798 !important;
-    font-size:7.5px !important;
-    margin-top:2px !important;
-}
-div[data-testid="stDialog"] .war-room-avatars {
-    display:flex !important;
-    align-items:center !important;
-    margin-top:3px !important;
-}
-div[data-testid="stDialog"] .war-room-avatar {
-    width:22px !important;
-    height:22px !important;
-    border-radius:50% !important;
-    display:inline-flex !important;
-    align-items:center !important;
-    justify-content:center !important;
-    margin-right:-3px !important;
-    background:#dff5ef !important;
-    color:#087b71 !important;
-    border:2px solid #fff !important;
-    font-size:8px !important;
-    font-weight:850 !important;
+div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar-thumb:hover {
+    background:#5e738a !important;
 }
 
-/* Compact station buttons and checklist controls. */
-div[data-testid="stDialog"] [class*="st-key-select_action_station_"] button { min-height:32px !important; height:32px !important; padding:4px 7px !important; font-size:10px !important; }
-div[data-testid="stDialog"] [class*="st-key-case_checklist_remove_"] button { width:24px !important; min-width:24px !important; height:24px !important; min-height:24px !important; font-size:15px !important; }
-
-</style>
-''', unsafe_allow_html=True)
-
-st.markdown(r'''<style>
-/* CASE DETAILS — compact header, tighter vertical rhythm */
-div[data-testid="stDialog"] header {
-    min-height:40px !important; height:40px !important; padding:2px 12px !important;
-}
-div[data-testid="stDialog"] header p {
-    font-size:15px !important; font-weight:750 !important; margin:0 !important; line-height:1.1 !important;
-}
-div[data-testid="stDialog"] .case-detail-hero { margin:0 0 2px !important; padding:2px 5px 2px !important; }
-div[data-testid="stDialog"] .case-detail-case-number { font-size:14px !important; line-height:1.1 !important; }
-div[data-testid="stDialog"] .case-detail-subject { font-size:11.5px !important; line-height:1.2 !important; margin-top:1px !important; }
-div[data-testid="stDialog"] .case-detail-copy { min-width:0 !important; }
-div[data-testid="stDialog"] .case-detail-title-row { gap:8px !important; }
-div[data-testid="stDialog"] .case-folder-icon { font-size:20px !important; }
-div[data-testid="stDialog"] .case-detail-account-line {
-    display:flex !important; align-items:center !important; flex-wrap:wrap !important; gap:6px !important;
-    color:#526078 !important; font-size:8.5px !important; line-height:1.15 !important; margin-top:2px !important;
-}
-div[data-testid="stDialog"] .case-account-priority {
-    display:inline-flex !important; padding:2px 5px !important; border-radius:999px !important;
-    font-size:7px !important; font-weight:850 !important; letter-spacing:.2px !important;
-}
-div[data-testid="stDialog"] .case-account-priority.high { background:#ffe5e9 !important; color:#d33a4e !important; }
-div[data-testid="stDialog"] .case-account-priority.normal { background:#eef2f6 !important; color:#66758d !important; }
-div[data-testid="stDialog"] .case-detail-timing { min-width:460px !important; }
-div[data-testid="stDialog"] .case-timing-item { padding:0 9px !important; }
-div[data-testid="stDialog"] .case-timing-item span { font-size:7.5px !important; }
-div[data-testid="stDialog"] .case-timing-item strong { font-size:9px !important; }
-div[data-testid="stDialog"] .case-timing-icon { font-size:12px !important; }
-div[data-testid="stDialog"] .case-summary-strip { padding:3px 3px !important; margin:1px 0 2px !important; }
-div[data-testid="stDialog"] .case-summary-cell { padding:1px 7px !important; min-width:0 !important; }
-div[data-testid="stDialog"] .case-summary-cell > span { font-size:7px !important; margin:0 0 1px !important; line-height:1 !important; }
-div[data-testid="stDialog"] .case-summary-cell > strong { font-size:8.5px !important; line-height:1.05 !important; }
-
-/* Compact dropdowns: remove the whitespace around labels and selected values. */
-div[data-testid="stDialog"] [data-testid="stSelectbox"] { margin:0 !important; padding:0 !important; }
-div[data-testid="stDialog"] [data-testid="stSelectbox"] > div { margin:0 !important; padding:0 !important; }
-div[data-testid="stDialog"] [data-testid="stSelectbox"] label { margin:0 0 1px !important; padding:0 !important; font-size:8.5px !important; line-height:1 !important; }
-div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] { margin:0 !important; padding:0 !important; }
-div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] > div { min-height:25px !important; height:25px !important; padding:0 7px !important; margin:0 !important; border-radius:5px !important; }
-div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] span { font-size:8.5px !important; line-height:23px !important; }
-
-/* Only the CURRENT station checklist is shown. */
-div[data-testid="stDialog"] .case-checklist-wrap { margin:4px 0 4px !important; padding:6px 8px !important; }
-div[data-testid="stDialog"] .case-checklist-title { font-size:10px !important; margin:0 0 1px !important; }
-div[data-testid="stDialog"] .case-checklist-sub { font-size:8px !important; line-height:1.2 !important; margin:0 0 4px !important; }
-div[data-testid="stDialog"] .case-checklist-status { padding:2px 6px !important; font-size:7.5px !important; margin:0 !important; }
-div[data-testid="stDialog"] [data-testid="stCheckbox"] { margin:0 !important; padding:0 !important; min-height:22px !important; }
-div[data-testid="stDialog"] [data-testid="stCheckbox"] label { font-size:9px !important; line-height:1.15 !important; padding:0 !important; margin:0 !important; }
-div[data-testid="stDialog"] [data-testid="stCheckbox"] > div { padding:0 !important; margin:0 !important; }
-
-/* Knowledge Base: readable white article, smaller questions and tighter SOP list. */
-div[data-testid="stDialog"] .kb-panel-intro { padding:5px 7px !important; margin:0 0 4px !important; background:#fff !important; }
-div[data-testid="stDialog"] .kb-panel-title { font-size:10px !important; }
-div[data-testid="stDialog"] .kb-panel-sub { font-size:8px !important; line-height:1.2 !important; }
-div[data-testid="stDialog"] .kb-suggested-title { font-size:7px !important; margin:3px 0 2px !important; }
-div[data-testid="stDialog"] [class*="st-key-kb_suggested_"] { margin:0 !important; padding:0 !important; }
-div[data-testid="stDialog"] [class*="st-key-kb_suggested_"] button {
-    font-size:7.5px !important; line-height:1.12 !important; padding:3px 5px !important;
-    min-height:22px !important; border-radius:4px !important; margin:0 0 2px !important;
-}
-div[data-testid="stDialog"] .kb-sop-list-title { font-size:7.5px !important; margin:4px 0 2px !important; }
-div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] { margin:0 !important; padding:0 !important; }
-div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] button {
-    min-height:23px !important; height:23px !important; padding:2px 5px !important;
-    font-size:7.5px !important; line-height:1 !important; border-radius:4px !important; margin:0 0 2px !important;
-}
-div[data-testid="stDialog"] .kb-selected-sop { padding:5px 7px !important; margin-top:3px !important; }
-div[data-testid="stDialog"] .kb-selected-label { font-size:6.5px !important; }
-div[data-testid="stDialog"] .kb-selected-sop-title { font-size:9px !important; line-height:1.15 !important; }
-div[data-testid="stDialog"] .kb-selected-sop-meta { font-size:7px !important; margin-top:2px !important; }
-div[data-testid="stDialog"] .kb-full-sop { padding:7px 9px !important; margin-top:4px !important; }
-div[data-testid="stDialog"] .kb-full-sop-label { font-size:7px !important; margin-bottom:3px !important; }
-div[data-testid="stDialog"] .kb-rich-content { font-size:8.5px !important; line-height:1.35 !important; color:#243858 !important; }
-div[data-testid="stDialog"] .kb-rich-content p { margin:0 0 4px !important; }
-div[data-testid="stDialog"] .kb-rich-content ul,
-div[data-testid="stDialog"] .kb-rich-content ol { margin:1px 0 5px 15px !important; padding:0 !important; }
-div[data-testid="stDialog"] .kb-rich-content li { margin:0 0 2px !important; padding-left:1px !important; }
-div[data-testid="stDialog"] .kb-content-heading { font-size:8px !important; margin:5px 0 2px !important; }
-
-/* Exact clickable War Room tile. */
-div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] { position:relative !important; min-height:88px !important; margin:0 !important; padding:0 !important; }
-div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] .war-room-mock { margin:0 !important; min-height:82px !important; box-sizing:border-box !important; cursor:pointer !important; transition:border-color .12s ease, box-shadow .12s ease !important; }
-div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] .war-room-mock:hover { border-color:#00a98f !important; box-shadow:0 0 0 2px rgba(0,169,143,.08) !important; }
-div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] [class*="st-key-war_room_open_button_"] { position:absolute !important; inset:0 !important; z-index:30 !important; margin:0 !important; padding:0 !important; }
-div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] [class*="st-key-war_room_open_button_"] button { position:absolute !important; inset:0 !important; width:100% !important; height:100% !important; background:transparent !important; border:0 !important; color:transparent !important; box-shadow:none !important; opacity:.001 !important; cursor:pointer !important; }
-div[data-testid="stDialog"] .war-room-expanded {
-    background:#f8fcfb !important; border:1px solid #cfe3e1 !important; border-radius:7px !important;
-    padding:7px 9px !important; margin:4px 0 5px !important;
-}
-div[data-testid="stDialog"] .war-room-expanded-head { display:flex !important; justify-content:space-between !important; font-size:9px !important; color:#102041 !important; }
-div[data-testid="stDialog"] .war-room-expanded-head span { color:#64748b !important; }
-div[data-testid="stDialog"] .war-room-expanded-live { color:#087b71 !important; background:#e7faf5 !important; border-radius:999px !important; padding:2px 5px !important; font-size:6.5px !important; font-weight:850 !important; }
-div[data-testid="stDialog"] .war-room-expanded-grid { display:grid !important; grid-template-columns:1fr 1fr !important; gap:10px !important; margin-top:5px !important; }
-div[data-testid="stDialog"] .war-room-expanded-grid ul { margin:2px 0 0 14px !important; padding:0 !important; font-size:8px !important; line-height:1.3 !important; }
-div[data-testid="stDialog"] .war-room-link { font-size:8.5px !important; color:#0879c9 !important; font-weight:750 !important; text-decoration:none !important; }
-
-/* Preserve a single scroll surface and make it tall enough to reach the bottom. */
+/* No nested fixed-height scrollbar. */
 div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
-    height:calc(100vh - 185px) !important; max-height:calc(100vh - 185px) !important;
-    min-height:220px !important; overflow-y:auto !important; overflow-x:hidden !important;
-    overscroll-behavior:contain !important; scrollbar-width:thin !important;
+    height:auto !important;
+    max-height:none !important;
+    min-height:0 !important;
+    overflow:visible !important;
+    overflow-y:visible !important;
+    overflow-x:visible !important;
+}
+div[data-testid="stDialog"] [data-testid="stDialogContent"] > div {
+    overflow:visible !important;
+    min-height:0 !important;
 }
 
-/* Remove old product-family/navigation tiles if any legacy markup remains. */
-div[data-testid="stDialog"] .kb-product-family,
-div[data-testid="stDialog"] .product-family-tiles,
-div[data-testid="stDialog"] [class*="product-family"] { display:none !important; }
-</style>''', unsafe_allow_html=True)
+/* Keyboard scrolling: clicking/focusing the invisible marker allows
+   ArrowDown/ArrowUp/PageDown/PageUp/Home/End to move the dialog content. */
+div[data-testid="stDialog"] .case-scroll-keyboard-marker {
+    position:absolute !important;
+    width:1px !important;
+    height:1px !important;
+    opacity:0 !important;
+    overflow:hidden !important;
+    pointer-events:auto !important;
+}
+div[data-testid="stDialog"] [data-testid="stDialogContent"] {
+    outline:none !important;
+}
 
-
-st.markdown(r'''
-<style>
-/* ============================================================
-   CASE DETAILS FINAL FIX — requested compact reference spacing
-   ============================================================ */
+/* Compact title/header. */
 div[data-testid="stDialog"] header {
-    min-height:40px !important;
-    height:40px !important;
-    padding:2px 12px !important;
+    min-height:34px !important;
+    height:34px !important;
+    padding:0 10px !important;
     margin:0 !important;
 }
 div[data-testid="stDialog"] header p {
-    font-size:16px !important;
-    line-height:1.1 !important;
+    font-size:14px !important;
+    line-height:1 !important;
     font-weight:750 !important;
     margin:0 !important;
 }
-div[data-testid="stDialog"] header button {
-    width:30px !important;
-    height:30px !important;
-    min-height:30px !important;
-    padding:0 !important;
-    margin:0 !important;
-}
-div[data-testid="stDialog"] [data-testid="stDialogContent"] {
-    padding-top:0 !important;
-    margin-top:0 !important;
-}
-div[data-testid="stDialog"] [data-testid="stDialogContent"] > div {
-    margin-top:0 !important;
-    padding-top:0 !important;
-}
+
+/* Compact hero. */
 div[data-testid="stDialog"] .case-detail-hero {
-    margin:0 0 3px 0 !important;
-    padding:2px 4px 2px 4px !important;
-}
-div[data-testid="stDialog"] .case-detail-title-row {
-    gap:10px !important;
-}
-div[data-testid="stDialog"] .case-folder-icon {
-    font-size:20px !important;
-    margin-top:1px !important;
+    margin:0 0 8px 0 !important;
+    padding:1px 4px 2px !important;
 }
 div[data-testid="stDialog"] .case-detail-case-number {
     font-size:14px !important;
-    line-height:1.05 !important;
-}
-div[data-testid="stDialog"] .case-copy-icon {
-    font-size:12px !important;
-    margin-left:4px !important;
-}
-div[data-testid="stDialog"] .case-priority-badge {
-    font-size:8px !important;
-    padding:3px 8px !important;
-    margin-left:6px !important;
+    line-height:1 !important;
 }
 div[data-testid="stDialog"] .case-detail-subject {
-    font-size:11px !important;
-    line-height:1.15 !important;
-    margin-top:2px !important;
-}
-div[data-testid="stDialog"] .case-detail-account-line {
-    font-size:8px !important;
-    line-height:1.1 !important;
-    margin-top:2px !important;
-}
-div[data-testid="stDialog"] .case-detail-account-line span {
-    margin-right:7px !important;
-}
-div[data-testid="stDialog"] .case-detail-timing {
-    min-width:430px !important;
-}
-div[data-testid="stDialog"] .case-timing-item {
-    padding:0 8px !important;
-    gap:4px !important;
-}
-div[data-testid="stDialog"] .case-timing-item span {
-    font-size:7px !important;
-}
-div[data-testid="stDialog"] .case-timing-item strong {
-    font-size:8px !important;
+    font-size:10.5px !important;
+    line-height:1.05 !important;
     margin-top:1px !important;
 }
-div[data-testid="stDialog"] .case-timing-icon {
-    font-size:11px !important;
+div[data-testid="stDialog"] .case-detail-account-line {
+    display:flex !important;
+    align-items:center !important;
+    flex-wrap:wrap !important;
+    gap:7px !important;
+    margin-top:3px !important;
+    line-height:1.1 !important;
+    font-size:12px !important;
 }
-div[data-testid="stDialog"] .case-due-badge {
-    font-size:7px !important;
-    padding:2px 4px !important;
-    margin-left:3px !important;
+div[data-testid="stDialog"] .case-account-name {
+    font-size:12px !important;
+    font-weight:700 !important;
 }
+div[data-testid="stDialog"] .case-account-name b {
+    font-weight:850 !important;
+    color:#102041 !important;
+}
+div[data-testid="stDialog"] .case-account-priority {
+    font-size:9px !important;
+    padding:3px 7px !important;
+    font-weight:850 !important;
+}
+
+/* Space below account row before Assigned To summary. */
 div[data-testid="stDialog"] .case-summary-strip {
-    margin:1px 0 3px !important;
-    padding:2px 2px !important;
+    margin:0 0 7px 0 !important;
+    padding:3px !important;
 }
-div[data-testid="stDialog"] .case-summary-cell {
-    padding:1px 6px !important;
-}
-div[data-testid="stDialog"] .case-summary-cell > span {
-    font-size:7px !important;
-    margin:0 0 1px !important;
-}
-div[data-testid="stDialog"] .case-summary-cell > strong {
-    font-size:8px !important;
-    line-height:1.05 !important;
-}
-div[data-testid="stDialog"] .case-summary-cell .case-status-chip {
-    font-size:7px !important;
-    padding:2px 5px !important;
-}
-/* Assigned To is intentionally label-over-value like the other summary cells. */
-div[data-testid="stDialog"] .case-summary-cell:first-child .case-avatar {
-    display:none !important;
-}
-/* Dropdowns: compact label/value with no extra top/bottom whitespace. */
+
+/* Tight dropdown wrappers. */
 div[data-testid="stDialog"] [data-testid="stSelectbox"],
 div[data-testid="stDialog"] [data-testid="stSelectbox"] > div,
-div[data-testid="stDialog"] [data-testid="stSelectbox"] label {
+div[data-testid="stDialog"] [data-testid="stSelectbox"] > div > div {
     margin:0 !important;
     padding:0 !important;
 }
 div[data-testid="stDialog"] [data-testid="stSelectbox"] label {
+    margin:0 0 1px !important;
+    padding:0 !important;
     font-size:8px !important;
     line-height:1 !important;
-    margin-bottom:1px !important;
 }
+div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"],
 div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] > div {
     min-height:24px !important;
     height:24px !important;
-    padding:0 6px !important;
     margin:0 !important;
+    padding:0 6px !important;
 }
 div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] span {
     font-size:8px !important;
     line-height:22px !important;
 }
-/* Current-station checklist only; no station selector row is rendered. */
+div[data-testid="stDialog"] [data-testid="stVerticalBlock"]:has(> [data-testid="stSelectbox"]),
+div[data-testid="stDialog"] [data-testid="stVerticalBlock"]:has(> [data-testid="stCheckbox"]) {
+    gap:0 !important;
+}
+
+/* Tight checklist rows. */
 div[data-testid="stDialog"] .case-checklist-wrap {
-    margin:3px 0 3px !important;
-    padding:5px 7px !important;
+    margin:2px 0 3px !important;
+    padding:4px 6px !important;
 }
 div[data-testid="stDialog"] .case-checklist-title {
     font-size:9px !important;
-    margin:0 0 1px !important;
-}
-div[data-testid="stDialog"] .case-checklist-sub {
-    font-size:7.5px !important;
-    margin:0 0 3px !important;
-}
-div[data-testid="stDialog"] .case-checklist-status {
-    font-size:7px !important;
-    padding:2px 5px !important;
+    line-height:1 !important;
     margin:0 !important;
 }
-div[data-testid="stDialog"] [data-testid="stCheckbox"] {
-    min-height:20px !important;
+div[data-testid="stDialog"] .case-checklist-sub {
+    font-size:7px !important;
+    line-height:1.05 !important;
+    margin:1px 0 2px !important;
+}
+div[data-testid="stDialog"] [data-testid="stCheckbox"],
+div[data-testid="stDialog"] [data-testid="stCheckbox"] > div,
+div[data-testid="stDialog"] [data-testid="stCheckbox"] label,
+div[data-testid="stDialog"] [data-testid="stCheckbox"] label > div {
+    min-height:18px !important;
+    height:18px !important;
     margin:0 !important;
     padding:0 !important;
 }
 div[data-testid="stDialog"] [data-testid="stCheckbox"] label {
     font-size:8px !important;
-    line-height:1.1 !important;
-    margin:0 !important;
-    padding:0 !important;
+    line-height:1.05 !important;
 }
-/* Knowledge Base: smaller text and tighter suggested/SOP tiles. */
-div[data-testid="stDialog"] .kb-suggested-title {
-    font-size:6.5px !important;
+
+/* Knowledge Base tiles — compact and evenly spaced. */
+div[data-testid="stDialog"] .kb-suggested-title,
+div[data-testid="stDialog"] .kb-sop-list-title {
     margin:2px 0 1px !important;
 }
-div[data-testid="stDialog"] [class*="st-key-kb_suggested_"] {
+div[data-testid="stDialog"] [class*="st-key-kb_suggested_"],
+div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"],
+div[data-testid="stDialog"] [class*="st-key-kb_suggested_"] > div,
+div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] > div {
     margin:0 !important;
     padding:0 !important;
 }
 div[data-testid="stDialog"] [class*="st-key-kb_suggested_"] button {
+    min-height:19px !important;
+    height:19px !important;
+    margin:0 !important;
+    padding:1px 4px !important;
     font-size:7px !important;
-    line-height:1.05 !important;
+    line-height:1 !important;
+}
+div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] button {
     min-height:20px !important;
-    padding:2px 4px !important;
-    margin:0 0 1px !important;
-}
-div[data-testid="stDialog"] .kb-sop-list-title {
+    height:20px !important;
+    margin:0 !important;
+    padding:1px 4px !important;
     font-size:7px !important;
-    margin:2px 0 1px !important;
+    line-height:1 !important;
 }
-div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] {
+div[data-testid="stDialog"] [data-testid="stHorizontalBlock"]:has([class*="st-key-kb_suggested_"]) {
+    gap:4px !important;
     margin:0 !important;
     padding:0 !important;
 }
-div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] button {
-    font-size:7px !important;
-    line-height:1 !important;
-    min-height:21px !important;
-    height:21px !important;
-    padding:2px 4px !important;
-    margin:0 0 1px !important;
-}
-div[data-testid="stDialog"] .kb-selected-sop {
-    padding:4px 6px !important;
-    margin-top:2px !important;
-}
-div[data-testid="stDialog"] .kb-selected-sop-title {
-    font-size:8.5px !important;
-}
-div[data-testid="stDialog"] .kb-selected-sop-meta {
-    font-size:6.5px !important;
-}
-div[data-testid="stDialog"] .kb-full-sop {
-    padding:5px 7px !important;
-    margin-top:2px !important;
-}
-div[data-testid="stDialog"] .kb-full-sop-label {
-    font-size:6.5px !important;
-    margin-bottom:2px !important;
-}
-div[data-testid="stDialog"] .kb-rich-content {
-    font-size:8px !important;
-    line-height:1.28 !important;
-}
-div[data-testid="stDialog"] .kb-rich-content p {
-    margin:0 0 3px !important;
-}
-div[data-testid="stDialog"] .kb-rich-content ul,
-div[data-testid="stDialog"] .kb-rich-content ol {
-    margin:1px 0 4px 14px !important;
+div[data-testid="stDialog"] [data-testid="stVerticalBlock"]:has([class*="st-key-kb_suggested_"]),
+div[data-testid="stDialog"] [data-testid="stVerticalBlock"]:has([class*="st-key-kb_sop_list_"]) {
+    gap:1px !important;
+    margin:0 !important;
     padding:0 !important;
 }
-div[data-testid="stDialog"] .kb-rich-content li {
-    margin:0 0 1px !important;
-}
-/* Remove the old recommendation presentation completely if legacy content exists. */
-div[data-testid="stDialog"] .kb-recommendation,
-div[data-testid="stDialog"] .kb-recommendation-label,
-div[data-testid="stDialog"] [class*="recommended-guidance"] {
-    display:none !important;
-}
-/* War Room: the exact visible tile is the click target. */
+
+/* War Room: tile toggles details; Close War Room removes the component. */
 div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] {
-    position:relative !important;
     margin:0 !important;
     padding:0 !important;
 }
 div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] .war-room-mock {
-    cursor:pointer !important;
-}
-div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] [class*="st-key-war_room_open_button_"] {
-    position:absolute !important;
-    inset:0 !important;
-    z-index:100 !important;
-}
-div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] [class*="st-key-war_room_open_button_"] button {
-    position:absolute !important;
-    inset:0 !important;
-    width:100% !important;
-    height:100% !important;
-    min-height:100% !important;
-    background:transparent !important;
-    border:0 !important;
-    opacity:.001 !important;
-    color:transparent !important;
-    cursor:pointer !important;
-}
-/* Keep one scrollable surface and make its height fit the viewport. */
-div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
-    height:calc(100vh - 150px) !important;
-    max-height:calc(100vh - 150px) !important;
-    min-height:220px !important;
-    overflow-y:auto !important;
-    overflow-x:hidden !important;
-    overscroll-behavior:contain !important;
+    margin:0 !important;
 }
 </style>
 
