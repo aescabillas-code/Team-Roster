@@ -6759,10 +6759,11 @@ def dashboard_fragment():
                     # can rerun the app without losing the Case Details modal.
                     st.session_state["selected_case_id"] = str(task_id)
                     st.session_state["show_case"] = True
-                    # This click occurs inside the 1-second dashboard fragment.
-                    # Force an application-scoped rerun so the dialog is opened
-                    # from the normal app layout context, not the fragment context.
-                    st.rerun(scope="app")
+                    # Open the dialog directly from this sequential fragment
+                    # widget interaction. Streamlit supports opening a dialog
+                    # from a fragment rerun; forcing an app rerun here caused
+                    # the layout-context error in this application.
+                    case_details(str(task_id))
 
 
         with row[1]:
@@ -7141,14 +7142,8 @@ seed_mock_cases()
 
 
 
-# Re-open the selected Case Details dialog BEFORE the live dashboard
-# fragment. This guarantees the dialog is created from normal app-level
-# Streamlit layout context, never from a fragment rerun.
-if st.session_state.get("show_case") and st.session_state.get("selected_case_id"):
-    case_details(st.session_state["selected_case_id"])
-
-
-# Render the live dashboard. The fragment itself refreshes independently.
+# Render the live dashboard. Case Details is opened directly by the
+# case button during the fragment's sequential widget interaction.
 dashboard_fragment()
 
 
