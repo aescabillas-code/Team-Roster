@@ -1011,6 +1011,7 @@ defaults = {
     "simulation_case_id": None,
     "simulation_alert_active": False,
     "simulation_alert_case_id": None,
+    "simulation_alert_delay_until": 0.0,
     "simulation_active": False,
     "search": "",
     # Kept for compatibility with existing session state; acknowledgement
@@ -1575,12 +1576,7 @@ st.markdown(
         border:2px solid #ef334f !important;
         animation:stationCardFlash .55s ease-in-out infinite alternate;
     }
-    .station-card-visual.critical-amber {
-        border:2px solid #d9a400 !important;
-        animation:stationCardFlashAmber .55s ease-in-out infinite alternate;
-    }
-    .station-card-visual.critical-red.selected,
-    .station-card-visual.critical-amber.selected {
+    .station-card-visual.critical-red.selected {
         border-width:3px !important;
     }
     .station-card-visual.critical.selected {
@@ -1615,21 +1611,6 @@ st.markdown(
             filter:saturate(1.18);
         }
     }
-    @keyframes stationCardFlashAmber {
-        from {
-            box-shadow:0 0 0 0 rgba(217,164,0,.10), 0 0 0 rgba(217,164,0,0);
-            filter:saturate(1);
-        }
-        to {
-            box-shadow:0 0 0 5px rgba(217,164,0,.15), 0 0 28px rgba(217,164,0,.40);
-            filter:saturate(1.12);
-        }
-    }
-
-    .station-alert-icon.amber {
-        background:#d9a400 !important;
-        box-shadow:0 0 0 3px rgba(217,164,0,.16), 0 5px 16px rgba(217,164,0,.24) !important;
-    }
     .station-alert-icon.red {
         background:#ef1738 !important;
     }
@@ -1649,8 +1630,7 @@ st.markdown(
 
 
     .station-card-visual.warning-muted,
-    .station-card-visual.warning-muted.critical-red,
-    .station-card-visual.warning-muted.critical-amber {
+    .station-card-visual.warning-muted.critical-red {
         animation:none !important;
         box-shadow:none !important;
         filter:none !important;
@@ -1668,8 +1648,10 @@ st.markdown(
         font-weight:800 !important;
         transition:color .25s ease, text-shadow .25s ease, opacity .25s ease;
     }
-    /* Duration color follows elapsed time in the CURRENT station SLA:
-       green = 0-50%, yellow = 50-80%, red = 80-100% and beyond. */
+    /* Duration color follows each station's own SLA:
+       green = more than 40% of the station timeframe remains,
+       amber = 40% or less remains,
+       red = final 20% / breach. */
     .duration-warning-wrap.duration-green { color:#218137 !important; }
     .duration-warning-wrap.duration-yellow { color:#c58a00 !important; }
     .duration-warning-wrap.duration-red {
@@ -3183,7 +3165,7 @@ def calculate_state(task, now=None):
         status = "BREACHED"
     elif remaining <= sla * 0.20:
         status = "CRITICAL"
-    elif remaining <= sla * 0.50:
+    elif remaining <= sla * 0.40:
         status = "MEDIUM"
     else:
         status = "LOW"
@@ -4856,6 +4838,51 @@ if st.session_state["show_settings"]:
     def show_settings():
 
 
+        # Settings-wide uploader layout fix. This must remain active after
+        # administrator unlocks the dialog, when the upload controls are shown.
+        st.markdown(
+            """
+            <style>
+            div[data-testid="stDialog"] [data-testid="stFileUploader"] {
+                position:relative !important;
+                overflow:visible !important;
+            }
+            div[data-testid="stDialog"] [data-testid="stFileUploader"] > label {
+                display:block !important;
+                position:static !important;
+                width:100% !important;
+                height:auto !important;
+                margin:0 0 8px 0 !important;
+                padding:0 !important;
+                line-height:1.35 !important;
+                z-index:auto !important;
+            }
+            div[data-testid="stDialog"] [data-testid="stFileUploader"] section {
+                display:block !important;
+                position:relative !important;
+                top:auto !important;
+                left:auto !important;
+                width:100% !important;
+                margin:0 !important;
+                min-height:88px !important;
+                padding:12px !important;
+                box-sizing:border-box !important;
+                z-index:auto !important;
+            }
+            div[data-testid="stDialog"] [data-testid="stFileUploader"] section > div {
+                position:relative !important;
+                margin:0 !important;
+                gap:8px !important;
+            }
+            div[data-testid="stDialog"] [data-testid="stFileUploader"] section > div {
+                gap:8px !important;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
         if not st.session_state[
             "admin_unlocked"
         ]:
@@ -4868,18 +4895,11 @@ if st.session_state["show_settings"]:
             st.markdown(
                 """
                 <style>
-                /* Replace the password-field's Material 'visibility' text with an eye icon. */
+                /* Admin PIN is intentionally password-only: hide the native
+                   visibility/reveal control. The surrounding st.form() keeps
+                   Enter-key submission enabled. */
                 div[data-testid="stDialog"] [data-testid="stTextInput"] button {
-                    font-size:0 !important;
-                    width:34px !important;
-                    min-width:34px !important;
-                    height:34px !important;
-                }
-                div[data-testid="stDialog"] [data-testid="stTextInput"] button::after {
-                    content:"👁" !important;
-                    font-size:18px !important;
-                    line-height:1 !important;
-                    color:#102041 !important;
+                    display:none !important;
                 }
                 </style>
                 """,
@@ -4887,34 +4907,29 @@ if st.session_state["show_settings"]:
             )
 
 
-            pin = st.text_input(
-                "Admin PIN",
-                type="password",
-                placeholder="Enter admin PIN",
-            )
+            with st.form("admin_pin_form", clear_on_submit=False):
+                pin = st.text_input(
+                    "Admin PIN",
+                    type="password",
+                    placeholder="Enter admin PIN",
+                )
+
+                unlock_submitted = st.form_submit_button(
+                    "Unlock Settings",
+                    type="primary",
+                    use_container_width=True,
+                )
 
 
-            if st.button(
-                "Unlock Settings",
-                type="primary",
-                use_container_width=True,
-            ):
-
-
+            if unlock_submitted:
                 if hmac.compare_digest(
                     pin,
                     admin_pin(),
                 ):
-
-
                     st.session_state[
                         "admin_unlocked"
                     ] = True
-
-
                     st.rerun()
-
-
                 else:
                     st.error(
                         "Invalid admin PIN."
@@ -5154,7 +5169,7 @@ if st.session_state["show_settings"]:
                     type="primary",
                     use_container_width=True,
                     key="run_caseflow_simulation",
-                    help="Reset all 25 mock cases below the 40%-remaining warning threshold, then immediately activate one H&M critical-account alert.",
+                    help="Reset all 25 mock cases below the 40%-remaining warning threshold, then show one H&M critical-account alert exactly 10 seconds after simulation starts.",
                 ):
                     reset_count = reset_mock_case_durations()
                     now = utc_now()
@@ -5235,8 +5250,14 @@ if st.session_state["show_settings"]:
                     clear_task_cache()
                     st.session_state["simulation_until"] = 0.0
                     st.session_state["simulation_case_id"] = simulation_case_id or None
-                    st.session_state["simulation_alert_active"] = bool(simulation_case_id)
+                    # The simulation alert is intentionally delayed by 10 seconds.
+                    # The dashboard fragment watches this timestamp and triggers
+                    # the actual popup when the delay expires.
+                    st.session_state["simulation_alert_active"] = False
                     st.session_state["simulation_alert_case_id"] = simulation_case_id
+                    st.session_state["simulation_alert_delay_until"] = (
+                        time.time() + 10.0 if simulation_case_id else 0.0
+                    )
                     st.session_state["simulation_active"] = bool(simulation_case_id)
                     st.session_state["station_warning_ack_until"] = {}
                     st.session_state["station_warning_silenced"] = set()
@@ -5245,7 +5266,7 @@ if st.session_state["show_settings"]:
 
                     if simulation_case_id:
                         st.success(
-                            f"Simulation started. {reset_count} mock case(s) reset; one H&M critical-account alert is active immediately."
+                            f"Simulation started. {reset_count} mock case(s) reset; the H&M critical-account alert will appear in 10 seconds."
                         )
                     else:
                         st.error("Simulation could not find the CARE mock case CAR-2026-0001.")
@@ -7105,6 +7126,25 @@ div[data-testid="stDialog"] [data-testid="stVerticalBlock"]::-webkit-scrollbar-t
 def dashboard_fragment():
 
 
+    # Trigger the simulation critical-account popup exactly 10 seconds after
+    # the Simulation button was pressed. The fragment runs every second, so
+    # this does not require a manual refresh.
+    simulation_delay_until = float(
+        st.session_state.get("simulation_alert_delay_until", 0.0) or 0.0
+    )
+    if (
+        simulation_delay_until
+        and time.time() >= simulation_delay_until
+        and st.session_state.get("simulation_alert_case_id")
+        and not st.session_state.get("simulation_alert_active")
+    ):
+        st.session_state["simulation_alert_active"] = True
+        st.session_state["simulation_alert_delay_until"] = 0.0
+        # The alert overlay is rendered outside the dashboard fragment, so
+        # explicitly rerun the full app once the 10-second delay expires.
+        st.rerun(scope="app")
+
+
     selected = st.session_state[
         "selected_station"
     ]
@@ -7173,7 +7213,7 @@ def dashboard_fragment():
         # the warning threshold OR has already breached the station SLA.
         # This keeps the visual warning tied to the same cases that receive
         # the red duration indicator in the table.
-        # Nearing due = final 20% of the SLA, strictly BEFORE breach.
+        # Nearing due = 40%-remaining SLA warning, strictly BEFORE breach.
         # Past due = SLA has already elapsed.
         nearing = sum(
             1
@@ -7185,10 +7225,9 @@ def dashboard_fragment():
             for state in station_states
             if state.get("past_due", False)
         )
-        # A tile flashes when at least one case reaches the 40%-remaining
-        # early-warning threshold. It stays AMBER through the warning window
-        # and becomes RED in the final 20%. Priority-account status alone does
-        # not trigger the station animation.
+        # A tile flashes RED as soon as at least one case reaches the
+        # 40%-remaining threshold for this station. There is no amber tile
+        # animation; the amber warning is represented only beside Duration.
         warning_ack_until = st.session_state.setdefault(
             "station_warning_ack_until",
             {},
@@ -7208,11 +7247,13 @@ def dashboard_fragment():
         warning_condition = (nearing > 0 or past_due > 0)
         red_warning = any(
             state.get("elapsed", 0) >= (
-                STATIONS[station]["sla_minutes"] * 60 * 0.80
+                STATIONS[station]["sla_minutes"] * 60 * 0.60
             )
             for state in station_states
         )
-        warning_tone_class = " red" if red_warning else (" amber" if warning_condition else "")
+        # Station tiles only flash when a case reaches the red/critical window.
+        # The 40%-remaining amber warning is shown in the Duration column only.
+        warning_tone_class = " red" if red_warning else ""
         warning_pairs = [
             (task, state)
             for task, state in zip(station_tasks, station_states)
@@ -7235,7 +7276,7 @@ def dashboard_fragment():
         # cannot resurrect an alert that the user already clicked. A new case
         # entering warning, or the same case entering a new station cycle, gets
         # a new trigger key and can alert again.
-        flash_tile = bool(unacknowledged_warning_tasks)
+        flash_tile = bool(unacknowledged_warning_tasks and red_warning)
 
 
         config = STATIONS[
@@ -7254,15 +7295,11 @@ def dashboard_fragment():
             icon = config.get("icon", "•")
             sla = config["sla_minutes"]
             sla_text = f"{sla} mins" if sla < 60 else f"{sla // 60} hour" + ("s" if sla != 60 else "")
-            critical_class = (
-                " critical-red" if (flash_tile and red_warning)
-                else " critical-amber" if flash_tile
-                else ""
-            )
+            critical_class = " critical-red" if (flash_tile and red_warning) else ""
             selected_class = " selected" if selected == station else ""
             alert_icon = (
-                f'<div class="station-alert-icon {"red" if red_warning else "amber"}" aria-label="SLA warning">!</div>'
-                if flash_tile else ""
+                '<div class="station-alert-icon red" aria-label="Critical SLA warning">!</div>'
+                if flash_tile and red_warning else ""
             )
 
 
@@ -7731,7 +7768,7 @@ def dashboard_fragment():
             # red = final 20% / breach.
             warning_threshold_seconds = sla_for_case * 0.60
             elapsed_ratio = (state["elapsed"] / sla_for_case) if sla_for_case else 1.0
-            if elapsed_ratio < 0.50:
+            if elapsed_ratio < 0.60:
                 duration_color_class = "duration-green"
             elif elapsed_ratio < 0.80:
                 duration_color_class = "duration-yellow"
@@ -7820,8 +7857,10 @@ def dashboard_fragment():
 
 
                     const ratio = elapsed / sla;
-                    wrap.classList.toggle("duration-green", ratio < 0.50);
-                    wrap.classList.toggle("duration-yellow", ratio >= 0.50 && ratio < 0.80);
+                    // Each row carries its station-specific SLA, so 40% remaining
+                    // is always evaluated against the correct station timeframe.
+                    wrap.classList.toggle("duration-green", ratio < 0.60);
+                    wrap.classList.toggle("duration-yellow", ratio >= 0.60 && ratio < 0.80);
                     wrap.classList.toggle("duration-red", ratio >= 0.80);
                     wrap.classList.toggle("duration-warning-active", ratio >= 0.80 && ratio < 1.0);
 
@@ -7900,7 +7939,7 @@ def dashboard_fragment():
                             /* Stop flashing immediately — do not wait for the
                                fragment rerender. */
                             if (isSelected) {
-                                card.classList.remove("critical", "critical-amber", "critical-red", "warning-amber", "warning-red");
+                                card.classList.remove("critical", "critical-red", "critical-amber", "warning-amber", "warning-red");
                                 card.classList.add("warning-muted");
                                 const icon = card.querySelector(".station-alert-icon");
                                 if (icon) {
@@ -8490,6 +8529,7 @@ if st.session_state.get("simulation_alert_active") and st.session_state.get("sim
                 key="simulation_alert_view_case",
             ):
                 st.session_state["simulation_alert_active"] = False
+                st.session_state["simulation_alert_delay_until"] = 0.0
                 st.session_state["selected_case_id"] = str(simulation_alert_case_id)
                 st.session_state["show_case"] = True
                 try:
@@ -8519,6 +8559,7 @@ if (
 ):
     st.session_state["simulation_until"] = 0
     st.session_state["simulation_case_id"] = None
+    st.session_state["simulation_alert_delay_until"] = 0.0
 
 
 
