@@ -116,10 +116,10 @@ ACCOUNT_PRIORITY_COLLECTION = "Account_Priority_Collection"
 
 
 # Performance tuning: short cache keeps station switches responsive while preserving near-real-time data.
-TASK_CACHE_TTL = 0.5
+TASK_CACHE_TTL = 1.5
 # Alert scans are lightweight and run in a dedicated 1-second fragment.
 # Duration itself remains browser-side, while Alert_Collection is kept near real time.
-ALERT_SCAN_MIN_INTERVAL = 1.0
+ALERT_SCAN_MIN_INTERVAL = 1.5
 
 
 STATIONS = {
@@ -2937,7 +2937,6 @@ def task_projection():
         "issue": 1,
         "description": 1,
         "notes": 1,
-        "history": 1,
         "station_warning_ack_trigger": 1,
         "station_warning_acknowledged_at": 1,
         "active": 1,
@@ -6317,7 +6316,7 @@ div[data-testid="stDialog"] [data-testid="stVerticalBlock"]::-webkit-scrollbar-t
     # Duration still updates browser-side every second for smooth per-second timing.
 
 
-@st.fragment(run_every="1s")
+@st.fragment(run_every="1.5s")
 def dashboard_fragment():
 
 
@@ -7142,16 +7141,15 @@ seed_mock_cases()
 
 
 
-# Render the live dashboard. The fragment itself refreshes every second,
-# while the rest of the application remains untouched.
-dashboard_fragment()
-
-
-# Re-open the selected Case Details dialog after an interaction-triggered
-# rerun. This keeps SOP selection, war-room expansion and other dialog
-# controls inside the same case instead of dropping back to the dashboard.
+# Re-open the selected Case Details dialog BEFORE the live dashboard
+# fragment. This guarantees the dialog is created from normal app-level
+# Streamlit layout context, never from a fragment rerun.
 if st.session_state.get("show_case") and st.session_state.get("selected_case_id"):
     case_details(st.session_state["selected_case_id"])
+
+
+# Render the live dashboard. The fragment itself refreshes independently.
+dashboard_fragment()
 
 
 # ============================================================
@@ -7243,13 +7241,14 @@ st.markdown(r'''
 /* Use one real scroll surface for Case Details. Do not apply scrollbar
    styling to every nested Streamlit vertical block. */
 div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
-    height:500px !important;
-    max-height:500px !important;
-    overflow-y:auto !important;
-    overflow-x:hidden !important;
-    overscroll-behavior:contain !important;
-    scrollbar-width:thin !important;
-    scrollbar-color:rgba(71,85,105,.42) transparent !important;
+    height:auto !important;
+    max-height:none !important;
+    min-height:0 !important;
+    overflow:visible !important;
+    overflow-x:visible !important;
+    overscroll-behavior:auto !important;
+    padding-bottom:18px !important;
+    box-sizing:border-box !important;
 }
 div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar { width:5px !important; height:5px !important; }
 div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar-track { background:transparent !important; }
@@ -7936,13 +7935,49 @@ div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] [class*="st-key-war
 }
 /* Keep one scrollable surface and make its height fit the viewport. */
 div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
-    height:calc(100vh - 150px) !important;
-    max-height:calc(100vh - 150px) !important;
-    min-height:220px !important;
-    overflow-y:auto !important;
-    overflow-x:hidden !important;
-    overscroll-behavior:contain !important;
+    height:auto !important;
+    max-height:none !important;
+    min-height:0 !important;
+    overflow:visible !important;
+    overflow-x:visible !important;
+    overscroll-behavior:auto !important;
+    padding-bottom:18px !important;
+    box-sizing:border-box !important;
 }
 </style>
 
 ''', unsafe_allow_html=True)
+
+st.markdown(r"""
+<style>
+/* CASE DETAILS — compact Knowledge Base SOP list */
+div[data-testid="stDialog"] [data-testid="stVerticalBlock"]:has([class*="st-key-kb_sop_list_"]) {
+    gap:2px !important;
+    row-gap:2px !important;
+}
+div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] {
+    margin:0 !important;
+    padding:0 !important;
+    min-height:0 !important;
+}
+div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] > div {
+    margin:0 !important;
+    padding:0 !important;
+}
+div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] button {
+    min-height:24px !important;
+    height:24px !important;
+    padding:2px 6px !important;
+    margin:0 !important;
+    font-size:8.5px !important;
+    line-height:1 !important;
+}
+/* Equal bottom breathing room, matching the compact top spacing. */
+div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
+    padding-bottom:18px !important;
+}
+div[data-testid="stDialog"] [data-testid="stDialogContent"] {
+    padding-bottom:18px !important;
+}
+</style>
+""", unsafe_allow_html=True)
