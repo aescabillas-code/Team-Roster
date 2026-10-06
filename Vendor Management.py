@@ -7324,6 +7324,23 @@ def dashboard_fragment():
                     window.requestAnimationFrame(durationClockLoop);
                 }
 
+                /*
+                 * Streamlit may replace the fragment DOM on its normal
+                 * 1.5-second data refresh. Repaint any newly inserted
+                 * Duration / Total Elapsed nodes immediately from the browser
+                 * clock so those data refreshes never become the visible timer.
+                 */
+                if (!window.__taskTrackerDurationObserver) {
+                    window.__taskTrackerDurationObserver = new MutationObserver(function () {
+                        updateDurations();
+                        updateTotalElapsed();
+                    });
+                    window.__taskTrackerDurationObserver.observe(document.body, {
+                        childList: true,
+                        subtree: true
+                    });
+                }
+
                 durationClockLoop();
             }
 
