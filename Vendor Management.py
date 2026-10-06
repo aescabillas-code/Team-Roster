@@ -3272,24 +3272,52 @@ MOCK_DATA_VERSION = 16
 
 
 def reset_mock_case_durations():
-    """Reset every seeded mock case to zero elapsed duration."""
+    """Reset the 25 seeded mock cases into five distinct alert states per station.
+
+    Each station receives the same five relative SLA positions, but the actual
+    timestamps differ because each station has a different SLA duration.
+
+      Case 1 = 0% elapsed   -> fresh / green
+      Case 2 = 50% elapsed  -> yellow threshold
+      Case 3 = 80% elapsed  -> red threshold
+      Case 4 = 95% elapsed  -> critical warning window
+      Case 5 = 100% elapsed -> breached
+    """
     reset_now = utc_now()
-    result = col(TASKS_COLLECTION).update_many(
-        {"is_mock": True, "case_number": {"$not": {"$regex": "^SIM-"}}},
-        {"$set": {
-            "created_at": reset_now,
-            "station_started_at": reset_now,
-            "last_update": reset_now,
-            "mock_data_version": MOCK_DATA_VERSION,
-        }},
-    )
+    elapsed_ratios = [0.00, 0.50, 0.80, 0.95, 1.00]
+    total_reset = 0
+
     for station, config in STATIONS.items():
-        col(TASKS_COLLECTION).update_many(
-            {"is_mock": True, "case_number": {"$not": {"^SIM-": {}}}, "department": station},
-            {"$set": {"due_date": reset_now + timedelta(minutes=config["sla_minutes"])}},
-        )
+        sla_seconds = int(config["sla_minutes"] * 60)
+        mock_cases = list(col(TASKS_COLLECTION).find(
+            {
+                "is_mock": True,
+                "case_number": {"$not": {"$regex": "^SIM-"}},
+                "department": station,
+            },
+            {"_id": 1},
+        ).sort("_id", ASCENDING).limit(5))
+
+        for idx, case in enumerate(mock_cases):
+            ratio = elapsed_ratios[idx] if idx < len(elapsed_ratios) else 0.0
+            elapsed_seconds = int(sla_seconds * ratio)
+            started_at = reset_now - timedelta(seconds=elapsed_seconds)
+            due_date = started_at + timedelta(seconds=sla_seconds)
+
+            col(TASKS_COLLECTION).update_one(
+                {"_id": case["_id"]},
+                {"$set": {
+                    "created_at": started_at,
+                    "station_started_at": started_at,
+                    "last_update": reset_now,
+                    "due_date": due_date,
+                    "mock_data_version": MOCK_DATA_VERSION,
+                }},
+            )
+            total_reset += 1
+
     clear_task_cache()
-    return result.modified_count
+    return total_reset
 
 
 @st.cache_resource(show_spinner=False)
@@ -4350,6 +4378,27 @@ if st.session_state["show_settings"]:
                 "### Administrator Access"
             )
 
+            st.markdown(
+                """
+                <style>
+                /* Replace the password-field's Material 'visibility' text with an eye icon. */
+                div[data-testid="stDialog"] [data-testid="stTextInput"] button {
+                    font-size:0 !important;
+                    width:34px !important;
+                    min-width:34px !important;
+                    height:34px !important;
+                }
+                div[data-testid="stDialog"] [data-testid="stTextInput"] button::after {
+                    content:"👁" !important;
+                    font-size:18px !important;
+                    line-height:1 !important;
+                    color:#102041 !important;
+                }
+                </style>
+                """,
+                unsafe_allow_html=True,
+            )
+
 
             pin = st.text_input(
                 "Admin PIN",
@@ -4603,7 +4652,7 @@ if st.session_state["show_settings"]:
             # -----------------------------------------------
 
 
-            with tabs[3]:
+            with tabs[4]:
 
 
                 st.markdown(
@@ -4618,17 +4667,17 @@ if st.session_state["show_settings"]:
 
 
                 if st.button(
-                    "↻ Reset Mock Case Durations to 00:00:00",
+                    "↻ Reset Mock Due Dates & Durations",
                     type="secondary",
                     use_container_width=True,
                     key="reset_mock_case_durations",
-                    help="Reset all seeded mock cases to zero elapsed duration and restart their station SLA timers.",
+                    help="Reset all 25 seeded HPE/Aruba mock cases with five different elapsed-duration states per station so green, yellow, red, critical and breached alerts can be demonstrated.",
                 ):
                     reset_count = reset_mock_case_durations()
                     st.session_state["simulation_until"] = 0.0
                     st.session_state["simulation_case_id"] = None
                     st.success(
-                        f"{reset_count} mock case(s) reset to 00:00:00."
+                        f"{reset_count} mock case(s) reset with staggered durations and due dates."
                     )
 
 
@@ -5609,10 +5658,7 @@ def case_details(task_id):
         with tab_kb:
             auto_query = case_kb_query(task)
             query_key = f"kb_reference_query_{task_id}"
-            suggestions_key = f"kb_suggestions_visible_{task_id}"
             selected_kb_key = f"selected_kb_doc_{task_id}"
-            if suggestions_key not in st.session_state:
-                st.session_state[suggestions_key] = True
 
             st.markdown(
                 "<div class='kb-panel-intro'><div class='kb-panel-title'>Knowledge Base</div>"
@@ -5645,36 +5691,17 @@ def case_details(task_id):
 
             if clear_clicked:
                 st.session_state.pop(query_key, None)
-                st.session_state[suggestions_key] = True
                 active_query = auto_query
             else:
                 active_query = text(query).strip() or auto_query
 
-            # Suggested questions are generated ONLY from this case's strongest matches.
-            # They disappear as soon as the user selects one or submits a search.
-            case_match_results = search_kb(auto_query, limit=6)
-            suggestion_clicked = False
-            if st.session_state.get(suggestions_key, True) and case_match_results and not search_clicked:
-                suggestions = build_case_suggestions(task, case_match_results, limit=4)
-                if suggestions:
-                    st.markdown("<div class='kb-suggested-title'>Suggested questions for this case</div>", unsafe_allow_html=True)
-                    question_cols = st.columns(2, gap="small")
-                    for idx, suggested in enumerate(suggestions):
-                        with question_cols[idx % 2]:
-                            if st.button(
-                                suggested,
-                                use_container_width=True,
-                                key=f"kb_suggested_{task_id}_{idx}",
-                            ):
-                                active_query = suggested
-                                suggestion_clicked = True
-                                st.session_state[suggestions_key] = False
-
+            # The suggested-question strip was intentionally removed to keep
+            # the Case Details Knowledge Base focused on the matched SOP list
+            # and the Exact Answer.
             if search_clicked:
                 active_query = text(query).strip() or auto_query
-                st.session_state[suggestions_key] = False
-            elif suggestion_clicked:
-                st.session_state[suggestions_key] = False
+            else:
+                active_query = text(query).strip() or auto_query
 
             results = search_kb(active_query, limit=8)
 
@@ -5684,7 +5711,7 @@ def case_details(task_id):
                 # Submit or a suggested question always selects the highest match.
                 available_ids = {text(x.get("_id")) or text(x.get("title")) for x in results}
                 stored_selected = st.session_state.get(selected_kb_key)
-                if stored_selected not in available_ids or search_clicked or suggestion_clicked:
+                if stored_selected not in available_ids or search_clicked:
                     stored_selected = text(results[0].get("_id")) or text(results[0].get("title"))
                     st.session_state[selected_kb_key] = stored_selected
 
@@ -5708,7 +5735,6 @@ def case_details(task_id):
                         type="primary" if selected else "secondary",
                     ):
                         st.session_state[selected_kb_key] = rid
-                        st.session_state[suggestions_key] = False
                         selected_doc = result
 
                 # Resolve the final selection after button interaction so the
@@ -6734,7 +6760,10 @@ def dashboard_fragment():
                     # can rerun the app without losing the Case Details modal.
                     st.session_state["selected_case_id"] = str(task_id)
                     st.session_state["show_case"] = True
-                    st.rerun()
+                    # This click occurs inside the 1-second dashboard fragment.
+                    # Force an application-scoped rerun so the dialog is opened
+                    # from the normal app layout context, not the fragment context.
+                    st.rerun(scope="app")
 
 
         with row[1]:
@@ -7608,6 +7637,38 @@ div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
 div[data-testid="stDialog"] .kb-product-family,
 div[data-testid="stDialog"] .product-family-tiles,
 div[data-testid="stDialog"] [class*="product-family"] { display:none !important; }
+
+/* KNOWLEDGE BASE FINAL SPACING / READABILITY FIX */
+div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] {
+    margin:0 !important;
+    padding:0 !important;
+    min-height:0 !important;
+}
+div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] + div {
+    margin-top:0 !important;
+}
+div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] button {
+    min-height:26px !important;
+    height:26px !important;
+    padding:3px 6px !important;
+    margin:0 0 2px 0 !important;
+    font-size:8.5px !important;
+    line-height:1.05 !important;
+}
+div[data-testid="stDialog"] .kb-full-sop-label {
+    font-size:9px !important;
+    margin-bottom:5px !important;
+}
+div[data-testid="stDialog"] .kb-rich-content {
+    font-size:11.5px !important;
+    line-height:1.48 !important;
+}
+div[data-testid="stDialog"] .kb-rich-content p {
+    margin:0 0 6px !important;
+}
+div[data-testid="stDialog"] .kb-rich-content li {
+    margin:0 0 4px !important;
+}
 </style>''', unsafe_allow_html=True)
 
 
