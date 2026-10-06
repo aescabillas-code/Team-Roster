@@ -3521,6 +3521,16 @@ def scan_alerts(tasks):
                 f"— {text(task.get('account_name'))}"
             )
 
+        # Acknowledgement is tied to the current station/SLA cycle.
+        # Once the user clicks the station warning, this exact trigger is
+        # silenced permanently. It can alert again only when the trigger key
+        # changes (for example: a new case or a new station cycle after transfer).
+        current_trigger = station_warning_trigger_key(
+            task,
+            station_name(task.get("department")),
+        )
+        if text(task.get("station_warning_ack_trigger")) == current_trigger:
+            continue
 
         candidates.append((task, alert_type, message))
 
@@ -7884,4 +7894,65 @@ div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
 }
 </style>
 
+''', unsafe_allow_html=True)
+
+
+st.markdown(r'''<style>
+/* ============================================================
+   CASE DETAILS — FINAL MODAL SCROLL FIX
+   The modal itself is the single scroll surface. This avoids the
+   nested fixed-height container stopping before the true bottom.
+   Mouse wheel, trackpad and keyboard scrolling operate on the modal.
+   ============================================================ */
+
+/* The actual dialog panel must be allowed to scroll vertically. */
+div[data-testid="stDialog"] > div {
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+    overscroll-behavior:contain !important;
+    -webkit-overflow-scrolling:touch !important;
+    scrollbar-width:thin !important;
+    scrollbar-color:rgba(71,85,105,.48) transparent !important;
+}
+
+/* WebKit scrollbar for the actual modal. */
+div[data-testid="stDialog"] > div::-webkit-scrollbar {
+    width:7px !important;
+}
+div[data-testid="stDialog"] > div::-webkit-scrollbar-track {
+    background:transparent !important;
+}
+div[data-testid="stDialog"] > div::-webkit-scrollbar-thumb {
+    background:rgba(71,85,105,.48) !important;
+    border-radius:999px !important;
+}
+div[data-testid="stDialog"] > div::-webkit-scrollbar-thumb:hover {
+    background:rgba(30,41,59,.70) !important;
+}
+
+/* Do not create a second scroll surface inside Case Details. */
+div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
+    height:auto !important;
+    min-height:0 !important;
+    max-height:none !important;
+    overflow:visible !important;
+    overscroll-behavior:auto !important;
+}
+
+/* Keep the dialog's inner content wide and let its natural height define
+   the total scrollable document. */
+div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] > div {
+    height:auto !important;
+    min-height:0 !important;
+    max-height:none !important;
+    overflow:visible !important;
+}
+
+/* Make the bottom footer part of the normal document flow. */
+div[data-testid="stDialog"] .case-detail-footer {
+    min-height:24px !important;
+    height:24px !important;
+    margin-bottom:12px !important;
+}
+</style>
 ''', unsafe_allow_html=True)
