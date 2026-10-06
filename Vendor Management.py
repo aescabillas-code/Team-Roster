@@ -3293,7 +3293,7 @@ def mock_original_state(case_number):
         "is_mock": True,
         "mock_data_version": MOCK_DATA_VERSION,
         "station_checklists": checklist,
-        "history": [{"action": f"Case entered {station_name(station)}", "timestamp": started}],
+        "history": [{"action": f"Case entered {station_name(station)}", "timestamp": started, "station": station}],
     }
 
 
@@ -3353,6 +3353,7 @@ def reset_mock_case_durations():
                         "meetings": "",
                         "communications": "",
                         "communication_history": "",
+                        "collaboration_history": "",
                         "attachments": "",
                         "files": "",
                         "war_room": "",
@@ -3451,7 +3452,7 @@ def seed_mock_cases(force=False):
                 "is_mock": True,
                 "mock_data_version": MOCK_DATA_VERSION,
                 "station_checklists": checklist,
-                "history": [{"action": f"Case entered {station_name(station)}", "timestamp": started}],
+                "history": [{"action": f"Case entered {station_name(station)}", "timestamp": started, "station": station}],
             })
             case_index += 1
 
@@ -4085,10 +4086,18 @@ def save_case_station_checklist(task_id, station, items):
         if is_complete and not was_complete:
             bullets = "\n".join(f"• {text(x.get('item'))}" for x in clean_items if text(x.get("item")))
             history = list(task.get("history") or [])
+            state_snapshot = calculate_state(task)
+            resolution_snapshot = automated_case_assessment(task, state_snapshot)
+            action_logs = task.get("case_action_log") or []
+            latest_action_log = action_logs[-1] if isinstance(action_logs, list) and action_logs and isinstance(action_logs[-1], dict) else {}
             history.append({
                 "action": f"{station_display_name(station)} checklist completed:\n{bullets}",
                 "timestamp": now,
                 "actor": "Caseflow",
+                "station": station,
+                "resolution_assessment": resolution_snapshot,
+                "action_plan": text(latest_action_log.get("action_plan")),
+                "case_note": text(latest_action_log.get("note")),
             })
             update["$set"]["history"] = history
             update["$set"]["notes"] = f"{station_display_name(station)} checklist completed:\n{bullets}"
@@ -4171,6 +4180,9 @@ def save_case_action_log(task_id, action_plan, note, logged_by="Caseflow User"):
             "timestamp": now,
             "actor": actor,
             "station": station,
+            "resolution_assessment": automated_case_assessment(task, calculate_state(task)),
+            "action_plan": action_plan,
+            "case_note": note,
         })
         result = col(TASKS_COLLECTION).update_one(
             {"_id": ObjectId(str(task_id))},
@@ -4194,14 +4206,54 @@ def save_case_action_log(task_id, action_plan, note, logged_by="Caseflow User"):
         return False, f"Unable to save the action plan and note: {exc}"
 
 
+def _append_collaboration_history(task_id, action, actor="Caseflow", station=None):
+    """Persist a collaboration-tab action and mirror it into the main case history."""
+    action = text(action)
+    if not action:
+        return False
+    try:
+        from bson import ObjectId
+        now = utc_now()
+        task = col(TASKS_COLLECTION).find_one({"_id": ObjectId(str(task_id))}) or {}
+        station = station_name(station or task.get("department"))
+        actor = text(actor) or "Caseflow"
+        collaboration_entry = {
+            "action": action,
+            "timestamp": now,
+            "actor": actor,
+            "station": station,
+        }
+        history = list(task.get("history") or [])
+        history.append({
+            "action": f"Collaboration · {action}",
+            "timestamp": now,
+            "actor": actor,
+            "station": station,
+            "history_type": "collaboration",
+        })
+        result = col(TASKS_COLLECTION).update_one(
+            {"_id": ObjectId(str(task_id))},
+            {
+                "$push": {
+                    "collaboration_history": {"$each": [collaboration_entry], "$slice": -100}
+                },
+                "$set": {
+                    "history": history,
+                    "last_update": now,
+                },
+            },
+        )
+        clear_task_cache()
+        return result.modified_count > 0
+    except Exception:
+        return False
+
+
 def reassign_case(task, assignee):
     assignee = text(assignee)
     current = station_name(task.get("department"))
     if not assignee or assignee == text(task.get("assigned_to")):
         return False, "Choose a different assignee."
-    missing = checklist_missing(task, current)
-    if missing:
-        return False, "Complete the current-station checklist before reassigning this case."
     try:
         from bson import ObjectId
         now = utc_now()
@@ -4290,13 +4342,22 @@ def transfer_case(task, destination):
     source_station = station_name(task.get("department"))
     destination_station = station_name(destination)
 
+    actor = text(task.get("assigned_to")) or "Caseflow"
+    state_snapshot = calculate_state(task)
+    resolution_snapshot = automated_case_assessment(task, state_snapshot)
+    action_logs = task.get("case_action_log") or []
+    latest_action_log = action_logs[-1] if isinstance(action_logs, list) and action_logs and isinstance(action_logs[-1], dict) else {}
     history.append({
         "action": (
             f"Transferred from {station_display_name(source_station)} "
             f"to {station_display_name(destination_station)}"
         ),
         "timestamp": now,
-        "actor": text(task.get("assigned_to")) or "Caseflow",
+        "actor": actor,
+        "station": source_station,
+        "resolution_assessment": resolution_snapshot,
+        "action_plan": text(latest_action_log.get("action_plan")),
+        "case_note": text(latest_action_log.get("note")),
     })
     history.append({
         "action": (
@@ -5463,18 +5524,74 @@ def case_details(task_id):
                     st.caption("No resolution, action plan, or notes are recorded for this case.")
                 st.markdown("</div>", unsafe_allow_html=True)
 
-            history = task.get("history") or []
+            history = list(task.get("history") or [])
+            # Legacy collaboration/communication records are folded into Case History
+            # so the complete journey remains visible even for cases created before
+            # Collaboration History was introduced.
+            history_actions = {
+                text(event.get("action"))
+                for event in history
+                if isinstance(event, dict)
+            }
+            for collab_event in list(task.get("collaboration_history") or []):
+                if not isinstance(collab_event, dict):
+                    continue
+                collab_action = text(collab_event.get("action"))
+                if collab_action and f"Collaboration · {collab_action}" not in history_actions:
+                    history.append({
+                        "action": f"Collaboration · {collab_action}",
+                        "timestamp": collab_event.get("timestamp"),
+                        "actor": collab_event.get("actor") or collab_event.get("user"),
+                        "station": collab_event.get("station") or department,
+                        "history_type": "collaboration",
+                    })
+            legacy_communications = task.get("communications") or task.get("communication_history") or []
+            for comm in legacy_communications if isinstance(legacy_communications, list) else []:
+                if isinstance(comm, dict):
+                    comm_body = text(comm.get("message") or comm.get("body") or comm.get("details"))
+                    comm_stamp = comm.get("timestamp") or comm.get("created_at")
+                    comm_actor = text(comm.get("sender") or comm.get("user") or comm.get("from"))
+                else:
+                    comm_body = text(comm)
+                    comm_stamp = None
+                    comm_actor = ""
+                if comm_body:
+                    history.append({
+                        "action": f"Collaboration · {comm_body}",
+                        "timestamp": comm_stamp,
+                        "actor": comm_actor or "Caseflow User",
+                        "station": department,
+                        "history_type": "collaboration",
+                    })
             st.markdown("<div class='case-card case-history-card'>", unsafe_allow_html=True)
             st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>◷</span>Case History</div>", unsafe_allow_html=True)
             if history:
-                for event in reversed(history):
+                # Chronological order intentionally starts at CARE and follows the
+                # case through ARCH, PET, SUPPLY CHAIN and FULFILLMENT.
+                for event in sorted(
+                    history,
+                    key=lambda x: as_utc(x.get("timestamp")) if isinstance(x, dict) and as_utc(x.get("timestamp")) else datetime.min.replace(tzinfo=timezone.utc),
+                ):
                     if isinstance(event, dict):
                         action = text(event.get("action") or event.get("event") or event.get("details")) or "Case updated"
                         stamp = dt_display(event.get("timestamp")) or ""
                         actor = text(event.get("user") or event.get("actor") or event.get("assigned_to")) or "System"
+                        station_label = station_display_name(event.get("station"))
+                        resolution_snapshot = text(event.get("resolution_assessment"))
+                        action_plan_snapshot = text(event.get("action_plan"))
+                        note_snapshot = text(event.get("case_note"))
                     else:
                         action, stamp, actor = text(event), "", "System"
+                        station_label = resolution_snapshot = action_plan_snapshot = note_snapshot = ""
                     action_html = html.escape(action).replace("\n", "<br>")
+                    if station_label:
+                        action_html = f"<b>{html.escape(station_label)}</b><br>{action_html}"
+                    if resolution_snapshot:
+                        action_html += f"<br><span class='history-snapshot'><b>Resolution / Assessment:</b> {html.escape(resolution_snapshot)}</span>"
+                    if action_plan_snapshot:
+                        action_html += f"<br><span class='history-snapshot'><b>Action Plan:</b> {html.escape(action_plan_snapshot)}</span>"
+                    if note_snapshot:
+                        action_html += f"<br><span class='history-snapshot'><b>Case Note:</b> {html.escape(note_snapshot)}</span>"
                     st.markdown(
                         f"<div class='history-row'><div class='history-dot'></div>"
                         f"<div class='history-main'><div class='history-meta'>{html.escape(stamp)} "
@@ -5483,7 +5600,7 @@ def case_details(task_id):
                         unsafe_allow_html=True,
                     )
             else:
-                st.info("No activity history is stored on this case.")
+                st.info("No activity history is stored on this case yet.")
             st.markdown("</div>", unsafe_allow_html=True)
 
         # ---------------------------------------------------------------
@@ -5515,8 +5632,6 @@ def case_details(task_id):
                 if st.button("Reassign Case", use_container_width=True, key=f"case_reassign_{task_id}"):
                     if new_assignee == assigned_to:
                         st.warning("Choose a different assignee.")
-                    elif current_missing:
-                        st.error("Complete every item in the current-station checklist before reassigning this case.")
                     else:
                         ok, message = reassign_case(task, new_assignee)
                         if ok:
@@ -5576,8 +5691,7 @@ def case_details(task_id):
                         type="primary",
                         use_container_width=True,
                         key=f"case_transfer_{task_id}",
-                        disabled=bool(current_missing),
-                        help="Complete every checklist item for the current station to enable transfer." if current_missing else "Transfer the case to the selected station.",
+                        help="Transfer becomes available as soon as the current-station checklist is complete.",
                     ):
                         if destination == current:
                             st.warning("Choose a different station.")
@@ -5593,7 +5707,7 @@ def case_details(task_id):
                             st.error("Unable to transfer case.")
 
                     st.markdown(
-                        "<div class='case-actions-note'>Reassignment and station transfer are locked until every required item for the current station is checked.</div>",
+                        "<div class='case-actions-note'>Station transfer is available immediately after the final checklist item is checked. Reassignment does not require checklist completion.</div>",
                         unsafe_allow_html=True,
                     )
                 st.markdown("</div>", unsafe_allow_html=True)
@@ -5844,6 +5958,13 @@ def case_details(task_id):
                 ):
                     st.session_state[war_open_key] = True
                     war_room_open = True
+                    _append_collaboration_history(
+                        task_id,
+                        f"War Room opened for {case_number}.",
+                        assigned_to or "Caseflow",
+                        department,
+                    )
+                    st.rerun()
 
             if war_room_open:
                 meetings = task.get("meetings") or []
@@ -5857,23 +5978,13 @@ def case_details(task_id):
                     unsafe_allow_html=True,
                 )
                 if st.button("Close War Room", use_container_width=True, key=f"war_room_close_{task_id}"):
-                    try:
-                        from bson import ObjectId
-                        now = utc_now()
-                        history = list(task.get("history") or [])
-                        attendee_names = ", ".join(text(x) for x in current_attendees if text(x)) or "None recorded"
-                        history.append({
-                            "action": f"War Room closed.\n• Attendees: {attendee_names}\n• Link: {mock_link}",
-                            "timestamp": now,
-                            "actor": assigned_to or "Caseflow",
-                        })
-                        col(TASKS_COLLECTION).update_one(
-                            {"_id": ObjectId(str(task_id))},
-                            {"$set": {"history": history, "last_update": now}},
-                        )
-                        clear_task_cache()
-                    except Exception:
-                        pass
+                    attendee_names = ", ".join(text(x) for x in current_attendees if text(x)) or "None recorded"
+                    _append_collaboration_history(
+                        task_id,
+                        f"War Room closed.\n• Attendees: {attendee_names}\n• Link: {mock_link}",
+                        assigned_to or "Caseflow",
+                        department,
+                    )
                     st.session_state[war_open_key] = False
                     st.rerun()
 
@@ -5955,7 +6066,17 @@ def case_details(task_id):
                                     "meetings": {
                                         "$each": [meeting_record],
                                         "$slice": -50,
-                                    }
+                                    },
+                                    "collaboration_history": {
+                                        "$each": [{
+                                            "action": meeting_history,
+                                            "timestamp": now,
+                                            "actor": assigned_to or "Caseflow",
+                                            "station": department,
+                                            "type": "meeting",
+                                        }],
+                                        "$slice": -100,
+                                    },
                                 },
                                 "$set": {
                                     "last_update": now,
@@ -5971,7 +6092,7 @@ def case_details(task_id):
 
             meetings = task.get("meetings") or []
             if isinstance(meetings, list) and meetings:
-                st.markdown("<div class='communication-section-label'>Recorded Meetings</div>", unsafe_allow_html=True)
+                st.markdown("<div class='communication-section-label'>Recorded Collaboration Meetings</div>", unsafe_allow_html=True)
                 for meeting in reversed(meetings[-10:]):
                     if not isinstance(meeting, dict):
                         continue
@@ -5997,10 +6118,16 @@ def case_details(task_id):
                         unsafe_allow_html=True,
                     )
 
-            st.markdown("<div class='communication-section-label'>Communication History</div>", unsafe_allow_html=True)
+            st.markdown("<div class='communication-section-label'>Collaboration History</div>", unsafe_allow_html=True)
+            collaboration_history = task.get("collaboration_history") or []
             communications = task.get("communications") or task.get("communication_history") or []
-            if isinstance(communications, list) and communications:
-                for item in reversed(communications[-20:]):
+            combined_collaboration = []
+            if isinstance(collaboration_history, list):
+                combined_collaboration.extend(collaboration_history)
+            if isinstance(communications, list):
+                combined_collaboration.extend(communications)
+            if isinstance(combined_collaboration, list) and combined_collaboration:
+                for item in reversed(combined_collaboration[-50:]):
                     if isinstance(item, dict):
                         sender = text(item.get("sender") or item.get("user") or item.get("from")) or "Caseflow User"
                         body = text(item.get("message") or item.get("body") or item.get("details")) or "—"
@@ -6012,7 +6139,7 @@ def case_details(task_id):
                         unsafe_allow_html=True,
                     )
             else:
-                st.info("No communication history is stored on this case.")
+                st.info("No collaboration history is stored on this case.")
             st.markdown("</div>", unsafe_allow_html=True)
 
         # ---------------------------------------------------------------
