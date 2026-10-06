@@ -37,7 +37,7 @@ Required secrets:
 
 
 Optional:
-    APP_NAME = "HPE Caseflow"
+    APP_NAME = "OVR-VW"
 
 
 Install:
@@ -79,7 +79,7 @@ from pymongo.errors import PyMongoError
 
 
 st.set_page_config(
-    page_title="HPE Caseflow",
+    page_title="OVR-VW",
     page_icon="⏱️",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -107,11 +107,13 @@ SOP_COLLECTION = "SOP_Collection"
 ACCOUNT_PRIORITY_COLLECTION = "Account_Priority_Collection"
 
 
-# Performance tuning: short cache keeps station switches responsive while preserving near-real-time data.
+# Performance tuning: retain a short cache so the 1-second UI fragment does not
+# force a MongoDB read on every tick. This reduces database/network churn while
+# keeping the dashboard visually current.
 TASK_CACHE_TTL = 1.5
-# Alert scans are lightweight and run in a dedicated 1-second fragment.
+# Alert scans are lightweight and run in the same 1-second fragment.
 # Duration itself remains browser-side, while Alert_Collection is kept near real time.
-ALERT_SCAN_MIN_INTERVAL = 1.5
+ALERT_SCAN_MIN_INTERVAL = 1.0
 
 
 STATIONS = {
@@ -931,7 +933,7 @@ def access_gate():
 
 
         <div class="access-wrap">
-            <div class="access-title">HPE Caseflow</div>
+            <div class="access-title">OVR-VW</div>
             <div class="access-sub">
                 Enter the one-time access code to continue.
             </div>
@@ -4359,14 +4361,14 @@ with st.container(key="caseflow_header_shell"):
     with header_cols[0]:
         st.markdown(
             """
-            <div class="caseflow-brand" aria-label="HPE Caseflow">
+            <div class="caseflow-brand" aria-label="OVR-VW">
                 <div class="caseflow-hpe-symbol" aria-hidden="true"></div>
                 <div class="caseflow-hpe-copy">
                     <div class="caseflow-hpe-word">HPE</div>
                     <div class="caseflow-hpe-tagline">Accelerating what's next together</div>
                 </div>
                 <div class="caseflow-divider" aria-hidden="true"></div>
-                <div class="caseflow-title">Caseflow</div>
+                <div class="caseflow-title">OVR-VW</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -6354,7 +6356,7 @@ div[data-testid="stDialog"] [data-testid="stVerticalBlock"]::-webkit-scrollbar-t
     # Duration and Total Elapsed are browser-clock driven; dashboard refresh cadence is independent.
 
 
-@st.fragment(run_every="1.5s")
+@st.fragment(run_every="1s")
 def dashboard_fragment():
 
 
@@ -7180,19 +7182,25 @@ def dashboard_fragment():
                 let lastSecond = -1;
 
                 function durationClockLoop() {
-                    const second = Math.floor(Date.now() / 1000);
+                    const now = Date.now();
+                    const second = Math.floor(now / 1000);
                     if (second !== lastSecond) {
                         lastSecond = second;
                         updateDurations();
                         updateTotalElapsed();
                         updateWarningAnimations();
                     }
-                    window.requestAnimationFrame(durationClockLoop);
+                    /* Wake close to the next wall-clock second instead of
+                       running requestAnimationFrame ~60 times per second.
+                       This preserves 1-second timer accuracy while materially
+                       reducing browser CPU work and visual contention. */
+                    const delay = Math.max(50, 1000 - (now % 1000) + 10);
+                    window.setTimeout(durationClockLoop, delay);
                 }
 
                 /*
                  * Streamlit may replace the fragment DOM on its normal
-                 * 1.5-second data refresh. Repaint any newly inserted
+                 * 1-second data refresh. Repaint any newly inserted
                  * Duration / Total Elapsed nodes immediately from the browser
                  * clock so those data refreshes never become the visible timer.
                  */
