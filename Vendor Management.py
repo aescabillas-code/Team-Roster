@@ -7873,14 +7873,49 @@ div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] [class*="st-key-war
     color:transparent !important;
     cursor:pointer !important;
 }
-/* Keep one scrollable surface and make its height fit the viewport. */
-div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
-    height:calc(100vh - 150px) !important;
-    max-height:calc(100vh - 150px) !important;
-    min-height:220px !important;
+/* ============================================================
+   CASE DETAILS — SCROLL-ONLY FIX
+   Keep the existing dialog size/design. Use the dialog content
+   wrapper as the single scroll surface so every Case Details
+   section, including the final section, can be reached.
+   ============================================================ */
+
+/* The dialog itself remains clipped; its content wrapper owns scrolling. */
+div[data-testid="stDialog"] > div {
+    overflow:hidden !important;
+    box-sizing:border-box !important;
+}
+
+/* Make the dialog content area the real viewport for the scroll. */
+div[data-testid="stDialog"] > div > div {
+    height:100% !important;
+    max-height:100% !important;
+    min-height:0 !important;
     overflow-y:auto !important;
     overflow-x:hidden !important;
+    box-sizing:border-box !important;
     overscroll-behavior:contain !important;
+    -webkit-overflow-scrolling:touch !important;
+    scrollbar-width:auto !important;
+    scrollbar-gutter:stable !important;
+}
+
+/* Do not create a second nested scrollbar inside Case Details. */
+div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
+    height:auto !important;
+    max-height:none !important;
+    min-height:0 !important;
+    overflow:visible !important;
+    overflow-x:visible !important;
+    overscroll-behavior:auto !important;
+}
+
+/* Ensure the last content block has enough scroll clearance. */
+div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::after {
+    content:"" !important;
+    display:block !important;
+    height:24px !important;
+    min-height:24px !important;
 }
 </style>
 
