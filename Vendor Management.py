@@ -7373,6 +7373,99 @@ seed_mock_cases()
 # case button during the fragment's sequential widget interaction.
 dashboard_fragment()
 
+# ============================================================
+# STABLE BROWSER TIMER — DURATION / TOTAL ELAPSED ONLY
+# ============================================================
+# This lives outside the 1.5s dashboard fragment. It controls ONLY the two
+# visible elapsed-time fields and does not change the application's refresh cadence.
+st.markdown(
+    r"""
+    <script>
+    (function () {
+        if (window.__caseflowStableDurationElapsedClock) return;
+        window.__caseflowStableDurationElapsedClock = true;
+
+        function fmt(seconds) {
+            seconds = Math.max(0, Math.floor(seconds));
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const sec = seconds % 60;
+            return String(h).padStart(2, "0") + ":" +
+                   String(m).padStart(2, "0") + ":" +
+                   String(sec).padStart(2, "0");
+        }
+
+        function paint() {
+            const now = Date.now();
+
+            document.querySelectorAll('[data-duration-live="1"]').forEach(function (node) {
+                const wrap = node.closest('.duration-warning-wrap');
+                const raw = node.getAttribute('data-duration-start');
+                if (!raw) return;
+                const started = Date.parse(raw);
+                if (!Number.isFinite(started)) return;
+
+                const elapsed = Math.max(0, Math.floor((now - started) / 1000));
+                node.textContent = fmt(elapsed);
+
+                if (wrap) {
+                    const sla = Number(wrap.getAttribute('data-sla-seconds') || '0');
+                    if (sla > 0) {
+                        const ratio = elapsed / sla;
+                        wrap.classList.toggle('duration-green', ratio < 0.50);
+                        wrap.classList.toggle('duration-yellow', ratio >= 0.50 && ratio < 0.80);
+                        wrap.classList.toggle('duration-red', ratio >= 0.80);
+                        wrap.classList.toggle('duration-warning-active', ratio >= 0.80 && ratio < 1.0);
+                    }
+                }
+            });
+
+            document.querySelectorAll('[data-total-elapsed-live="1"]').forEach(function (node) {
+                const raw = node.getAttribute('data-total-elapsed-start');
+                if (!raw) return;
+                const started = Date.parse(raw);
+                if (!Number.isFinite(started)) return;
+                const elapsed = Math.max(0, Math.floor((now - started) / 1000));
+                node.textContent = fmt(elapsed);
+            });
+        }
+
+        // Align to the browser's real second boundary. The 1.5s Streamlit
+        // refresh is completely independent of these two clocks.
+        function tick() {
+            paint();
+            window.setTimeout(tick, 1000 - (Date.now() % 1000));
+        }
+
+        // When Streamlit replaces the fragment DOM, immediately repaint only
+        // when timer ELEMENTS are inserted. Ignore our own text-node changes.
+        const observer = new MutationObserver(function (mutations) {
+            for (const mutation of mutations) {
+                for (const added of mutation.addedNodes) {
+                    if (added.nodeType !== 1) continue;
+                    if ((added.matches && (
+                        added.matches('[data-duration-live="1"]') ||
+                        added.matches('[data-total-elapsed-live="1"]')
+                    )) || (added.querySelector && added.querySelector(
+                        '[data-duration-live="1"], [data-total-elapsed-live="1"]'
+                    ))) {
+                        paint();
+                        return;
+                    }
+                }
+            }
+        });
+
+        observer.observe(document.body, {childList: true, subtree: true});
+        paint();
+        tick();
+    })();
+    </script>
+    """,
+    unsafe_allow_html=True,
+)
+
+
 
 # ============================================================
 # SIMULATION CLEANUP
