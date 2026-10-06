@@ -52,6 +52,7 @@ import secrets
 import os
 import time
 import textwrap
+import re
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
@@ -3270,50 +3271,137 @@ MOCK_ACCOUNTS = [
 MOCK_DATA_VERSION = 16
 
 
+def mock_original_state(case_number):
+    """Return the original seeded state for one of the 25 deterministic mock cases."""
+    match = re.search(r"-(\d{4})$", text(case_number))
+    if not match:
+        return None
+
+    case_index = int(match.group(1))
+    if case_index < 1 or case_index > 25:
+        return None
+
+    station_order = list(STATIONS.keys())
+    station = station_order[(case_index - 1) // 5]
+    item_index = (case_index - 1) % 5
+    context = MOCK_CASE_CONTEXT[station][item_index]
+    account = MOCK_ACCOUNTS[item_index % len(MOCK_ACCOUNTS)]
+    priority_account = item_index == 0
+    started = utc_now()
+    checklist = {
+        station: [
+            {"item": item, "checked": False}
+            for item in STATION_CHECKLISTS[station]
+        ]
+    }
+
+    return {
+        "subject": MOCK_SUBJECTS[station][item_index],
+        "priority": "Critical" if priority_account else ("Medium" if item_index == 1 else "Low"),
+        "account_priority": "Yes" if priority_account else "No",
+        "assigned_to": MOCK_NAMES[item_index % len(MOCK_NAMES)],
+        "department": station,
+        "account_name": account,
+        "vendor": "HPE Services" if item_index % 2 == 0 else "Aruba Networking Services",
+        "issue": context["issue"],
+        "description": (
+            f"HPE/Aruba demonstration case for {station_name(station)}. "
+            f"Device: {context['product']}. {context['issue']} "
+            "The case is intentionally aligned with a Knowledge Base/SOP topic "
+            "so the integrated guidance panel can demonstrate retrieval."
+        ),
+        "product": context["product"],
+        "category": context["category"],
+        "related_system": context["product"],
+        "resolution": "Pending current-station checklist completion and SOP-guided assessment.",
+        "next_action": context["next_action"],
+        "notes": "HPE/Aruba mock case for Caseflow + Knowledge Base demonstration.",
+        "status": "In Progress" if item_index % 2 == 0 else "Open",
+        "active": True,
+        "is_mock": True,
+        "mock_data_version": MOCK_DATA_VERSION,
+        "station_checklists": checklist,
+        "history": [{"action": f"Case entered {station_name(station)}", "timestamp": started}],
+    }
+
+
 def reset_mock_case_durations():
-    """Reset the 25 seeded mock cases into five distinct alert states per station.
+    """Reset all 25 mock cases to their original seeded state and SLA demo timing.
 
-    Each station receives the same five relative SLA positions, but the actual
-    timestamps differ because each station has a different SLA duration.
-
-      Case 1 = 0% elapsed   -> fresh / green
-      Case 2 = 50% elapsed  -> yellow threshold
-      Case 3 = 80% elapsed  -> red threshold
-      Case 4 = 95% elapsed  -> critical warning window
-      Case 5 = 100% elapsed -> breached
+    The reset intentionally restores the original station, assignee, status,
+    checklist and seeded case fields first. This means mock cases may be moved
+    and updated during a demonstration, but Reset always returns them to the
+    state in which they were originally seeded.
     """
     reset_now = utc_now()
     elapsed_ratios = [0.00, 0.50, 0.80, 0.95, 1.00]
     total_reset = 0
+    reset_task_ids = []
 
-    for station, config in STATIONS.items():
-        sla_seconds = int(config["sla_minutes"] * 60)
-        mock_cases = list(col(TASKS_COLLECTION).find(
+    mock_cases = list(
+        col(TASKS_COLLECTION).find(
             {
                 "is_mock": True,
                 "case_number": {"$not": {"$regex": "^SIM-"}},
-                "department": station,
             },
-            {"_id": 1},
-        ).sort("_id", ASCENDING).limit(5))
+            {"_id": 1, "case_number": 1},
+        ).sort("case_number", ASCENDING)
+    )
 
-        for idx, case in enumerate(mock_cases):
-            ratio = elapsed_ratios[idx] if idx < len(elapsed_ratios) else 0.0
-            elapsed_seconds = int(sla_seconds * ratio)
-            started_at = reset_now - timedelta(seconds=elapsed_seconds)
-            due_date = started_at + timedelta(seconds=sla_seconds)
+    for case in mock_cases:
+        original = mock_original_state(case.get("case_number"))
+        if not original:
+            continue
 
-            col(TASKS_COLLECTION).update_one(
-                {"_id": case["_id"]},
-                {"$set": {
-                    "created_at": started_at,
-                    "station_started_at": started_at,
-                    "last_update": reset_now,
-                    "due_date": due_date,
-                    "mock_data_version": MOCK_DATA_VERSION,
-                }},
+        station = original["department"]
+        station_index = (int(text(case["case_number"])[-4:]) - 1) % 5
+        sla_seconds = int(STATIONS[station]["sla_minutes"] * 60)
+        ratio = elapsed_ratios[station_index]
+        elapsed_seconds = int(sla_seconds * ratio)
+        started_at = reset_now - timedelta(seconds=elapsed_seconds)
+        due_date = started_at + timedelta(seconds=sla_seconds)
+
+        restore = dict(original)
+        restore.update({
+            "created_at": started_at,
+            "station_started_at": started_at,
+            "last_update": reset_now,
+            "due_date": due_date,
+            "mock_data_version": MOCK_DATA_VERSION,
+        })
+
+        try:
+            from bson import ObjectId
+            result = col(TASKS_COLLECTION).update_one(
+                {"_id": ObjectId(str(case["_id"]))},
+                {
+                    "$set": restore,
+                    "$unset": {
+                        "case_action_log": "",
+                        "meetings": "",
+                        "communications": "",
+                        "communication_history": "",
+                        "attachments": "",
+                        "files": "",
+                        "war_room": "",
+                        "station_warning_ack_trigger": "",
+                        "station_warning_acknowledged_at": "",
+                    },
+                },
             )
-            total_reset += 1
+            if result.matched_count:
+                total_reset += 1
+                reset_task_ids.append(str(case["_id"]))
+        except Exception:
+            continue
+
+    # Remove stale alerts from the demonstration state. A reset starts a
+    # completely new mock-case/SLA cycle and must not inherit prior alerts.
+    if reset_task_ids:
+        try:
+            col(ALERT_COLLECTION).delete_many({"task_id": {"$in": reset_task_ids}})
+        except Exception:
+            pass
 
     clear_task_cache()
     return total_reset
@@ -4220,6 +4308,48 @@ def reassign_case(task, assignee):
         return False, f"Unable to reassign case: {exc}"
 
 
+def close_case(task):
+    """Close a case only from the final FULFILLMENT/ONSITE station after its checklist is complete."""
+    current_station = station_name(task.get("department"))
+    if current_station != "ONSITE":
+        return False, "Case can only be closed from FULFILLMENT."
+
+    missing = checklist_missing(task, current_station)
+    if missing:
+        return False, "Complete every FULFILLMENT checklist item before closing the case."
+
+    try:
+        from bson import ObjectId
+        now = utc_now()
+        history = list(task.get("history") or [])
+        history.append({
+            "action": (
+                "Case closed from FULFILLMENT after completing the final station checklist."
+            ),
+            "timestamp": now,
+            "actor": text(task.get("assigned_to")) or "Caseflow",
+            "station": current_station,
+        })
+
+        result = col(TASKS_COLLECTION).update_one(
+            {"_id": ObjectId(str(task["_id"]))},
+            {
+                "$set": {
+                    "status": "Closed",
+                    "active": False,
+                    "last_update": now,
+                    "resolution": "Case closed after completing the FULFILLMENT checklist.",
+                    "next_action": "No further station transfer required.",
+                    "history": history,
+                }
+            },
+        )
+        clear_task_cache()
+        return result.modified_count > 0, ""
+    except Exception as exc:
+        return False, f"Unable to close case: {exc}"
+
+
 # ============================================================
 # CASE TRANSFER
 # ============================================================
@@ -4675,6 +4805,9 @@ if st.session_state["show_settings"]:
                     reset_count = reset_mock_case_durations()
                     st.session_state["simulation_until"] = 0.0
                     st.session_state["simulation_case_id"] = None
+                    st.session_state["station_warning_ack_until"] = {}
+                    st.session_state["station_warning_silenced"] = set()
+                    st.session_state["station_warning_latched"] = set()
                     st.success(
                         f"{reset_count} mock case(s) reset with staggered durations and due dates."
                     )
@@ -5355,7 +5488,7 @@ def case_details(task_id):
                     </div>
                     <div class="case-timing-item">
                         <span class="case-timing-icon">◷</span>
-                        <div><span>Total Elapsed</span><strong>{html.escape(elapsed)}</strong></div>
+                        <div><span>Total Elapsed</span><strong data-total-elapsed-live="1" data-total-elapsed-start="{html.escape(iso_z(task.get("station_started_at") or task.get("created_at")))}">{html.escape(elapsed)}</strong></div>
                     </div>
                 </div>
             </div>
@@ -5524,38 +5657,77 @@ def case_details(task_id):
                         else:
                             st.error(message or "Unable to reassign case.")
 
-                destination = st.selectbox(
-                    "Transfer to station",
-                    stations,
-                    index=stations.index(current),
-                    format_func=station_display_name,
-                    key=f"case_transfer_destination_{task_id}",
-                )
-                if st.button(
-                    "Transfer Case",
-                    type="primary",
-                    use_container_width=True,
-                    key=f"case_transfer_{task_id}",
-                    disabled=bool(current_missing),
-                    help="Complete every checklist item for the current station to enable transfer." if current_missing else "Transfer the case to the selected station.",
-                ):
-                    if destination == current:
-                        st.warning("Choose a different station.")
-                    elif current_missing:
-                        missing_html = "<br>• ".join(html.escape(x) for x in current_missing[:8])
-                        st.error(f"Complete the current-station checklist before transfer:<br>• {missing_html}", unsafe_allow_html=True)
-                    elif transfer_case(task, destination):
-                        st.success(f"Case transferred to {station_name(destination)}.")
-                        st.session_state["show_case"] = False
-                        st.session_state["selected_case_id"] = None
-                        st.rerun()
-                    else:
-                        st.error("Unable to transfer case.")
+                if current == "ONSITE":
+                    st.markdown(
+                        "<div class='action-readonly-label'>Final Station</div>"
+                        "<div class='action-readonly-value'>FULFILLMENT</div>",
+                        unsafe_allow_html=True,
+                    )
+                    if st.button(
+                        "Close Case",
+                        type="primary",
+                        use_container_width=True,
+                        key=f"case_close_{task_id}",
+                        disabled=bool(current_missing),
+                        help=(
+                            "Complete every FULFILLMENT checklist item to enable case closure."
+                            if current_missing
+                            else "Close the case after the final FULFILLMENT checklist is complete."
+                        ),
+                    ):
+                        if current_missing:
+                            missing_html = "<br>• ".join(html.escape(x) for x in current_missing[:8])
+                            st.error(
+                                f"Complete the FULFILLMENT checklist before closing the case:<br>• {missing_html}",
+                                unsafe_allow_html=True,
+                            )
+                        else:
+                            ok, message = close_case(task)
+                            if ok:
+                                st.success("Case closed.")
+                                st.session_state["show_case"] = False
+                                st.session_state["selected_case_id"] = None
+                                st.rerun()
+                            else:
+                                st.error(message or "Unable to close case.")
 
-                st.markdown(
-                    "<div class='case-actions-note'>Reassignment and station transfer are locked until every required item for the current station is checked.</div>",
-                    unsafe_allow_html=True,
-                )
+                    st.markdown(
+                        "<div class='case-actions-note'>FULFILLMENT is the final station. Completing every checklist item enables case closure instead of station transfer.</div>",
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    destination = st.selectbox(
+                        "Transfer to station",
+                        stations,
+                        index=stations.index(current),
+                        format_func=station_display_name,
+                        key=f"case_transfer_destination_{task_id}",
+                    )
+                    if st.button(
+                        "Transfer Case",
+                        type="primary",
+                        use_container_width=True,
+                        key=f"case_transfer_{task_id}",
+                        disabled=bool(current_missing),
+                        help="Complete every checklist item for the current station to enable transfer." if current_missing else "Transfer the case to the selected station.",
+                    ):
+                        if destination == current:
+                            st.warning("Choose a different station.")
+                        elif current_missing:
+                            missing_html = "<br>• ".join(html.escape(x) for x in current_missing[:8])
+                            st.error(f"Complete the current-station checklist before transfer:<br>• {missing_html}", unsafe_allow_html=True)
+                        elif transfer_case(task, destination):
+                            st.success(f"Case transferred to {station_name(destination)}.")
+                            st.session_state["show_case"] = False
+                            st.session_state["selected_case_id"] = None
+                            st.rerun()
+                        else:
+                            st.error("Unable to transfer case.")
+
+                    st.markdown(
+                        "<div class='case-actions-note'>Reassignment and station transfer are locked until every required item for the current station is checked.</div>",
+                        unsafe_allow_html=True,
+                    )
                 st.markdown("</div>", unsafe_allow_html=True)
 
             with checklist_col:
@@ -7040,6 +7212,30 @@ def dashboard_fragment():
                 // Flashing is latched server-side and may only be stopped by
                 // clicking the station tile. Do not time it out in the browser.
             }
+            function updateTotalElapsed() {
+                const nodes = document.querySelectorAll('[data-total-elapsed-live="1"]');
+                const nowMs = Date.now();
+
+                nodes.forEach(function (node) {
+                    const raw = node.getAttribute("data-total-elapsed-start");
+                    if (!raw) return;
+
+                    const startedMs = Date.parse(raw);
+                    if (!Number.isFinite(startedMs)) return;
+
+                    const elapsed = Math.max(0, Math.floor((nowMs - startedMs) / 1000));
+                    const h = Math.floor(elapsed / 3600);
+                    const m = Math.floor((elapsed % 3600) / 60);
+                    const sec = elapsed % 60;
+
+                    node.textContent =
+                        String(h).padStart(2, "0") + ":" +
+                        String(m).padStart(2, "0") + ":" +
+                        String(sec).padStart(2, "0");
+                });
+            }
+
+
 
 
             /* Make the selected station respond visually BEFORE the
@@ -7103,6 +7299,7 @@ def dashboard_fragment():
 
 
             updateDurations();
+            updateTotalElapsed();
             updateWarningAnimations();
 
 
@@ -7111,6 +7308,7 @@ def dashboard_fragment():
                     setInterval(
                         function () {
                             updateDurations();
+                            updateTotalElapsed();
                             updateWarningAnimations();
                         },
                         1000
