@@ -293,6 +293,9 @@ def initialize_indexes():
         col(ALERT_COLLECTION).create_index(
             [("acknowledged", ASCENDING), ("created_at", DESCENDING)]
         )
+        col(ALERT_COLLECTION).create_index(
+            [("task_id", ASCENDING), ("trigger_key", ASCENDING), ("alert_type", ASCENDING)]
+        )
         col(ACCOUNT_PRIORITY_COLLECTION).create_index(
             [("account_name", ASCENDING)]
         )
@@ -2935,6 +2938,8 @@ def task_projection():
         "description": 1,
         "notes": 1,
         "history": 1,
+        "station_warning_ack_trigger": 1,
+        "station_warning_acknowledged_at": 1,
         "active": 1,
         "is_mock": 1,
     }
@@ -3379,32 +3384,32 @@ def create_alert(
     alert_type,
     message,
 ):
+    """Create one alert per case/station trigger.
+
+    Acknowledged alerts are not recreated while the same trigger is still
+    active. A new station cycle (station_started_at changes) or a new case
+    produces a new trigger key and can alert again.
+    """
     task_id = str(task["_id"])
+    station = station_name(task.get("department"))
+    trigger_key = station_warning_trigger_key(task, station)
 
-
-    exists = col(
-        ALERT_COLLECTION
-    ).find_one({
+    exists = col(ALERT_COLLECTION).find_one({
         "task_id": task_id,
         "alert_type": alert_type,
-        "acknowledged": False,
+        "trigger_key": trigger_key,
     })
-
 
     if exists:
         return
 
-
     col(ALERT_COLLECTION).insert_one({
         "task_id": task_id,
         "case_number": task.get("case_number"),
-        "station": station_name(
-            task.get("department")
-        ),
-        "account_name": task.get(
-            "account_name"
-        ),
+        "station": station,
+        "account_name": task.get("account_name"),
         "alert_type": alert_type,
+        "trigger_key": trigger_key,
         "message": message,
         "created_at": utc_now(),
         "acknowledged": False,
@@ -3452,12 +3457,17 @@ def acknowledge_alert(alert_id):
 
 
 
-def acknowledge_station_alerts(station):
+def acknowledge_station_alerts(station, trigger_keys=None):
+    """Acknowledge only the active warning triggers represented by the clicked tile."""
+    query = {
+        "station": station,
+        "acknowledged": False,
+    }
+    if trigger_keys:
+        query["trigger_key"] = {"$in": list(trigger_keys)}
+
     col(ALERT_COLLECTION).update_many(
-        {
-            "station": station,
-            "acknowledged": False,
-        },
+        query,
         {
             "$set": {
                 "acknowledged": True,
@@ -3520,27 +3530,34 @@ def scan_alerts(tasks):
 
 
     task_ids = [str(task["_id"]) for task, _, _ in candidates]
+    candidate_trigger_keys = {
+        station_warning_trigger_key(task, station_name(task.get("department")))
+        for task, _, _ in candidates
+    }
     try:
         existing = {
-            (str(doc.get("task_id")), doc.get("alert_type"))
+            (
+                str(doc.get("task_id")),
+                doc.get("alert_type"),
+                text(doc.get("trigger_key")),
+            )
             for doc in col(ALERT_COLLECTION).find(
                 {
-                    "acknowledged": False,
                     "task_id": {"$in": task_ids},
+                    "trigger_key": {"$in": list(candidate_trigger_keys)},
                 },
-                {"task_id": 1, "alert_type": 1},
+                {"task_id": 1, "alert_type": 1, "trigger_key": 1},
             )
         }
     except Exception:
         existing = set()
 
-
     docs = []
     created_at = utc_now()
 
-
     for task, alert_type, message in candidates:
-        key = (str(task["_id"]), alert_type)
+        trigger_key = station_warning_trigger_key(task, station_name(task.get("department")))
+        key = (str(task["_id"]), alert_type, trigger_key)
         if key in existing:
             continue
         docs.append({
@@ -3549,6 +3566,7 @@ def scan_alerts(tasks):
             "station": station_name(task.get("department")),
             "account_name": task.get("account_name"),
             "alert_type": alert_type,
+            "trigger_key": trigger_key,
             "message": message,
             "created_at": created_at,
             "acknowledged": False,
@@ -4023,7 +4041,7 @@ def save_case_station_checklist(task_id, station, items):
                 "timestamp": now,
                 "actor": "Caseflow",
             })
-            update["$set"]["history"] = history[-50:]
+            update["$set"]["history"] = history
             update["$set"]["notes"] = f"{station_display_name(station)} checklist completed:\n{bullets}"
 
         col(TASKS_COLLECTION).update_one(
@@ -4101,20 +4119,36 @@ def save_case_action_log(task_id, action_plan, note, logged_by="Caseflow User"):
     try:
         from bson import ObjectId
         now = utc_now()
+        task = col(TASKS_COLLECTION).find_one({"_id": ObjectId(str(task_id))}) or {}
+        station = station_name(task.get("department"))
+        actor = text(logged_by) or "Caseflow User"
         record = {
             "timestamp": now,
             "action_plan": action_plan,
             "note": note,
-            "logged_by": text(logged_by) or "Caseflow User",
+            "logged_by": actor,
+            "station": station,
         }
+        history = list(task.get("history") or [])
+        history.append({
+            "action": (
+                f"{station_display_name(station)} action plan/note logged."
+                + (f"\n• Action Plan: {action_plan}" if action_plan else "")
+                + (f"\n• Case Note: {note}" if note else "")
+            ),
+            "timestamp": now,
+            "actor": actor,
+            "station": station,
+        })
         result = col(TASKS_COLLECTION).update_one(
             {"_id": ObjectId(str(task_id))},
             {
-                "$push": {"case_action_log": {"$each": [record], "$slice": -50}},
+                "$push": {"case_action_log": {"$each": [record]}},
                 "$set": {
                     "next_action": action_plan,
                     "notes": note,
                     "last_update": now,
+                    "history": history,
                 },
             },
         )
@@ -4150,7 +4184,7 @@ def reassign_case(task, assignee):
             {"$set": {
                 "assigned_to": assignee,
                 "last_update": now,
-                "history": history[-50:],
+                "history": history,
             }},
         )
         clear_task_cache()
@@ -4179,13 +4213,24 @@ def transfer_case(task, destination):
     )
 
 
+    source_station = station_name(task.get("department"))
+    destination_station = station_name(destination)
+
     history.append({
         "action": (
-            f"Transferred from "
-            f"{station_name(task.get('department'))} "
-            f"to {destination}"
+            f"Transferred from {station_display_name(source_station)} "
+            f"to {station_display_name(destination_station)}"
         ),
         "timestamp": now,
+        "actor": text(task.get("assigned_to")) or "Caseflow",
+    })
+    history.append({
+        "action": (
+            f"Entered {station_display_name(destination_station)} station. "
+            f"SLA clock reset to {STATIONS.get(destination_station, STATIONS['CARE'])['sla_minutes']} minutes."
+        ),
+        "timestamp": now,
+        "actor": text(task.get("assigned_to")) or "Caseflow",
     })
 
 
@@ -4209,7 +4254,7 @@ def transfer_case(task, destination):
                     ),
                     "last_update": now,
                     "status": "Open",
-                    "history": history[-50:],
+                    "history": history,
                 }
             },
         )
@@ -5355,7 +5400,12 @@ def case_details(task_id):
                 if next_action:
                     st.markdown(f"<div class='resolution-label'>Logged Action Plan</div><div class='resolution-value'>{html.escape(next_action)}</div>", unsafe_allow_html=True)
                 if notes:
-                    st.markdown(f"<div class='resolution-label'>Logged Case Note</div><div class='resolution-value'>{html.escape(notes)}</div>", unsafe_allow_html=True)
+                    notes_html = html.escape(notes).replace("\n", "<br>")
+                    st.markdown(
+                        f"<div class='resolution-label'>Logged Case Note</div>"
+                        f"<div class='resolution-value'>{notes_html}</div>",
+                        unsafe_allow_html=True,
+                    )
                 if latest_action_log.get("timestamp"):
                     logged_stamp = dt_display(latest_action_log.get("timestamp"))
                     logged_by = text(latest_action_log.get("logged_by")) or "Caseflow User"
@@ -5368,15 +5418,19 @@ def case_details(task_id):
             st.markdown("<div class='case-card case-history-card'>", unsafe_allow_html=True)
             st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>◷</span>Case History</div>", unsafe_allow_html=True)
             if history:
-                for event in reversed(history[-10:]):
+                for event in reversed(history):
                     if isinstance(event, dict):
                         action = text(event.get("action") or event.get("event") or event.get("details")) or "Case updated"
                         stamp = dt_display(event.get("timestamp")) or ""
                         actor = text(event.get("user") or event.get("actor") or event.get("assigned_to")) or "System"
                     else:
                         action, stamp, actor = text(event), "", "System"
+                    action_html = html.escape(action).replace("\n", "<br>")
                     st.markdown(
-                        f"<div class='history-row'><div class='history-dot'></div><div class='history-main'><div class='history-meta'>{html.escape(stamp)} <span>{html.escape(actor)}</span></div><div class='history-action'>{html.escape(action)}</div></div></div>",
+                        f"<div class='history-row'><div class='history-dot'></div>"
+                        f"<div class='history-main'><div class='history-meta'>{html.escape(stamp)} "
+                        f"<span>{html.escape(actor)}</span></div>"
+                        f"<div class='history-action'>{action_html}</div></div></div>",
                         unsafe_allow_html=True,
                     )
             else:
@@ -5680,14 +5734,6 @@ def case_details(task_id):
                     unsafe_allow_html=True,
                 )
 
-                steps = selected_doc.get("steps")
-                if steps:
-                    st.markdown("<div class='kb-sop-list-title'>Approved steps</div>", unsafe_allow_html=True)
-                    st.markdown(
-                        f"<div class='kb-full-sop'><div class='kb-rich-content'>{kb_rich_html(steps)}</div></div>",
-                        unsafe_allow_html=True,
-                    )
-
         # ---------------------------------------------------------------
         # COMMUNICATION TAB
         # ---------------------------------------------------------------
@@ -5732,7 +5778,7 @@ def case_details(task_id):
                     key=f"war_room_open_button_{task_id}",
                 ):
                     st.session_state[war_open_key] = True
-                    st.rerun()
+                    war_room_open = True
 
             if war_room_open:
                 meetings = task.get("meetings") or []
@@ -5758,7 +5804,7 @@ def case_details(task_id):
                         })
                         col(TASKS_COLLECTION).update_one(
                             {"_id": ObjectId(str(task_id))},
-                            {"$set": {"history": history[-50:], "last_update": now}},
+                            {"$set": {"history": history, "last_update": now}},
                         )
                         clear_task_cache()
                     except Exception:
@@ -5823,6 +5869,20 @@ def case_details(task_id):
                             "actions": text(meeting_actions),
                             "recorded_by": assigned_to,
                         }
+                        history = list(task.get("history") or [])
+                        meeting_history = (
+                            f"{station_display_name(department)} meeting recorded."
+                            + (f"\n• War Room: {text(meeting_link)}" if text(meeting_link) else "")
+                            + (f"\n• Tagged: {', '.join(text(x) for x in meeting_tagged)}" if meeting_tagged else "")
+                            + (f"\n• Attendees: {', '.join(text(x) for x in meeting_attendance)}" if meeting_attendance else "")
+                            + (f"\n• Actions / Decisions: {text(meeting_actions)}" if text(meeting_actions) else "")
+                        )
+                        history.append({
+                            "action": meeting_history,
+                            "timestamp": now,
+                            "actor": assigned_to or "Caseflow",
+                            "station": department,
+                        })
                         col(TASKS_COLLECTION).update_one(
                             {"_id": ObjectId(str(task_id))},
                             {
@@ -5832,7 +5892,10 @@ def case_details(task_id):
                                         "$slice": -50,
                                     }
                                 },
-                                "$set": {"last_update": now},
+                                "$set": {
+                                    "last_update": now,
+                                    "history": history,
+                                },
                             },
                         )
                         clear_task_cache()
@@ -6418,7 +6481,13 @@ def dashboard_fragment():
                         warning_silenced.add(station)
                         warning_latched.discard(station)
                         acknowledge_station_warning_cycle(unacknowledged_warning_tasks)
-                        acknowledge_station_alerts(station)
+                        acknowledge_station_alerts(
+                            station,
+                            trigger_keys={
+                                station_warning_trigger_key(task, station)
+                                for task in unacknowledged_warning_tasks
+                            },
+                        )
 
 
                     # A single click changes the filter and reruns ONLY
@@ -7540,3 +7609,279 @@ div[data-testid="stDialog"] .kb-product-family,
 div[data-testid="stDialog"] .product-family-tiles,
 div[data-testid="stDialog"] [class*="product-family"] { display:none !important; }
 </style>''', unsafe_allow_html=True)
+
+
+st.markdown(r'''
+<style>
+/* ============================================================
+   CASE DETAILS FINAL FIX — requested compact reference spacing
+   ============================================================ */
+div[data-testid="stDialog"] header {
+    min-height:40px !important;
+    height:40px !important;
+    padding:2px 12px !important;
+    margin:0 !important;
+}
+div[data-testid="stDialog"] header p {
+    font-size:16px !important;
+    line-height:1.1 !important;
+    font-weight:750 !important;
+    margin:0 !important;
+}
+div[data-testid="stDialog"] header button {
+    width:30px !important;
+    height:30px !important;
+    min-height:30px !important;
+    padding:0 !important;
+    margin:0 !important;
+}
+div[data-testid="stDialog"] [data-testid="stDialogContent"] {
+    padding-top:0 !important;
+    margin-top:0 !important;
+}
+div[data-testid="stDialog"] [data-testid="stDialogContent"] > div {
+    margin-top:0 !important;
+    padding-top:0 !important;
+}
+div[data-testid="stDialog"] .case-detail-hero {
+    margin:0 0 3px 0 !important;
+    padding:2px 4px 2px 4px !important;
+}
+div[data-testid="stDialog"] .case-detail-title-row {
+    gap:10px !important;
+}
+div[data-testid="stDialog"] .case-folder-icon {
+    font-size:20px !important;
+    margin-top:1px !important;
+}
+div[data-testid="stDialog"] .case-detail-case-number {
+    font-size:14px !important;
+    line-height:1.05 !important;
+}
+div[data-testid="stDialog"] .case-copy-icon {
+    font-size:12px !important;
+    margin-left:4px !important;
+}
+div[data-testid="stDialog"] .case-priority-badge {
+    font-size:8px !important;
+    padding:3px 8px !important;
+    margin-left:6px !important;
+}
+div[data-testid="stDialog"] .case-detail-subject {
+    font-size:11px !important;
+    line-height:1.15 !important;
+    margin-top:2px !important;
+}
+div[data-testid="stDialog"] .case-detail-account-line {
+    font-size:8px !important;
+    line-height:1.1 !important;
+    margin-top:2px !important;
+}
+div[data-testid="stDialog"] .case-detail-account-line span {
+    margin-right:7px !important;
+}
+div[data-testid="stDialog"] .case-detail-timing {
+    min-width:430px !important;
+}
+div[data-testid="stDialog"] .case-timing-item {
+    padding:0 8px !important;
+    gap:4px !important;
+}
+div[data-testid="stDialog"] .case-timing-item span {
+    font-size:7px !important;
+}
+div[data-testid="stDialog"] .case-timing-item strong {
+    font-size:8px !important;
+    margin-top:1px !important;
+}
+div[data-testid="stDialog"] .case-timing-icon {
+    font-size:11px !important;
+}
+div[data-testid="stDialog"] .case-due-badge {
+    font-size:7px !important;
+    padding:2px 4px !important;
+    margin-left:3px !important;
+}
+div[data-testid="stDialog"] .case-summary-strip {
+    margin:1px 0 3px !important;
+    padding:2px 2px !important;
+}
+div[data-testid="stDialog"] .case-summary-cell {
+    padding:1px 6px !important;
+}
+div[data-testid="stDialog"] .case-summary-cell > span {
+    font-size:7px !important;
+    margin:0 0 1px !important;
+}
+div[data-testid="stDialog"] .case-summary-cell > strong {
+    font-size:8px !important;
+    line-height:1.05 !important;
+}
+div[data-testid="stDialog"] .case-summary-cell .case-status-chip {
+    font-size:7px !important;
+    padding:2px 5px !important;
+}
+/* Assigned To is intentionally label-over-value like the other summary cells. */
+div[data-testid="stDialog"] .case-summary-cell:first-child .case-avatar {
+    display:none !important;
+}
+/* Dropdowns: compact label/value with no extra top/bottom whitespace. */
+div[data-testid="stDialog"] [data-testid="stSelectbox"],
+div[data-testid="stDialog"] [data-testid="stSelectbox"] > div,
+div[data-testid="stDialog"] [data-testid="stSelectbox"] label {
+    margin:0 !important;
+    padding:0 !important;
+}
+div[data-testid="stDialog"] [data-testid="stSelectbox"] label {
+    font-size:8px !important;
+    line-height:1 !important;
+    margin-bottom:1px !important;
+}
+div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] > div {
+    min-height:24px !important;
+    height:24px !important;
+    padding:0 6px !important;
+    margin:0 !important;
+}
+div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] span {
+    font-size:8px !important;
+    line-height:22px !important;
+}
+/* Current-station checklist only; no station selector row is rendered. */
+div[data-testid="stDialog"] .case-checklist-wrap {
+    margin:3px 0 3px !important;
+    padding:5px 7px !important;
+}
+div[data-testid="stDialog"] .case-checklist-title {
+    font-size:9px !important;
+    margin:0 0 1px !important;
+}
+div[data-testid="stDialog"] .case-checklist-sub {
+    font-size:7.5px !important;
+    margin:0 0 3px !important;
+}
+div[data-testid="stDialog"] .case-checklist-status {
+    font-size:7px !important;
+    padding:2px 5px !important;
+    margin:0 !important;
+}
+div[data-testid="stDialog"] [data-testid="stCheckbox"] {
+    min-height:20px !important;
+    margin:0 !important;
+    padding:0 !important;
+}
+div[data-testid="stDialog"] [data-testid="stCheckbox"] label {
+    font-size:8px !important;
+    line-height:1.1 !important;
+    margin:0 !important;
+    padding:0 !important;
+}
+/* Knowledge Base: smaller text and tighter suggested/SOP tiles. */
+div[data-testid="stDialog"] .kb-suggested-title {
+    font-size:6.5px !important;
+    margin:2px 0 1px !important;
+}
+div[data-testid="stDialog"] [class*="st-key-kb_suggested_"] {
+    margin:0 !important;
+    padding:0 !important;
+}
+div[data-testid="stDialog"] [class*="st-key-kb_suggested_"] button {
+    font-size:7px !important;
+    line-height:1.05 !important;
+    min-height:20px !important;
+    padding:2px 4px !important;
+    margin:0 0 1px !important;
+}
+div[data-testid="stDialog"] .kb-sop-list-title {
+    font-size:7px !important;
+    margin:2px 0 1px !important;
+}
+div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] {
+    margin:0 !important;
+    padding:0 !important;
+}
+div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] button {
+    font-size:7px !important;
+    line-height:1 !important;
+    min-height:21px !important;
+    height:21px !important;
+    padding:2px 4px !important;
+    margin:0 0 1px !important;
+}
+div[data-testid="stDialog"] .kb-selected-sop {
+    padding:4px 6px !important;
+    margin-top:2px !important;
+}
+div[data-testid="stDialog"] .kb-selected-sop-title {
+    font-size:8.5px !important;
+}
+div[data-testid="stDialog"] .kb-selected-sop-meta {
+    font-size:6.5px !important;
+}
+div[data-testid="stDialog"] .kb-full-sop {
+    padding:5px 7px !important;
+    margin-top:2px !important;
+}
+div[data-testid="stDialog"] .kb-full-sop-label {
+    font-size:6.5px !important;
+    margin-bottom:2px !important;
+}
+div[data-testid="stDialog"] .kb-rich-content {
+    font-size:8px !important;
+    line-height:1.28 !important;
+}
+div[data-testid="stDialog"] .kb-rich-content p {
+    margin:0 0 3px !important;
+}
+div[data-testid="stDialog"] .kb-rich-content ul,
+div[data-testid="stDialog"] .kb-rich-content ol {
+    margin:1px 0 4px 14px !important;
+    padding:0 !important;
+}
+div[data-testid="stDialog"] .kb-rich-content li {
+    margin:0 0 1px !important;
+}
+/* Remove the old recommendation presentation completely if legacy content exists. */
+div[data-testid="stDialog"] .kb-recommendation,
+div[data-testid="stDialog"] .kb-recommendation-label,
+div[data-testid="stDialog"] [class*="recommended-guidance"] {
+    display:none !important;
+}
+/* War Room: the exact visible tile is the click target. */
+div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] {
+    position:relative !important;
+    margin:0 !important;
+    padding:0 !important;
+}
+div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] .war-room-mock {
+    cursor:pointer !important;
+}
+div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] [class*="st-key-war_room_open_button_"] {
+    position:absolute !important;
+    inset:0 !important;
+    z-index:100 !important;
+}
+div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] [class*="st-key-war_room_open_button_"] button {
+    position:absolute !important;
+    inset:0 !important;
+    width:100% !important;
+    height:100% !important;
+    min-height:100% !important;
+    background:transparent !important;
+    border:0 !important;
+    opacity:.001 !important;
+    color:transparent !important;
+    cursor:pointer !important;
+}
+/* Keep one scrollable surface and make its height fit the viewport. */
+div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
+    height:calc(100vh - 150px) !important;
+    max-height:calc(100vh - 150px) !important;
+    min-height:220px !important;
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+    overscroll-behavior:contain !important;
+}
+</style>
+
+''', unsafe_allow_html=True)
