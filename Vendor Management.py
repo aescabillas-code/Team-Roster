@@ -6,7 +6,7 @@ Single-file Streamlit application.
 UI is designed to closely match the supplied dashboard reference:
 - White/light gray background
 - Dark navy typography
-- CSS-recreated HPE OVR-VW header interface
+- CSS-recreated HPE Caseflow header interface
 - Integrated live search bar
 - Five pastel station tiles
 - Borderless active-case table
@@ -37,7 +37,7 @@ Required secrets:
 
 
 Optional:
-    APP_NAME = "HPE OVR-VW"
+    APP_NAME = "HPE Caseflow"
 
 
 Install:
@@ -83,7 +83,7 @@ from pymongo.errors import PyMongoError
 
 
 st.set_page_config(
-    page_title="OVR-VW",
+    page_title="HPE Caseflow",
     page_icon="⏱️",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -99,7 +99,7 @@ st.set_page_config(
 
 APP_NAME = st.secrets.get(
     "APP_NAME",
-    "HPE OVR-VW",
+    "HPE Caseflow",
 )
 
 
@@ -203,7 +203,7 @@ STATION_CHECKLISTS = {
     ],
 }
 
-Caseflow_ASSIGNEES = [
+CASEFLOW_ASSIGNEES = [
     "June John Cruz",
     "Arianne May Escabillas",
     "Jonathan Gaspar",
@@ -433,11 +433,11 @@ def station_display_name(value):
 # the Knowledge Base implementation.
 
 
-ACCESS_STORAGE_KEY = "hpe_OVR-VW_authorized_v1"
-AUTH_COOKIE_KEY = "hpe_OVR-VW_authorized_cookie_v1"
-JS_READ_KEY = "hpe_OVR-VW_auth_read_v1"
-JS_SAVE_KEY = "hpe_OVR-VW_auth_save_v1"
-JS_CLEAR_KEY = "hpe_OVR-VW_auth_clear_v1"
+ACCESS_STORAGE_KEY = "hpe_caseflow_authorized_v1"
+AUTH_COOKIE_KEY = "hpe_caseflow_authorized_cookie_v1"
+JS_READ_KEY = "hpe_caseflow_auth_read_v1"
+JS_SAVE_KEY = "hpe_caseflow_auth_save_v1"
+JS_CLEAR_KEY = "hpe_caseflow_auth_clear_v1"
 
 
 
@@ -504,7 +504,7 @@ def get_token_serializer():
 
 
     salt = (
-        "hpe-OVR-VW-browser-access-v1-"
+        "hpe-caseflow-browser-access-v1-"
         f"{_get_code_fingerprint(access_code_value)}"
     )
 
@@ -942,7 +942,7 @@ def access_gate():
 
 
         <div class="access-wrap">
-            <div class="access-title">HPE OVR-VW</div>
+            <div class="access-title">HPE Caseflow</div>
             <div class="access-sub">
                 Enter the one-time access code to continue.
             </div>
@@ -1087,11 +1087,11 @@ st.markdown(
     }
 
 
-    /* HEADER — CSS recreation of the supplied HPE OVR-VW reference.
+    /* HEADER — CSS recreation of the supplied HPE Caseflow reference.
        No uploaded image is used. The logo, teal field, diagonal wave,
        search field and settings control are rendered as HTML/CSS. */
-    .OVR-VW-header-shell,
-    [class*="st-key-OVR-VW_header_shell"] {
+    .caseflow-header-shell,
+    [class*="st-key-caseflow_header_shell"] {
         position:relative !important;
         height:62px !important;
         min-height:62px !important;
@@ -1111,8 +1111,8 @@ st.markdown(
     }
 
 
-    .OVR-VW-header-shell::before,
-    [class*="st-key-OVR-VW_header_shell"]::before {
+    .caseflow-header-shell::before,
+    [class*="st-key-caseflow_header_shell"]::before {
         content:"" !important;
         position:absolute !important;
         z-index:0 !important;
@@ -1132,8 +1132,8 @@ st.markdown(
     }
 
 
-    .OVR-VW-header-shell::after,
-    [class*="st-key-OVR-VW_header_shell"]::after {
+    .caseflow-header-shell::after,
+    [class*="st-key-caseflow_header_shell"]::after {
         content:"" !important;
         position:absolute !important;
         z-index:0 !important;
@@ -1154,7 +1154,7 @@ st.markdown(
     }
 
 
-    [class*="st-key-OVR-VW_header_shell"] > div {
+    [class*="st-key-caseflow_header_shell"] > div {
         position:relative !important;
         z-index:2 !important;
     }
@@ -1165,46 +1165,46 @@ st.markdown(
        The search field and Settings gear receive their own full-size,
        high-z-index hit areas so the entire visible control is clickable,
        not just its lower portion. */
-    [class*="st-key-OVR-VW_header_shell"] {
+    [class*="st-key-caseflow_header_shell"] {
         isolation:isolate !important;
     }
 
 
-    [class*="st-key-OVR-VW_header_shell"] [data-testid="stHorizontalBlock"] {
+    [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] {
         z-index:100 !important;
         pointer-events:none !important;
     }
 
 
-    [class*="st-key-OVR-VW_header_shell"] [data-testid="stHorizontalBlock"] > div {
+    [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] > div {
         pointer-events:none !important;
     }
 
 
-    [class*="st-key-OVR-VW_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(2),
-    [class*="st-key-OVR-VW_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(3) {
+    [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(2),
+    [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(3) {
         pointer-events:auto !important;
         z-index:200 !important;
     }
 
 
-    [class*="st-key-OVR-VW_header_shell"] [data-testid="stTextInput"],
-    [class*="st-key-OVR-VW_header_shell"] [data-testid="stTextInput"] > div,
-    [class*="st-key-OVR-VW_header_shell"] [data-testid="stTextInput"] input {
+    [class*="st-key-caseflow_header_shell"] [data-testid="stTextInput"],
+    [class*="st-key-caseflow_header_shell"] [data-testid="stTextInput"] > div,
+    [class*="st-key-caseflow_header_shell"] [data-testid="stTextInput"] input {
         position:relative !important;
         z-index:201 !important;
         pointer-events:auto !important;
     }
 
 
-    [class*="st-key-OVR-VW_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(3),
-    [class*="st-key-OVR-VW_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(3) > div,
-    [class*="st-key-OVR-VW_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(3) button {
+    [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(3),
+    [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(3) > div,
+    [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(3) button {
         pointer-events:auto !important;
     }
 
 
-    [class*="st-key-OVR-VW_header_shell"] [data-testid="stHorizontalBlock"] {
+    [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] {
         position:absolute !important;
         inset:0 !important;
         width:100% !important;
@@ -1217,7 +1217,7 @@ st.markdown(
 
 
     /* Left HPE lockup */
-    [class*="st-key-OVR-VW_header_shell"] .OVR-VW-brand {
+    [class*="st-key-caseflow_header_shell"] .caseflow-brand {
         position:absolute !important;
         left:12px !important;
         top:7px !important;
@@ -1231,7 +1231,7 @@ st.markdown(
     }
 
 
-    .OVR-VW-hpe-symbol {
+    .caseflow-hpe-symbol {
         width:23px !important;
         height:23px !important;
         position:relative !important;
@@ -1239,8 +1239,8 @@ st.markdown(
     }
 
 
-    .OVR-VW-hpe-symbol::before,
-    .OVR-VW-hpe-symbol::after {
+    .caseflow-hpe-symbol::before,
+    .caseflow-hpe-symbol::after {
         content:"" !important;
         position:absolute !important;
         left:1px !important;
@@ -1252,11 +1252,11 @@ st.markdown(
     }
 
 
-    .OVR-VW-hpe-symbol::before { top:3px !important; }
-    .OVR-VW-hpe-symbol::after { top:12px !important; }
+    .caseflow-hpe-symbol::before { top:3px !important; }
+    .caseflow-hpe-symbol::after { top:12px !important; }
 
 
-    .OVR-VW-hpe-copy {
+    .caseflow-hpe-copy {
         display:flex !important;
         flex-direction:column !important;
         justify-content:center !important;
@@ -1264,7 +1264,7 @@ st.markdown(
     }
 
 
-    .OVR-VW-hpe-word {
+    .caseflow-hpe-word {
         font-size:18px !important;
         line-height:16px !important;
         font-weight:800 !important;
@@ -1273,7 +1273,7 @@ st.markdown(
     }
 
 
-    .OVR-VW-hpe-tagline {
+    .caseflow-hpe-tagline {
         margin-top:4px !important;
         font-size:6px !important;
         line-height:5px !important;
@@ -1283,7 +1283,7 @@ st.markdown(
     }
 
 
-    .OVR-VW-divider {
+    .caseflow-divider {
         width:1px !important;
         height:36px !important;
         margin-left:8px !important;
@@ -1291,7 +1291,7 @@ st.markdown(
     }
 
 
-    .OVR-VW-title {
+    .caseflow-title {
         font-size:18px !important;
         line-height:21px !important;
         font-weight:750 !important;
@@ -1301,7 +1301,7 @@ st.markdown(
 
 
     /* The Streamlit columns are used only as functional control hosts. */
-    [class*="st-key-OVR-VW_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(1) {
+    [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(1) {
         position:absolute !important;
         left:0 !important;
         top:0 !important;
@@ -1313,7 +1313,7 @@ st.markdown(
     }
 
 
-    [class*="st-key-OVR-VW_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(2) {
+    [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(2) {
         position:absolute !important;
         left:34.2% !important;
         top:13px !important;
@@ -1328,7 +1328,7 @@ st.markdown(
     }
 
 
-    [class*="st-key-OVR-VW_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(3) {
+    [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(3) {
         position:absolute !important;
         right:1.1% !important;
         top:7px !important;
@@ -1342,14 +1342,14 @@ st.markdown(
     }
 
 
-    [class*="st-key-OVR-VW_header_shell"] div[data-testid="stTextInput"] {
+    [class*="st-key-caseflow_header_shell"] div[data-testid="stTextInput"] {
         width:100% !important;
         margin:0 !important;
         padding:0 !important;
     }
 
 
-    [class*="st-key-OVR-VW_header_shell"] div[data-testid="stTextInput"] > div {
+    [class*="st-key-caseflow_header_shell"] div[data-testid="stTextInput"] > div {
         width:100% !important;
         min-height:0 !important;
         margin:0 !important;
@@ -1357,7 +1357,7 @@ st.markdown(
     }
 
 
-    [class*="st-key-OVR-VW_header_shell"] div[data-testid="stTextInput"] input {
+    [class*="st-key-caseflow_header_shell"] div[data-testid="stTextInput"] input {
         width:100% !important;
         height:36px !important;
         min-height:36px !important;
@@ -1379,19 +1379,19 @@ st.markdown(
     }
 
 
-    [class*="st-key-OVR-VW_header_shell"] div[data-testid="stTextInput"] input::placeholder {
+    [class*="st-key-caseflow_header_shell"] div[data-testid="stTextInput"] input::placeholder {
         color:#748a98 !important;
         opacity:1 !important;
         font-size:11px !important;
     }
 
 
-    [class*="st-key-OVR-VW_header_shell"] div[data-testid="stTextInput"] input:focus {
+    [class*="st-key-caseflow_header_shell"] div[data-testid="stTextInput"] input:focus {
         box-shadow:0 0 0 1px rgba(112,235,207,.75), 0 1px 4px rgba(0,0,0,.12) !important;
     }
 
 
-    [class*="st-key-OVR-VW_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(3) button {
+    [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(3) button {
         width:48px !important;
         height:48px !important;
         min-width:48px !important;
@@ -1410,7 +1410,7 @@ st.markdown(
     }
 
 
-    [class*="st-key-OVR-VW_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(3) button::before {
+    [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(3) button::before {
         content:"⚙" !important;
         position:absolute !important;
         inset:0 !important;
@@ -1423,13 +1423,13 @@ st.markdown(
     }
 
 
-    [class*="st-key-OVR-VW_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(3) button:hover {
+    [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(3) button:hover {
         background:rgba(255,255,255,.12) !important;
         border-color:rgba(255,255,255,.85) !important;
     }
 
 
-    [class*="st-key-OVR-VW_header_shell"] [data-testid="stTextInput"] label {
+    [class*="st-key-caseflow_header_shell"] [data-testid="stTextInput"] label {
         display:none !important;
     }
 
@@ -2012,21 +2012,21 @@ st.markdown(
         }
 
 
-        .OVR-VW-header-shell,
-        [class*="st-key-OVR-VW_header_shell"] {
+        .caseflow-header-shell,
+        [class*="st-key-caseflow_header_shell"] {
             height:94px !important;
             min-height:94px !important;
             margin-bottom:12px !important;
         }
 
 
-        [class*="st-key-OVR-VW_header_shell"] [data-testid="stHorizontalBlock"] {
+        [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] {
             height:94px !important;
             min-height:94px !important;
         }
 
 
-        [class*="st-key-OVR-VW_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(1) {
+        [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(1) {
             left:0 !important;
             top:0 !important;
             width:72% !important;
@@ -2034,7 +2034,7 @@ st.markdown(
         }
 
 
-        [class*="st-key-OVR-VW_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(2) {
+        [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(2) {
             left:10px !important;
             top:52px !important;
             width:calc(100% - 70px) !important;
@@ -2043,7 +2043,7 @@ st.markdown(
         }
 
 
-        [class*="st-key-OVR-VW_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(3) {
+        [class*="st-key-caseflow_header_shell"] [data-testid="stHorizontalBlock"] > div:nth-child(3) {
             right:8px !important;
             top:6px !important;
             width:48px !important;
@@ -2053,33 +2053,33 @@ st.markdown(
         }
 
 
-        [class*="st-key-OVR-VW_header_shell"] .OVR-VW-brand {
+        [class*="st-key-caseflow_header_shell"] .caseflow-brand {
             left:10px !important;
             top:5px !important;
             height:42px !important;
         }
 
 
-        .OVR-VW-hpe-symbol {
+        .caseflow-hpe-symbol {
             width:27px !important;
             height:27px !important;
             flex-basis:27px !important;
         }
 
 
-        .OVR-VW-hpe-symbol::before,
-        .OVR-VW-hpe-symbol::after {
+        .caseflow-hpe-symbol::before,
+        .caseflow-hpe-symbol::after {
             width:25px !important;
         }
 
 
-        .OVR-VW-hpe-word { font-size:16px !important; line-height:15px !important; }
-        .OVR-VW-hpe-tagline { font-size:5px !important; line-height:6px !important; }
-        .OVR-VW-divider { height:30px !important; margin-left:5px !important; }
-        .OVR-VW-title { font-size:17px !important; line-height:20px !important; }
+        .caseflow-hpe-word { font-size:16px !important; line-height:15px !important; }
+        .caseflow-hpe-tagline { font-size:5px !important; line-height:6px !important; }
+        .caseflow-divider { height:30px !important; margin-left:5px !important; }
+        .caseflow-title { font-size:17px !important; line-height:20px !important; }
 
 
-        [class*="st-key-OVR-VW_header_shell"] div[data-testid="stTextInput"] input {
+        [class*="st-key-caseflow_header_shell"] div[data-testid="stTextInput"] input {
             height:34px !important;
             min-height:34px !important;
             font-size:11px !important;
@@ -2206,7 +2206,7 @@ st.markdown(
 
 # ============================================================
 # CENTERED CASE DETAILS — visual override based on supplied reference image.
-# This changes only the dialog presentation; the underlying OVR-VW logic
+# This changes only the dialog presentation; the underlying Caseflow logic
 # remains unchanged.
 # ============================================================
 st.markdown(r"""
@@ -3254,7 +3254,7 @@ MOCK_CASE_CONTEXT = {
 }
 
 
-MOCK_NAMES = OVR-VW_ASSIGNEES
+MOCK_NAMES = CASEFLOW_ASSIGNEES
 
 
 MOCK_ACCOUNTS = [
@@ -3315,7 +3315,7 @@ def mock_original_state(case_number):
         "related_system": context["product"],
         "resolution": "Pending current-station checklist completion and SOP-guided assessment.",
         "next_action": context["next_action"],
-        "notes": "HPE/Aruba mock case for OVR-VW + Knowledge Base demonstration.",
+        "notes": "HPE/Aruba mock case for Caseflow + Knowledge Base demonstration.",
         "status": "In Progress" if item_index % 2 == 0 else "Open",
         "active": True,
         "is_mock": True,
@@ -3469,7 +3469,7 @@ def seed_mock_cases(force=False):
                 "related_system": context["product"],
                 "resolution": "Pending current-station checklist completion and SOP-guided assessment.",
                 "next_action": context["next_action"],
-                "notes": "HPE/Aruba mock case for OVR-VW + Knowledge Base demonstration.",
+                "notes": "HPE/Aruba mock case for Caseflow + Knowledge Base demonstration.",
                 "status": "In Progress" if i % 2 == 0 else "Open",
                 "created_at": started,
                 "station_started_at": started,
@@ -4154,7 +4154,7 @@ def save_case_station_checklist(task_id, station, items):
             history.append({
                 "action": f"{station_display_name(station)} checklist completed:\n{bullets}",
                 "timestamp": now,
-                "actor": "OVR-VW",
+                "actor": "Caseflow",
             })
             update["$set"]["history"] = history
             update["$set"]["notes"] = f"{station_display_name(station)} checklist completed:\n{bullets}"
@@ -4225,7 +4225,7 @@ def remove_case_checklist_item(task_id, station, index):
         return False
 
 
-def save_case_action_log(task_id, action_plan, note, logged_by="OVR-VW User"):
+def save_case_action_log(task_id, action_plan, note, logged_by="Caseflow User"):
     """Persist an action-plan/note entry and mirror the latest values to the case."""
     action_plan = text(action_plan)
     note = text(note)
@@ -4236,7 +4236,7 @@ def save_case_action_log(task_id, action_plan, note, logged_by="OVR-VW User"):
         now = utc_now()
         task = col(TASKS_COLLECTION).find_one({"_id": ObjectId(str(task_id))}) or {}
         station = station_name(task.get("department"))
-        actor = text(logged_by) or "OVR-VW User"
+        actor = text(logged_by) or "Caseflow User"
         record = {
             "timestamp": now,
             "action_plan": action_plan,
@@ -4327,7 +4327,7 @@ def close_case(task):
                 "Case closed from FULFILLMENT after completing the final station checklist."
             ),
             "timestamp": now,
-            "actor": text(task.get("assigned_to")) or "OVR-VW",
+            "actor": text(task.get("assigned_to")) or "Caseflow",
             "station": current_station,
         })
 
@@ -4379,7 +4379,7 @@ def transfer_case(task, destination):
             f"to {station_display_name(destination_station)}"
         ),
         "timestamp": now,
-        "actor": text(task.get("assigned_to")) or "OVR-VW",
+        "actor": text(task.get("assigned_to")) or "Caseflow",
     })
     history.append({
         "action": (
@@ -4387,7 +4387,7 @@ def transfer_case(task, destination):
             f"SLA clock reset to {STATIONS.get(destination_station, STATIONS['CARE'])['sla_minutes']} minutes."
         ),
         "timestamp": now,
-        "actor": text(task.get("assigned_to")) or "OVR-VW",
+        "actor": text(task.get("assigned_to")) or "Caseflow",
     })
 
 
@@ -4432,10 +4432,10 @@ def transfer_case(task, destination):
 # ============================================================
 
 
-# CSS/HTML recreation of the supplied HPE OVR-VW reference.
+# CSS/HTML recreation of the supplied HPE Caseflow reference.
 # The uploaded image itself is NOT used. Search and Settings remain native
 # Streamlit controls so all existing functionality is preserved.
-with st.container(key="OVR-VW_header_shell"):
+with st.container(key="caseflow_header_shell"):
 
 
     header_cols = st.columns([31, 44, 5], gap="small")
@@ -4444,14 +4444,14 @@ with st.container(key="OVR-VW_header_shell"):
     with header_cols[0]:
         st.markdown(
             """
-            <div class="OVR-VW-brand" aria-label="HPE OVR-VW">
-                <div class="OVR-VW-hpe-symbol" aria-hidden="true"></div>
-                <div class="OVR-VW-hpe-copy">
-                    <div class="OVR-VW-hpe-word">HPE</div>
-                    <div class="OVR-VW-hpe-tagline">Accelerating what's next together</div>
+            <div class="caseflow-brand" aria-label="HPE Caseflow">
+                <div class="caseflow-hpe-symbol" aria-hidden="true"></div>
+                <div class="caseflow-hpe-copy">
+                    <div class="caseflow-hpe-word">HPE</div>
+                    <div class="caseflow-hpe-tagline">Accelerating what's next together</div>
                 </div>
-                <div class="OVR-VW-divider" aria-hidden="true"></div>
-                <div class="OVR-VW-title">OVR-VW</div>
+                <div class="caseflow-divider" aria-hidden="true"></div>
+                <div class="caseflow-title">Caseflow</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -5038,16 +5038,16 @@ def kb_score(query, doc):
 
 @st.cache_data(ttl=30, show_spinner=False)
 def load_kb_documents():
-    """Load OVR-VW KB/SOP records plus the shared HPE Knowledge Base.
+    """Load Caseflow KB/SOP records plus the shared HPE Knowledge Base.
 
     The standalone HPE Knowledge Base stores AI-ready records in the HPE
-    database using `Knowledge base` and `Knowledge base Documents`.  OVR-VW
+    database using `Knowledge base` and `Knowledge base Documents`.  Caseflow
     consumes those records read-only so the Case Details panel can surface the
     same SOP content without requiring a second API or a duplicate KB.
     """
     docs = []
 
-    # OVR-VW-local KB/SOP collections.
+    # Caseflow-local KB/SOP collections.
     for collection_name in [KB_COLLECTION, SOP_COLLECTION]:
         try:
             docs.extend(list(col(collection_name).find({}, {
@@ -5060,7 +5060,7 @@ def load_kb_documents():
             pass
 
     # Shared standalone HPE Knowledge Base.  It is optional: if the same
-    # MongoDB cluster/secret is not available, OVR-VW simply keeps using its
+    # MongoDB cluster/secret is not available, Caseflow simply keeps using its
     # local KB without breaking the dashboard.
     try:
         uri = text(st.secrets.get("MONGODB_URI", ""))
@@ -5162,12 +5162,12 @@ def seed_demo_kb():
         if col(KB_COLLECTION).count_documents({}) or col(SOP_COLLECTION).count_documents({}):
             return
         docs = [
-            {"title":"HPE ProLiant / iLO Alert Troubleshooting","category":"HPE Compute","keywords":["HPE","ProLiant","iLO","server","alert","hardware"],"answer":"Verify the server model and serial number, capture the iLO alert code, review hardware health and recent events, and confirm whether the issue is recoverable remotely before escalation or onsite dispatch.","source":"HPE OVR-VW Knowledge Base","source_type":"demo"},
-            {"title":"Aruba Central Device Offline","category":"Aruba Networking","keywords":["Aruba","Central","offline","AP","switch","network"],"answer":"Confirm the device serial number, site, last-seen time and connectivity path. Check Aruba Central status and the local uplink/power state. Document the exact error and last successful contact before escalation.","source":"HPE OVR-VW Knowledge Base","source_type":"demo"},
-            {"title":"HPE Licensing Portal Access","category":"HPE Licensing","keywords":["HPE","licensing","portal","access","entitlement","login"],"answer":"Validate the customer account, entitlement and exact portal error. Capture the affected user/email and licensing reference. If entitlement is valid but access remains blocked, follow the approved licensing/account-access escalation path.","source":"HPE OVR-VW Knowledge Base","source_type":"demo"},
-            {"title":"Aruba ClearPass Endpoint Profiling","category":"Aruba ClearPass","keywords":["Aruba","ClearPass","endpoint","profiling","policy","authentication"],"answer":"Capture the endpoint identifier, authentication method, enforcement profile and timestamp. Review the ClearPass request/event details and confirm whether the endpoint is being classified correctly before changing policy.","source":"HPE OVR-VW Knowledge Base","source_type":"demo"},
-            {"title":"HPE Alletra Storage Capacity Warning","category":"HPE Storage","keywords":["HPE","Alletra","storage","capacity","warning","array"],"answer":"Confirm the array/site, affected system and current capacity threshold. Capture the alert details and recent capacity trend. Follow the applicable storage monitoring and escalation SOP before making configuration changes.","source":"HPE OVR-VW Knowledge Base","source_type":"demo"},
-            {"title":"Aruba CX Switch Onsite Support","category":"Aruba CX","keywords":["Aruba","CX","switch","onsite","replacement","technician"],"answer":"Confirm the switch model, serial number, site address, onsite contact, access requirements and symptoms. Verify whether remote troubleshooting has been completed and document the replacement/dispatch requirement.","source":"HPE OVR-VW Knowledge Base","source_type":"demo"},
+            {"title":"HPE ProLiant / iLO Alert Troubleshooting","category":"HPE Compute","keywords":["HPE","ProLiant","iLO","server","alert","hardware"],"answer":"Verify the server model and serial number, capture the iLO alert code, review hardware health and recent events, and confirm whether the issue is recoverable remotely before escalation or onsite dispatch.","source":"HPE Caseflow Knowledge Base","source_type":"demo"},
+            {"title":"Aruba Central Device Offline","category":"Aruba Networking","keywords":["Aruba","Central","offline","AP","switch","network"],"answer":"Confirm the device serial number, site, last-seen time and connectivity path. Check Aruba Central status and the local uplink/power state. Document the exact error and last successful contact before escalation.","source":"HPE Caseflow Knowledge Base","source_type":"demo"},
+            {"title":"HPE Licensing Portal Access","category":"HPE Licensing","keywords":["HPE","licensing","portal","access","entitlement","login"],"answer":"Validate the customer account, entitlement and exact portal error. Capture the affected user/email and licensing reference. If entitlement is valid but access remains blocked, follow the approved licensing/account-access escalation path.","source":"HPE Caseflow Knowledge Base","source_type":"demo"},
+            {"title":"Aruba ClearPass Endpoint Profiling","category":"Aruba ClearPass","keywords":["Aruba","ClearPass","endpoint","profiling","policy","authentication"],"answer":"Capture the endpoint identifier, authentication method, enforcement profile and timestamp. Review the ClearPass request/event details and confirm whether the endpoint is being classified correctly before changing policy.","source":"HPE Caseflow Knowledge Base","source_type":"demo"},
+            {"title":"HPE Alletra Storage Capacity Warning","category":"HPE Storage","keywords":["HPE","Alletra","storage","capacity","warning","array"],"answer":"Confirm the array/site, affected system and current capacity threshold. Capture the alert details and recent capacity trend. Follow the applicable storage monitoring and escalation SOP before making configuration changes.","source":"HPE Caseflow Knowledge Base","source_type":"demo"},
+            {"title":"Aruba CX Switch Onsite Support","category":"Aruba CX","keywords":["Aruba","CX","switch","onsite","replacement","technician"],"answer":"Confirm the switch model, serial number, site address, onsite contact, access requirements and symptoms. Verify whether remote troubleshooting has been completed and document the replacement/dispatch requirement.","source":"HPE Caseflow Knowledge Base","source_type":"demo"},
         ]
         col(KB_COLLECTION).insert_many(docs)
     except Exception:
@@ -5306,7 +5306,7 @@ def _case_update_events(task):
 
     fallback = as_utc(task.get("last_update") or task.get("updated_at") or task.get("created_at"))
     if fallback:
-        events.append((fallback, "Case record updated.", "OVR-VW"))
+        events.append((fallback, "Case record updated.", "Caseflow"))
     return events
 
 
@@ -5391,7 +5391,7 @@ seed_demo_kb()
 
 @st.dialog("Case Details", width="large")
 def case_details(task_id):
-    """Compact, centered Case Details modal using the original OVR-VW data/actions.
+    """Compact, centered Case Details modal using the original Caseflow data/actions.
 
     Tabs are deliberately separated:
       1. Case Information
@@ -5589,7 +5589,7 @@ def case_details(task_id):
                     )
                 if latest_action_log.get("timestamp"):
                     logged_stamp = dt_display(latest_action_log.get("timestamp"))
-                    logged_by = text(latest_action_log.get("logged_by")) or "OVR-VW User"
+                    logged_by = text(latest_action_log.get("logged_by")) or "Caseflow User"
                     st.markdown(f"<div class='resolution-log-meta'>Latest action log · {html.escape(logged_stamp)} · {html.escape(logged_by)}</div>", unsafe_allow_html=True)
                 if not any([resolution, next_action, notes]):
                     st.caption("No resolution, action plan, or notes are recorded for this case.")
@@ -5636,7 +5636,7 @@ def case_details(task_id):
                 st.markdown("<div class='action-readonly-label'>Current Assignee</div>", unsafe_allow_html=True)
                 st.markdown(f"<div class='action-readonly-value'>{html.escape(assigned_to)}</div>", unsafe_allow_html=True)
 
-                assignee_options = list(dict.fromkeys(OVR-VW_ASSIGNEES + ([assigned_to] if assigned_to else [])))
+                assignee_options = list(dict.fromkeys(CASEFLOW_ASSIGNEES + ([assigned_to] if assigned_to else [])))
                 new_assignee = st.selectbox(
                     "Reassign case to",
                     assignee_options,
@@ -5814,7 +5814,7 @@ def case_details(task_id):
                     if not isinstance(entry, dict):
                         continue
                     stamp = dt_display(entry.get("timestamp")) or "—"
-                    actor = text(entry.get("logged_by")) or "OVR-VW User"
+                    actor = text(entry.get("logged_by")) or "Caseflow User"
                     plan = text(entry.get("action_plan")) or "No action plan"
                     note = text(entry.get("note")) or "No note"
                     st.markdown(
@@ -5920,7 +5920,7 @@ def case_details(task_id):
                     f"<div class='kb-selected-sop'>"
                     f"<div class='kb-selected-label'>{'BEST MATCH FOR THIS CASE' if selected_doc is results[0] else 'SELECTED SOP'}</div>"
                     f"<div class='kb-selected-sop-title'>{html.escape(text(selected_doc.get('title')) or 'Knowledge Base Article')}</div>"
-                    f"<div class='kb-selected-sop-meta'>{html.escape(text(selected_doc.get('category')) or 'HPE Knowledge Base')} · {html.escape(text(selected_doc.get('source')) or text(selected_doc.get('source_type')) or 'OVR-VW')}</div>"
+                    f"<div class='kb-selected-sop-meta'>{html.escape(text(selected_doc.get('category')) or 'HPE Knowledge Base')} · {html.escape(text(selected_doc.get('source')) or text(selected_doc.get('source_type')) or 'Caseflow')}</div>"
                     f"</div>",
                     unsafe_allow_html=True,
                 )
@@ -5951,13 +5951,13 @@ def case_details(task_id):
             latest_events = _case_update_events(task)
             latest_event = max(latest_events, key=lambda x: x[0]) if latest_events else None
             latest_text = text(latest_event[1]) if latest_event else "No live update has been recorded yet."
-            latest_actor = text(latest_event[2]) if latest_event and latest_event[2] else "OVR-VW"
-            participants_preview = list(dict.fromkeys(OVR-VW_ASSIGNEES + ([assigned_to] if assigned_to else [])))
+            latest_actor = text(latest_event[2]) if latest_event and latest_event[2] else "Caseflow"
+            participants_preview = list(dict.fromkeys(CASEFLOW_ASSIGNEES + ([assigned_to] if assigned_to else [])))
             participant_preview = participants_preview[:5] or [assigned_to]
             participant_html = "".join(f"<span class='war-room-avatar'>{html.escape((text(name) or '?')[:1].upper())}</span>" for name in participant_preview if text(name))
             war_open_key = f"war_room_open_{task_id}"
             war_room_open = bool(st.session_state.get(war_open_key, False))
-            mock_link = f"https://meet.example.com/hpe-OVR-VW-{html.escape(case_number, quote=True)}"
+            mock_link = f"https://meet.example.com/hpe-caseflow-{html.escape(case_number, quote=True)}"
             with st.container(key=f"war_room_tile_{task_id}"):
                 st.markdown(
                     f"<div class='war-room-mock {'war-room-open' if war_room_open else ''}' role='button' aria-label='Open war room'>"
@@ -5997,7 +5997,7 @@ def case_details(task_id):
                         history.append({
                             "action": f"War Room closed.\n• Attendees: {attendee_names}\n• Link: {mock_link}",
                             "timestamp": now,
-                            "actor": assigned_to or "OVR-VW",
+                            "actor": assigned_to or "Caseflow",
                         })
                         col(TASKS_COLLECTION).update_one(
                             {"_id": ObjectId(str(task_id))},
@@ -6015,8 +6015,8 @@ def case_details(task_id):
             meeting_actions_key = f"meeting_actions_{task_id}"
 
             participant_options = list(dict.fromkeys(
-                OVR-VW_ASSIGNEES
-                + ([assigned_to] if assigned_to and assigned_to not in OVR-VW_ASSIGNEES else [])
+                CASEFLOW_ASSIGNEES
+                + ([assigned_to] if assigned_to and assigned_to not in CASEFLOW_ASSIGNEES else [])
             ))
 
             meeting_link = st.text_input(
@@ -6077,7 +6077,7 @@ def case_details(task_id):
                         history.append({
                             "action": meeting_history,
                             "timestamp": now,
-                            "actor": assigned_to or "OVR-VW",
+                            "actor": assigned_to or "Caseflow",
                             "station": department,
                         })
                         col(TASKS_COLLECTION).update_one(
@@ -6134,11 +6134,11 @@ def case_details(task_id):
             if isinstance(communications, list) and communications:
                 for item in reversed(communications[-20:]):
                     if isinstance(item, dict):
-                        sender = text(item.get("sender") or item.get("user") or item.get("from")) or "OVR-VW User"
+                        sender = text(item.get("sender") or item.get("user") or item.get("from")) or "Caseflow User"
                         body = text(item.get("message") or item.get("body") or item.get("details")) or "—"
                         stamp = dt_display(item.get("timestamp") or item.get("created_at"))
                     else:
-                        sender, body, stamp = "OVR-VW User", text(item), ""
+                        sender, body, stamp = "Caseflow User", text(item), ""
                     st.markdown(
                         f"<div class='communication-card'><div class='communication-head'><strong>{html.escape(sender)}</strong><span>{html.escape(stamp)}</span></div><div>{html.escape(body)}</div></div>",
                         unsafe_allow_html=True,
@@ -6185,7 +6185,7 @@ def case_details(task_id):
 # ============================================================
 st.markdown(r"""
 <style>
-/* Compact modal shell sized to the actual OVR-VW desktop workspace. */
+/* Compact modal shell sized to the actual Caseflow desktop workspace. */
 div[data-testid="stDialog"] > div {
     position: fixed !important;
     top: 50% !important;
@@ -7458,7 +7458,7 @@ st.markdown(
 st.markdown(r'''
 <style>
 /* ============================================================
-   OVR-VW FINAL UI PATCH — 2026-10-06
+   CASEFLOW FINAL UI PATCH — 2026-10-06
    ============================================================ */
 /* Use one real scroll surface for Case Details. Do not apply scrollbar
    styling to every nested Streamlit vertical block. */
