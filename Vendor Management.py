@@ -6485,7 +6485,7 @@ div[data-testid="stDialog"] [data-testid="stVerticalBlock"]::-webkit-scrollbar-t
 </style>
 """, unsafe_allow_html=True)
 
-    # Duration still updates browser-side every second for smooth per-second timing.
+    # Duration and Total Elapsed are browser-clock driven; dashboard refresh cadence is independent.
 
 
 @st.fragment(run_every="1.5s")
@@ -7303,16 +7303,28 @@ def dashboard_fragment():
             updateWarningAnimations();
 
 
-            if (!window.__taskTrackerDurationTimer) {
-                window.__taskTrackerDurationTimer =
-                    setInterval(
-                        function () {
-                            updateDurations();
-                            updateTotalElapsed();
-                            updateWarningAnimations();
-                        },
-                        1000
-                    );
+            /*
+             * Keep Duration and Total Elapsed completely browser-side.
+             * Do not depend on the Streamlit fragment cadence.  The dashboard
+             * may refresh independently for alerts/data, but these clocks are
+             * driven from the browser clock and repaint on the exact second.
+             */
+            if (!window.__taskTrackerDurationLoop) {
+                window.__taskTrackerDurationLoop = true;
+                let lastSecond = -1;
+
+                function durationClockLoop() {
+                    const second = Math.floor(Date.now() / 1000);
+                    if (second !== lastSecond) {
+                        lastSecond = second;
+                        updateDurations();
+                        updateTotalElapsed();
+                        updateWarningAnimations();
+                    }
+                    window.requestAnimationFrame(durationClockLoop);
+                }
+
+                durationClockLoop();
             }
 
 
