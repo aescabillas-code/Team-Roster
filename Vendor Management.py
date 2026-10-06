@@ -50,7 +50,6 @@ import hmac
 import html
 import os
 import time
-import re
 from datetime import datetime, timezone, timedelta
 
 
@@ -94,16 +93,11 @@ st.set_page_config(
 # ============================================================
 
 
-APP_NAME = st.secrets.get(
-    "APP_NAME",
-    "HPE Caseflow",
-)
 
 
 DB_NAME = "TeamRoster"
 
 
-ROSTER_COLLECTION = "Team Roster Collection"
 TASKS_COLLECTION = "Tasks_Collection"
 VENDOR_COLLECTION = "Vendor_Collection"
 ACCESS_COLLECTION = "Access_Collection"
@@ -2664,10 +2658,6 @@ div[data-testid="stDialog"] .case-summary-strip {
 div[data-testid="stDialog"] .case-summary-cell {
     padding: 2px 6px !important;
 }
-div[data-testid="stDialog"] .case-summary-cell > span {
-    font-size: 8px !important;
-    margin-bottom: 2px !important;
-}
 div[data-testid="stDialog"] .case-summary-cell > strong {
     font-size: 9px !important;
 }
@@ -2728,24 +2718,9 @@ div[data-testid="stDialog"] .case-info-row span {
 div[data-testid="stDialog"] .case-info-row strong {
     font-size: 8.7px !important;
 }
-div[data-testid="stDialog"] .action-readonly-label {
-    font-size: 8px !important;
-    margin-top: 3px !important;
-}
 div[data-testid="stDialog"] .action-readonly-value {
     font-size: 9px !important;
     padding: 5px 7px !important;
-}
-div[data-testid="stDialog"] .case-checklist-title {
-    font-size: 9px !important;
-}
-div[data-testid="stDialog"] .case-checklist-sub {
-    font-size: 7.5px !important;
-    line-height: 1.2 !important;
-}
-div[data-testid="stDialog"] .case-checklist-status {
-    font-size: 7.5px !important;
-    padding: 2px 5px !important;
 }
 div[data-testid="stDialog"] [data-testid="stCheckbox"] label {
     font-size: 8px !important;
@@ -7242,6 +7217,9 @@ def dashboard_fragment():
         unsafe_allow_html=True,
     )
 
+
+
+
 # ============================================================
 # INITIAL MOCK DATA
 # ============================================================
@@ -7253,6 +7231,8 @@ def dashboard_fragment():
 # Seed/mock migration is cached as a resource so normal fragment reruns
 # do not repeatedly query MongoDB for the mock-data count.
 seed_mock_cases()
+
+
 
 
 # Render the live dashboard. Case Details is opened directly by the
@@ -7275,6 +7255,7 @@ if (
         "simulation_until"
     ]
 ):
+
 
     simulation_id = st.session_state.get(
         "simulation_case_id"
@@ -7310,13 +7291,18 @@ if (
         "simulation_until"
     ] = 0
 
+
     st.session_state[
         "simulation_case_id"
     ] = None
 
+
+
+
 # ============================================================
 # FOOTER
 # ============================================================
+
 
 st.markdown(
     """
@@ -7332,6 +7318,8 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+
 
 st.markdown(r'''
 <style>
@@ -7377,7 +7365,6 @@ div[data-testid="stDialog"] .kb-step {
 }
 div[data-testid="stDialog"] .case-detail-case-number { font-size:16px !important; }
 div[data-testid="stDialog"] .case-detail-subject { font-size:13px !important; }
-div[data-testid="stDialog"] .case-card-heading { font-size:12px !important; font-weight:800 !important; }
 div[data-testid="stDialog"] .case-info-row span,
 div[data-testid="stDialog"] .action-readonly-label,
 div[data-testid="stDialog"] .resolution-label { font-size:10px !important; }
@@ -7726,11 +7713,6 @@ div[data-testid="stDialog"] .war-room-expanded-grid ul { margin:2px 0 0 14px !im
 div[data-testid="stDialog"] .war-room-link { font-size:8.5px !important; color:#0879c9 !important; font-weight:750 !important; text-decoration:none !important; }
 
 /* Preserve a single scroll surface and make it tall enough to reach the bottom. */
-div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
-    height:calc(100vh - 185px) !important; max-height:calc(100vh - 185px) !important;
-    min-height:220px !important; overflow-y:auto !important; overflow-x:hidden !important;
-    overscroll-behavior:contain !important; scrollbar-width:thin !important;
-}
 
 /* Remove old product-family/navigation tiles if any legacy markup remains. */
 div[data-testid="stDialog"] .kb-product-family,
@@ -7757,16 +7739,6 @@ div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] button {
 div[data-testid="stDialog"] .kb-full-sop-label {
     font-size:9px !important;
     margin-bottom:5px !important;
-}
-div[data-testid="stDialog"] .kb-rich-content {
-    font-size:11.5px !important;
-    line-height:1.48 !important;
-}
-div[data-testid="stDialog"] .kb-rich-content p {
-    margin:0 0 6px !important;
-}
-div[data-testid="stDialog"] .kb-rich-content li {
-    margin:0 0 4px !important;
 }
 </style>''', unsafe_allow_html=True)
 
@@ -7941,10 +7913,6 @@ div[data-testid="stDialog"] .kb-suggested-title {
     font-size:6.5px !important;
     margin:2px 0 1px !important;
 }
-div[data-testid="stDialog"] [class*="st-key-kb_suggested_"] {
-    margin:0 !important;
-    padding:0 !important;
-}
 div[data-testid="stDialog"] [class*="st-key-kb_suggested_"] button {
     font-size:7px !important;
     line-height:1.05 !important;
@@ -7955,18 +7923,6 @@ div[data-testid="stDialog"] [class*="st-key-kb_suggested_"] button {
 div[data-testid="stDialog"] .kb-sop-list-title {
     font-size:7px !important;
     margin:2px 0 1px !important;
-}
-div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] {
-    margin:0 !important;
-    padding:0 !important;
-}
-div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] button {
-    font-size:7px !important;
-    line-height:1 !important;
-    min-height:21px !important;
-    height:21px !important;
-    padding:2px 4px !important;
-    margin:0 0 1px !important;
 }
 div[data-testid="stDialog"] .kb-selected-sop {
     padding:4px 6px !important;
@@ -8049,9 +8005,6 @@ div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
 }
 div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar {
     width:7px !important;
-}
-div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar-track {
-    background:transparent !important;
 }
 div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar-thumb {
     background:rgba(71,85,105,.48) !important;
