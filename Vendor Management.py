@@ -112,6 +112,7 @@ ACCESS_COLLECTION = "Access_Collection"
 ALERT_COLLECTION = "Alert_Collection"
 KB_COLLECTION = "Knowledge_Base_Collection"
 SOP_COLLECTION = "SOP_Collection"
+ACCOUNT_PRIORITY_COLLECTION = "Account_Priority_Collection"
 
 
 # Performance tuning: short cache keeps station switches responsive while preserving near-real-time data.
@@ -291,6 +292,9 @@ def initialize_indexes():
         )
         col(ALERT_COLLECTION).create_index(
             [("acknowledged", ASCENDING), ("created_at", DESCENDING)]
+        )
+        col(ACCOUNT_PRIORITY_COLLECTION).create_index(
+            [("account_name", ASCENDING)]
         )
     except Exception:
         pass
@@ -2992,6 +2996,69 @@ def clear_task_cache():
 
 
 
+@st.cache_data(ttl=15, show_spinner=False)
+def _account_priority_lookup(account_name):
+    account_name = text(account_name)
+    if not account_name:
+        return False
+    try:
+        record = col(ACCOUNT_PRIORITY_COLLECTION).find_one({
+            "account_name": account_name,
+            "account_priority": {"$in": ["High", "HIGH", "Yes", "YES", "Critical", "CRITICAL", True, 1]},
+        }, {"_id": 1})
+        if record:
+            return True
+    except Exception:
+        pass
+    try:
+        record = col(TASKS_COLLECTION).find_one({
+            "account_name": account_name,
+            "source_type": "excel",
+            "account_priority": {"$in": ["Yes", "YES", "High", "HIGH", "Critical", "CRITICAL", True, 1]},
+        }, {"_id": 1})
+        return bool(record)
+    except Exception:
+        return False
+
+
+def account_priority_status(task):
+    """Resolve account priority from the case record or Excel-backed account mapping."""
+    if is_priority(task.get("account_priority")):
+        return True
+    return _account_priority_lookup(task.get("account_name"))
+
+
+
+def station_warning_trigger_key(task, station=None):
+    """Stable identifier for one SLA-warning cycle of one case/station."""
+    station = station_name(station or task.get("department"))
+    started = iso_z(task.get("station_started_at") or task.get("created_at"))
+    task_id = text(task.get("_id")) or text(task.get("case_number"))
+    return sha256(f"{station}|{task_id}|{started}|{STATIONS.get(station, STATIONS['CARE']).get('sla_minutes', 0)}")[:32]
+
+
+def acknowledge_station_warning_cycle(task_list):
+    """Persist the currently flashing station-warning cycles as acknowledged."""
+    try:
+        now = utc_now()
+        for task in task_list:
+            col(TASKS_COLLECTION).update_one(
+                {"_id": task.get("_id")},
+                {"$set": {
+                    "station_warning_ack_trigger": station_warning_trigger_key(task),
+                    "station_warning_acknowledged_at": now,
+                }},
+            )
+    except Exception:
+        pass
+    clear_task_cache()
+    try:
+        _account_priority_lookup.clear()
+    except Exception:
+        pass
+
+
+
 def calculate_state(task, now=None):
     """
     SLA is based on station_started_at.
@@ -3045,9 +3112,7 @@ def calculate_state(task, now=None):
     )
 
 
-    priority_account = is_priority(
-        task.get("account_priority")
-    )
+    priority_account = account_priority_status(task)
 
 
     # SLA warning is strictly time-based: final 20% BEFORE the SLA ends.
@@ -3610,6 +3675,57 @@ def sync_vendor_excel(uploaded_file):
 
 
 
+def sync_account_priority_excel(uploaded_file):
+    """Synchronize account priority mapping from an Excel workbook."""
+    try:
+        df = pd.read_excel(uploaded_file)
+        if df.empty:
+            return False, "The Account Priority Excel file is empty.", 0
+
+        def normalize(value):
+            return text(value).lower().strip().replace("#", "number").replace("/", "_").replace("-", "_").replace(" ", "_")
+
+        df.columns = [normalize(c) for c in df.columns]
+        aliases = {
+            "account": "account_name",
+            "accountname": "account_name",
+            "customer": "account_name",
+            "customer_name": "account_name",
+            "accountpriority": "account_priority",
+            "priority": "account_priority",
+            "account_priority": "account_priority",
+        }
+        df = df.rename(columns=aliases)
+        if "account_name" not in df.columns or "account_priority" not in df.columns:
+            return False, "Required columns: Account Name and Account Priority.", 0
+
+        docs = []
+        for _, row in df.iterrows():
+            account = text(row.get("account_name"))
+            if not account:
+                continue
+            raw = text(row.get("account_priority"))
+            high = is_priority(raw) or raw.lower() in {"high", "critical", "p1", "p0"}
+            docs.append({
+                "account_name": account,
+                "account_priority": "High" if high else "Normal",
+                "source_type": "account_priority_excel",
+                "synced_at": utc_now(),
+            })
+
+        collection = col(ACCOUNT_PRIORITY_COLLECTION)
+        collection.delete_many({})
+        if docs:
+            collection.insert_many(docs)
+        try:
+            _account_priority_lookup.clear()
+        except Exception:
+            pass
+        return True, f"{len(docs)} account-priority records synchronized.", len(docs)
+    except Exception as exc:
+        return False, str(exc), 0
+
+
 def import_cases_excel(uploaded_file, replace_existing_excel=False):
     """Import case records from an Excel workbook into Tasks_Collection.
 
@@ -3883,12 +3999,36 @@ def save_case_station_checklist(task_id, station, items):
 
     try:
         from bson import ObjectId
+        now = utc_now()
+        task = col(TASKS_COLLECTION).find_one({"_id": ObjectId(str(task_id))}) or {}
+        previous_items = get_case_station_checklist(task, station)
+        was_complete = bool(previous_items) and all(bool(x.get("checked")) for x in previous_items)
+        is_complete = bool(clean_items) and all(bool(x.get("checked")) for x in clean_items)
+
+        update = {
+            "$set": {
+                f"station_checklists.{station}": clean_items,
+                "last_update": now,
+            }
+        }
+
+        # When the current station checklist becomes complete, create one
+        # readable bullet-form history/current-note entry. The transition guard
+        # prevents duplicate entries on subsequent rerenders.
+        if is_complete and not was_complete:
+            bullets = "\n".join(f"• {text(x.get('item'))}" for x in clean_items if text(x.get("item")))
+            history = list(task.get("history") or [])
+            history.append({
+                "action": f"{station_display_name(station)} checklist completed:\n{bullets}",
+                "timestamp": now,
+                "actor": "Caseflow",
+            })
+            update["$set"]["history"] = history[-50:]
+            update["$set"]["notes"] = f"{station_display_name(station)} checklist completed:\n{bullets}"
+
         col(TASKS_COLLECTION).update_one(
             {"_id": ObjectId(str(task_id))},
-            {"$set": {
-                f"station_checklists.{station}": clean_items,
-                "last_update": utc_now(),
-            }},
+            update,
         )
         clear_task_cache()
         return True
@@ -3979,6 +4119,10 @@ def save_case_action_log(task_id, action_plan, note, logged_by="Caseflow User"):
             },
         )
         clear_task_cache()
+        try:
+            _account_priority_lookup.clear()
+        except Exception:
+            pass
         return result.modified_count > 0, ""
     except Exception as exc:
         return False, f"Unable to save the action plan and note: {exc}"
@@ -4211,6 +4355,7 @@ if st.session_state["show_settings"]:
 
             tabs = st.tabs([
                 "Cases",
+                "Account Priority",
                 "External Sync",
                 "Access Control",
                 "Simulation",
@@ -4286,11 +4431,48 @@ if st.session_state["show_settings"]:
 
 
             # -----------------------------------------------
+            # ACCOUNT PRIORITY EXCEL
+            # -----------------------------------------------
+            with tabs[1]:
+                st.markdown("### Account Priority")
+                st.caption(
+                    "Upload an Excel mapping of Account Name to Account Priority. "
+                    "High/Critical accounts automatically make their active cases CRITICAL."
+                )
+                priority_file = st.file_uploader(
+                    "Account Priority Excel",
+                    type=["xlsx", "xls"],
+                    key="account_priority_excel_upload",
+                )
+                if priority_file is not None:
+                    try:
+                        preview_priority = pd.read_excel(priority_file)
+                        st.dataframe(preview_priority.head(8), use_container_width=True, hide_index=True)
+                    except Exception as exc:
+                        st.error(f"Unable to preview the Account Priority file: {exc}")
+                    if st.button(
+                        "Import Account Priorities",
+                        type="primary",
+                        use_container_width=True,
+                        key="import_account_priority_excel",
+                    ):
+                        with st.spinner("Importing account priorities..."):
+                            ok, msg, _count = sync_account_priority_excel(priority_file)
+                        if ok:
+                            st.success(msg)
+                            clear_task_cache()
+                            st.rerun()
+                        else:
+                            st.error(msg)
+                st.info("Recommended columns: Account Name, Account Priority. Example: H&M | High")
+
+
+            # -----------------------------------------------
             # EXTERNAL SYNC
             # -----------------------------------------------
 
 
-            with tabs[1]:
+            with tabs[2]:
 
 
                 st.markdown(
@@ -4342,7 +4524,7 @@ if st.session_state["show_settings"]:
             # -----------------------------------------------
 
 
-            with tabs[2]:
+            with tabs[3]:
 
 
                 st.markdown(
@@ -4802,6 +4984,9 @@ def kb_rich_html(content):
         if not line:
             close_lists()
             continue
+        if line in {"---", "___", "***"}:
+            close_lists()
+            continue
         if line.startswith("### "):
             close_lists()
             html_lines.append(f"<div class='kb-content-heading'>{_kb_inline_format(line[4:])}</div>")
@@ -4813,6 +4998,10 @@ def kb_rich_html(content):
         if line.startswith("# "):
             close_lists()
             html_lines.append(f"<div class='kb-content-heading'>{_kb_inline_format(line[2:])}</div>")
+            continue
+        if line.startswith("**") and line.endswith("**") and len(line) > 4:
+            close_lists()
+            html_lines.append(f"<div class='kb-content-heading'>{_kb_inline_format(line[2:-2])}</div>")
             continue
         if line.startswith("- ") or line.startswith("• "):
             if in_ol:
@@ -4925,7 +5114,9 @@ def build_case_suggestions(task, documents, limit=4):
     case_context = case_kb_query(task)
     for doc in documents:
         score = kb_score(case_context, doc)
-        if score <= 0:
+        # Suggested questions must have a meaningful case-specific match;
+        # weak category-only matches are not promoted into the suggestion row.
+        if score < 4:
             continue
         question = text(doc.get("question"))
         title = text(doc.get("title")) or "this issue"
@@ -4951,11 +5142,12 @@ def build_case_suggestions(task, documents, limit=4):
 
 
 def local_kb_ai_answer(question, task, documents):
+    """Return one case-matched KB answer without duplicating the displayed SOP."""
     question = text(question).strip()
     if not question:
         return {"answer":"Please enter a question first.","sources":[],"confidence":"No question"}
     if not documents:
-        return {"answer":"No matching Knowledge Base or SOP article was found. Try a product, issue, station, or troubleshooting keyword.","sources":[],"confidence":"No matching source"}
+        return {"answer":"No matching Knowledge Base or SOP article was found.","sources":[],"confidence":"No matching source"}
     selected=[]; seen=set()
     for doc in documents:
         identity=text(doc.get("_id")) or text(doc.get("title")).lower()
@@ -4965,14 +5157,7 @@ def local_kb_ai_answer(question, task, documents):
     score=max([kb_score(f"{question} {case_kb_query(task)}", d) for d in selected] or [0])
     confidence="High match" if score>=8 else "Good match" if score>=4 else "Related match"
     best=selected[0]
-    parts=["### Recommended guidance", f"**{text(best.get('title')) or 'Knowledge Base Article'}**", "", kb_content(best)]
-    if len(selected)>1:
-        parts += ["", "### Additional relevant guidance"]
-        for doc in selected[1:3]:
-            c=kb_content(doc); c=c[:450].rstrip()+"…" if len(c)>450 else c
-            parts.append(f"- **{text(doc.get('title')) or 'Related Article'}:** {c}")
-    parts += ["", "### Verify before action", "Confirm the current case details, applicable policy or entitlement, required identifiers, and the latest approved SOP before escalating or taking an external action."]
-    return {"answer":"\n".join(parts),"sources":selected,"confidence":confidence}
+    return {"answer":kb_content(best),"sources":selected,"confidence":confidence}
 
 
 seed_demo_kb()
@@ -5014,6 +5199,7 @@ def case_details(task_id):
     description = text(task.get("description")) or text(task.get("issue")) or "No description available."
     assigned_to = text(task.get("assigned_to")) or "Unassigned"
     account_name = text(task.get("account_name")) or "—"
+    account_priority_label = "HIGH" if state.get("priority_account") else "NORMAL"
     case_type = text(task.get("case_type")) or text(task.get("category")) or "—"
     related_system = text(task.get("related_system")) or text(task.get("product")) or "—"
     last_update = dt_display(task.get("last_update")) or "—"
@@ -5058,7 +5244,10 @@ def case_details(task_id):
                             <span class="badge {priority_class} case-priority-badge">{html.escape(priority_label.title())}</span>
                         </div>
                         <div class="case-detail-subject">{html.escape(subject)}</div>
-                        <div class="case-detail-description">{html.escape(description)}</div>
+                        <div class="case-detail-account-line">
+                            <span><b>Account:</b> {html.escape(account_name)}</span>
+                            <span class="case-account-priority {'high' if account_priority_label == 'HIGH' else 'normal'}">{html.escape(account_priority_label)} PRIORITY ACCOUNT</span>
+                        </div>
                     </div>
                 </div>
                 <div class="case-detail-timing">
@@ -5086,15 +5275,11 @@ def case_details(task_id):
     st.markdown(
         f"""
         <div class="case-summary-strip">
-            <div class="case-summary-cell case-assignee">
-                <div class="case-avatar">{html.escape(initials.upper())}</div>
-                <div class="case-assignee-copy"><span>Assigned To</span><strong>{html.escape(assigned_to)}</strong></div>
-            </div>
+            <div class="case-summary-cell"><span>Assigned To</span><strong>{html.escape(assigned_to)}</strong></div>
             <div class="case-summary-cell"><span>Priority</span><strong class="priority-text">{html.escape(priority_label.title())}</strong></div>
             <div class="case-summary-cell"><span>Current Status</span><strong><span class="case-status-chip">{html.escape(status)}</span></strong></div>
             <div class="case-summary-cell"><span>Last Update</span><strong>{html.escape(last_update)}</strong></div>
             <div class="case-summary-cell"><span>Case Type</span><strong>{html.escape(case_type)}</strong></div>
-            <div class="case-summary-cell"><span>Account</span><strong>{html.escape(account_name)}</strong></div>
             <div class="case-summary-cell"><span>Related System</span><strong>{html.escape(related_system)}</strong></div>
         </div>
         """,
@@ -5124,7 +5309,8 @@ def case_details(task_id):
                 rows = [
                     ("Case #", case_number),
                     ("Subject", subject),
-                    ("Description", description),
+                    ("Account", account_name),
+                    ("Account Priority", account_priority_label.title()),
                     ("Priority", priority_label.title()),
                     ("Assigned To", assigned_to),
                     ("Due Date", due),
@@ -5133,7 +5319,6 @@ def case_details(task_id):
                     ("Current Status", status),
                     ("Case Category", text(task.get("category")) or "—"),
                     ("Product / Device", text(task.get("product")) or related_system),
-                    ("Client", account_name),
                     ("Related System", related_system),
                     ("Site / Location", text(task.get("site_location")) or "—"),
                     ("Reference Number", text(task.get("reference_number")) or "—"),
@@ -5274,29 +5459,9 @@ def case_details(task_id):
             with checklist_col:
                 st.markdown("<div class='case-card'>", unsafe_allow_html=True)
                 st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>☑</span>Station Task Checklists</div>", unsafe_allow_html=True)
-                st.caption("Select a station to review or complete its required tasks. The checklist for the current station is the transfer/reassignment gate.")
+                st.caption(f"Required tasks for the current station: {station_display_name(current)}. Completed items are logged automatically when the station checklist is finished.")
 
-                selected_key = f"action_checklist_station_{task_id}"
-                if selected_key not in st.session_state or st.session_state[selected_key] not in stations:
-                    st.session_state[selected_key] = current
-                selected_check_station = st.session_state[selected_key]
-
-                status_cols = st.columns(5, gap="small")
-                for idx, station in enumerate(stations):
-                    station_items = get_case_station_checklist(task, station)
-                    complete = bool(station_items) and all(bool(x.get("checked")) for x in station_items)
-                    button_label = station_display_name(station)
-                    with status_cols[idx]:
-                        if st.button(
-                            button_label,
-                            use_container_width=True,
-                            key=f"select_action_station_{task_id}_{station}",
-                            type="primary" if selected_check_station == station else "secondary",
-                        ):
-                            st.session_state[selected_key] = station
-                            st.rerun()
-
-                selected_check_station = st.session_state[selected_key]
+                selected_check_station = current
                 selected_items = get_case_station_checklist(task, selected_check_station)
                 selected_missing = [x.get("item") for x in selected_items if not bool(x.get("checked"))]
                 complete_class = "complete" if not selected_missing else "pending"
@@ -5333,19 +5498,6 @@ def case_details(task_id):
                             else:
                                 st.error("Unable to remove this checklist item.")
 
-                add_key = f"case_checklist_new_{task_id}_{selected_check_station}"
-                add_item = st.text_input(
-                    "Add checklist item",
-                    key=add_key,
-                    placeholder=f"Add a {station_display_name(selected_check_station)}-specific task...",
-                )
-                if st.button("＋ Add Checklist Item", use_container_width=True, key=f"case_checklist_add_{task_id}_{selected_check_station}"):
-                    if append_case_checklist_item(task_id, selected_check_station, add_item):
-                        st.session_state.pop(add_key, None)
-                        st.success("Checklist item added.")
-                        st.rerun()
-                    else:
-                        st.warning("Enter a new checklist item.")
                 st.markdown("</div>", unsafe_allow_html=True)
 
             # -----------------------------------------------------------
@@ -5528,17 +5680,6 @@ def case_details(task_id):
                     unsafe_allow_html=True,
                 )
 
-                recommendation = local_kb_ai_answer(
-                    f"What is the best next action for this case? {active_query} {case_kb_query(task)}",
-                    task,
-                    [selected_doc] + [doc for doc in results if doc is not selected_doc][:3],
-                )
-                st.markdown(
-                    f"<div class='kb-recommendation'><div class='kb-full-sop-label'>RECOMMENDED GUIDANCE</div>"
-                    f"<div class='kb-rich-content'>{kb_rich_html(recommendation.get('answer'))}</div></div>",
-                    unsafe_allow_html=True,
-                )
-
                 steps = selected_doc.get("steps")
                 if steps:
                     st.markdown("<div class='kb-sop-list-title'>Approved steps</div>", unsafe_allow_html=True)
@@ -5571,16 +5712,59 @@ def case_details(task_id):
             participants_preview = list(dict.fromkeys(CASEFLOW_ASSIGNEES + ([assigned_to] if assigned_to else [])))
             participant_preview = participants_preview[:5] or [assigned_to]
             participant_html = "".join(f"<span class='war-room-avatar'>{html.escape((text(name) or '?')[:1].upper())}</span>" for name in participant_preview if text(name))
-            st.markdown(
-                f"<div class='war-room-mock'>"
-                f"<div class='war-room-top'><div><span class='war-room-live-dot'></span><b>LIVE WAR ROOM</b><span class='war-room-case'>{html.escape(case_number)}</span></div><span class='war-room-status'>ACTIVE</span></div>"
-                f"<div class='war-room-grid'>"
-                f"<div><div class='war-room-label'>CURRENT FOCUS</div><div class='war-room-focus'>{html.escape(subject)}</div><div class='war-room-muted'>{html.escape(station_display_name(department))} · {html.escape(priority_label.title())}</div></div>"
-                f"<div><div class='war-room-label'>PARTICIPANTS</div><div class='war-room-avatars'>{participant_html}</div><div class='war-room-muted'>{len(participant_preview)} people in collaboration</div></div>"
-                f"<div><div class='war-room-label'>MOST RECENT UPDATE</div><div class='war-room-update'>{html.escape(latest_text[:190])}</div><div class='war-room-muted'>by {html.escape(latest_actor)}</div></div>"
-                f"</div></div>",
-                unsafe_allow_html=True,
-            )
+            war_open_key = f"war_room_open_{task_id}"
+            war_room_open = bool(st.session_state.get(war_open_key, False))
+            mock_link = f"https://meet.example.com/hpe-caseflow-{html.escape(case_number, quote=True)}"
+            with st.container(key=f"war_room_tile_{task_id}"):
+                st.markdown(
+                    f"<div class='war-room-mock {'war-room-open' if war_room_open else ''}' role='button' aria-label='Open war room'>"
+                    f"<div class='war-room-top'><div><span class='war-room-live-dot'></span><b>LIVE WAR ROOM</b><span class='war-room-case'>{html.escape(case_number)}</span></div><span class='war-room-status'>{'OPEN' if war_room_open else 'ACTIVE'}</span></div>"
+                    f"<div class='war-room-grid'>"
+                    f"<div><div class='war-room-label'>CURRENT FOCUS</div><div class='war-room-focus'>{html.escape(subject)}</div><div class='war-room-muted'>{html.escape(station_display_name(department))} · {html.escape(priority_label.title())}</div></div>"
+                    f"<div><div class='war-room-label'>PARTICIPANTS</div><div class='war-room-avatars'>{participant_html}</div><div class='war-room-muted'>{len(participant_preview)} people in collaboration</div></div>"
+                    f"<div><div class='war-room-label'>MOST RECENT UPDATE</div><div class='war-room-update'>{html.escape(latest_text[:190])}</div><div class='war-room-muted'>by {html.escape(latest_actor)}</div></div>"
+                    f"</div></div>",
+                    unsafe_allow_html=True,
+                )
+                if st.button(
+                    "Open War Room",
+                    use_container_width=True,
+                    key=f"war_room_open_button_{task_id}",
+                ):
+                    st.session_state[war_open_key] = True
+                    st.rerun()
+
+            if war_room_open:
+                meetings = task.get("meetings") or []
+                latest_meeting = meetings[-1] if isinstance(meetings, list) and meetings and isinstance(meetings[-1], dict) else {}
+                current_attendees = latest_meeting.get("attendance") or participant_preview
+                attendee_html = "".join(f"<li>{html.escape(text(name))}</li>" for name in current_attendees if text(name)) or "<li>No attendees recorded yet.</li>"
+                st.markdown(
+                    f"<div class='war-room-expanded'><div class='war-room-expanded-head'><div><b>War Room Details</b><span> · {html.escape(case_number)}</span></div><span class='war-room-expanded-live'>LIVE</span></div>"
+                    f"<div class='war-room-expanded-grid'><div><div class='war-room-label'>CURRENT ATTENDEES</div><ul>{attendee_html}</ul></div>"
+                    f"<div><div class='war-room-label'>MOCK WAR ROOM LINK</div><a class='war-room-link' href='{mock_link}' target='_blank' rel='noopener noreferrer'>Open mock war room ↗</a><div class='war-room-muted'>Opens without closing Case Details.</div></div></div></div>",
+                    unsafe_allow_html=True,
+                )
+                if st.button("Close War Room", use_container_width=True, key=f"war_room_close_{task_id}"):
+                    try:
+                        from bson import ObjectId
+                        now = utc_now()
+                        history = list(task.get("history") or [])
+                        attendee_names = ", ".join(text(x) for x in current_attendees if text(x)) or "None recorded"
+                        history.append({
+                            "action": f"War Room closed.\n• Attendees: {attendee_names}\n• Link: {mock_link}",
+                            "timestamp": now,
+                            "actor": assigned_to or "Caseflow",
+                        })
+                        col(TASKS_COLLECTION).update_one(
+                            {"_id": ObjectId(str(task_id))},
+                            {"$set": {"history": history[-50:], "last_update": now}},
+                        )
+                        clear_task_cache()
+                    except Exception:
+                        pass
+                    st.session_state[war_open_key] = False
+                    st.rerun()
 
             meeting_link_key = f"meeting_link_{task_id}"
             meeting_tags_key = f"meeting_tags_{task_id}"
@@ -6148,25 +6332,29 @@ def dashboard_fragment():
 
 
         warning_condition = (nearing > 0 or past_due > 0)
-        if warning_condition and station not in warning_silenced:
+        warning_pairs = [
+            (task, state)
+            for task, state in zip(station_tasks, station_states)
+            if state.get("nearing_due", False) or state.get("past_due", False)
+        ]
+        unacknowledged_warning_tasks = [
+            task for task, _state in warning_pairs
+            if text(task.get("station_warning_ack_trigger")) != station_warning_trigger_key(task, station)
+        ]
+        if unacknowledged_warning_tasks:
             warning_latched.add(station)
         elif not warning_condition:
-            # A silenced warning cycle is cleared only after the underlying
-            # warning condition has cleared, allowing a future warning to latch.
+            warning_latched.discard(station)
             warning_silenced.discard(station)
-
 
         ack_until = 0.0
         now_epoch = time.time()
 
-
-        # Once a station starts flashing, the alert remains latched until the
-        # user clicks that station tile. It does not stop merely because the
-        # case crosses from nearing-due into breached.
-        flash_tile = (
-            station in warning_latched
-            and station not in warning_silenced
-        )
+        # Persisted per-case warning-cycle acknowledgement means a refresh
+        # cannot resurrect an alert that the user already clicked. A new case
+        # entering warning, or the same case entering a new station cycle, gets
+        # a new trigger key and can alert again.
+        flash_tile = bool(unacknowledged_warning_tasks)
 
 
         config = STATIONS[
@@ -6223,13 +6411,13 @@ def dashboard_fragment():
                     key=f"station_{station}",
                     use_container_width=True,
                 ):
-                    if station in warning_latched or warning_condition:
-                        # Stop the tile warning immediately on click. The latch
-                        # is cleared here; it will only start again on a future
-                        # warning cycle after the underlying condition clears.
+                    if warning_condition:
+                        # Acknowledge exactly the currently-warning case cycles
+                        # in MongoDB so the clicked state survives refresh.
                         warning_ack_until[station] = 0.0
                         warning_silenced.add(station)
                         warning_latched.discard(station)
+                        acknowledge_station_warning_cycle(unacknowledged_warning_tasks)
                         acknowledge_station_alerts(station)
 
 
@@ -6473,9 +6661,11 @@ def dashboard_fragment():
                     key=f"case_{task_id}",
                     use_container_width=True,
                 ):
-                    # Open the dialog directly from the user's click.
-                    # There is no periodic dashboard rerun.
-                    case_details(task_id)
+                    # Persist the selected case so controls inside the dialog
+                    # can rerun the app without losing the Case Details modal.
+                    st.session_state["selected_case_id"] = str(task_id)
+                    st.session_state["show_case"] = True
+                    st.rerun()
 
 
         with row[1]:
@@ -6859,6 +7049,11 @@ seed_mock_cases()
 dashboard_fragment()
 
 
+# Re-open the selected Case Details dialog after an interaction-triggered
+# rerun. This keeps SOP selection, war-room expansion and other dialog
+# controls inside the same case instead of dropping back to the dashboard.
+if st.session_state.get("show_case") and st.session_state.get("selected_case_id"):
+    case_details(st.session_state["selected_case_id"])
 
 
 # ============================================================
@@ -7235,3 +7430,113 @@ div[data-testid="stDialog"] [class*="st-key-case_checklist_remove_"] button { wi
 
 </style>
 ''', unsafe_allow_html=True)
+
+st.markdown(r'''<style>
+/* CASE DETAILS — compact header, tighter vertical rhythm */
+div[data-testid="stDialog"] header {
+    min-height:40px !important; height:40px !important; padding:2px 12px !important;
+}
+div[data-testid="stDialog"] header p {
+    font-size:15px !important; font-weight:750 !important; margin:0 !important; line-height:1.1 !important;
+}
+div[data-testid="stDialog"] .case-detail-hero { margin:0 0 2px !important; padding:2px 5px 2px !important; }
+div[data-testid="stDialog"] .case-detail-case-number { font-size:14px !important; line-height:1.1 !important; }
+div[data-testid="stDialog"] .case-detail-subject { font-size:11.5px !important; line-height:1.2 !important; margin-top:1px !important; }
+div[data-testid="stDialog"] .case-detail-copy { min-width:0 !important; }
+div[data-testid="stDialog"] .case-detail-title-row { gap:8px !important; }
+div[data-testid="stDialog"] .case-folder-icon { font-size:20px !important; }
+div[data-testid="stDialog"] .case-detail-account-line {
+    display:flex !important; align-items:center !important; flex-wrap:wrap !important; gap:6px !important;
+    color:#526078 !important; font-size:8.5px !important; line-height:1.15 !important; margin-top:2px !important;
+}
+div[data-testid="stDialog"] .case-account-priority {
+    display:inline-flex !important; padding:2px 5px !important; border-radius:999px !important;
+    font-size:7px !important; font-weight:850 !important; letter-spacing:.2px !important;
+}
+div[data-testid="stDialog"] .case-account-priority.high { background:#ffe5e9 !important; color:#d33a4e !important; }
+div[data-testid="stDialog"] .case-account-priority.normal { background:#eef2f6 !important; color:#66758d !important; }
+div[data-testid="stDialog"] .case-detail-timing { min-width:460px !important; }
+div[data-testid="stDialog"] .case-timing-item { padding:0 9px !important; }
+div[data-testid="stDialog"] .case-timing-item span { font-size:7.5px !important; }
+div[data-testid="stDialog"] .case-timing-item strong { font-size:9px !important; }
+div[data-testid="stDialog"] .case-timing-icon { font-size:12px !important; }
+div[data-testid="stDialog"] .case-summary-strip { padding:3px 3px !important; margin:1px 0 2px !important; }
+div[data-testid="stDialog"] .case-summary-cell { padding:1px 7px !important; min-width:0 !important; }
+div[data-testid="stDialog"] .case-summary-cell > span { font-size:7px !important; margin:0 0 1px !important; line-height:1 !important; }
+div[data-testid="stDialog"] .case-summary-cell > strong { font-size:8.5px !important; line-height:1.05 !important; }
+
+/* Compact dropdowns: remove the whitespace around labels and selected values. */
+div[data-testid="stDialog"] [data-testid="stSelectbox"] { margin:0 !important; padding:0 !important; }
+div[data-testid="stDialog"] [data-testid="stSelectbox"] > div { margin:0 !important; padding:0 !important; }
+div[data-testid="stDialog"] [data-testid="stSelectbox"] label { margin:0 0 1px !important; padding:0 !important; font-size:8.5px !important; line-height:1 !important; }
+div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] { margin:0 !important; padding:0 !important; }
+div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] > div { min-height:25px !important; height:25px !important; padding:0 7px !important; margin:0 !important; border-radius:5px !important; }
+div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] span { font-size:8.5px !important; line-height:23px !important; }
+
+/* Only the CURRENT station checklist is shown. */
+div[data-testid="stDialog"] .case-checklist-wrap { margin:4px 0 4px !important; padding:6px 8px !important; }
+div[data-testid="stDialog"] .case-checklist-title { font-size:10px !important; margin:0 0 1px !important; }
+div[data-testid="stDialog"] .case-checklist-sub { font-size:8px !important; line-height:1.2 !important; margin:0 0 4px !important; }
+div[data-testid="stDialog"] .case-checklist-status { padding:2px 6px !important; font-size:7.5px !important; margin:0 !important; }
+div[data-testid="stDialog"] [data-testid="stCheckbox"] { margin:0 !important; padding:0 !important; min-height:22px !important; }
+div[data-testid="stDialog"] [data-testid="stCheckbox"] label { font-size:9px !important; line-height:1.15 !important; padding:0 !important; margin:0 !important; }
+div[data-testid="stDialog"] [data-testid="stCheckbox"] > div { padding:0 !important; margin:0 !important; }
+
+/* Knowledge Base: readable white article, smaller questions and tighter SOP list. */
+div[data-testid="stDialog"] .kb-panel-intro { padding:5px 7px !important; margin:0 0 4px !important; background:#fff !important; }
+div[data-testid="stDialog"] .kb-panel-title { font-size:10px !important; }
+div[data-testid="stDialog"] .kb-panel-sub { font-size:8px !important; line-height:1.2 !important; }
+div[data-testid="stDialog"] .kb-suggested-title { font-size:7px !important; margin:3px 0 2px !important; }
+div[data-testid="stDialog"] [class*="st-key-kb_suggested_"] { margin:0 !important; padding:0 !important; }
+div[data-testid="stDialog"] [class*="st-key-kb_suggested_"] button {
+    font-size:7.5px !important; line-height:1.12 !important; padding:3px 5px !important;
+    min-height:22px !important; border-radius:4px !important; margin:0 0 2px !important;
+}
+div[data-testid="stDialog"] .kb-sop-list-title { font-size:7.5px !important; margin:4px 0 2px !important; }
+div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] { margin:0 !important; padding:0 !important; }
+div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] button {
+    min-height:23px !important; height:23px !important; padding:2px 5px !important;
+    font-size:7.5px !important; line-height:1 !important; border-radius:4px !important; margin:0 0 2px !important;
+}
+div[data-testid="stDialog"] .kb-selected-sop { padding:5px 7px !important; margin-top:3px !important; }
+div[data-testid="stDialog"] .kb-selected-label { font-size:6.5px !important; }
+div[data-testid="stDialog"] .kb-selected-sop-title { font-size:9px !important; line-height:1.15 !important; }
+div[data-testid="stDialog"] .kb-selected-sop-meta { font-size:7px !important; margin-top:2px !important; }
+div[data-testid="stDialog"] .kb-full-sop { padding:7px 9px !important; margin-top:4px !important; }
+div[data-testid="stDialog"] .kb-full-sop-label { font-size:7px !important; margin-bottom:3px !important; }
+div[data-testid="stDialog"] .kb-rich-content { font-size:8.5px !important; line-height:1.35 !important; color:#243858 !important; }
+div[data-testid="stDialog"] .kb-rich-content p { margin:0 0 4px !important; }
+div[data-testid="stDialog"] .kb-rich-content ul,
+div[data-testid="stDialog"] .kb-rich-content ol { margin:1px 0 5px 15px !important; padding:0 !important; }
+div[data-testid="stDialog"] .kb-rich-content li { margin:0 0 2px !important; padding-left:1px !important; }
+div[data-testid="stDialog"] .kb-content-heading { font-size:8px !important; margin:5px 0 2px !important; }
+
+/* Exact clickable War Room tile. */
+div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] { position:relative !important; min-height:88px !important; margin:0 !important; padding:0 !important; }
+div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] .war-room-mock { margin:0 !important; min-height:82px !important; box-sizing:border-box !important; cursor:pointer !important; transition:border-color .12s ease, box-shadow .12s ease !important; }
+div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] .war-room-mock:hover { border-color:#00a98f !important; box-shadow:0 0 0 2px rgba(0,169,143,.08) !important; }
+div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] [class*="st-key-war_room_open_button_"] { position:absolute !important; inset:0 !important; z-index:30 !important; margin:0 !important; padding:0 !important; }
+div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] [class*="st-key-war_room_open_button_"] button { position:absolute !important; inset:0 !important; width:100% !important; height:100% !important; background:transparent !important; border:0 !important; color:transparent !important; box-shadow:none !important; opacity:.001 !important; cursor:pointer !important; }
+div[data-testid="stDialog"] .war-room-expanded {
+    background:#f8fcfb !important; border:1px solid #cfe3e1 !important; border-radius:7px !important;
+    padding:7px 9px !important; margin:4px 0 5px !important;
+}
+div[data-testid="stDialog"] .war-room-expanded-head { display:flex !important; justify-content:space-between !important; font-size:9px !important; color:#102041 !important; }
+div[data-testid="stDialog"] .war-room-expanded-head span { color:#64748b !important; }
+div[data-testid="stDialog"] .war-room-expanded-live { color:#087b71 !important; background:#e7faf5 !important; border-radius:999px !important; padding:2px 5px !important; font-size:6.5px !important; font-weight:850 !important; }
+div[data-testid="stDialog"] .war-room-expanded-grid { display:grid !important; grid-template-columns:1fr 1fr !important; gap:10px !important; margin-top:5px !important; }
+div[data-testid="stDialog"] .war-room-expanded-grid ul { margin:2px 0 0 14px !important; padding:0 !important; font-size:8px !important; line-height:1.3 !important; }
+div[data-testid="stDialog"] .war-room-link { font-size:8.5px !important; color:#0879c9 !important; font-weight:750 !important; text-decoration:none !important; }
+
+/* Preserve a single scroll surface and make it tall enough to reach the bottom. */
+div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
+    height:calc(100vh - 185px) !important; max-height:calc(100vh - 185px) !important;
+    min-height:220px !important; overflow-y:auto !important; overflow-x:hidden !important;
+    overscroll-behavior:contain !important; scrollbar-width:thin !important;
+}
+
+/* Remove old product-family/navigation tiles if any legacy markup remains. */
+div[data-testid="stDialog"] .kb-product-family,
+div[data-testid="stDialog"] .product-family-tiles,
+div[data-testid="stDialog"] [class*="product-family"] { display:none !important; }
+</style>''', unsafe_allow_html=True)
