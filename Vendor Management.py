@@ -203,7 +203,7 @@ STATION_CHECKLISTS = {
     ],
 }
 
-OVR-VW_ASSIGNEES = [
+Caseflow_ASSIGNEES = [
     "June John Cruz",
     "Arianne May Escabillas",
     "Jonathan Gaspar",
