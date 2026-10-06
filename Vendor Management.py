@@ -7123,16 +7123,19 @@ seed_mock_cases()
 
 
 
-# Render the live dashboard. The fragment itself refreshes every second,
-# while the rest of the application remains untouched.
-dashboard_fragment()
-
-
-# Re-open the selected Case Details dialog after an interaction-triggered
-# rerun. This keeps SOP selection, war-room expansion and other dialog
-# controls inside the same case instead of dropping back to the dashboard.
+# Case Details is a Streamlit dialog (it is itself a fragment).
+# IMPORTANT: invoke it from the main script context BEFORE invoking the
+# dashboard fragment. Calling a dialog after dashboard_fragment() can leave
+# Streamlit in the fragment layout context and raises
+# StreamlitInvalidLayoutContextError. Dialog interactions then rerun only the
+# dialog fragment, so the modal remains open while its controls are used.
 if st.session_state.get("show_case") and st.session_state.get("selected_case_id"):
     case_details(st.session_state["selected_case_id"])
+
+
+# Render the live dashboard after the dialog has been registered. The
+# dashboard fragment continues to refresh independently during normal use.
+dashboard_fragment()
 
 
 # ============================================================
@@ -7956,3 +7959,73 @@ div[data-testid="stDialog"] .case-detail-footer {
 }
 </style>
 ''', unsafe_allow_html=True)
+
+
+st.markdown(r'''<style>
+/* ============================================================
+   CASEFLOW V7 — AUTHORITATIVE CASE DETAILS SCROLL FIX
+   ============================================================
+   ONE scroll surface only. The dialog panel is fixed; its content column
+   is the scroll surface. The case_detail_scroll container is NOT scrollable.
+*/
+div[data-testid="stDialog"] > div {
+    height:min(86vh, 760px) !important;
+    max-height:calc(100vh - 32px) !important;
+    min-height:0 !important;
+    overflow:hidden !important;
+}
+
+div[data-testid="stDialog"] > div > div {
+    height:calc(100% - 48px) !important;
+    max-height:calc(100% - 48px) !important;
+    min-height:0 !important;
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+    overscroll-behavior:contain !important;
+    -webkit-overflow-scrolling:touch !important;
+    scrollbar-width:auto !important;
+    scrollbar-color:#8fa3b9 #edf2f7 !important;
+}
+
+div[data-testid="stDialog"] > div > div::-webkit-scrollbar { width:9px !important; display:block !important; }
+div[data-testid="stDialog"] > div > div::-webkit-scrollbar-track { background:#edf2f7 !important; }
+div[data-testid="stDialog"] > div > div::-webkit-scrollbar-thumb { background:#8fa3b9 !important; border-radius:8px !important; border:2px solid #edf2f7 !important; }
+
+div[data-testid="stDialog"] [data-testid="stDialogContent"] {
+    height:auto !important;
+    max-height:none !important;
+    min-height:0 !important;
+    overflow:visible !important;
+    overflow-y:visible !important;
+    overflow-x:visible !important;
+}
+
+div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
+    height:auto !important;
+    max-height:none !important;
+    min-height:0 !important;
+    overflow:visible !important;
+    overflow-y:visible !important;
+    overflow-x:visible !important;
+    overscroll-behavior:auto !important;
+}
+
+div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] > div {
+    height:auto !important;
+    max-height:none !important;
+    min-height:0 !important;
+    overflow:visible !important;
+}
+
+div[data-testid="stDialog"] [data-testid="stVerticalBlock"] {
+    overflow:visible !important;
+    max-height:none !important;
+}
+
+div[data-testid="stDialog"] .case-detail-footer {
+    position:static !important;
+    min-height:24px !important;
+    height:24px !important;
+    margin-bottom:16px !important;
+}
+</style>''', unsafe_allow_html=True)
