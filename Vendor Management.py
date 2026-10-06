@@ -1012,6 +1012,7 @@ defaults = {
     "simulation_alert_active": False,
     "simulation_alert_case_id": None,
     "simulation_active": False,
+    "pending_alert_case_id": None,
     "search": "",
     # Kept for compatibility with existing session state; acknowledgement
     # now stops tile flashing immediately.
@@ -1638,6 +1639,42 @@ st.markdown(
         white-space:nowrap;
         font-weight:800 !important;
         transition:color .25s ease, text-shadow .25s ease, opacity .25s ease;
+    }
+    .duration-alert-icon {
+        display:none;
+        width:17px;
+        height:17px;
+        margin-left:5px;
+        border-radius:50%;
+        align-items:center;
+        justify-content:center;
+        font-size:11px;
+        line-height:1;
+        font-weight:950;
+        flex:0 0 17px;
+        animation:durationAlertBlink .62s ease-in-out infinite alternate;
+    }
+    .duration-alert-question {
+        color:#c58a00;
+        border:2px solid #c58a00;
+        background:#fff8df;
+        box-shadow:0 0 7px rgba(197,138,0,.30);
+    }
+    .duration-alert-amber {
+        color:#a86d00;
+        border:2px solid #d99a00;
+        background:#fff1bf;
+        box-shadow:0 0 8px rgba(217,154,0,.40);
+    }
+    .duration-alert-red {
+        color:#fff;
+        border:2px solid #ef1738;
+        background:#ef1738;
+        box-shadow:0 0 9px rgba(239,23,56,.52);
+    }
+    @keyframes durationAlertBlink {
+        from { opacity:.45; transform:scale(.82); }
+        to { opacity:1; transform:scale(1.12); }
     }
     /* Duration color follows elapsed time in the CURRENT station SLA:
        green = 0-50%, yellow = 50-80%, red = 80-100% and beyond. */
@@ -3108,9 +3145,9 @@ def calculate_state(task, now=None):
     priority_account = account_priority_status(task)
 
 
-    # SLA warning is strictly time-based: final 20% BEFORE the SLA ends.
-    # Once elapsed time reaches the SLA, the case is past due instead.
-    nearing_due = (remaining > 0) and (remaining <= sla * 0.20)
+    # Early-warning threshold is 40% REMAINING so the team has enough time
+    # to act before breach. The warning is still amber at this point.
+    nearing_due = (remaining > 0) and (remaining <= sla * 0.40)
     past_due = remaining <= 0
 
 
@@ -3133,6 +3170,7 @@ def calculate_state(task, now=None):
         "progress": progress,
         "priority_account": priority_account,
         "nearing_due": nearing_due,
+        "warning_triggered": nearing_due,
         "past_due": past_due,
         "critical": status in {"CRITICAL", "BREACHED"},
         "breached": status == "BREACHED",
@@ -3324,7 +3362,7 @@ def reset_mock_case_durations():
     reset_now = utc_now()
     # Five cases per station are restored in staggered, non-breached states.
     # The final case is at 80% elapsed, leaving 20% SLA remaining.
-    elapsed_ratios = [0.00, 0.25, 0.50, 0.65, 0.80]
+    elapsed_ratios = [0.00, 0.15, 0.30, 0.45, 0.55]
     total_reset = 0
     reset_task_ids = []
 
@@ -3574,7 +3612,7 @@ def scan_alerts(tasks):
 
     for task in tasks:
         state = calculate_state(task, now)
-        if not state["critical"]:
+        if not state.get("warning_triggered") and not state["priority_account"]:
             continue
 
 
@@ -3590,8 +3628,8 @@ def scan_alerts(tasks):
         else:
             alert_type = "NEARING_DUE"
             message = (
-                f"Case nearing SLA: {text(task.get('case_number'))} "
-                f"— {text(task.get('account_name'))}"
+                f"Case approaching SLA warning threshold: {text(task.get('case_number'))} "
+                f"— {text(task.get('account_name'))} · 40% timeframe remaining"
             )
 
 
@@ -5103,7 +5141,10 @@ if st.session_state["show_settings"]:
                         from bson import ObjectId
                         simulation_id = simulation_case.get("_id")
                         sla_seconds = int(STATIONS["CARE"]["sla_minutes"] * 60)
-                        simulation_due = now + timedelta(seconds=45)
+                        # Start H&M exactly at the 40% remaining early-warning point.
+                        # It is a single cross-station simulation alert; the other
+                        # staggered mock cases remain below the warning threshold.
+                        simulation_due = now + timedelta(seconds=int(sla_seconds * 0.40))
                         simulation_started = simulation_due - timedelta(seconds=sla_seconds)
 
                         col(TASKS_COLLECTION).update_one(
@@ -5254,19 +5295,27 @@ if st.session_state["show_alerts"]:
                     )
 
 
-                    if st.button(
-                        "Acknowledge",
-                        key=f"ack_{alert['_id']}",
-                        use_container_width=True,
-                    ):
-
-
-                        acknowledge_alert(
-                            str(alert["_id"])
-                        )
-
-
-                        st.rerun()
+                    alert_actions = st.columns(2)
+                    with alert_actions[0]:
+                        if st.button(
+                            "View Case",
+                            key=f"view_alert_case_{alert['_id']}",
+                            use_container_width=True,
+                        ):
+                            st.session_state["selected_case_id"] = text(alert.get("task_id"))
+                            st.session_state["pending_alert_case_id"] = text(alert.get("task_id"))
+                            st.session_state["show_case"] = True
+                            acknowledge_alert(str(alert["_id"]))
+                            st.session_state["show_alerts"] = False
+                            st.rerun()
+                    with alert_actions[1]:
+                        if st.button(
+                            "Acknowledge",
+                            key=f"ack_{alert['_id']}",
+                            use_container_width=True,
+                        ):
+                            acknowledge_alert(str(alert["_id"]))
+                            st.rerun()
 
 
         if st.button(
@@ -7092,7 +7141,7 @@ def dashboard_fragment():
         # A priority account is still marked CRITICAL and can generate alerts,
         # but it must NOT make a station tile blink by itself.
         #
-        # "Nearing due" means the case has entered the final 20% of the
+        # "Nearing due" means the case has entered the final 40% of the
         # station SLA, while it has not yet breached the SLA.
         #
         # The duration clock itself starts at station_started_at. When a case
@@ -7104,7 +7153,7 @@ def dashboard_fragment():
         # the warning threshold OR has already breached the station SLA.
         # This keeps the visual warning tied to the same cases that receive
         # the red duration indicator in the table.
-        # Nearing due = final 20% of the SLA, strictly BEFORE breach.
+        # Nearing due = final 40% of the SLA, strictly BEFORE breach.
         # Past due = SLA has already elapsed.
         nearing = sum(
             1
@@ -7116,8 +7165,8 @@ def dashboard_fragment():
             for state in station_states
             if state.get("past_due", False)
         )
-        # A tile flashes ONLY while at least one case is in the final
-        # 20% of this station's SLA. Priority-account status alone does not
+        # A tile flashes when at least one case reaches the final 40% of
+        # this station's SLA. Priority-account status alone does not
         # trigger the tile animation.
         warning_ack_until = st.session_state.setdefault(
             "station_warning_ack_until",
@@ -7260,15 +7309,12 @@ def dashboard_fragment():
 
     selected_tasks.sort(
         key=lambda task: (
+            0 if states[str(task["_id"])].get("priority_account") else 1,
             STATUS_ORDER.get(
-                states[
-                    str(task["_id"])
-                ]["status"],
+                states[str(task["_id"])]["status"],
                 9,
             ),
-            states[
-                str(task["_id"])
-            ]["remaining"],
+            states[str(task["_id"])]["remaining"],
         )
     )
 
@@ -7307,6 +7353,7 @@ def dashboard_fragment():
                 "Duration",
                 "Due Date",
             ],
+            index=1,
             label_visibility="collapsed",
             key="sort_choice",
         )
@@ -7316,10 +7363,10 @@ def dashboard_fragment():
 
 
         selected_tasks.sort(
-            key=lambda task:
-            -states[
-                str(task["_id"])
-            ]["elapsed"]
+            key=lambda task: (
+                0 if states[str(task["_id"])].get("priority_account") else 1,
+                -states[str(task["_id"])]["elapsed"],
+            )
         )
 
 
@@ -7645,15 +7692,27 @@ def dashboard_fragment():
 
 
             # Duration color follows elapsed SLA progress:
-            # green 0-50%, yellow 50-80%, red 80-100% and past due.
-            warning_threshold_seconds = sla_for_case * 0.80
+            # green = more than 50% remaining, amber = 20%-50% remaining,
+            # red = final 20% and past due. The alert trigger begins at 40%
+            # remaining so the team receives an early warning while still amber.
+            warning_threshold_seconds = sla_for_case * 0.60
             elapsed_ratio = (state["elapsed"] / sla_for_case) if sla_for_case else 1.0
             if elapsed_ratio < 0.50:
                 duration_color_class = "duration-green"
+                duration_alert_symbol = ""
+                duration_alert_class = ""
+            elif elapsed_ratio < 0.60:
+                duration_color_class = "duration-yellow"
+                duration_alert_symbol = "?"
+                duration_alert_class = "duration-alert-question"
             elif elapsed_ratio < 0.80:
                 duration_color_class = "duration-yellow"
+                duration_alert_symbol = "!"
+                duration_alert_class = "duration-alert-amber"
             else:
                 duration_color_class = "duration-red"
+                duration_alert_symbol = "!"
+                duration_alert_class = "duration-alert-red"
 
 
             warning_ack_map = st.session_state.get(
@@ -7683,6 +7742,9 @@ def dashboard_fragment():
                             data-duration-live="1">
                             {duration_string(state['elapsed'])}
                         </span>
+                        <span class="duration-alert-icon {duration_alert_class}"
+                              data-duration-alert="1"
+                              aria-label="SLA warning">{duration_alert_symbol}</span>
                     </div>
                 </div>
                 """,
@@ -7733,10 +7795,30 @@ def dashboard_fragment():
 
 
                     const ratio = elapsed / sla;
+                    const alertIcon = wrap.querySelector('[data-duration-alert="1"]');
                     wrap.classList.toggle("duration-green", ratio < 0.50);
                     wrap.classList.toggle("duration-yellow", ratio >= 0.50 && ratio < 0.80);
                     wrap.classList.toggle("duration-red", ratio >= 0.80);
-                    wrap.classList.toggle("duration-warning-active", ratio >= 0.80 && ratio < 1.0);
+                    wrap.classList.toggle("duration-warning-active", ratio >= 0.60 && ratio < 1.0);
+
+                    if (alertIcon) {
+                        let symbol = "";
+                        let iconClass = "";
+                        if (ratio >= 0.80) {
+                            symbol = "!";
+                            iconClass = "duration-alert-red";
+                        } else if (ratio >= 0.60) {
+                            symbol = "!";
+                            iconClass = "duration-alert-amber";
+                        } else if (ratio >= 0.50) {
+                            symbol = "?";
+                            iconClass = "duration-alert-question";
+                        }
+                        alertIcon.textContent = symbol;
+                        alertIcon.classList.remove("duration-alert-question", "duration-alert-amber", "duration-alert-red");
+                        if (iconClass) alertIcon.classList.add(iconClass);
+                        alertIcon.style.display = symbol ? "inline-flex" : "none";
+                    }
                 });
             }
 
@@ -8361,16 +8443,18 @@ if st.session_state.get("simulation_alert_active") and st.session_state.get("sim
         simulation_assignee = text(simulation_alert_task.get("assigned_to")) or "Unassigned"
         simulation_account = text(simulation_alert_task.get("account_name")) or "H&M"
         simulation_due = dt_display(simulation_alert_task.get("due_date")) or "Today"
-        with st.container(key="simulation_alert_overlay"):
+
+        @st.dialog("Critical Case Alert", width="small")
+        def show_simulation_critical_alert():
             st.markdown(
                 f"""
                 <div class="simulation-alert-card">
                     <div class="simulation-alert-header">
                         <div class="simulation-alert-icon">!</div>
                         <div>
-                            <div class="simulation-alert-title">Critical Case Alert</div>
+                            <div class="simulation-alert-title">Critical Case Alert · HIGH PRIORITY ACCOUNT</div>
                             <div class="simulation-alert-subtitle">
-                                The following high priority account requires immediate attention and is still not resolved.
+                                H&amp;M is a high priority account requiring immediate attention. This is the single starting simulation alert across all stations.
                             </div>
                         </div>
                     </div>
@@ -8379,8 +8463,8 @@ if st.session_state.get("simulation_alert_active") and st.session_state.get("sim
                         <div class="simulation-alert-row"><span>Subject</span><strong>{html.escape(simulation_subject)}</strong></div>
                         <div class="simulation-alert-row"><span>Account</span><strong>{html.escape(simulation_account)}</strong></div>
                         <div class="simulation-alert-row"><span>Assigned To</span><strong>{html.escape(simulation_assignee)}</strong></div>
-                        <div class="simulation-alert-row"><span>Priority</span><strong><span class="simulation-alert-critical">Critical</span></strong></div>
-                        <div class="simulation-alert-row"><span>Due Date</span><strong style="color:#e51c3a">{html.escape(simulation_due)}</strong></div>
+                        <div class="simulation-alert-row"><span>Priority</span><strong><span class="simulation-alert-critical">HIGH PRIORITY · CRITICAL</span></strong></div>
+                        <div class="simulation-alert-row"><span>Due Date</span><strong style="color:#d99a00">{html.escape(simulation_due)}</strong></div>
                         <div class="simulation-alert-row"><span>Current Status</span><strong>{html.escape(text(simulation_alert_task.get("status")) or "In Progress")}</strong></div>
                     </div>
                 </div>
@@ -8395,12 +8479,13 @@ if st.session_state.get("simulation_alert_active") and st.session_state.get("sim
             ):
                 st.session_state["simulation_alert_active"] = False
                 st.session_state["selected_case_id"] = str(simulation_alert_case_id)
+                st.session_state["pending_alert_case_id"] = str(simulation_alert_case_id)
                 st.session_state["show_case"] = True
                 try:
                     col(ALERT_COLLECTION).update_many(
                         {
                             "task_id": str(simulation_alert_case_id),
-                            "alert_type": "PRIORITY_ACCOUNT",
+                            "alert_type": {"$in": ["PRIORITY_ACCOUNT", "NEARING_DUE"]},
                             "acknowledged": False,
                         },
                         {"$set": {"acknowledged": True, "acknowledged_at": utc_now()}},
@@ -8408,7 +8493,16 @@ if st.session_state.get("simulation_alert_active") and st.session_state.get("sim
                 except Exception:
                     pass
                 clear_task_cache()
-                case_details(str(simulation_alert_case_id))
+                st.rerun()
+
+        show_simulation_critical_alert()
+
+# After an alert's View Case action, open the real Case Details dialog for
+# the exact case that generated that alert.
+pending_alert_case_id = text(st.session_state.get("pending_alert_case_id"))
+if pending_alert_case_id and not st.session_state.get("simulation_alert_active"):
+    st.session_state["pending_alert_case_id"] = None
+    case_details(pending_alert_case_id)
 
 # ============================================================
 # SIMULATION CLEANUP
