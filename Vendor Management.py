@@ -214,6 +214,18 @@ STATUS_ORDER = {
     "LOW": 3,
 }
 
+CASE_STATUS_OPTIONS = [
+    "Open",
+    "In Progress",
+    "Pending Customer",
+    "Pending Internal",
+    "On Hold",
+    "Escalated",
+    "Resolved",
+    "Completed",
+    "Closed",
+]
+
 
 
 
@@ -997,6 +1009,9 @@ defaults = {
     "admin_unlocked": False,
     "simulation_until": 0.0,
     "simulation_case_id": None,
+    "simulation_alert_active": False,
+    "simulation_alert_case_id": None,
+    "simulation_active": False,
     "search": "",
     # Kept for compatibility with existing session state; acknowledgement
     # now stops tile flashing immediately.
@@ -3307,7 +3322,9 @@ def reset_mock_case_durations():
     state in which they were originally seeded.
     """
     reset_now = utc_now()
-    elapsed_ratios = [0.00, 0.50, 0.80, 0.95, 1.00]
+    # Five cases per station are restored in staggered, non-breached states.
+    # The final case is at 80% elapsed, leaving 20% SLA remaining.
+    elapsed_ratios = [0.00, 0.25, 0.50, 0.65, 0.80]
     total_reset = 0
     reset_task_ids = []
 
@@ -3358,6 +3375,8 @@ def reset_mock_case_durations():
                         "attachments": "",
                         "files": "",
                         "war_room": "",
+                        "active_war_rooms": "",
+                        "simulation_collaboration": "",
                         "station_warning_ack_trigger": "",
                         "station_warning_acknowledged_at": "",
                     },
@@ -4207,6 +4226,48 @@ def save_case_action_log(task_id, action_plan, note, logged_by="Caseflow User"):
         return False, f"Unable to save the action plan and note: {exc}"
 
 
+def update_case_status(task_id, new_status, logged_by="Caseflow User"):
+    """Update the editable case status and record the change in Case History."""
+    new_status = text(new_status)
+    if not new_status:
+        return False, "Choose a case status."
+    try:
+        from bson import ObjectId
+        now = utc_now()
+        task = col(TASKS_COLLECTION).find_one({"_id": ObjectId(str(task_id))}) or {}
+        old_status = text(task.get("status")) or "Open"
+        actor = text(logged_by) or "Caseflow User"
+        if old_status == new_status:
+            return False, "No status change was made."
+        station = station_name(task.get("department"))
+        history = list(task.get("history") or [])
+        history.append({
+            "action": f"Case status changed from {old_status} to {new_status}.",
+            "timestamp": now,
+            "actor": actor,
+            "station": station,
+            "resolution_assessment": automated_case_assessment(task, calculate_state(task)),
+            "action_plan": text(task.get("next_action")),
+            "case_note": text(task.get("notes")),
+        })
+        result = col(TASKS_COLLECTION).update_one(
+            {"_id": ObjectId(str(task_id))},
+            {"$set": {
+                "status": new_status,
+                "last_update": now,
+                "history": history,
+            }},
+        )
+        clear_task_cache()
+        try:
+            _account_priority_lookup.clear()
+        except Exception:
+            pass
+        return result.modified_count > 0, ""
+    except Exception as exc:
+        return False, f"Unable to update case status: {exc}"
+
+
 def _append_collaboration_history(task_id, action, actor="Caseflow", station=None):
     """Persist a collaboration-tab action and mirror it into the main case history."""
     action = text(action)
@@ -4248,6 +4309,255 @@ def _append_collaboration_history(task_id, action, actor="Caseflow", station=Non
         return result.modified_count > 0
     except Exception:
         return False
+
+
+def _collaboration_actor(task):
+    return text(task.get("assigned_to")) or "Caseflow User"
+
+
+def create_active_war_room(task_id, meeting_link, tagged_people=None, attendance=None, actor="Caseflow User"):
+    """Create an active War Room from a pasted meeting link."""
+    meeting_link = text(meeting_link)
+    if not meeting_link:
+        return False, "Paste a valid War Room / meeting link."
+    try:
+        from bson import ObjectId
+        now = utc_now()
+        task = col(TASKS_COLLECTION).find_one({"_id": ObjectId(str(task_id))}) or {}
+        station = station_name(task.get("department"))
+        room_id = sha256(f"{task_id}|{meeting_link}|{now.isoformat()}")[:16]
+        tagged_people = list(dict.fromkeys(text(x) for x in (tagged_people or []) if text(x)))
+        attendance = list(dict.fromkeys(text(x) for x in (attendance or []) if text(x)))
+        assigned = text(task.get("assigned_to"))
+        if assigned and assigned not in attendance:
+            attendance.insert(0, assigned)
+
+        room = {
+            "room_id": room_id,
+            "meeting_link": meeting_link,
+            "tagged_people": tagged_people,
+            "attendance": attendance,
+            "discussed": "",
+            "action_plan": "",
+            "acknowledged_by": [],
+            "created_at": now,
+            "created_by": text(actor) or "Caseflow User",
+            "status": "ACTIVE",
+        }
+        existing = list(task.get("active_war_rooms") or [])
+        existing.append(room)
+        action = (
+            f"Active War Room created for {text(task.get('case_number')) or 'case'}."
+            f"\n• Link: {meeting_link}"
+            + (f"\n• Tagged: {', '.join(tagged_people)}" if tagged_people else "")
+            + (f"\n• Attendees: {', '.join(attendance)}" if attendance else "")
+        )
+        history = list(task.get("history") or [])
+        history.append({
+            "action": f"Collaboration · {action}",
+            "timestamp": now,
+            "actor": text(actor) or "Caseflow User",
+            "station": station,
+            "history_type": "collaboration",
+        })
+        col(TASKS_COLLECTION).update_one(
+            {"_id": ObjectId(str(task_id))},
+            {"$set": {
+                "active_war_rooms": existing[-10:],
+                "history": history,
+                "last_update": now,
+            },
+             "$push": {
+                 "collaboration_history": {
+                     "$each": [{
+                         "action": action,
+                         "timestamp": now,
+                         "actor": text(actor) or "Caseflow User",
+                         "station": station,
+                         "type": "war_room_created",
+                         "room_id": room_id,
+                         "meeting_link": meeting_link,
+                         "tagged_people": tagged_people,
+                         "attendance": attendance,
+                     }],
+                     "$slice": -100,
+                 }
+             }},
+        )
+        clear_task_cache()
+        return True, room_id
+    except Exception as exc:
+        return False, f"Unable to create the active War Room: {exc}"
+
+
+def record_war_room_update(task_id, room_id, discussed, action_plan, actor="Caseflow User"):
+    """Record discussion/action plan for an active War Room."""
+    discussed = text(discussed)
+    action_plan = text(action_plan)
+    if not discussed and not action_plan:
+        return False, "Add discussion or an action plan first."
+    try:
+        from bson import ObjectId
+        now = utc_now()
+        task = col(TASKS_COLLECTION).find_one({"_id": ObjectId(str(task_id))}) or {}
+        rooms = list(task.get("active_war_rooms") or [])
+        room = next((x for x in rooms if isinstance(x, dict) and text(x.get("room_id")) == text(room_id)), None)
+        if not room:
+            return False, "Active War Room not found."
+        room["discussed"] = discussed
+        room["action_plan"] = action_plan
+        room["last_updated_at"] = now
+        room["last_updated_by"] = text(actor) or "Caseflow User"
+        station = station_name(task.get("department"))
+        detail = (
+            f"War Room update recorded for {text(task.get('case_number')) or 'case'}."
+            + (f"\n• Discussed: {discussed}" if discussed else "")
+            + (f"\n• Action Plan: {action_plan}" if action_plan else "")
+        )
+        history = list(task.get("history") or [])
+        history.append({
+            "action": f"Collaboration · {detail}",
+            "timestamp": now,
+            "actor": text(actor) or "Caseflow User",
+            "station": station,
+            "history_type": "collaboration",
+            "room_id": room_id,
+        })
+        col(TASKS_COLLECTION).update_one(
+            {"_id": ObjectId(str(task_id))},
+            {"$set": {"active_war_rooms": rooms, "history": history, "last_update": now},
+             "$push": {"collaboration_history": {
+                 "$each": [{
+                     "action": detail,
+                     "timestamp": now,
+                     "actor": text(actor) or "Caseflow User",
+                     "station": station,
+                     "type": "war_room_update",
+                     "room_id": room_id,
+                     "discussed": discussed,
+                     "action_plan": action_plan,
+                 }],
+                 "$slice": -100,
+             }}},
+        )
+        clear_task_cache()
+        return True, ""
+    except Exception as exc:
+        return False, f"Unable to record the War Room update: {exc}"
+
+
+def acknowledge_war_room(task_id, room_id, people, actor="Caseflow User"):
+    people = list(dict.fromkeys(text(x) for x in (people or []) if text(x)))
+    if not people:
+        return False, "Select at least one attendant or tagged person."
+    try:
+        from bson import ObjectId
+        now = utc_now()
+        task = col(TASKS_COLLECTION).find_one({"_id": ObjectId(str(task_id))}) or {}
+        rooms = list(task.get("active_war_rooms") or [])
+        room = next((x for x in rooms if isinstance(x, dict) and text(x.get("room_id")) == text(room_id)), None)
+        if not room:
+            return False, "Active War Room not found."
+        acknowledged = list(dict.fromkeys(
+            text(x) for x in (room.get("acknowledged_by") or []) if text(x)
+        ))
+        acknowledged.extend(x for x in people if x not in acknowledged)
+        room["acknowledged_by"] = acknowledged
+        room["acknowledged_at"] = now
+        station = station_name(task.get("department"))
+        detail = (
+            f"War Room acknowledgement recorded for {text(task.get('case_number')) or 'case'}."
+            f"\n• Acknowledged by: {', '.join(people)}"
+        )
+        history = list(task.get("history") or [])
+        history.append({
+            "action": f"Collaboration · {detail}",
+            "timestamp": now,
+            "actor": text(actor) or "Caseflow User",
+            "station": station,
+            "history_type": "collaboration",
+            "room_id": room_id,
+        })
+        col(TASKS_COLLECTION).update_one(
+            {"_id": ObjectId(str(task_id))},
+            {"$set": {"active_war_rooms": rooms, "history": history, "last_update": now},
+             "$push": {"collaboration_history": {
+                 "$each": [{
+                     "action": detail,
+                     "timestamp": now,
+                     "actor": text(actor) or "Caseflow User",
+                     "station": station,
+                     "type": "war_room_acknowledgement",
+                     "room_id": room_id,
+                     "acknowledged_by": people,
+                 }],
+                 "$slice": -100,
+             }}},
+        )
+        clear_task_cache()
+        return True, ""
+    except Exception as exc:
+        return False, f"Unable to record the acknowledgement: {exc}"
+
+
+def close_active_war_room(task_id, room_id, actor="Caseflow User"):
+    """Remove an active War Room while preserving its complete record in collaboration history."""
+    try:
+        from bson import ObjectId
+        now = utc_now()
+        task = col(TASKS_COLLECTION).find_one({"_id": ObjectId(str(task_id))}) or {}
+        rooms = list(task.get("active_war_rooms") or [])
+        room = next((x for x in rooms if isinstance(x, dict) and text(x.get("room_id")) == text(room_id)), None)
+        if not room:
+            return False, "Active War Room not found."
+        remaining = [
+            x for x in rooms
+            if not (isinstance(x, dict) and text(x.get("room_id")) == text(room_id))
+        ]
+        station = station_name(task.get("department"))
+        detail = (
+            f"War Room closed for {text(task.get('case_number')) or 'case'}."
+            f"\n• Link: {text(room.get('meeting_link')) or 'None'}"
+            + (f"\n• Tagged: {', '.join(text(x) for x in room.get('tagged_people') or [])}" if room.get("tagged_people") else "")
+            + (f"\n• Attendees: {', '.join(text(x) for x in room.get('attendance') or [])}" if room.get("attendance") else "")
+            + (f"\n• Discussed: {text(room.get('discussed'))}" if text(room.get("discussed")) else "")
+            + (f"\n• Action Plan: {text(room.get('action_plan'))}" if text(room.get("action_plan")) else "")
+            + (f"\n• Acknowledged by: {', '.join(text(x) for x in room.get('acknowledged_by') or [])}" if room.get("acknowledged_by") else "")
+        )
+        history = list(task.get("history") or [])
+        history.append({
+            "action": f"Collaboration · {detail}",
+            "timestamp": now,
+            "actor": text(actor) or "Caseflow User",
+            "station": station,
+            "history_type": "collaboration",
+            "room_id": room_id,
+        })
+        col(TASKS_COLLECTION).update_one(
+            {"_id": ObjectId(str(task_id))},
+            {"$set": {"active_war_rooms": remaining, "history": history, "last_update": now},
+             "$push": {"collaboration_history": {
+                 "$each": [{
+                     "action": detail,
+                     "timestamp": now,
+                     "actor": text(actor) or "Caseflow User",
+                     "station": station,
+                     "type": "war_room_closed",
+                     "room_id": room_id,
+                     "meeting_link": text(room.get("meeting_link")),
+                     "tagged_people": list(room.get("tagged_people") or []),
+                     "attendance": list(room.get("attendance") or []),
+                     "discussed": text(room.get("discussed")),
+                     "action_plan": text(room.get("action_plan")),
+                     "acknowledged_by": list(room.get("acknowledged_by") or []),
+                 }],
+                 "$slice": -100,
+             }}},
+        )
+        clear_task_cache()
+        return True, ""
+    except Exception as exc:
+        return False, f"Unable to close the War Room: {exc}"
 
 
 def reassign_case(task, assignee):
@@ -4759,111 +5069,117 @@ if st.session_state["show_settings"]:
             # SIMULATION
             # -----------------------------------------------
 
-
             with tabs[4]:
 
-
                 st.markdown(
-                    "### Alert Simulation"
+                    "### Simulation"
                 )
-
 
                 st.caption(
-                    "Creates a temporary CARE case with approximately 5 seconds remaining. "
-                    "Use this to demonstrate flashing, critical status and the central alert."
+                    "Resets all 25 mock cases into five staggered, non-breached SLA states per station, "
+                    "sets their due dates to the current day, and launches a critical-account alert demonstration."
                 )
 
-
                 if st.button(
-                    "↻ Reset Mock Due Dates & Durations",
-                    type="secondary",
+                    "▶ Simulation",
+                    type="primary",
                     use_container_width=True,
-                    key="reset_mock_case_durations",
-                    help="Reset all 25 seeded HPE/Aruba mock cases with five different elapsed-duration states per station so green, yellow, red, critical and breached alerts can be demonstrated.",
+                    key="run_caseflow_simulation",
+                    help="Reset all 25 mock cases in staggered non-breached states and display a flashing critical-account alert.",
                 ):
                     reset_count = reset_mock_case_durations()
+                    now = utc_now()
+
+                    # Use the first CARE mock case as the simulated critical account.
+                    simulation_case = col(TASKS_COLLECTION).find_one(
+                        {
+                            "is_mock": True,
+                            "case_number": "CAR-2026-0001",
+                        }
+                    )
+
+                    simulation_case_id = ""
+                    if simulation_case:
+                        from bson import ObjectId
+                        simulation_id = simulation_case.get("_id")
+                        sla_seconds = int(STATIONS["CARE"]["sla_minutes"] * 60)
+                        simulation_due = now + timedelta(seconds=45)
+                        simulation_started = simulation_due - timedelta(seconds=sla_seconds)
+
+                        col(TASKS_COLLECTION).update_one(
+                            {"_id": simulation_id},
+                            {
+                                "$set": {
+                                    "account_priority": "Yes",
+                                    "priority": "Critical",
+                                    "account_name": "H&M",
+                                    "status": "In Progress",
+                                    "simulation_collaboration": {
+                                        "title": "H&M Critical Account Collaboration Session",
+                                        "status": "LIVE",
+                                        "meeting_link": "https://meet.example.com/ovr-vw-hm-critical",
+                                        "participants": ["Arianne May Escabillas", "June John Cruz", "Jonathan Gaspar", "Kenjie Locsin"],
+                                        "discussion": "H&M is a high priority account requiring immediate coordination. The team is validating entitlement, impact and the fastest safe resolution path.",
+                                        "action_plan": "Confirm account priority and entitlement, validate the affected service, assign an owner for each next step, and provide the customer with the next confirmed update.",
+                                        "acknowledged_by": [],
+                                        "started_at": now,
+                                    },
+                                    "station_started_at": simulation_started,
+                                    "due_date": simulation_due,
+                                    "last_update": now,
+                                },
+                                "$push": {
+                                    "history": {
+                                        "action": "Simulation activated a critical-account alert.",
+                                        "timestamp": now,
+                                        "actor": "Caseflow Simulation",
+                                        "station": "CARE",
+                                    }
+                                },
+                            },
+                        )
+                        simulation_case_id = str(simulation_id)
+
+                        # Seed the alert center with the same simulated critical-account event.
+                        try:
+                            col(ALERT_COLLECTION).delete_many({
+                                "task_id": simulation_case_id,
+                                "alert_type": "PRIORITY_ACCOUNT",
+                                "acknowledged": False,
+                            })
+                            col(ALERT_COLLECTION).insert_one({
+                                "task_id": simulation_case_id,
+                                "station": "CARE",
+                                "alert_type": "PRIORITY_ACCOUNT",
+                                "trigger_key": station_warning_trigger_key({
+                                    **simulation_case,
+                                    "station_started_at": simulation_started,
+                                    "department": "CARE",
+                                }),
+                                "message": "Critical account alert: H&M is a high priority account and requires immediate attention.",
+                                "created_at": now,
+                                "acknowledged": False,
+                            })
+                        except Exception:
+                            pass
+
+                    clear_task_cache()
                     st.session_state["simulation_until"] = 0.0
-                    st.session_state["simulation_case_id"] = None
+                    st.session_state["simulation_case_id"] = simulation_case_id or None
+                    st.session_state["simulation_alert_active"] = bool(simulation_case_id)
+                    st.session_state["simulation_alert_case_id"] = simulation_case_id
+                    st.session_state["simulation_active"] = bool(simulation_case_id)
                     st.session_state["station_warning_ack_until"] = {}
                     st.session_state["station_warning_silenced"] = set()
                     st.session_state["station_warning_latched"] = set()
-                    st.success(
-                        f"{reset_count} mock case(s) reset with staggered durations and due dates."
-                    )
+                    st.session_state["show_settings"] = False
 
-
-                st.markdown("---")
-
-
-                if st.button(
-                    "▶ Simulate Critical Alert",
-                    type="primary",
-                    use_container_width=True,
-                ):
-
-
-                    now = utc_now()
-
-
-                    demo = {
-                        "case_number": (
-                            "SIM-CARE-001"
-                        ),
-                        "subject": (
-                            "Simulation – Critical Case Alert"
-                        ),
-                        "priority": "Low",
-                        "account_priority": "No",
-                        "assigned_to": "Simulation User",
-                        "department": "CARE",
-                        "account_name": "Simulation Account",
-                        "vendor": "Simulation Vendor",
-                        "issue": (
-                            "Demonstration of the critical alert."
-                        ),
-                        "description": (
-                            "Temporary simulation case."
-                        ),
-                        "status": "In Progress",
-                        "created_at": now,
-                        "station_started_at": (
-                            now -
-                            timedelta(
-                                minutes=14,
-                                seconds=55,
-                            )
-                        ),
-                        "due_date": (
-                            now +
-                            timedelta(seconds=5)
-                        ),
-                        "last_update": now,
-                        "notes": "Temporary simulation.",
-                        "active": True,
-                        "is_mock": True,
-                    }
-
-
-                    result = col(
-                        TASKS_COLLECTION
-                    ).insert_one(demo)
-
-
-                    st.session_state[
-                        "simulation_case_id"
-                    ] = str(
-                        result.inserted_id
-                    )
-
-
-                    st.session_state[
-                        "simulation_until"
-                    ] = time.time() + 35
-
-
-                    st.success(
-                        "Critical alert simulation started."
-                    )
+                    if simulation_case_id:
+                        st.success(
+                            f"Simulation started. {reset_count} mock case(s) reset and the critical-account alert is active."
+                        )
+                    else:
+                        st.error("Simulation could not find the CARE mock case CAR-2026-0001.")
 
 
             if st.button(
@@ -5615,8 +5931,28 @@ def case_details(task_id):
             with action_col:
                 st.markdown("<div class='case-card case-actions-card'>", unsafe_allow_html=True)
                 st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>◷</span>Case Action</div>", unsafe_allow_html=True)
-                st.markdown("<div class='action-readonly-label'>Current Status</div>", unsafe_allow_html=True)
-                st.markdown(f"<div class='action-readonly-value'>{html.escape(status)}</div>", unsafe_allow_html=True)
+                status_options = list(dict.fromkeys(
+                    CASE_STATUS_OPTIONS + ([status] if status else [])
+                ))
+                status_index = status_options.index(status) if status in status_options else 0
+                editable_status = st.selectbox(
+                    "Case Status",
+                    status_options,
+                    index=status_index,
+                    key=f"case_status_{task_id}",
+                )
+                if editable_status != status:
+                    if st.button(
+                        "Update Status",
+                        use_container_width=True,
+                        key=f"case_update_status_{task_id}",
+                    ):
+                        ok, message = update_case_status(task_id, editable_status, assigned_to)
+                        if ok:
+                            st.success(f"Case status updated to {editable_status}.")
+                            st.rerun()
+                        else:
+                            st.error(message or "Unable to update case status.")
                 st.markdown("<div class='action-readonly-label'>Current Station</div>", unsafe_allow_html=True)
                 st.markdown(f"<div class='action-readonly-value'>{html.escape(station_display_name(current))}</div>", unsafe_allow_html=True)
                 st.markdown("<div class='action-readonly-label'>Current Assignee</div>", unsafe_allow_html=True)
@@ -5876,7 +6212,7 @@ def case_details(task_id):
 
                 # Keep the matching-SOP list inside the same dialog. Clicking a
                 # result changes the selected document without closing the modal.
-                st.markdown("<div class='kb-sop-list-title'>Matching SOPs for this case</div>", unsafe_allow_html=True)
+                st.markdown("<div class='kb-sop-list-title'>Matching SOPs for this case</div><div class='kb-sop-list-spacer'></div>", unsafe_allow_html=True)
                 for idx, result in enumerate(results[:6]):
                     rid = text(result.get("_id")) or text(result.get("title")) or str(idx)
                     title = text(result.get("title")) or "Knowledge Base Article"
@@ -5922,22 +6258,216 @@ def case_details(task_id):
             st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>✦</span>Collaboration</div>", unsafe_allow_html=True)
 
             # -----------------------------------------------------------
-            # WAR ROOM / MEETING RECORD
+            # ACTIVE / MOCK WAR ROOM + COLLABORATION SESSION
             # -----------------------------------------------------------
             st.markdown(
                 "<div class='meeting-panel'>"
                 "<div class='meeting-panel-title'>War Room / Meeting</div>"
-                "<div class='meeting-panel-sub'>Create a meeting record, add the war-room link, tag participants, record attendance and capture agreed actions.</div>"
+                "<div class='meeting-panel-sub'>Paste a meeting link to create an active War Room. Record discussion, action plans, attendance and acknowledgements without leaving Case Details.</div>"
                 "</div>",
                 unsafe_allow_html=True,
             )
+
             latest_events = _case_update_events(task)
             latest_event = max(latest_events, key=lambda x: x[0]) if latest_events else None
             latest_text = text(latest_event[1]) if latest_event else "No live update has been recorded yet."
             latest_actor = text(latest_event[2]) if latest_event and latest_event[2] else "Caseflow"
             participants_preview = list(dict.fromkeys(CASEFLOW_ASSIGNEES + ([assigned_to] if assigned_to else [])))
             participant_preview = participants_preview[:5] or [assigned_to]
-            participant_html = "".join(f"<span class='war-room-avatar'>{html.escape((text(name) or '?')[:1].upper())}</span>" for name in participant_preview if text(name))
+            participant_html = "".join(
+                f"<span class='war-room-avatar'>{html.escape((text(name) or '?')[:1].upper())}</span>"
+                for name in participant_preview if text(name)
+            )
+
+            participant_options = list(dict.fromkeys(
+                CASEFLOW_ASSIGNEES
+                + ([assigned_to] if assigned_to and assigned_to not in CASEFLOW_ASSIGNEES else [])
+            ))
+
+            # -----------------------------------------------------------
+            # MOCK COLLABORATION SESSION — visible only after Simulation.
+            # -----------------------------------------------------------
+            if (
+                st.session_state.get("simulation_active")
+                and str(st.session_state.get("simulation_case_id") or "") == str(task_id)
+            ):
+                simulation_session = task.get("simulation_collaboration") or {}
+                sim_people = simulation_session.get("participants") or participant_preview
+                sim_discussion = text(simulation_session.get("discussion")) or (
+                    "H&M is a high priority account requiring immediate coordination."
+                )
+                sim_action_plan = text(simulation_session.get("action_plan")) or (
+                    "Validate entitlement, confirm impact, assign owners and provide the next customer update."
+                )
+                sim_link = text(simulation_session.get("meeting_link"))
+                video_tiles = "".join(
+                    f"<div class='simulation-video-tile'><div class='simulation-video-avatar'>{html.escape((text(person) or '?')[:1].upper())}</div>"
+                    f"<div class='simulation-video-name'>{html.escape(text(person))}</div><div class='simulation-video-status'>● Connected</div></div>"
+                    for person in sim_people[:6] if text(person)
+                )
+                st.markdown(
+                    f"<div class='simulation-collab-card'>"
+                    f"<div class='simulation-collab-head'><div><span class='simulation-live-dot'></span><b>LIVE COLLABORATION · SIMULATION</b>"
+                    f"<div class='simulation-collab-title'>H&amp;M Critical Account Session</div></div><span class='simulation-session-badge'>LIVE</span></div>"
+                    f"<div class='simulation-video-grid'>{video_tiles}</div>"
+                    f"<div class='simulation-collab-grid'><div><div class='war-room-label'>DISCUSSION</div><div class='simulation-collab-copy'>{html.escape(sim_discussion)}</div></div>"
+                    f"<div><div class='war-room-label'>ACTION PLAN</div><div class='simulation-collab-copy'>{html.escape(sim_action_plan)}</div></div></div>"
+                    f"<div class='simulation-collab-footer'><span>Mock collaboration session for demonstration only.</span>"
+                    f"{f'<a href=\"{html.escape(sim_link, quote=True)}\" target=\"_blank\" rel=\"noopener noreferrer\">Open mock session ↗</a>' if sim_link else ''}</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+
+            # -----------------------------------------------------------
+            # USER-CREATED ACTIVE WAR ROOMS
+            # -----------------------------------------------------------
+            active_rooms = task.get("active_war_rooms") or []
+            if isinstance(active_rooms, list) and active_rooms:
+                st.markdown(
+                    "<div class='communication-section-label'>Active War Rooms</div>",
+                    unsafe_allow_html=True,
+                )
+
+                for room in reversed(active_rooms[-10:]):
+                    if not isinstance(room, dict):
+                        continue
+                    room_id = text(room.get("room_id"))
+                    if not room_id:
+                        continue
+                    room_open_key = f"active_war_room_open_{task_id}_{room_id}"
+                    room_open = bool(st.session_state.get(room_open_key, False))
+                    room_link = text(room.get("meeting_link"))
+                    room_tagged = list(room.get("tagged_people") or [])
+                    room_attendance = list(room.get("attendance") or [])
+                    room_ack = list(room.get("acknowledged_by") or [])
+                    room_focus = subject
+                    room_update = text(room.get("discussed")) or "No discussion has been recorded yet."
+                    room_actor = text(room.get("last_updated_by") or room.get("created_by")) or "Caseflow"
+                    room_participants = list(dict.fromkeys(room_attendance + room_tagged))
+                    room_participant_html = "".join(
+                        f"<span class='war-room-avatar'>{html.escape((text(name) or '?')[:1].upper())}</span>"
+                        for name in room_participants[:6] if text(name)
+                    )
+                    with st.container(key=f"active_war_room_tile_{task_id}_{room_id}"):
+                        st.markdown(
+                            f"<div class='war-room-mock active-war-room'>"
+                            f"<div class='war-room-top'><div><span class='war-room-live-dot'></span><b>ACTIVE WAR ROOM</b><span class='war-room-case'>{html.escape(case_number)}</span></div><span class='war-room-status'>LIVE</span></div>"
+                            f"<div class='war-room-grid'>"
+                            f"<div><div class='war-room-label'>CURRENT FOCUS</div><div class='war-room-focus'>{html.escape(room_focus)}</div><div class='war-room-muted'>{html.escape(station_display_name(department))} · {html.escape(priority_label.title())}</div></div>"
+                            f"<div><div class='war-room-label'>PARTICIPANTS</div><div class='war-room-avatars'>{room_participant_html}</div><div class='war-room-muted'>{len(room_participants)} people tagged / attending</div></div>"
+                            f"<div><div class='war-room-label'>MOST RECENT UPDATE</div><div class='war-room-update'>{html.escape(room_update[:190])}</div><div class='war-room-muted'>by {html.escape(room_actor)}</div></div>"
+                            f"</div></div>",
+                            unsafe_allow_html=True,
+                        )
+                        if st.button(
+                            "Hide War Room Details" if room_open else "Open War Room",
+                            use_container_width=True,
+                            key=f"active_war_room_toggle_{task_id}_{room_id}",
+                        ):
+                            st.session_state[room_open_key] = not room_open
+                            st.rerun()
+
+                    if room_open:
+                        st.markdown(
+                            f"<div class='war-room-expanded active-war-room-expanded'>"
+                            f"<div class='war-room-expanded-head'><div><b>War Room Details</b><span> · {html.escape(case_number)}</span></div><span class='war-room-expanded-live'>LIVE</span></div>"
+                            f"<div class='war-room-expanded-grid'>"
+                            f"<div><div class='war-room-label'>WAR ROOM LINK</div><a class='war-room-link' href='{html.escape(room_link, quote=True)}' target='_blank' rel='noopener noreferrer'>{html.escape(room_link) if room_link else 'No link recorded'} ↗</a></div>"
+                            f"<div><div class='war-room-label'>CURRENT ATTENDANTS</div><div class='war-room-muted'>{html.escape(', '.join(text(x) for x in room_attendance) or 'None recorded')}</div></div>"
+                            f"<div><div class='war-room-label'>TAGGED PEOPLE</div><div class='war-room-muted'>{html.escape(', '.join(text(x) for x in room_tagged) or 'None recorded')}</div></div>"
+                            f"<div><div class='war-room-label'>ACKNOWLEDGED BY</div><div class='war-room-muted'>{html.escape(', '.join(text(x) for x in room_ack) or 'No acknowledgement recorded')}</div></div>"
+                            f"</div></div>",
+                            unsafe_allow_html=True,
+                        )
+
+                        discussed_key = f"war_room_discussed_{task_id}_{room_id}"
+                        action_plan_key = f"war_room_action_plan_{task_id}_{room_id}"
+                        ack_key = f"war_room_ack_{task_id}_{room_id}"
+
+                        discussed = st.text_area(
+                            "Discussed",
+                            value=text(room.get("discussed")),
+                            placeholder="Record what was discussed, decisions, findings or blockers...",
+                            height=85,
+                            key=discussed_key,
+                        )
+                        action_plan = st.text_area(
+                            "Action Plan",
+                            value=text(room.get("action_plan")),
+                            placeholder="Record owners, next steps, due actions or commitments...",
+                            height=85,
+                            key=action_plan_key,
+                        )
+
+                        action_cols = st.columns(2)
+                        with action_cols[0]:
+                            if st.button(
+                                "＋ Record Discussion & Action Plan",
+                                type="primary",
+                                use_container_width=True,
+                                key=f"record_war_room_update_{task_id}_{room_id}",
+                            ):
+                                ok, msg = record_war_room_update(
+                                    task_id,
+                                    room_id,
+                                    discussed,
+                                    action_plan,
+                                    assigned_to or "Caseflow User",
+                                )
+                                if ok:
+                                    st.success("War Room documentation saved to Collaboration History.")
+                                    st.rerun()
+                                else:
+                                    st.error(msg)
+
+                        acknowledgement_options = list(dict.fromkeys(
+                            [text(x) for x in room_attendance + room_tagged if text(x)]
+                        ))
+                        with action_cols[1]:
+                            acknowledged_people = st.multiselect(
+                                "Acknowledge by attendants / tagged people",
+                                acknowledgement_options,
+                                default=[x for x in room_ack if x in acknowledgement_options],
+                                key=ack_key,
+                            )
+                            if st.button(
+                                "✓ Record Acknowledgement",
+                                use_container_width=True,
+                                key=f"ack_war_room_{task_id}_{room_id}",
+                            ):
+                                ok, msg = acknowledge_war_room(
+                                    task_id,
+                                    room_id,
+                                    acknowledged_people,
+                                    assigned_to or "Caseflow User",
+                                )
+                                if ok:
+                                    st.success("Acknowledgement saved to Collaboration History.")
+                                    st.rerun()
+                                else:
+                                    st.error(msg)
+
+                        if st.button(
+                            "Close Active War Room",
+                            type="secondary",
+                            use_container_width=True,
+                            key=f"close_active_war_room_{task_id}_{room_id}",
+                        ):
+                            ok, msg = close_active_war_room(
+                                task_id,
+                                room_id,
+                                assigned_to or "Caseflow User",
+                            )
+                            if ok:
+                                st.session_state.pop(room_open_key, None)
+                                st.success("War Room closed. Its complete details remain in Collaboration History.")
+                                st.rerun()
+                            else:
+                                st.error(msg)
+
+            # -----------------------------------------------------------
+            # MOCK WAR ROOM — retained until real collaboration data exists.
+            # -----------------------------------------------------------
             war_open_key = f"war_room_open_{task_id}"
             war_room_open = bool(st.session_state.get(war_open_key, False))
             mock_link = f"https://meet.example.com/hpe-caseflow-{html.escape(case_number, quote=True)}"
@@ -5953,72 +6483,90 @@ def case_details(task_id):
                     unsafe_allow_html=True,
                 )
                 if st.button(
-                    "Open War Room",
+                    "Hide War Room Details" if war_room_open else "Open War Room",
                     use_container_width=True,
                     key=f"war_room_open_button_{task_id}",
                 ):
-                    st.session_state[war_open_key] = True
-                    war_room_open = True
+                    st.session_state[war_open_key] = not war_room_open
                     _append_collaboration_history(
                         task_id,
-                        f"War Room opened for {case_number}.",
+                        (
+                            f"War Room opened for {case_number}."
+                            if not war_room_open
+                            else f"War Room details hidden for {case_number}."
+                        ),
                         assigned_to or "Caseflow",
                         department,
                     )
-                    st.rerun()
 
             if war_room_open:
                 meetings = task.get("meetings") or []
                 latest_meeting = meetings[-1] if isinstance(meetings, list) and meetings and isinstance(meetings[-1], dict) else {}
                 current_attendees = latest_meeting.get("attendance") or participant_preview
-                attendee_html = "".join(f"<li>{html.escape(text(name))}</li>" for name in current_attendees if text(name)) or "<li>No attendees recorded yet.</li>"
+                attendee_html = "".join(
+                    f"<li>{html.escape(text(name))}</li>"
+                    for name in current_attendees if text(name)
+                ) or "<li>No attendees recorded yet.</li>"
                 st.markdown(
-                    f"<div class='war-room-expanded'><div class='war-room-expanded-head'><div><b>War Room Details</b><span> · {html.escape(case_number)}</span></div><span class='war-room-expanded-live'>LIVE</span></div>"
+                    f"<div class='war-room-expanded'><div class='war-room-expanded-head'><div><b>Mock War Room Details</b><span> · {html.escape(case_number)}</span></div><span class='war-room-expanded-live'>MOCK LIVE</span></div>"
                     f"<div class='war-room-expanded-grid'><div><div class='war-room-label'>CURRENT ATTENDEES</div><ul>{attendee_html}</ul></div>"
-                    f"<div><div class='war-room-label'>MOCK WAR ROOM LINK</div><a class='war-room-link' href='{mock_link}' target='_blank' rel='noopener noreferrer'>Open mock war room ↗</a><div class='war-room-muted'>Opens without closing Case Details.</div></div></div></div>",
+                    f"<div><div class='war-room-label'>MOCK WAR ROOM LINK</div><a class='war-room-link' href='{mock_link}' target='_blank' rel='noopener noreferrer'>Open mock war room ↗</a><div class='war-room-muted'>Demonstration placeholder while no real collaboration data is available.</div></div></div></div>",
                     unsafe_allow_html=True,
                 )
-                if st.button("Close War Room", use_container_width=True, key=f"war_room_close_{task_id}"):
-                    attendee_names = ", ".join(text(x) for x in current_attendees if text(x)) or "None recorded"
-                    _append_collaboration_history(
-                        task_id,
-                        f"War Room closed.\n• Attendees: {attendee_names}\n• Link: {mock_link}",
-                        assigned_to or "Caseflow",
-                        department,
-                    )
-                    st.session_state[war_open_key] = False
-                    st.rerun()
 
+            # -----------------------------------------------------------
+            # PASTE LINK → ACTIVE WAR ROOM
+            # -----------------------------------------------------------
             meeting_link_key = f"meeting_link_{task_id}"
             meeting_tags_key = f"meeting_tags_{task_id}"
             meeting_attendance_key = f"meeting_attendance_{task_id}"
-            meeting_actions_key = f"meeting_actions_{task_id}"
 
-            participant_options = list(dict.fromkeys(
-                CASEFLOW_ASSIGNEES
-                + ([assigned_to] if assigned_to and assigned_to not in CASEFLOW_ASSIGNEES else [])
-            ))
+            def _create_from_pasted_war_room():
+                pasted_link = text(st.session_state.get(meeting_link_key))
+                if not pasted_link:
+                    return
+                tags = st.session_state.get(meeting_tags_key, []) or []
+                attendance = st.session_state.get(meeting_attendance_key, []) or []
+                ok, _ = create_active_war_room(
+                    task_id,
+                    pasted_link,
+                    tags,
+                    attendance,
+                    assigned_to or "Caseflow User",
+                )
+                if ok:
+                    st.session_state[meeting_link_key] = ""
 
+            st.markdown(
+                "<div class='communication-section-label'>Create Active War Room</div>",
+                unsafe_allow_html=True,
+            )
             meeting_link = st.text_input(
                 "War Room / Meeting Link",
                 value="",
-                placeholder="Paste Teams, Meet, Zoom or other meeting link...",
+                placeholder="Paste Teams, Meet, Zoom or other meeting link — it will create an active War Room...",
                 key=meeting_link_key,
+                on_change=_create_from_pasted_war_room,
             )
             meeting_tagged = st.multiselect(
                 "Tag people",
                 participant_options,
                 default=[],
-                placeholder="Select people to tag in this meeting...",
+                placeholder="Select people to tag...",
                 key=meeting_tags_key,
             )
             meeting_attendance = st.multiselect(
                 "Attendance",
                 participant_options,
                 default=[],
-                placeholder="Select attendees who joined...",
+                placeholder="Select attendants who joined...",
                 key=meeting_attendance_key,
             )
+
+            # -----------------------------------------------------------
+            # MEETING RECORD — retained for normal meeting documentation.
+            # -----------------------------------------------------------
+            meeting_actions_key = f"meeting_actions_{task_id}"
             meeting_actions = st.text_area(
                 "Meeting actions / decisions",
                 placeholder="Record decisions, owners, next steps or commitments...",
@@ -6086,7 +6634,7 @@ def case_details(task_id):
                             },
                         )
                         clear_task_cache()
-                        st.success("Meeting record saved.")
+                        st.success("Meeting record saved to Collaboration History.")
                         st.rerun()
                     except Exception as exc:
                         st.error(f"Unable to save the meeting record: {exc}")
@@ -6130,13 +6678,13 @@ def case_details(task_id):
             if isinstance(combined_collaboration, list) and combined_collaboration:
                 for item in reversed(combined_collaboration[-50:]):
                     if isinstance(item, dict):
-                        sender = text(item.get("sender") or item.get("user") or item.get("from")) or "Caseflow User"
-                        body = text(item.get("message") or item.get("body") or item.get("details")) or "—"
+                        sender = text(item.get("sender") or item.get("user") or item.get("from") or item.get("actor")) or "Caseflow User"
+                        body = text(item.get("message") or item.get("body") or item.get("details") or item.get("action")) or "—"
                         stamp = dt_display(item.get("timestamp") or item.get("created_at"))
                     else:
                         sender, body, stamp = "Caseflow User", text(item), ""
                     st.markdown(
-                        f"<div class='communication-card'><div class='communication-head'><strong>{html.escape(sender)}</strong><span>{html.escape(stamp)}</span></div><div>{html.escape(body)}</div></div>",
+                        f"<div class='communication-card'><div class='communication-head'><strong>{html.escape(sender)}</strong><span>{html.escape(stamp)}</span></div><div>{html.escape(body).replace(chr(10), '<br>')}</div></div>",
                         unsafe_allow_html=True,
                     )
             else:
@@ -6960,19 +7508,11 @@ def dashboard_fragment():
             }.get(priority_text, "low")
 
 
-            priority_icon = {
-                "Critical": "●",
-                "High": "●",
-                "Medium": "●",
-                "Low": "●",
-            }.get(priority_text, "●")
-
-
             st.markdown(
                 f"""
                 <div class="case-row">
                     <span class="priority-pill {priority_slug}">
-                        {priority_icon} {html.escape(priority_text)}
+                        {html.escape(priority_text)}
                     </span>
                 </div>
                 """,
@@ -7377,60 +7917,512 @@ dashboard_fragment()
 
 
 # ============================================================
+# SIMULATION ALERT OVERLAY — visual reference inspired by the supplied image
+# ============================================================
+st.markdown(
+    """
+    <style>
+    [class*="st-key-simulation_alert_overlay"] {
+        position:fixed !important;
+        inset:0 !important;
+        z-index:999999 !important;
+        width:100vw !important;
+        height:100vh !important;
+        max-width:none !important;
+        margin:0 !important;
+        padding:0 !important;
+        display:flex !important;
+        align-items:center !important;
+        justify-content:center !important;
+        background:rgba(15,27,39,.58) !important;
+        backdrop-filter:blur(2px) !important;
+        pointer-events:auto !important;
+    }
+    [class*="st-key-simulation_alert_overlay"] > div {
+        width:100% !important;
+        height:100% !important;
+        display:flex !important;
+        flex-direction:column !important;
+        align-items:center !important;
+        justify-content:center !important;
+    }
+    [class*="st-key-simulation_alert_overlay"] .simulation-alert-card {
+        width:min(490px, calc(100vw - 34px));
+        box-sizing:border-box;
+        background:#fff;
+        border:1px solid #e5e9ef;
+        border-radius:14px;
+        padding:24px 24px 18px;
+        box-shadow:0 28px 90px rgba(0,0,0,.30);
+        animation:simulationAlertPulse .72s ease-in-out infinite alternate;
+    }
+    .simulation-alert-header {
+        display:flex;
+        align-items:flex-start;
+        gap:14px;
+    }
+    .simulation-alert-icon {
+        width:54px;
+        height:54px;
+        min-width:54px;
+        border-radius:50%;
+        background:#ef1738;
+        color:#fff;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        font-size:34px;
+        font-weight:900;
+        line-height:1;
+        box-shadow:0 0 0 6px rgba(239,23,56,.12);
+        animation:simulationAlertIconBlink .42s ease-in-out infinite alternate;
+    }
+    .simulation-alert-title {
+        color:#e51c3a;
+        font-size:21px;
+        font-weight:900;
+        line-height:1.15;
+        margin-top:2px;
+    }
+    .simulation-alert-subtitle {
+        color:#526078;
+        font-size:12px;
+        line-height:1.4;
+        margin-top:6px;
+    }
+    .simulation-alert-details {
+        margin-top:16px;
+        padding:13px 15px;
+        background:#fff0f2;
+        border-radius:8px;
+        border:1px solid #ffd9df;
+    }
+    .simulation-alert-row {
+        display:grid;
+        grid-template-columns:105px 1fr;
+        gap:8px;
+        padding:4px 0;
+        color:#334155;
+        font-size:11px;
+    }
+    .simulation-alert-row strong { color:#102041; font-weight:800; }
+    .simulation-alert-critical {
+        display:inline-block;
+        color:#fff;
+        background:#ef1738;
+        border-radius:5px;
+        padding:3px 8px;
+        font-weight:850;
+    }
+    [class*="st-key-simulation_alert_overlay"] [data-testid="stButton"] {
+        width:min(490px, calc(100vw - 34px)) !important;
+        margin-top:12px !important;
+    }
+    [class*="st-key-simulation_alert_overlay"] [data-testid="stButton"] button {
+        width:100% !important;
+        height:42px !important;
+        border-radius:8px !important;
+        background:#ef1738 !important;
+        border:1px solid #ef1738 !important;
+        color:#fff !important;
+        font-weight:850 !important;
+        font-size:12px !important;
+        box-shadow:0 7px 18px rgba(239,23,56,.22) !important;
+    }
+    [class*="st-key-simulation_alert_overlay"] [data-testid="stButton"] button:hover {
+        background:#d91531 !important;
+        border-color:#d91531 !important;
+    }
+    @keyframes simulationAlertPulse {
+        from { transform:scale(1); box-shadow:0 28px 90px rgba(0,0,0,.30); }
+        to { transform:scale(1.012); box-shadow:0 28px 105px rgba(239,23,56,.16), 0 28px 90px rgba(0,0,0,.30); }
+    }
+    @keyframes simulationAlertIconBlink {
+        from { opacity:.55; transform:scale(.88); }
+        to { opacity:1; transform:scale(1.08); }
+    }
+    .kb-sop-list-spacer { height:8px; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ============================================================
+# SIMULATION ALERT OVERLAY — visual reference inspired by the supplied image
+# ============================================================
+st.markdown(
+    """
+    <style>
+    [class*="st-key-simulation_alert_overlay"] {
+        position:fixed !important;
+        inset:0 !important;
+        z-index:999999 !important;
+        width:100vw !important;
+        height:100vh !important;
+        max-width:none !important;
+        margin:0 !important;
+        padding:0 !important;
+        display:flex !important;
+        align-items:center !important;
+        justify-content:center !important;
+        background:rgba(15,27,39,.58) !important;
+        backdrop-filter:blur(2px) !important;
+        pointer-events:auto !important;
+    }
+    [class*="st-key-simulation_alert_overlay"] > div {
+        width:100% !important;
+        height:100% !important;
+        display:flex !important;
+        align-items:center !important;
+        justify-content:center !important;
+    }
+    [class*="st-key-simulation_alert_overlay"] .simulation-alert-card {
+        width:min(490px, calc(100vw - 34px));
+        box-sizing:border-box;
+        background:#fff;
+        border:1px solid #e5e9ef;
+        border-radius:14px;
+        padding:24px 24px 18px;
+        box-shadow:0 28px 90px rgba(0,0,0,.30);
+        animation:simulationAlertPulse .72s ease-in-out infinite alternate;
+    }
+    .simulation-alert-header {
+        display:flex;
+        align-items:flex-start;
+        gap:14px;
+    }
+    .simulation-alert-icon {
+        width:54px;
+        height:54px;
+        min-width:54px;
+        border-radius:50%;
+        background:#ef1738;
+        color:#fff;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        font-size:34px;
+        font-weight:900;
+        line-height:1;
+        box-shadow:0 0 0 6px rgba(239,23,56,.12);
+        animation:simulationAlertIconBlink .42s ease-in-out infinite alternate;
+    }
+    .simulation-alert-title {
+        color:#e51c3a;
+        font-size:21px;
+        font-weight:900;
+        line-height:1.15;
+        margin-top:2px;
+    }
+    .simulation-alert-subtitle {
+        color:#526078;
+        font-size:12px;
+        line-height:1.4;
+        margin-top:6px;
+    }
+    .simulation-alert-details {
+        margin-top:16px;
+        padding:13px 15px;
+        background:#fff0f2;
+        border-radius:8px;
+        border:1px solid #ffd9df;
+    }
+    .simulation-alert-row {
+        display:grid;
+        grid-template-columns:105px 1fr;
+        gap:8px;
+        padding:4px 0;
+        color:#334155;
+        font-size:11px;
+    }
+    .simulation-alert-row strong { color:#102041; font-weight:800; }
+    .simulation-alert-critical {
+        display:inline-block;
+        color:#fff;
+        background:#ef1738;
+        border-radius:5px;
+        padding:3px 8px;
+        font-weight:850;
+    }
+    [class*="st-key-simulation_alert_overlay"] [data-testid="stButton"] {
+        width:min(490px, calc(100vw - 34px)) !important;
+        margin-top:12px !important;
+    }
+    [class*="st-key-simulation_alert_overlay"] [data-testid="stButton"] button {
+        width:100% !important;
+        height:42px !important;
+        border-radius:8px !important;
+        background:#ef1738 !important;
+        border:1px solid #ef1738 !important;
+        color:#fff !important;
+        font-weight:850 !important;
+        font-size:12px !important;
+        box-shadow:0 7px 18px rgba(239,23,56,.22) !important;
+    }
+    [class*="st-key-simulation_alert_overlay"] [data-testid="stButton"] button:hover {
+        background:#d91531 !important;
+        border-color:#d91531 !important;
+    }
+    @keyframes simulationAlertPulse {
+        from { transform:scale(1); box-shadow:0 28px 90px rgba(0,0,0,.30); }
+        to { transform:scale(1.012); box-shadow:0 28px 105px rgba(239,23,56,.16), 0 28px 90px rgba(0,0,0,.30); }
+    }
+    @keyframes simulationAlertIconBlink {
+        from { opacity:.55; transform:scale(.88); }
+        to { opacity:1; transform:scale(1.08); }
+    }
+    .kb-sop-list-spacer { height:8px; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# ============================================================
+# COLLABORATION / ACTIVE WAR ROOM ENHANCEMENTS
+# ============================================================
+st.markdown(r"""
+<style>
+div[data-testid="stDialog"] .active-war-room {
+    border-color:#00a98f !important;
+    background:linear-gradient(135deg,#f7fffc,#eefbf8) !important;
+}
+div[data-testid="stDialog"] .active-war-room:hover {
+    border-color:#008f80 !important;
+    box-shadow:0 0 0 2px rgba(0,169,143,.10), 0 7px 20px rgba(0,74,72,.08) !important;
+}
+div[data-testid="stDialog"] [class*="st-key-active_war_room_tile_"] {
+    position:relative !important;
+    min-height:88px !important;
+    margin:0 0 4px !important;
+    padding:0 !important;
+}
+div[data-testid="stDialog"] [class*="st-key-active_war_room_tile_"] [class*="st-key-active_war_room_toggle_"] {
+    position:absolute !important;
+    inset:0 !important;
+    z-index:30 !important;
+    margin:0 !important;
+    padding:0 !important;
+}
+div[data-testid="stDialog"] [class*="st-key-active_war_room_tile_"] [class*="st-key-active_war_room_toggle_"] button {
+    position:absolute !important;
+    inset:0 !important;
+    width:100% !important;
+    height:100% !important;
+    background:transparent !important;
+    border:0 !important;
+    color:transparent !important;
+    box-shadow:none !important;
+    opacity:.001 !important;
+    cursor:pointer !important;
+}
+div[data-testid="stDialog"] .active-war-room-expanded {
+    border-color:#9ed9d0 !important;
+    background:#f4fcfa !important;
+}
+div[data-testid="stDialog"] .simulation-collab-card {
+    border:1px solid #b9e3db !important;
+    border-radius:9px !important;
+    background:linear-gradient(145deg,#f4fffc,#ffffff) !important;
+    padding:10px !important;
+    margin:0 0 8px !important;
+    box-shadow:0 5px 18px rgba(0,79,74,.07) !important;
+}
+div[data-testid="stDialog"] .simulation-collab-head {
+    display:flex !important;
+    align-items:flex-start !important;
+    justify-content:space-between !important;
+    gap:10px !important;
+}
+div[data-testid="stDialog"] .simulation-live-dot {
+    display:inline-block !important;
+    width:7px !important;
+    height:7px !important;
+    margin-right:5px !important;
+    border-radius:50% !important;
+    background:#ef334f !important;
+    box-shadow:0 0 0 3px rgba(239,51,79,.12) !important;
+    animation:simulationLivePulse .75s ease-in-out infinite alternate !important;
+}
+div[data-testid="stDialog"] .simulation-collab-title {
+    margin-top:3px !important;
+    color:#102041 !important;
+    font-size:11px !important;
+    font-weight:850 !important;
+}
+div[data-testid="stDialog"] .simulation-session-badge {
+    background:#e7faf5 !important;
+    color:#087b71 !important;
+    border:1px solid #b8e8dc !important;
+    border-radius:999px !important;
+    padding:3px 7px !important;
+    font-size:7px !important;
+    font-weight:900 !important;
+}
+div[data-testid="stDialog"] .simulation-video-grid {
+    display:grid !important;
+    grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+    gap:5px !important;
+    margin-top:8px !important;
+}
+div[data-testid="stDialog"] .simulation-video-tile {
+    min-height:58px !important;
+    border-radius:6px !important;
+    background:linear-gradient(145deg,#152b40,#28465c) !important;
+    color:#fff !important;
+    padding:7px !important;
+    position:relative !important;
+    overflow:hidden !important;
+}
+div[data-testid="stDialog"] .simulation-video-avatar {
+    width:23px !important;
+    height:23px !important;
+    border-radius:50% !important;
+    display:flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    background:#00a98f !important;
+    color:#fff !important;
+    font-size:9px !important;
+    font-weight:900 !important;
+}
+div[data-testid="stDialog"] .simulation-video-name {
+    margin-top:6px !important;
+    font-size:7.5px !important;
+    font-weight:750 !important;
+    white-space:nowrap !important;
+    overflow:hidden !important;
+    text-overflow:ellipsis !important;
+}
+div[data-testid="stDialog"] .simulation-video-status {
+    margin-top:2px !important;
+    color:#8ff1d6 !important;
+    font-size:6.5px !important;
+}
+div[data-testid="stDialog"] .simulation-collab-grid {
+    display:grid !important;
+    grid-template-columns:1fr 1fr !important;
+    gap:8px !important;
+    margin-top:8px !important;
+}
+div[data-testid="stDialog"] .simulation-collab-copy {
+    color:#263957 !important;
+    font-size:8.5px !important;
+    line-height:1.4 !important;
+    background:#fff !important;
+    border:1px solid #e0ece9 !important;
+    border-radius:5px !important;
+    padding:6px 7px !important;
+}
+div[data-testid="stDialog"] .simulation-collab-footer {
+    display:flex !important;
+    justify-content:space-between !important;
+    gap:8px !important;
+    margin-top:7px !important;
+    color:#73819a !important;
+    font-size:7px !important;
+}
+div[data-testid="stDialog"] .simulation-collab-footer a {
+    color:#0879c9 !important;
+    font-weight:800 !important;
+    text-decoration:none !important;
+}
+@keyframes simulationLivePulse {
+    from { opacity:.45; transform:scale(.8); }
+    to { opacity:1; transform:scale(1.15); }
+}
+@media (max-width:700px) {
+    div[data-testid="stDialog"] .simulation-video-grid {
+        grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+    }
+    div[data-testid="stDialog"] .simulation-collab-grid {
+        grid-template-columns:1fr !important;
+    }
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ============================================================
+# SIMULATION CRITICAL ACCOUNT ALERT
+# ============================================================
+if st.session_state.get("simulation_alert_active") and st.session_state.get("simulation_alert_case_id"):
+    simulation_alert_case_id = st.session_state.get("simulation_alert_case_id")
+    try:
+        from bson import ObjectId
+        simulation_alert_task = col(TASKS_COLLECTION).find_one(
+            {"_id": ObjectId(str(simulation_alert_case_id))}
+        ) or {}
+    except Exception:
+        simulation_alert_task = {}
+
+    if simulation_alert_task:
+        simulation_case_number = text(simulation_alert_task.get("case_number")) or "—"
+        simulation_subject = text(simulation_alert_task.get("subject")) or text(simulation_alert_task.get("issue")) or "Critical account simulation"
+        simulation_assignee = text(simulation_alert_task.get("assigned_to")) or "Unassigned"
+        simulation_account = text(simulation_alert_task.get("account_name")) or "H&M"
+        simulation_due = dt_display(simulation_alert_task.get("due_date")) or "Today"
+        with st.container(key="simulation_alert_overlay"):
+            st.markdown(
+                f"""
+                <div class="simulation-alert-card">
+                    <div class="simulation-alert-header">
+                        <div class="simulation-alert-icon">!</div>
+                        <div>
+                            <div class="simulation-alert-title">Critical Case Alert</div>
+                            <div class="simulation-alert-subtitle">
+                                The following high priority account requires immediate attention and is still not resolved.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="simulation-alert-details">
+                        <div class="simulation-alert-row"><span>Case #</span><strong>{html.escape(simulation_case_number)}</strong></div>
+                        <div class="simulation-alert-row"><span>Subject</span><strong>{html.escape(simulation_subject)}</strong></div>
+                        <div class="simulation-alert-row"><span>Account</span><strong>{html.escape(simulation_account)}</strong></div>
+                        <div class="simulation-alert-row"><span>Assigned To</span><strong>{html.escape(simulation_assignee)}</strong></div>
+                        <div class="simulation-alert-row"><span>Priority</span><strong><span class="simulation-alert-critical">Critical</span></strong></div>
+                        <div class="simulation-alert-row"><span>Due Date</span><strong style="color:#e51c3a">{html.escape(simulation_due)}</strong></div>
+                        <div class="simulation-alert-row"><span>Current Status</span><strong>{html.escape(text(simulation_alert_task.get("status")) or "In Progress")}</strong></div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            if st.button(
+                "View Case",
+                type="primary",
+                use_container_width=True,
+                key="simulation_alert_view_case",
+            ):
+                st.session_state["simulation_alert_active"] = False
+                st.session_state["selected_case_id"] = str(simulation_alert_case_id)
+                st.session_state["show_case"] = True
+                try:
+                    col(ALERT_COLLECTION).update_many(
+                        {
+                            "task_id": str(simulation_alert_case_id),
+                            "alert_type": "PRIORITY_ACCOUNT",
+                            "acknowledged": False,
+                        },
+                        {"$set": {"acknowledged": True, "acknowledged_at": utc_now()}},
+                    )
+                except Exception:
+                    pass
+                clear_task_cache()
+                case_details(str(simulation_alert_case_id))
+
+# ============================================================
 # SIMULATION CLEANUP
 # ============================================================
 
 
+# Legacy simulation cleanup is retained only for compatibility with older
+# sessions that may still contain the former temporary simulation timer.
 if (
-    st.session_state.get(
-        "simulation_until",
-        0
-    )
-    and time.time()
-    > st.session_state[
-        "simulation_until"
-    ]
+    st.session_state.get("simulation_until", 0)
+    and time.time() > st.session_state.get("simulation_until", 0)
 ):
-
-
-    simulation_id = st.session_state.get(
-        "simulation_case_id"
-    )
-
-
-    if simulation_id:
-
-
-        try:
-            from bson import ObjectId
-
-
-            col(
-                TASKS_COLLECTION
-            ).update_one(
-                {
-                    "_id": ObjectId(
-                        simulation_id
-                    )
-                },
-                {
-                    "$set": {
-                        "active": False
-                    }
-                },
-            )
-        except Exception:
-            pass
-
-
-    st.session_state[
-        "simulation_until"
-    ] = 0
-
-
-    st.session_state[
-        "simulation_case_id"
-    ] = None
+    st.session_state["simulation_until"] = 0
+    st.session_state["simulation_case_id"] = None
 
 
 
