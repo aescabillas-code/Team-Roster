@@ -7992,3 +7992,31 @@ div[data-testid="stDialog"] [data-testid="stDialogContent"] {
 }
 </style>
 """, unsafe_allow_html=True)
+
+st.markdown(r"""
+<style>
+/* USER REQUEST — ONLY these two typography changes.
+   1) Matching SOP tiles: one smaller, uniform font size.
+   2) Case Details tabs: smaller, uniform tab-label font size.
+   No spacing, layout, scrollbar, content, or functionality changes. */
+
+/* 1. MATCHING SOP TILES — smaller + same font size everywhere */
+div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] button,
+div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] button *,
+div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] button p,
+div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] button div,
+div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] button span {
+    font-size:7px !important;
+    line-height:1 !important;
+}
+
+/* 2. CASE DETAILS TABS — smaller + same font size */
+div[data-testid="stDialog"] [data-testid="stTabs"] [role="tab"],
+div[data-testid="stDialog"] [data-testid="stTabs"] [role="tab"] *,
+div[data-testid="stDialog"] [data-testid="stTabs"] [role="tab"] p,
+div[data-testid="stDialog"] [data-testid="stTabs"] [role="tab"] span {
+    font-size:10px !important;
+    line-height:1.1 !important;
+}
+</style>
+""", unsafe_allow_html=True)
