@@ -1572,6 +1572,27 @@ st.markdown(
         cursor:pointer !important; z-index:30 !important; pointer-events:auto !important;
     }
     /* ACTIVE SLA WARNING: intentionally strong and unmistakable. */
+    .station-card-visual.warning {
+        border:2px solid #d99a00 !important;
+        animation:stationCardAmberFlash .65s ease-in-out infinite alternate;
+    }
+    .station-card-visual.warning .station-warning { color:#b77800 !important; }
+    .station-alert-warning {
+        background:#d99a00 !important;
+        color:#fff !important;
+        box-shadow:0 0 0 3px rgba(217,154,0,.16), 0 5px 16px rgba(217,154,0,.28) !important;
+        animation:stationAlertAmberFlash .55s ease-in-out infinite alternate !important;
+    }
+    .station-alert-breach { background:#ef1738 !important; }
+    @keyframes stationCardAmberFlash {
+        from { box-shadow:0 0 0 0 rgba(217,154,0,.10), 0 0 0 rgba(217,154,0,0); }
+        to { box-shadow:0 0 0 5px rgba(217,154,0,.16), 0 0 26px rgba(217,154,0,.42); }
+    }
+    @keyframes stationAlertAmberFlash {
+        from { transform:scale(.88); opacity:.60; }
+        to { transform:scale(1.12); opacity:1; }
+    }
+
     .station-card-visual.critical {
         border:2px solid #ef334f !important;
         animation:stationCardFlash .55s ease-in-out infinite alternate;
@@ -1654,12 +1675,6 @@ st.markdown(
         flex:0 0 17px;
         animation:durationAlertBlink .62s ease-in-out infinite alternate;
     }
-    .duration-alert-question {
-        color:#c58a00;
-        border:2px solid #c58a00;
-        background:#fff8df;
-        box-shadow:0 0 7px rgba(197,138,0,.30);
-    }
     .duration-alert-amber {
         color:#a86d00;
         border:2px solid #d99a00;
@@ -1696,6 +1711,24 @@ st.markdown(
         to { opacity:1; }
     }
 
+
+    .high-priority-badge {
+        display:inline-flex;
+        align-items:center;
+        gap:3px;
+        margin-right:4px;
+        padding:3px 6px;
+        border-radius:999px;
+        background:#fff0c2;
+        border:1px solid #d99a00;
+        color:#8a5a00;
+        font-size:7px;
+        line-height:1;
+        font-weight:950;
+        letter-spacing:.15px;
+        white-space:nowrap;
+        vertical-align:middle;
+    }
 
     /* TABLE */
 
@@ -3095,8 +3128,8 @@ def calculate_state(task, now=None):
 
 
     Priority accounts are automatically critical.
-    Normal cases become critical at 20% remaining.
-    Medium begins at 50% remaining.
+    Normal cases enter the amber warning state at <=40% remaining
+    and become critical only in the final 20% before breach.
     """
 
 
@@ -3157,7 +3190,7 @@ def calculate_state(task, now=None):
         status = "BREACHED"
     elif remaining <= sla * 0.20:
         status = "CRITICAL"
-    elif remaining <= sla * 0.50:
+    elif nearing_due:
         status = "MEDIUM"
     else:
         status = "LOW"
@@ -3361,7 +3394,9 @@ def reset_mock_case_durations():
     """
     reset_now = utc_now()
     # Five cases per station are restored in staggered, non-breached states.
-    # The final case is at 80% elapsed, leaving 20% SLA remaining.
+    # No normal mock case starts at or below the 40% remaining warning boundary.
+    # The simulation lifecycle promotes exactly ONE case to the immediate
+    # high-priority critical alert state.
     elapsed_ratios = [0.00, 0.15, 0.30, 0.45, 0.55]
     total_reset = 0
     reset_task_ids = []
@@ -5127,6 +5162,12 @@ if st.session_state["show_settings"]:
                 ):
                     reset_count = reset_mock_case_durations()
                     now = utc_now()
+
+                    # Exactly one case is allowed to generate the immediate
+                    # simulation critical alert.
+                    st.session_state["simulation_alert_active"] = False
+                    st.session_state["simulation_alert_case_id"] = None
+                    st.session_state["pending_alert_case_id"] = None
 
                     # Use the first CARE mock case as the simulated critical account.
                     simulation_case = col(TASKS_COLLECTION).find_one(
@@ -7226,11 +7267,17 @@ def dashboard_fragment():
             icon = config.get("icon", "•")
             sla = config["sla_minutes"]
             sla_text = f"{sla} mins" if sla < 60 else f"{sla // 60} hour" + ("s" if sla != 60 else "")
-            critical_class = " critical" if flash_tile else ""
+            station_has_breach = past_due > 0
+            warning_class = (
+                " critical" if station_has_breach
+                else (" warning" if flash_tile else "")
+            )
             selected_class = " selected" if selected == station else ""
             alert_icon = (
-                '<div class="station-alert-icon" aria-label="SLA warning">!</div>'
-                if flash_tile else ""
+                '<div class="station-alert-icon station-alert-warning" aria-label="SLA warning">!</div>'
+                if flash_tile and not station_has_breach else
+                ('<div class="station-alert-icon station-alert-breach" aria-label="SLA breach">!</div>'
+                 if station_has_breach else "")
             )
 
 
@@ -7242,7 +7289,7 @@ def dashboard_fragment():
                 # Markdown parser can otherwise interpret indented multiline
                 # HTML as a code block and expose the raw tags.
                 station_html = (
-                    f'<div class="station-card-visual {slug}{critical_class}{selected_class}" '
+                    f'<div class="station-card-visual {slug}{warning_class}{selected_class}" '
                     f'data-station="{html.escape(station)}" '
                     f'data-warning-stop="{ack_until if ack_until > time.time() else 0:.3f}">'
                     f'{alert_icon}'
@@ -7307,14 +7354,12 @@ def dashboard_fragment():
     ]
 
 
+    # Stable baseline: high-priority accounts always supersede normal cases.
+    # Default operational order is station duration, highest to lowest.
     selected_tasks.sort(
         key=lambda task: (
             0 if states[str(task["_id"])].get("priority_account") else 1,
-            STATUS_ORDER.get(
-                states[str(task["_id"])]["status"],
-                9,
-            ),
-            states[str(task["_id"])]["remaining"],
+            -states[str(task["_id"])]["elapsed"],
         )
     )
 
@@ -7555,9 +7600,14 @@ def dashboard_fragment():
             }.get(priority_text, "low")
 
 
+            high_priority_badge = (
+                '<span class="high-priority-badge" title="High Priority Account">★ HIGH PRIORITY</span>'
+                if priority_account else ""
+            )
             st.markdown(
                 f"""
                 <div class="case-row">
+                    {high_priority_badge}
                     <span class="priority-pill {priority_slug}">
                         {html.escape(priority_text)}
                     </span>
@@ -7691,28 +7741,23 @@ def dashboard_fragment():
             )["sla_minutes"] * 60
 
 
-            # Duration color follows elapsed SLA progress:
-            # green = more than 50% remaining, amber = 20%-50% remaining,
-            # red = final 20% and past due. The alert trigger begins at 40%
-            # remaining so the team receives an early warning while still amber.
+            # >40% remaining = green/no icon.
+            # <=40% remaining = amber/flashing !.
+            # <=0 remaining = red/flashing !.
             warning_threshold_seconds = sla_for_case * 0.60
             elapsed_ratio = (state["elapsed"] / sla_for_case) if sla_for_case else 1.0
-            if elapsed_ratio < 0.50:
-                duration_color_class = "duration-green"
-                duration_alert_symbol = ""
-                duration_alert_class = ""
-            elif elapsed_ratio < 0.60:
-                duration_color_class = "duration-yellow"
-                duration_alert_symbol = "?"
-                duration_alert_class = "duration-alert-question"
-            elif elapsed_ratio < 0.80:
+            if state["remaining"] <= 0:
+                duration_color_class = "duration-red"
+                duration_alert_symbol = "!"
+                duration_alert_class = "duration-alert-red"
+            elif state["remaining"] <= sla_for_case * 0.40:
                 duration_color_class = "duration-yellow"
                 duration_alert_symbol = "!"
                 duration_alert_class = "duration-alert-amber"
             else:
-                duration_color_class = "duration-red"
-                duration_alert_symbol = "!"
-                duration_alert_class = "duration-alert-red"
+                duration_color_class = "duration-green"
+                duration_alert_symbol = ""
+                duration_alert_class = ""
 
 
             warning_ack_map = st.session_state.get(
@@ -7795,27 +7840,29 @@ def dashboard_fragment():
 
 
                     const ratio = elapsed / sla;
+                    const remainingRatio = 1 - ratio;
                     const alertIcon = wrap.querySelector('[data-duration-alert="1"]');
-                    wrap.classList.toggle("duration-green", ratio < 0.50);
-                    wrap.classList.toggle("duration-yellow", ratio >= 0.50 && ratio < 0.80);
-                    wrap.classList.toggle("duration-red", ratio >= 0.80);
-                    wrap.classList.toggle("duration-warning-active", ratio >= 0.60 && ratio < 1.0);
+
+                    // >40% remaining: green/no icon.
+                    // <=40% remaining: amber flashing !.
+                    // Breached: red flashing !.
+                    wrap.classList.toggle("duration-green", remainingRatio > 0.40);
+                    wrap.classList.toggle("duration-yellow", remainingRatio <= 0.40 && remainingRatio > 0);
+                    wrap.classList.toggle("duration-red", remainingRatio <= 0);
+                    wrap.classList.toggle("duration-warning-active", remainingRatio <= 0.40);
 
                     if (alertIcon) {
                         let symbol = "";
                         let iconClass = "";
-                        if (ratio >= 0.80) {
+                        if (remainingRatio <= 0) {
                             symbol = "!";
                             iconClass = "duration-alert-red";
-                        } else if (ratio >= 0.60) {
+                        } else if (remainingRatio <= 0.40) {
                             symbol = "!";
                             iconClass = "duration-alert-amber";
-                        } else if (ratio >= 0.50) {
-                            symbol = "?";
-                            iconClass = "duration-alert-question";
                         }
                         alertIcon.textContent = symbol;
-                        alertIcon.classList.remove("duration-alert-question", "duration-alert-amber", "duration-alert-red");
+                        alertIcon.classList.remove("duration-alert-amber", "duration-alert-red");
                         if (iconClass) alertIcon.classList.add(iconClass);
                         alertIcon.style.display = symbol ? "inline-flex" : "none";
                     }
