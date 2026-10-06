@@ -3521,16 +3521,6 @@ def scan_alerts(tasks):
                 f"— {text(task.get('account_name'))}"
             )
 
-        # Acknowledgement is tied to the current station/SLA cycle.
-        # Once the user clicks the station warning, this exact trigger is
-        # silenced permanently. It can alert again only when the trigger key
-        # changes (for example: a new case or a new station cycle after transfer).
-        current_trigger = station_warning_trigger_key(
-            task,
-            station_name(task.get("department")),
-        )
-        if text(task.get("station_warning_ack_trigger")) == current_trigger:
-            continue
 
         candidates.append((task, alert_type, message))
 
@@ -7123,19 +7113,16 @@ seed_mock_cases()
 
 
 
-# Case Details is a Streamlit dialog (it is itself a fragment).
-# IMPORTANT: invoke it from the main script context BEFORE invoking the
-# dashboard fragment. Calling a dialog after dashboard_fragment() can leave
-# Streamlit in the fragment layout context and raises
-# StreamlitInvalidLayoutContextError. Dialog interactions then rerun only the
-# dialog fragment, so the modal remains open while its controls are used.
+# Render the live dashboard. The fragment itself refreshes every second,
+# while the rest of the application remains untouched.
+dashboard_fragment()
+
+
+# Re-open the selected Case Details dialog after an interaction-triggered
+# rerun. This keeps SOP selection, war-room expansion and other dialog
+# controls inside the same case instead of dropping back to the dashboard.
 if st.session_state.get("show_case") and st.session_state.get("selected_case_id"):
     case_details(st.session_state["selected_case_id"])
-
-
-# Render the live dashboard after the dialog has been registered. The
-# dashboard fragment continues to refresh independently during normal use.
-dashboard_fragment()
 
 
 # ============================================================
@@ -7898,134 +7885,3 @@ div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
 </style>
 
 ''', unsafe_allow_html=True)
-
-
-st.markdown(r'''<style>
-/* ============================================================
-   CASE DETAILS — FINAL MODAL SCROLL FIX
-   The modal itself is the single scroll surface. This avoids the
-   nested fixed-height container stopping before the true bottom.
-   Mouse wheel, trackpad and keyboard scrolling operate on the modal.
-   ============================================================ */
-
-/* The actual dialog panel must be allowed to scroll vertically. */
-div[data-testid="stDialog"] > div {
-    overflow-y:auto !important;
-    overflow-x:hidden !important;
-    overscroll-behavior:contain !important;
-    -webkit-overflow-scrolling:touch !important;
-    scrollbar-width:thin !important;
-    scrollbar-color:rgba(71,85,105,.48) transparent !important;
-}
-
-/* WebKit scrollbar for the actual modal. */
-div[data-testid="stDialog"] > div::-webkit-scrollbar {
-    width:7px !important;
-}
-div[data-testid="stDialog"] > div::-webkit-scrollbar-track {
-    background:transparent !important;
-}
-div[data-testid="stDialog"] > div::-webkit-scrollbar-thumb {
-    background:rgba(71,85,105,.48) !important;
-    border-radius:999px !important;
-}
-div[data-testid="stDialog"] > div::-webkit-scrollbar-thumb:hover {
-    background:rgba(30,41,59,.70) !important;
-}
-
-/* Do not create a second scroll surface inside Case Details. */
-div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
-    height:auto !important;
-    min-height:0 !important;
-    max-height:none !important;
-    overflow:visible !important;
-    overscroll-behavior:auto !important;
-}
-
-/* Keep the dialog's inner content wide and let its natural height define
-   the total scrollable document. */
-div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] > div {
-    height:auto !important;
-    min-height:0 !important;
-    max-height:none !important;
-    overflow:visible !important;
-}
-
-/* Make the bottom footer part of the normal document flow. */
-div[data-testid="stDialog"] .case-detail-footer {
-    min-height:24px !important;
-    height:24px !important;
-    margin-bottom:12px !important;
-}
-</style>
-''', unsafe_allow_html=True)
-
-
-st.markdown(r'''<style>
-/* ============================================================
-   CASEFLOW V7 — AUTHORITATIVE CASE DETAILS SCROLL FIX
-   ============================================================
-   ONE scroll surface only. The dialog panel is fixed; its content column
-   is the scroll surface. The case_detail_scroll container is NOT scrollable.
-*/
-div[data-testid="stDialog"] > div {
-    height:min(86vh, 760px) !important;
-    max-height:calc(100vh - 32px) !important;
-    min-height:0 !important;
-    overflow:hidden !important;
-}
-
-div[data-testid="stDialog"] > div > div {
-    height:calc(100% - 48px) !important;
-    max-height:calc(100% - 48px) !important;
-    min-height:0 !important;
-    overflow-y:auto !important;
-    overflow-x:hidden !important;
-    overscroll-behavior:contain !important;
-    -webkit-overflow-scrolling:touch !important;
-    scrollbar-width:auto !important;
-    scrollbar-color:#8fa3b9 #edf2f7 !important;
-}
-
-div[data-testid="stDialog"] > div > div::-webkit-scrollbar { width:9px !important; display:block !important; }
-div[data-testid="stDialog"] > div > div::-webkit-scrollbar-track { background:#edf2f7 !important; }
-div[data-testid="stDialog"] > div > div::-webkit-scrollbar-thumb { background:#8fa3b9 !important; border-radius:8px !important; border:2px solid #edf2f7 !important; }
-
-div[data-testid="stDialog"] [data-testid="stDialogContent"] {
-    height:auto !important;
-    max-height:none !important;
-    min-height:0 !important;
-    overflow:visible !important;
-    overflow-y:visible !important;
-    overflow-x:visible !important;
-}
-
-div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
-    height:auto !important;
-    max-height:none !important;
-    min-height:0 !important;
-    overflow:visible !important;
-    overflow-y:visible !important;
-    overflow-x:visible !important;
-    overscroll-behavior:auto !important;
-}
-
-div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] > div {
-    height:auto !important;
-    max-height:none !important;
-    min-height:0 !important;
-    overflow:visible !important;
-}
-
-div[data-testid="stDialog"] [data-testid="stVerticalBlock"] {
-    overflow:visible !important;
-    max-height:none !important;
-}
-
-div[data-testid="stDialog"] .case-detail-footer {
-    position:static !important;
-    min-height:24px !important;
-    height:24px !important;
-    margin-bottom:16px !important;
-}
-</style>''', unsafe_allow_html=True)
