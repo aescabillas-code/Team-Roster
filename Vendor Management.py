@@ -3364,7 +3364,12 @@ def seed_mock_cases(force=False):
                 "is_mock": True,
                 "mock_data_version": MOCK_DATA_VERSION,
                 "station_checklists": checklist,
-                "history": [{"action": f"Case entered {station_name(station)}", "timestamp": started}],
+                "history": [{
+                    "action": f"Case entered {station_display_name(station)}",
+                    "timestamp": started,
+                    "actor": "Caseflow",
+                    "station": station,
+                }],
             })
             case_index += 1
 
@@ -3894,8 +3899,10 @@ def import_cases_excel(uploaded_file, replace_existing_excel=False):
                 "is_mock": raw_is_mock,
                 "source_type": "excel",
                 "history": [{
-                    "action": f"Case imported into {station}",
+                    "action": f"Case imported into {station_display_name(station)}",
                     "timestamp": now,
+                    "actor": "Caseflow",
+                    "station": station,
                 }],
             }
 
@@ -4030,16 +4037,45 @@ def save_case_station_checklist(task_id, station, items):
             }
         }
 
+        # Every checklist interaction is part of the station audit trail.
+        # This preserves the full CARE -> ARCH -> PET -> SUPPLY CHAIN ->
+        # FULFILLMENT history instead of only recording the final completion.
+        previous_by_label = {
+            text(x.get("item")): bool(x.get("checked"))
+            for x in previous_items
+            if text(x.get("item"))
+        }
+        history = list(task.get("history") or [])
+        for item in clean_items:
+            label = text(item.get("item"))
+            if not label:
+                continue
+            new_checked = bool(item.get("checked"))
+            old_checked = previous_by_label.get(label, False)
+            if new_checked != old_checked:
+                history.append({
+                    "action": (
+                        f"{station_display_name(station)} checklist item "
+                        f"{'completed' if new_checked else 'unchecked'}:\n"
+                        f"• {label}"
+                    ),
+                    "timestamp": now,
+                    "actor": "Caseflow",
+                    "station": station,
+                })
+        if len(history) != len(task.get("history") or []):
+            update["$set"]["history"] = history
+
         # When the current station checklist becomes complete, create one
         # readable bullet-form history/current-note entry. The transition guard
         # prevents duplicate entries on subsequent rerenders.
         if is_complete and not was_complete:
             bullets = "\n".join(f"• {text(x.get('item'))}" for x in clean_items if text(x.get("item")))
-            history = list(task.get("history") or [])
             history.append({
                 "action": f"{station_display_name(station)} checklist completed:\n{bullets}",
                 "timestamp": now,
                 "actor": "Caseflow",
+                "station": station,
             })
             update["$set"]["history"] = history
             update["$set"]["notes"] = f"{station_display_name(station)} checklist completed:\n{bullets}"
@@ -4110,6 +4146,53 @@ def remove_case_checklist_item(task_id, station, index):
         return False
 
 
+def append_station_history_event(task, action, station=None, actor="Caseflow", timestamp=None):
+    """Append a station-tagged history event without dropping earlier station logs."""
+    station = station_name(station or task.get("department"))
+    event_time = timestamp or utc_now()
+    history = list(task.get("history") or [])
+    history.append({
+        "action": text(action) or "Case updated",
+        "timestamp": event_time,
+        "actor": text(actor) or "Caseflow",
+        "station": station,
+    })
+    return history
+
+
+def station_history_timeline(task):
+    """Return every stored case event in chronological order, preserving station tags."""
+    events = []
+    history = task.get("history") or []
+    if isinstance(history, list):
+        for event in history:
+            if not isinstance(event, dict):
+                continue
+            action = text(event.get("action") or event.get("event") or event.get("details"))
+            if not action:
+                continue
+            stamp = as_utc(event.get("timestamp") or event.get("created_at") or event.get("updated_at"))
+            station = station_name(event.get("station") or "")
+            actor = text(event.get("actor") or event.get("user") or event.get("assigned_to")) or "System"
+            events.append((stamp or datetime.min.replace(tzinfo=timezone.utc), station, actor, action))
+    return sorted(events, key=lambda x: x[0])
+
+
+def save_case_history(task_id, history):
+    """Persist the complete case history without replacing earlier station events."""
+    try:
+        from bson import ObjectId
+        now = utc_now()
+        result = col(TASKS_COLLECTION).update_one(
+            {"_id": ObjectId(str(task_id))},
+            {"$set": {"history": list(history), "last_update": now}},
+        )
+        clear_task_cache()
+        return result.modified_count > 0
+    except Exception:
+        return False
+
+
 def save_case_action_log(task_id, action_plan, note, logged_by="Caseflow User"):
     """Persist an action-plan/note entry and mirror the latest values to the case."""
     action_plan = text(action_plan)
@@ -4175,9 +4258,11 @@ def reassign_case(task, assignee):
         now = utc_now()
         history = list(task.get("history") or [])
         history.append({
-            "action": f"Reassigned within {current} from {text(task.get('assigned_to')) or 'Unassigned'} to {assignee}",
+            "action": f"Reassigned within {station_display_name(current)} from {text(task.get('assigned_to')) or 'Unassigned'} to {assignee}",
             "timestamp": now,
             "assigned_to": assignee,
+            "actor": assignee,
+            "station": current,
         })
         result = col(TASKS_COLLECTION).update_one(
             {"_id": ObjectId(str(task["_id"]))},
@@ -4207,14 +4292,11 @@ def transfer_case(task, destination):
     now = utc_now()
 
 
-    history = task.get(
-        "history",
-        []
-    )
-
+    history = list(task.get("history") or [])
 
     source_station = station_name(task.get("department"))
     destination_station = station_name(destination)
+    actor = text(task.get("assigned_to")) or "Caseflow"
 
     history.append({
         "action": (
@@ -4222,7 +4304,8 @@ def transfer_case(task, destination):
             f"to {station_display_name(destination_station)}"
         ),
         "timestamp": now,
-        "actor": text(task.get("assigned_to")) or "Caseflow",
+        "actor": actor,
+        "station": source_station,
     })
     history.append({
         "action": (
@@ -4230,7 +4313,8 @@ def transfer_case(task, destination):
             f"SLA clock reset to {STATIONS.get(destination_station, STATIONS['CARE'])['sla_minutes']} minutes."
         ),
         "timestamp": now,
-        "actor": text(task.get("assigned_to")) or "Caseflow",
+        "actor": actor,
+        "station": destination_station,
     })
 
 
@@ -5208,6 +5292,49 @@ def local_kb_ai_answer(question, task, documents):
 seed_demo_kb()
 
 
+def normalize_case_history(task):
+    """Normalize legacy history records without inventing missing station events."""
+    history = list(task.get("history") or [])
+    normalized = []
+    changed = False
+    current_station = station_name(task.get("department"))
+    for event in history:
+        if not isinstance(event, dict):
+            normalized.append(event)
+            continue
+        item = dict(event)
+        if not text(item.get("station")):
+            action = text(item.get("action") or item.get("event") or item.get("details")).lower()
+            inferred = ""
+            if "case entered care" in action or "care station" in action:
+                inferred = "CARE"
+            elif "entered arch" in action or "arch station" in action:
+                inferred = "ARCH"
+            elif "entered pet" in action or "pet station" in action:
+                inferred = "PET"
+            elif "entered supply chain" in action:
+                inferred = "SUPPLY CHAIN"
+            elif "entered fulfillment" in action or "entered onsite" in action or "onsite station" in action:
+                inferred = "ONSITE"
+            elif "transferred from care" in action:
+                inferred = "CARE"
+            elif "transferred from arch" in action:
+                inferred = "ARCH"
+            elif "transferred from pet" in action:
+                inferred = "PET"
+            elif "transferred from supply chain" in action:
+                inferred = "SUPPLY CHAIN"
+            elif "transferred from fulfillment" in action or "transferred from onsite" in action:
+                inferred = "ONSITE"
+            elif "transferred" in action or "entered " in action:
+                inferred = current_station
+            if inferred:
+                item["station"] = inferred
+                changed = True
+        normalized.append(item)
+    return normalized, changed
+
+
 @st.dialog("Case Details", width="large")
 def case_details(task_id):
     """Compact, centered Case Details modal using the original Caseflow data/actions.
@@ -5235,6 +5362,10 @@ def case_details(task_id):
             st.session_state["selected_case_id"] = None
             st.rerun()
         return
+
+    normalized_history, _history_changed = normalize_case_history(task)
+    if normalized_history:
+        task["history"] = normalized_history
 
     state = calculate_state(task)
     status = text(task.get("status", "Open")) or "Open"
@@ -5290,7 +5421,7 @@ def case_details(task_id):
                         </div>
                         <div class="case-detail-subject">{html.escape(subject)}</div>
                         <div class="case-detail-account-line">
-                            <span><b>Account:</b> {html.escape(account_name)}</span>
+                            <span class="case-account-name"><b>Account:</b> {html.escape(account_name)}</span>
                             <span class="case-account-priority {'high' if account_priority_label == 'HIGH' else 'normal'}">{html.escape(account_priority_label)} PRIORITY ACCOUNT</span>
                         </div>
                     </div>
@@ -5414,23 +5545,23 @@ def case_details(task_id):
                     st.caption("No resolution, action plan, or notes are recorded for this case.")
                 st.markdown("</div>", unsafe_allow_html=True)
 
-            history = task.get("history") or []
+            history_events = station_history_timeline(task)
             st.markdown("<div class='case-card case-history-card'>", unsafe_allow_html=True)
             st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>◷</span>Case History</div>", unsafe_allow_html=True)
-            if history:
-                for event in reversed(history):
-                    if isinstance(event, dict):
-                        action = text(event.get("action") or event.get("event") or event.get("details")) or "Case updated"
-                        stamp = dt_display(event.get("timestamp")) or ""
-                        actor = text(event.get("user") or event.get("actor") or event.get("assigned_to")) or "System"
-                    else:
-                        action, stamp, actor = text(event), "", "System"
+            if history_events:
+                for stamp_dt, station, actor, action in reversed(history_events):
+                    stamp = dt_display(stamp_dt) or ""
+                    station_badge = station_display_name(station) if station else "Caseflow"
                     action_html = html.escape(action).replace("\n", "<br>")
                     st.markdown(
-                        f"<div class='history-row'><div class='history-dot'></div>"
-                        f"<div class='history-main'><div class='history-meta'>{html.escape(stamp)} "
-                        f"<span>{html.escape(actor)}</span></div>"
-                        f"<div class='history-action'>{action_html}</div></div></div>",
+                        f"<div class='history-row'>"
+                        f"<div class='history-dot'></div>"
+                        f"<div class='history-main'>"
+                        f"<div class='history-meta'>{html.escape(stamp)} "
+                        f"<span>{html.escape(actor)}</span>"
+                        f"<b class='history-station'>{html.escape(station_badge)}</b></div>"
+                        f"<div class='history-action'>{action_html}</div>"
+                        f"</div></div>",
                         unsafe_allow_html=True,
                     )
             else:
@@ -5759,9 +5890,12 @@ def case_details(task_id):
             participant_preview = participants_preview[:5] or [assigned_to]
             participant_html = "".join(f"<span class='war-room-avatar'>{html.escape((text(name) or '?')[:1].upper())}</span>" for name in participant_preview if text(name))
             war_open_key = f"war_room_open_{task_id}"
+            war_closed_key = f"war_room_closed_{task_id}"
             war_room_open = bool(st.session_state.get(war_open_key, False))
+            war_room_closed = bool(st.session_state.get(war_closed_key, False))
             mock_link = f"https://meet.example.com/hpe-caseflow-{html.escape(case_number, quote=True)}"
-            with st.container(key=f"war_room_tile_{task_id}"):
+            if not war_room_closed:
+             with st.container(key=f"war_room_tile_{task_id}"):
                 st.markdown(
                     f"<div class='war-room-mock {'war-room-open' if war_room_open else ''}' role='button' aria-label='Open war room'>"
                     f"<div class='war-room-top'><div><span class='war-room-live-dot'></span><b>LIVE WAR ROOM</b><span class='war-room-case'>{html.escape(case_number)}</span></div><span class='war-room-status'>{'OPEN' if war_room_open else 'ACTIVE'}</span></div>"
@@ -5777,40 +5911,46 @@ def case_details(task_id):
                     use_container_width=True,
                     key=f"war_room_open_button_{task_id}",
                 ):
-                    st.session_state[war_open_key] = True
-                    war_room_open = True
+                    # Clicking the visible tile toggles the details. It never
+                    # closes Case Details.
+                    st.session_state[war_open_key] = not war_room_open
+                    war_room_open = not war_room_open
 
-            if war_room_open:
-                meetings = task.get("meetings") or []
-                latest_meeting = meetings[-1] if isinstance(meetings, list) and meetings and isinstance(meetings[-1], dict) else {}
-                current_attendees = latest_meeting.get("attendance") or participant_preview
-                attendee_html = "".join(f"<li>{html.escape(text(name))}</li>" for name in current_attendees if text(name)) or "<li>No attendees recorded yet.</li>"
-                st.markdown(
-                    f"<div class='war-room-expanded'><div class='war-room-expanded-head'><div><b>War Room Details</b><span> · {html.escape(case_number)}</span></div><span class='war-room-expanded-live'>LIVE</span></div>"
-                    f"<div class='war-room-expanded-grid'><div><div class='war-room-label'>CURRENT ATTENDEES</div><ul>{attendee_html}</ul></div>"
-                    f"<div><div class='war-room-label'>MOCK WAR ROOM LINK</div><a class='war-room-link' href='{mock_link}' target='_blank' rel='noopener noreferrer'>Open mock war room ↗</a><div class='war-room-muted'>Opens without closing Case Details.</div></div></div></div>",
-                    unsafe_allow_html=True,
-                )
-                if st.button("Close War Room", use_container_width=True, key=f"war_room_close_{task_id}"):
-                    try:
-                        from bson import ObjectId
-                        now = utc_now()
-                        history = list(task.get("history") or [])
-                        attendee_names = ", ".join(text(x) for x in current_attendees if text(x)) or "None recorded"
-                        history.append({
-                            "action": f"War Room closed.\n• Attendees: {attendee_names}\n• Link: {mock_link}",
-                            "timestamp": now,
-                            "actor": assigned_to or "Caseflow",
-                        })
-                        col(TASKS_COLLECTION).update_one(
-                            {"_id": ObjectId(str(task_id))},
-                            {"$set": {"history": history, "last_update": now}},
-                        )
-                        clear_task_cache()
-                    except Exception:
-                        pass
-                    st.session_state[war_open_key] = False
-                    st.rerun()
+            if (not war_room_closed) and war_room_open:
+                 meetings = task.get("meetings") or []
+                 latest_meeting = meetings[-1] if isinstance(meetings, list) and meetings and isinstance(meetings[-1], dict) else {}
+                 current_attendees = latest_meeting.get("attendance") or participant_preview
+                 attendee_html = "".join(f"<li>{html.escape(text(name))}</li>" for name in current_attendees if text(name)) or "<li>No attendees recorded yet.</li>"
+                 st.markdown(
+                     f"<div class='war-room-expanded'><div class='war-room-expanded-head'><div><b>War Room Details</b><span> · {html.escape(case_number)}</span></div><span class='war-room-expanded-live'>LIVE</span></div>"
+                     f"<div class='war-room-expanded-grid'><div><div class='war-room-label'>CURRENT ATTENDEES</div><ul>{attendee_html}</ul></div>"
+                     f"<div><div class='war-room-label'>MOCK WAR ROOM LINK</div><a class='war-room-link' href='{mock_link}' target='_blank' rel='noopener noreferrer'>Open mock war room ↗</a><div class='war-room-muted'>Opens without closing Case Details.</div></div></div></div>",
+                     unsafe_allow_html=True,
+                 )
+                 if st.button("Close War Room", use_container_width=True, key=f"war_room_close_{task_id}"):
+                     try:
+                         from bson import ObjectId
+                         now = utc_now()
+                         history = list(task.get("history") or [])
+                         attendee_names = ", ".join(text(x) for x in current_attendees if text(x)) or "None recorded"
+                         history.append({
+                             "action": f"War Room closed.\n• Attendees: {attendee_names}\n• Link: {mock_link}",
+                             "timestamp": now,
+                             "actor": assigned_to or "Caseflow",
+                             "station": department,
+                         })
+                         col(TASKS_COLLECTION).update_one(
+                             {"_id": ObjectId(str(task_id))},
+                             {"$set": {"history": history, "last_update": now}},
+                         )
+                         clear_task_cache()
+                     except Exception:
+                         pass
+                     st.session_state[war_open_key] = False
+                     st.session_state[war_closed_key] = True
+                     # Fully remove the War Room component. This is different
+                     # from clicking the tile, which only hides/shows details.
+                     st.rerun()
 
             meeting_link_key = f"meeting_link_{task_id}"
             meeting_tags_key = f"meeting_tags_{task_id}"
@@ -6404,19 +6544,24 @@ def dashboard_fragment():
             task for task, _state in warning_pairs
             if text(task.get("station_warning_ack_trigger")) != station_warning_trigger_key(task, station)
         ]
+
+        # A clicked warning acknowledges the CURRENT trigger cycle only.
+        # Once every warning case in the station has that trigger persisted,
+        # the tile is completely silent. A later station cycle gets a new
+        # trigger key and is therefore eligible to alert again.
         if unacknowledged_warning_tasks:
             warning_latched.add(station)
-        elif not warning_condition:
+            warning_silenced.discard(station)
+        elif warning_condition:
+            warning_latched.discard(station)
+            warning_silenced.add(station)
+        else:
             warning_latched.discard(station)
             warning_silenced.discard(station)
 
         ack_until = 0.0
         now_epoch = time.time()
 
-        # Persisted per-case warning-cycle acknowledgement means a refresh
-        # cannot resurrect an alert that the user already clicked. A new case
-        # entering warning, or the same case entering a new station cycle, gets
-        # a new trigger key and can alert again.
         flash_tile = bool(unacknowledged_warning_tasks)
 
 
@@ -6474,9 +6619,10 @@ def dashboard_fragment():
                     key=f"station_{station}",
                     use_container_width=True,
                 ):
-                    if warning_condition:
-                        # Acknowledge exactly the currently-warning case cycles
-                        # in MongoDB so the clicked state survives refresh.
+                    if warning_condition and unacknowledged_warning_tasks:
+                        # Acknowledge exactly the CURRENT warning trigger(s).
+                        # The persisted trigger key is what prevents the same
+                        # warning from flashing again after refresh/re-render.
                         warning_ack_until[station] = 0.0
                         warning_silenced.add(station)
                         warning_latched.discard(station)
@@ -6488,7 +6634,7 @@ def dashboard_fragment():
                                 for task in unacknowledged_warning_tasks
                             },
                         )
-
+                        flash_tile = False
 
                     # A single click changes the filter and reruns ONLY
                     # the dashboard fragment. This keeps station switching
@@ -7885,3 +8031,254 @@ div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
 </style>
 
 ''', unsafe_allow_html=True)
+
+
+st.markdown(r"""
+<style>
+/* ============================================================
+   CASE DETAILS v4 — compact, precise spacing
+   ============================================================ */
+div[data-testid="stDialog"] > div {
+    height:min(720px, calc(100vh - 20px)) !important;
+    max-height:calc(100vh - 20px) !important;
+    overflow:hidden !important;
+}
+div[data-testid="stDialog"] [data-testid="stDialogContent"] {
+    max-height:calc(100vh - 66px) !important;
+    height:calc(100vh - 66px) !important;
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+    scrollbar-width:thin !important;
+    scrollbar-color:rgba(71,85,105,.42) transparent !important;
+}
+div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar { width:5px !important; }
+div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar-thumb { background:rgba(71,85,105,.42) !important; border-radius:999px !important; }
+div[data-testid="stDialog"] [data-testid="stDialogContent"] > div { overflow:visible !important; }
+/* The Case Details wrapper is a content wrapper only. The dialog content itself
+   is the single scroll surface, so there is no competing nested scrollbar. */
+div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
+    height:auto !important;
+    max-height:none !important;
+    min-height:0 !important;
+    overflow:visible !important;
+    overflow-y:visible !important;
+    overflow-x:visible !important;
+}
+
+/* Header: smaller and with virtually no dead space above/below the title. */
+div[data-testid="stDialog"] header {
+    min-height:34px !important;
+    height:34px !important;
+    padding:0 10px !important;
+    margin:0 !important;
+}
+div[data-testid="stDialog"] header p {
+    font-size:14px !important;
+    line-height:1 !important;
+    font-weight:750 !important;
+    margin:0 !important;
+}
+div[data-testid="stDialog"] header button {
+    width:26px !important; height:26px !important; min-height:26px !important;
+    padding:0 !important; margin:0 !important;
+}
+
+/* Hero: compressed top/bottom, but account information is deliberately larger. */
+div[data-testid="stDialog"] .case-detail-hero {
+    margin:0 0 9px 0 !important;
+    padding:1px 4px 2px !important;
+}
+div[data-testid="stDialog"] .case-detail-title-row { gap:8px !important; }
+div[data-testid="stDialog"] .case-detail-case-number {
+    font-size:14px !important; line-height:1 !important;
+}
+div[data-testid="stDialog"] .case-detail-subject {
+    font-size:10.5px !important; line-height:1.05 !important; margin-top:1px !important;
+}
+div[data-testid="stDialog"] .case-detail-account-line {
+    display:flex !important;
+    align-items:center !important;
+    flex-wrap:wrap !important;
+    gap:7px !important;
+    margin-top:3px !important;
+    line-height:1.1 !important;
+    font-size:12px !important;
+}
+div[data-testid="stDialog"] .case-account-name {
+    font-size:12px !important;
+    font-weight:650 !important;
+    color:#334155 !important;
+}
+div[data-testid="stDialog"] .case-account-name b {
+    font-weight:800 !important;
+    color:#102041 !important;
+}
+div[data-testid="stDialog"] .case-account-priority {
+    font-size:9px !important;
+    padding:3px 7px !important;
+    font-weight:850 !important;
+}
+
+/* More breathing room specifically between account row and Assigned To summary. */
+div[data-testid="stDialog"] .case-summary-strip {
+    margin:0 0 7px 0 !important;
+    padding:3px 3px !important;
+}
+div[data-testid="stDialog"] .case-summary-cell {
+    padding:1px 7px !important;
+}
+div[data-testid="stDialog"] .case-summary-cell > span {
+    font-size:7px !important; margin:0 0 1px !important; line-height:1 !important;
+}
+div[data-testid="stDialog"] .case-summary-cell > strong {
+    font-size:8.5px !important; line-height:1.05 !important;
+}
+div[data-testid="stDialog"] .case-summary-cell:first-child strong {
+    font-size:9px !important;
+}
+
+/* Dropdown: collapse Streamlit's default vertical element gap, not only the select. */
+div[data-testid="stDialog"] [data-testid="stSelectbox"],
+div[data-testid="stDialog"] [data-testid="stSelectbox"] > div,
+div[data-testid="stDialog"] [data-testid="stSelectbox"] > div > div {
+    margin:0 !important;
+    padding:0 !important;
+}
+div[data-testid="stDialog"] [data-testid="stSelectbox"] label {
+    font-size:8px !important;
+    line-height:1 !important;
+    margin:0 0 1px !important;
+    padding:0 !important;
+}
+div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"],
+div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] > div {
+    min-height:24px !important;
+    height:24px !important;
+    padding:0 6px !important;
+    margin:0 !important;
+    border-radius:5px !important;
+}
+div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] span {
+    font-size:8px !important; line-height:22px !important;
+}
+
+div[data-testid="stDialog"] [data-testid="stVerticalBlock"]:has(> [data-testid="stSelectbox"]) {
+    gap:0 !important;
+}
+div[data-testid="stDialog"] [data-testid="stVerticalBlock"]:has(> [data-testid="stCheckbox"]) {
+    gap:0 !important;
+}
+
+/* Checklist: remove the vertical gap generated by Streamlit's widget blocks. */
+div[data-testid="stDialog"] .case-checklist-wrap {
+    margin:2px 0 3px !important;
+    padding:4px 6px !important;
+}
+div[data-testid="stDialog"] .case-checklist-title {
+    font-size:9px !important; line-height:1 !important; margin:0 !important;
+}
+div[data-testid="stDialog"] .case-checklist-sub {
+    font-size:7px !important; line-height:1.05 !important; margin:1px 0 2px !important;
+}
+div[data-testid="stDialog"] [data-testid="stCheckbox"] {
+    min-height:18px !important;
+    height:18px !important;
+    margin:0 !important;
+    padding:0 !important;
+}
+div[data-testid="stDialog"] [data-testid="stCheckbox"] > div,
+div[data-testid="stDialog"] [data-testid="stCheckbox"] label,
+div[data-testid="stDialog"] [data-testid="stCheckbox"] label > div {
+    margin:0 !important; padding:0 !important;
+}
+div[data-testid="stDialog"] [data-testid="stCheckbox"] label {
+    font-size:8px !important; line-height:1.05 !important;
+}
+div[data-testid="stDialog"] [data-testid="stCheckbox"] + div {
+    margin:0 !important;
+}
+div[data-testid="stDialog"] [class*="st-key-case_checklist_remove_"] {
+    margin:0 !important; padding:0 !important;
+}
+div[data-testid="stDialog"] [class*="st-key-case_checklist_remove_"] button {
+    width:18px !important; min-width:18px !important;
+    height:18px !important; min-height:18px !important;
+    padding:0 !important; margin:0 !important; font-size:11px !important;
+}
+
+/* KB suggested questions — tight horizontal and vertical spacing. */
+div[data-testid="stDialog"] .kb-suggested-title {
+    margin:2px 0 1px !important; font-size:6.5px !important;
+}
+div[data-testid="stDialog"] [class*="st-key-kb_suggested_"] {
+    margin:0 !important; padding:0 !important;
+}
+div[data-testid="stDialog"] [class*="st-key-kb_suggested_"] > div {
+    margin:0 !important; padding:0 !important;
+}
+div[data-testid="stDialog"] [class*="st-key-kb_suggested_"] button {
+    min-height:19px !important;
+    height:19px !important;
+    padding:1px 4px !important;
+    margin:0 !important;
+    font-size:7px !important;
+    line-height:1 !important;
+    border-radius:4px !important;
+}
+/* Streamlit column/vertical gaps around the suggested buttons. */
+div[data-testid="stDialog"] [data-testid="stHorizontalBlock"]:has([class*="st-key-kb_suggested_"]) {
+    gap:4px !important;
+    margin:0 !important;
+    padding:0 !important;
+}
+div[data-testid="stDialog"] [data-testid="stVerticalBlock"]:has([class*="st-key-kb_suggested_"]) {
+    gap:1px !important;
+    margin:0 !important;
+    padding:0 !important;
+}
+
+/* SOP list — each tile immediately follows the previous one. */
+div[data-testid="stDialog"] .kb-sop-list-title {
+    margin:2px 0 1px !important;
+}
+div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] {
+    margin:0 !important; padding:0 !important;
+}
+div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] > div {
+    margin:0 !important; padding:0 !important;
+}
+div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] button {
+    min-height:20px !important;
+    height:20px !important;
+    padding:1px 4px !important;
+    margin:0 !important;
+    font-size:7px !important;
+    line-height:1 !important;
+    border-radius:4px !important;
+}
+div[data-testid="stDialog"] [data-testid="stVerticalBlock"]:has([class*="st-key-kb_sop_list_"]) {
+    gap:1px !important;
+    margin:0 !important; padding:0 !important;
+}
+
+/* Case History station label. */
+div[data-testid="stDialog"] .history-station {
+    display:inline-block !important;
+    margin-left:5px !important;
+    padding:1px 4px !important;
+    border-radius:999px !important;
+    background:#edf5f4 !important;
+    color:#087b71 !important;
+    font-size:7px !important;
+    font-weight:800 !important;
+}
+
+/* War Room: tile is a toggle; Close War Room removes the whole component. */
+div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] {
+    margin:0 !important; padding:0 !important;
+}
+div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] .war-room-mock {
+    margin:0 !important;
+}
+</style>
+""", unsafe_allow_html=True)
