@@ -48,13 +48,10 @@ Install:
 import hashlib
 import hmac
 import html
-import secrets
 import os
 import time
-import textwrap
 import re
 from datetime import datetime, timezone, timedelta
-from typing import Optional
 
 
 try:
@@ -471,8 +468,6 @@ def _get_access_secrets():
 
 
 
-def access_code():
-    return _get_access_secrets()[0]
 
 
 
@@ -3494,41 +3489,6 @@ def seed_mock_cases(force=False):
 # ============================================================
 
 
-def create_alert(
-    task,
-    alert_type,
-    message,
-):
-    """Create one alert per case/station trigger.
-
-    Acknowledged alerts are not recreated while the same trigger is still
-    active. A new station cycle (station_started_at changes) or a new case
-    produces a new trigger key and can alert again.
-    """
-    task_id = str(task["_id"])
-    station = station_name(task.get("department"))
-    trigger_key = station_warning_trigger_key(task, station)
-
-    exists = col(ALERT_COLLECTION).find_one({
-        "task_id": task_id,
-        "alert_type": alert_type,
-        "trigger_key": trigger_key,
-    })
-
-    if exists:
-        return
-
-    col(ALERT_COLLECTION).insert_one({
-        "task_id": task_id,
-        "case_number": task.get("case_number"),
-        "station": station,
-        "account_name": task.get("account_name"),
-        "alert_type": alert_type,
-        "trigger_key": trigger_key,
-        "message": message,
-        "created_at": utc_now(),
-        "acknowledged": False,
-    })
 
 
 
@@ -4106,9 +4066,6 @@ def get_case_station_checklist(task, station=None):
     return normalized or _default_station_checklist(station)
 
 
-def checklist_complete(task, station=None):
-    items = get_case_station_checklist(task, station)
-    return bool(items) and all(bool(item.get("checked")) for item in items)
 
 
 def checklist_missing(task, station=None):
@@ -4189,23 +4146,6 @@ def set_case_checklist_item(task_id, station, index, checked):
         return False
 
 
-def append_case_checklist_item(task_id, station, label):
-    label = text(label)
-    if not label:
-        return False
-    station = station_name(station)
-    try:
-        from bson import ObjectId
-        task = col(TASKS_COLLECTION).find_one({"_id": ObjectId(str(task_id))})
-        if not task:
-            return False
-        items = get_case_station_checklist(task, station)
-        if any(text(x.get("item")).lower() == label.lower() for x in items):
-            return False
-        items.append({"item": label, "checked": False})
-        return save_case_station_checklist(task_id, station, items)
-    except Exception:
-        return False
 
 
 def remove_case_checklist_item(task_id, station, index):
@@ -5333,57 +5273,8 @@ def automated_case_assessment(task, state):
     return f"{lead} No detailed update has been recorded yet."
 
 
-def build_case_suggestions(task, documents, limit=4):
-    """Create case-specific suggested questions from the strongest KB matches."""
-    suggestions = []
-    seen = set()
-    case_context = case_kb_query(task)
-    for doc in documents:
-        score = kb_score(case_context, doc)
-        # Suggested questions must have a meaningful case-specific match;
-        # weak category-only matches are not promoted into the suggestion row.
-        if score < 4:
-            continue
-        question = text(doc.get("question"))
-        title = text(doc.get("title")) or "this issue"
-        candidates = [
-            question,
-            f"What are the recommended steps for {title}?",
-            f"What information should I capture for {title}?",
-            f"What should I verify before escalating {title}?",
-        ]
-        for candidate in candidates:
-            candidate = " ".join(candidate.split())
-            if len(candidate) < 12:
-                continue
-            key = candidate.lower()
-            if key in seen:
-                continue
-            seen.add(key)
-            suggestions.append(candidate)
-            break
-        if len(suggestions) >= limit:
-            break
-    return suggestions
 
 
-def local_kb_ai_answer(question, task, documents):
-    """Return one case-matched KB answer without duplicating the displayed SOP."""
-    question = text(question).strip()
-    if not question:
-        return {"answer":"Please enter a question first.","sources":[],"confidence":"No question"}
-    if not documents:
-        return {"answer":"No matching Knowledge Base or SOP article was found.","sources":[],"confidence":"No matching source"}
-    selected=[]; seen=set()
-    for doc in documents:
-        identity=text(doc.get("_id")) or text(doc.get("title")).lower()
-        if identity in seen: continue
-        seen.add(identity); selected.append(doc)
-        if len(selected)>=4: break
-    score=max([kb_score(f"{question} {case_kb_query(task)}", d) for d in selected] or [0])
-    confidence="High match" if score>=8 else "Good match" if score>=4 else "Related match"
-    best=selected[0]
-    return {"answer":kb_content(best),"sources":selected,"confidence":confidence}
 
 
 seed_demo_kb()
@@ -7351,9 +7242,6 @@ def dashboard_fragment():
         unsafe_allow_html=True,
     )
 
-
-
-
 # ============================================================
 # INITIAL MOCK DATA
 # ============================================================
@@ -7365,8 +7253,6 @@ def dashboard_fragment():
 # Seed/mock migration is cached as a resource so normal fragment reruns
 # do not repeatedly query MongoDB for the mock-data count.
 seed_mock_cases()
-
-
 
 
 # Render the live dashboard. Case Details is opened directly by the
@@ -7389,7 +7275,6 @@ if (
         "simulation_until"
     ]
 ):
-
 
     simulation_id = st.session_state.get(
         "simulation_case_id"
@@ -7425,18 +7310,13 @@ if (
         "simulation_until"
     ] = 0
 
-
     st.session_state[
         "simulation_case_id"
     ] = None
 
-
-
-
 # ============================================================
 # FOOTER
 # ============================================================
-
 
 st.markdown(
     """
@@ -7452,8 +7332,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
-
 
 st.markdown(r'''
 <style>
