@@ -2417,6 +2417,37 @@ div[data-testid="stDialog"] .case-checklist-wrap {
     margin-top: 5px !important;
     padding: 6px !important;
 }
+/* Checklist refresh: compact icon beside the remaining-items badge. */
+div[data-testid="stDialog"] [class*="st-key-case_checklist_refresh_"] {
+    min-width:32px !important;
+    width:32px !important;
+    margin-top:2px !important;
+}
+div[data-testid="stDialog"] [class*="st-key-case_checklist_refresh_"] button {
+    width:32px !important;
+    min-width:32px !important;
+    height:32px !important;
+    min-height:32px !important;
+    padding:0 !important;
+    border:1px solid #d8e1e9 !important;
+    border-radius:8px !important;
+    background:#fff !important;
+    color:#087b73 !important;
+    font-size:17px !important;
+    font-weight:800 !important;
+    line-height:1 !important;
+    box-shadow:none !important;
+}
+div[data-testid="stDialog"] [class*="st-key-case_checklist_refresh_"] button:hover {
+    border-color:#00a98f !important;
+    background:#f0fbf8 !important;
+    color:#006b63 !important;
+}
+div[data-testid="stDialog"] [class*="st-key-case_checklist_refresh_"] button:focus-visible {
+    outline:2px solid rgba(0,169,143,.35) !important;
+    outline-offset:1px !important;
+}
+
 div[data-testid="stDialog"] .case-checklist-title {
     font-size: 9px !important;
 }
@@ -6221,12 +6252,24 @@ def case_details(task_id):
                 selected_missing = [x.get("item") for x in selected_items if not bool(x.get("checked"))]
                 complete_class = "complete" if not selected_missing else "pending"
                 complete_text = "✓ Complete" if not selected_missing else f"{len(selected_missing)} item(s) remaining"
-                st.markdown(
-                    f"<div class='case-checklist-wrap'><div class='case-checklist-title'>{html.escape(station_display_name(selected_check_station))} Required Tasks</div>"
-                    f"<div class='case-checklist-sub'>Every task below must be completed before this case can leave the current station.</div>"
-                    f"<span class='case-checklist-status {complete_class}'>{html.escape(complete_text)}</span></div>",
-                    unsafe_allow_html=True,
-                )
+                checklist_head_col, checklist_refresh_col = st.columns([1, 0.10], gap="small")
+                with checklist_head_col:
+                    st.markdown(
+                        f"<div class='case-checklist-wrap'><div class='case-checklist-title'>{html.escape(station_display_name(selected_check_station))} Required Tasks</div>"
+                        f"<div class='case-checklist-sub'>Every task below must be completed before this case can leave the current station.</div>"
+                        f"<span class='case-checklist-status {complete_class}'>{html.escape(complete_text)}</span></div>",
+                        unsafe_allow_html=True,
+                    )
+                with checklist_refresh_col:
+                    if st.button(
+                        "↻",
+                        key=f"case_checklist_refresh_{task_id}_{selected_check_station}",
+                        help="Refresh the checklist status from the latest saved case data.",
+                    ):
+                        # Do not call st.rerun() explicitly. The button interaction
+                        # already causes the Case Details dialog to rerun, where the
+                        # task is fetched fresh from MongoDB.
+                        clear_task_cache()
 
                 for idx, item in enumerate(selected_items):
                     check_key = f"case_checklist_{task_id}_{selected_check_station}_{idx}"
@@ -8691,11 +8734,14 @@ if (
                 except Exception:
                     pass
                 clear_task_cache()
-                # Stop rendering the alert immediately. The next full app
-                # render opens Case Details from the persisted session state.
-                # This prevents the alert and dialog from competing in the
-                # same render and eliminates the close/reopen visual glitch.
-                st.rerun(scope="app")
+
+                # Open Case Details immediately in this same View Case
+                # interaction. The alert has already been marked dismissed
+                # above, so it cannot render again. Keep open_case_after_alert
+                # true so the native dialog on_dismiss callback still handles
+                # the transition after the user closes Case Details.
+                case_details(str(simulation_alert_case_id))
+                st.stop()
 
 # Open the simulated H&M case only after the alert has been fully
 # dismissed from the previous render. Keeping this as a separate render
