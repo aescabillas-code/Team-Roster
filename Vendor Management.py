@@ -8700,9 +8700,8 @@ if (
                 except Exception:
                     pass
                 clear_task_cache()
-                # Keep open_case_after_alert=True until the native dialog is
-                # actually dismissed. The on_dismiss callback then performs a
-                # full app rerun into CARE, eliminating the blank transition.
+                # Re-open Case Details using the freshly saved CARE
+                # station_started_at timestamp so both timers start at 00:00.
                 case_details(str(simulation_alert_case_id))
 
 # ============================================================
