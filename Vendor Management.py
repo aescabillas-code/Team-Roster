@@ -297,11 +297,17 @@ def initialize_indexes():
         col(ACCESS_COLLECTION).create_index(
             [("token_hash", ASCENDING)]
         )
+        col(ACCESS_COLLECTION).create_index(
+            [("browser_fingerprint", ASCENDING), ("code_fingerprint", ASCENDING), ("authorized", ASCENDING)]
+        )
         col(ALERT_COLLECTION).create_index(
             [("acknowledged", ASCENDING), ("created_at", DESCENDING)]
         )
         col(ALERT_COLLECTION).create_index(
             [("task_id", ASCENDING), ("trigger_key", ASCENDING), ("alert_type", ASCENDING)]
+        )
+        col(ALERT_COLLECTION).create_index(
+            [("alert_type", ASCENDING), ("trigger_key", ASCENDING), ("active", ASCENDING)]
         )
         col(ACCOUNT_PRIORITY_COLLECTION).create_index(
             [("account_name", ASCENDING)]
@@ -826,9 +832,54 @@ def _clear_browser_token():
 
 
 
+def _browser_fingerprint():
+    """Return a stable browser-profile fingerprint without exposing raw browser data."""
+    expression = """
+    (() => {
+        try {
+            return [
+                navigator.userAgent || '',
+                navigator.platform || '',
+                navigator.language || '',
+                Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+                String(navigator.hardwareConcurrency || ''),
+                String(navigator.maxTouchPoints || ''),
+                String(navigator.vendor || '')
+            ].join('|');
+        } catch (e) {
+            return '';
+        }
+    })()
+    """
+    value = _js_parent_storage(expression, "hpe_caseflow_browser_fingerprint_v1")
+    if value is None:
+        return None
+    raw = str(value or "").strip()
+    return sha256(raw) if raw else ""
+
+
+def _server_browser_authorized(fingerprint):
+    """Fallback authorization for mobile/browser profiles where storage is unavailable."""
+    if not fingerprint:
+        return False
+    access_code_value, _ = _get_access_secrets()
+    code_fp = _get_code_fingerprint(access_code_value) if access_code_value else ""
+    if not code_fp:
+        return False
+    try:
+        return bool(col(ACCESS_COLLECTION).find_one({
+            "browser_fingerprint": fingerprint,
+            "code_fingerprint": code_fp,
+            "authorized": True,
+        }, {"_id": 1}))
+    except Exception:
+        return False
+
+
 def browser_is_authorized():
     """
-    Check Streamlit session state first, then persistent browser storage.
+    Check session state first, then signed browser storage, then the
+    server-side browser-profile fallback used when mobile storage is blocked.
     """
     if st.session_state.get(
         "access_authorized",
@@ -851,6 +902,13 @@ def browser_is_authorized():
         st.session_state["access_granted"] = True
         return True
 
+    fingerprint = _browser_fingerprint()
+    if fingerprint is None:
+        return None
+    if _server_browser_authorized(fingerprint):
+        st.session_state["access_authorized"] = True
+        st.session_state["access_granted"] = True
+        return True
 
     return False
 
@@ -869,6 +927,21 @@ def authorize_browser():
     # The current session becomes authorized immediately. The browser
     # component writes the signed token independently.
     _save_browser_token(token)
+
+    fingerprint = _browser_fingerprint()
+    if fingerprint:
+        access_code_value, _ = _get_access_secrets()
+        try:
+            col(ACCESS_COLLECTION).update_one(
+                {
+                    "browser_fingerprint": fingerprint,
+                    "code_fingerprint": _get_code_fingerprint(access_code_value),
+                },
+                {"$set": {"authorized": True, "authorized_at": utc_now()}},
+                upsert=True,
+            )
+        except Exception:
+            pass
 
 
     st.session_state["access_authorized"] = True
@@ -897,7 +970,16 @@ def clear_token_access():
 
     _clear_browser_token()
 
-
+    fingerprint = _browser_fingerprint()
+    if fingerprint:
+        access_code_value, _ = _get_access_secrets()
+        try:
+            col(ACCESS_COLLECTION).delete_many({
+                "browser_fingerprint": fingerprint,
+                "code_fingerprint": _get_code_fingerprint(access_code_value),
+            })
+        except Exception:
+            pass
 
 
 def access_gate():
@@ -1041,28 +1123,19 @@ if not access_gate():
 
 defaults = {
     "selected_station": "CARE",
-    "selected_case_id": None,
-    "show_case": False,
     "show_alerts": False,
     "show_settings": False,
     "admin_unlocked": False,
-    "simulation_until": 0.0,
     "simulation_case_id": None,
     "simulation_alert_active": False,
     "simulation_alert_case_id": None,
+    "simulation_alert_event_id": None,
     "simulation_alert_delay_until": 0.0,
     "simulation_alert_dismissed": False,
     "open_case_after_alert": False,
     "pending_case_dialog_id": None,
     "simulation_active": False,
     "search": "",
-    # Kept for compatibility with existing session state; acknowledgement
-    # now stops tile flashing immediately.
-    "station_warning_ack_until": {},
-    # Stations silenced after the user clicks their active warning tile.
-    # The station stays silenced until the current warning condition clears.
-    "station_warning_silenced": set(),
-    "station_warning_latched": set(),
 }
 
 
@@ -2246,32 +2319,68 @@ st.markdown(
         .station-pill { font-size:11px !important; padding:5px 10px !important; }
 
 
-        /* Keep the essential case fields visible and prevent the table from
-           becoming unusably narrow. Secondary fields are hidden on phones. */
+        /* Mobile case table: keep the useful operational fields on one
+           readable row. Assigned To and Due Date remain available in Case
+           Details; on phones they are intentionally collapsed to preserve
+           a clear table rather than stacking every column vertically. */
+        [data-testid="stHorizontalBlock"]:has(.case-head) > div:nth-child(4),
+        [data-testid="stHorizontalBlock"]:has(.case-head) > div:nth-child(5),
         [data-testid="stHorizontalBlock"]:has([class*="st-key-case_cell_"]) > div:nth-child(4),
         [data-testid="stHorizontalBlock"]:has([class*="st-key-case_cell_"]) > div:nth-child(5) {
             display:none !important;
         }
 
-
+        [data-testid="stHorizontalBlock"]:has(.case-head),
         [data-testid="stHorizontalBlock"]:has([class*="st-key-case_cell_"]) {
             display:grid !important;
-            grid-template-columns:1.2fr 2.1fr 1.15fr 1.05fr !important;
+            grid-template-columns:1.15fr 2.15fr .95fr 1.00fr .90fr !important;
+            grid-auto-flow:row !important;
             gap:4px !important;
+            width:100% !important;
+            align-items:center !important;
         }
 
-
+        [data-testid="stHorizontalBlock"]:has(.case-head) > div,
         [data-testid="stHorizontalBlock"]:has([class*="st-key-case_cell_"]) > div {
             min-width:0 !important;
             width:auto !important;
-            flex:unset !important;
+            max-width:none !important;
+            flex:0 0 auto !important;
+            margin:0 !important;
+            padding:0 !important;
+            align-self:stretch !important;
+            grid-column:auto !important;
         }
 
+        [data-testid="stHorizontalBlock"]:has(.case-head) .case-head {
+            min-height:27px !important;
+            padding:6px 5px !important;
+            white-space:nowrap !important;
+            overflow:hidden !important;
+            text-overflow:ellipsis !important;
+        }
 
-        .case-head, .case-row { font-size:9px !important; }
-        [class*="st-key-case_cell_"] button { font-size:9px !important; padding:3px 5px !important; }
+        [data-testid="stHorizontalBlock"]:has([class*="st-key-case_cell_"]) .case-row,
+        [data-testid="stHorizontalBlock"]:has([class*="st-key-case_cell_"]) .agent-cell,
+        [data-testid="stHorizontalBlock"]:has([class*="st-key-case_cell_"]) .due-cell {
+            min-height:32px !important;
+            padding:4px 5px !important;
+            box-sizing:border-box !important;
+        }
+
+        [class*="st-key-case_cell_"] button {
+            font-size:9px !important;
+            padding:3px 5px !important;
+            min-height:30px !important;
+            height:30px !important;
+        }
         .priority-pill { font-size:8px !important; padding:4px 5px !important; }
         .duration-warning-wrap { font-size:9px !important; }
+        [data-testid="stHorizontalBlock"]:has([class*="st-key-case_cell_"]) .badge {
+            white-space:nowrap !important;
+            font-size:8px !important;
+            padding:5px 6px !important;
+        }
 
 
         div[data-testid="stDialog"] > div {
@@ -2457,37 +2566,6 @@ div[data-testid="stDialog"] .case-checklist-wrap {
     margin-top: 5px !important;
     padding: 6px !important;
 }
-/* Checklist refresh: compact icon beside the remaining-items badge. */
-div[data-testid="stDialog"] [class*="st-key-case_checklist_refresh_"] {
-    min-width:32px !important;
-    width:32px !important;
-    margin-top:2px !important;
-}
-div[data-testid="stDialog"] [class*="st-key-case_checklist_refresh_"] button {
-    width:32px !important;
-    min-width:32px !important;
-    height:32px !important;
-    min-height:32px !important;
-    padding:0 !important;
-    border:1px solid #d8e1e9 !important;
-    border-radius:8px !important;
-    background:#fff !important;
-    color:#087b73 !important;
-    font-size:17px !important;
-    font-weight:800 !important;
-    line-height:1 !important;
-    box-shadow:none !important;
-}
-div[data-testid="stDialog"] [class*="st-key-case_checklist_refresh_"] button:hover {
-    border-color:#00a98f !important;
-    background:#f0fbf8 !important;
-    color:#006b63 !important;
-}
-div[data-testid="stDialog"] [class*="st-key-case_checklist_refresh_"] button:focus-visible {
-    outline:2px solid rgba(0,169,143,.35) !important;
-    outline-offset:1px !important;
-}
-
 div[data-testid="stDialog"] .case-checklist-title {
     font-size: 9px !important;
 }
@@ -3291,6 +3369,16 @@ def duration_string(seconds):
     return f"{m:02d}:{s:02d}"
 
 
+def display_priority_label(state):
+    """Single display rule for both the case table and Case Details."""
+    if state.get("priority_account"):
+        return "Critical"
+    if state.get("status") in {"CRITICAL", "BREACHED"}:
+        return "Critical"
+    if state.get("status") == "MEDIUM":
+        return "Medium"
+    return "Low"
+
 
 
 # ============================================================
@@ -3449,6 +3537,50 @@ def mock_original_state(case_number):
     }
 
 
+GLOBAL_SIMULATION_ALERT_KEY = "OVR_VW_GLOBAL_SIMULATION_PRIORITY_ACCOUNT"
+
+
+def _get_global_simulation_event():
+    try:
+        return col(ALERT_COLLECTION).find_one({
+            "alert_type": "SIMULATION_PRIORITY_ACCOUNT",
+            "trigger_key": GLOBAL_SIMULATION_ALERT_KEY,
+            "active": True,
+        })
+    except Exception:
+        return None
+
+
+def _set_global_simulation_event(task_id, triggered_at):
+    try:
+        col(ALERT_COLLECTION).update_one(
+            {
+                "alert_type": "SIMULATION_PRIORITY_ACCOUNT",
+                "trigger_key": GLOBAL_SIMULATION_ALERT_KEY,
+            },
+            {"$set": {
+                "task_id": str(task_id),
+                "triggered_at": as_utc(triggered_at) or utc_now(),
+                "active": True,
+                "acknowledged": False,
+                "updated_at": utc_now(),
+            }},
+            upsert=True,
+        )
+    except Exception:
+        pass
+
+
+def _clear_global_simulation_event():
+    try:
+        col(ALERT_COLLECTION).delete_many({
+            "alert_type": "SIMULATION_PRIORITY_ACCOUNT",
+            "trigger_key": GLOBAL_SIMULATION_ALERT_KEY,
+        })
+    except Exception:
+        pass
+
+
 def reset_mock_case_durations():
     """Reset all 25 mock cases to their original seeded state and SLA demo timing.
 
@@ -3458,6 +3590,7 @@ def reset_mock_case_durations():
     state in which they were originally seeded.
     """
     reset_now = utc_now()
+    _clear_global_simulation_event()
     # Five cases per station are restored in staggered, non-breached states.
     # The latest mock case is only 50% elapsed, so no seeded case reaches the
     # 40%-remaining early-warning threshold during reset. Simulation then
@@ -4274,38 +4407,6 @@ def save_case_station_checklist(task_id, station, items):
         return False
 
 
-def refresh_case_checklist_state(task_id, station):
-    """Synchronize checklist widgets with the latest persisted MongoDB state.
-
-    The checklist is saved immediately when a checkbox changes.  The refresh
-    icon therefore only needs to pull the persisted values back into
-    session_state before Streamlit renders the checkbox widgets again.
-    """
-    station = station_name(station)
-    try:
-        from bson import ObjectId
-        task = col(TASKS_COLLECTION).find_one({"_id": ObjectId(str(task_id))})
-        if not task:
-            return
-
-        items = get_case_station_checklist(task, station)
-        for idx, item in enumerate(items):
-            check_key = f"case_checklist_{task_id}_{station}_{idx}"
-            st.session_state[check_key] = bool(item.get("checked"))
-
-        # If items were removed since the last render, clear stale widget keys
-        # for the old indexes so they cannot leak into a later refresh.
-        prefix = f"case_checklist_{task_id}_{station}_"
-        valid_keys = {f"{prefix}{idx}" for idx in range(len(items))}
-        for key in list(st.session_state.keys()):
-            if key.startswith(prefix) and key not in valid_keys:
-                st.session_state.pop(key, None)
-
-        clear_task_cache()
-    except Exception:
-        pass
-
-
 def set_case_checklist_item(task_id, station, index, checked):
     # Streamlit callbacks pass the widget key so the current checkbox value
     # can be read from session_state at callback time.
@@ -4488,10 +4589,6 @@ def _append_collaboration_history(task_id, action, actor="Caseflow", station=Non
         return result.modified_count > 0
     except Exception:
         return False
-
-
-def _collaboration_actor(task):
-    return text(task.get("assigned_to")) or "Caseflow User"
 
 
 def create_active_war_room(task_id, meeting_link, tagged_people=None, attendance=None, actor="Caseflow User"):
@@ -5278,7 +5375,6 @@ if st.session_state["show_settings"]:
                         simulation_id = simulation_case.get("_id")
                         # The H&M case is only an alert placeholder at simulation start.
                         # Its CARE timer must NOT begin until the user clicks View Case.
-                        sla_seconds = int(STATIONS["CARE"]["sla_minutes"] * 60)
                         simulation_due = now + timedelta(seconds=45)
                         
                         # Keep the alert visually urgent without making the actual CARE timer
@@ -5320,6 +5416,7 @@ if st.session_state["show_settings"]:
                             },
                         )
                         simulation_case_id = str(simulation_id)
+                        _set_global_simulation_event(simulation_id, now)
 
                         # Seed the alert center with the same simulated critical-account event.
                         try:
@@ -5345,7 +5442,6 @@ if st.session_state["show_settings"]:
                             pass
 
                     clear_task_cache()
-                    st.session_state["simulation_until"] = 0.0
                     st.session_state["simulation_case_id"] = simulation_case_id or None
                     # The simulation alert is intentionally delayed by 5 seconds.
                     # The browser reveals the already-rendered alert at this
@@ -5358,9 +5454,6 @@ if st.session_state["show_settings"]:
                         time.time() + 5.0 if simulation_case_id else 0.0
                     )
                     st.session_state["simulation_active"] = bool(simulation_case_id)
-                    st.session_state["station_warning_ack_until"] = {}
-                    st.session_state["station_warning_silenced"] = set()
-                    st.session_state["station_warning_latched"] = set()
                     st.session_state["show_settings"] = False
 
                     if simulation_case_id:
@@ -5850,7 +5943,6 @@ def _case_details_dismissed():
         )
         clear_task_cache()
         st.session_state["selected_station"] = "CARE"
-        st.session_state["show_case"] = False
         st.session_state["open_case_after_alert"] = False
         # The alert has served its purpose. The H&M record is now a normal
         # active CARE case, so the simulation alert must never be rendered again.
@@ -5867,7 +5959,6 @@ def _case_details_dismissed():
         # If MongoDB is temporarily unavailable, still return to the normal
         # dashboard rather than leaving the user on an empty page.
         st.session_state["selected_station"] = "CARE"
-        st.session_state["show_case"] = False
         st.session_state["open_case_after_alert"] = False
         st.session_state["simulation_alert_active"] = False
         st.session_state["simulation_alert_dismissed"] = True
@@ -5901,8 +5992,6 @@ def case_details(task_id):
     if not task:
         st.error("Case not found.")
         if st.button("Close", use_container_width=True, key=f"case_missing_close_{task_id}"):
-            st.session_state["show_case"] = False
-            st.session_state["selected_case_id"] = None
             st.rerun()
         return
 
@@ -5922,9 +6011,8 @@ def case_details(task_id):
     due = dt_display(task.get("due_date")) or "—"
     elapsed = duration_string(state.get("elapsed", 0))
 
-    priority_label = "CRITICAL" if state.get("priority_account") else str(state.get("status") or "LOW").upper()
+    priority_label = display_priority_label(state).upper()
     priority_class = {
-        "BREACHED": "badge-critical",
         "CRITICAL": "badge-critical",
         "MEDIUM": "badge-medium",
         "LOW": "badge-low",
@@ -6248,8 +6336,6 @@ def case_details(task_id):
                             ok, message = close_case(task)
                             if ok:
                                 st.success("Case closed.")
-                                st.session_state["show_case"] = False
-                                st.session_state["selected_case_id"] = None
                                 st.rerun()
                             else:
                                 st.error(message or "Unable to close case.")
@@ -6302,8 +6388,6 @@ def case_details(task_id):
                             st.error(f"Complete the current-station checklist before transfer:<br>• {missing_html}", unsafe_allow_html=True)
                         elif transfer_case(task, destination):
                             st.success(f"Case transferred to {station_name(destination)}.")
-                            st.session_state["show_case"] = False
-                            st.session_state["selected_case_id"] = None
                             st.rerun()
                         else:
                             st.error("Unable to transfer case.")
@@ -6324,22 +6408,12 @@ def case_details(task_id):
                 selected_missing = [x.get("item") for x in selected_items if not bool(x.get("checked"))]
                 complete_class = "complete" if not selected_missing else "pending"
                 complete_text = "✓ Complete" if not selected_missing else f"{len(selected_missing)} item(s) remaining"
-                checklist_head_col, checklist_refresh_col = st.columns([1, 0.10], gap="small")
-                with checklist_head_col:
-                    st.markdown(
-                        f"<div class='case-checklist-wrap'><div class='case-checklist-title'>{html.escape(station_display_name(selected_check_station))} Required Tasks</div>"
-                        f"<div class='case-checklist-sub'>Every task below must be completed before this case can leave the current station.</div>"
-                        f"<span class='case-checklist-status {complete_class}'>{html.escape(complete_text)}</span></div>",
-                        unsafe_allow_html=True,
-                    )
-                with checklist_refresh_col:
-                    st.button(
-                        "↻",
-                        key=f"case_checklist_refresh_{task_id}_{selected_check_station}",
-                        help="Refresh the checklist status from the latest saved case data.",
-                        on_click=refresh_case_checklist_state,
-                        args=(task_id, selected_check_station),
-                    )
+                st.markdown(
+                    f"<div class='case-checklist-wrap'><div class='case-checklist-title'>{html.escape(station_display_name(selected_check_station))} Required Tasks</div>"
+                    f"<div class='case-checklist-sub'>Every task below must be completed before this case can leave the current station.</div>"
+                    f"<span class='case-checklist-status {complete_class}'>{html.escape(complete_text)}</span></div>",
+                    unsafe_allow_html=True,
+                )
 
                 for idx, item in enumerate(selected_items):
                     check_key = f"case_checklist_{task_id}_{selected_check_station}_{idx}"
@@ -7312,11 +7386,22 @@ def dashboard_fragment():
 
 
     # Duration/data monitoring remains in the 1-second fragment.
-    # The simulation critical alert is promoted server-side exactly once
-    # when its 5-second deadline is reached. This is intentionally a
-    # backend app rerun (with the Streamlit spinner hidden by CSS), rather
-    # than browser JavaScript, because scripts embedded in st.markdown are
-    # not reliably executed by Streamlit.
+    # Simulation state is shared through MongoDB so every connected user
+    # receives the same H&M critical-account alert after the 5-second delay.
+    global_simulation = _get_global_simulation_event()
+    if global_simulation:
+        global_task_id = str(global_simulation.get("task_id") or "")
+        global_triggered_at = as_utc(global_simulation.get("triggered_at"))
+        global_event_id = f"{global_task_id}:{iso_z(global_triggered_at)}"
+        if st.session_state.get("simulation_alert_event_id") != global_event_id:
+            st.session_state["simulation_alert_event_id"] = global_event_id
+            st.session_state["simulation_alert_case_id"] = global_task_id or None
+            st.session_state["simulation_alert_dismissed"] = False
+            st.session_state["simulation_alert_active"] = False
+            st.session_state["simulation_alert_delay_until"] = (
+                global_triggered_at.timestamp() + 5.0 if global_triggered_at else 0.0
+            )
+
     simulation_delay_until = float(
         st.session_state.get("simulation_alert_delay_until", 0.0) or 0.0
     )
@@ -7415,22 +7500,6 @@ def dashboard_fragment():
         # A tile flashes RED as soon as at least one case reaches the
         # 40%-remaining threshold for this station. There is no amber tile
         # animation; the amber warning is represented only beside Duration.
-        warning_ack_until = st.session_state.setdefault(
-            "station_warning_ack_until",
-            {},
-        )
-
-
-        warning_silenced = st.session_state.setdefault(
-            "station_warning_silenced",
-            set(),
-        )
-        warning_latched = st.session_state.setdefault(
-            "station_warning_latched",
-            set(),
-        )
-
-
         warning_condition = (nearing > 0 or past_due > 0)
         red_warning = any(
             state.get("elapsed", 0) >= (
@@ -7450,14 +7519,8 @@ def dashboard_fragment():
             task for task, _state in warning_pairs
             if text(task.get("station_warning_ack_trigger")) != station_warning_trigger_key(task, station)
         ]
-        if unacknowledged_warning_tasks:
-            warning_latched.add(station)
-        elif not warning_condition:
-            warning_latched.discard(station)
-            warning_silenced.discard(station)
-
-        ack_until = 0.0
-        now_epoch = time.time()
+        # Persisted per-case acknowledgement is authoritative; no local
+        # station-level latch is needed.
 
         # Persisted per-case warning-cycle acknowledgement means a refresh
         # cannot resurrect an alert that the user already clicked. A new case
@@ -7523,9 +7586,6 @@ def dashboard_fragment():
                     if warning_condition:
                         # Acknowledge exactly the currently-warning case cycles
                         # in MongoDB so the clicked state survives refresh.
-                        warning_ack_until[station] = 0.0
-                        warning_silenced.add(station)
-                        warning_latched.discard(station)
                         acknowledge_station_warning_cycle(unacknowledged_warning_tasks)
                         acknowledge_station_alerts(
                             station,
@@ -7708,30 +7768,11 @@ def dashboard_fragment():
             status_class = "badge-low"
 
 
-        priority_account = (
-            state["priority_account"]
-        )
-
-
-        priority_text = (
-            "Critical"
-            if priority_account
-            or status in {
-                "CRITICAL",
-                "BREACHED",
-            }
-            else text(
-                task.get(
-                    "priority",
-                    "Low"
-                )
-            ).title()
-        )
+        priority_text = display_priority_label(state)
 
 
         priority_class = {
             "Critical": "priority-critical",
-            "High": "priority-high",
             "Medium": "priority-medium",
             "Low": "priority-low",
         }.get(
@@ -7784,8 +7825,6 @@ def dashboard_fragment():
                 ):
                     # Persist the selected case so controls inside the dialog
                     # can rerun the app without losing the Case Details modal.
-                    st.session_state["selected_case_id"] = str(task_id)
-                    st.session_state["show_case"] = True
                     # Open the dialog directly from this sequential fragment
                     # widget interaction. Streamlit supports opening a dialog
                     # from a fragment rerun; forcing an app rerun here caused
@@ -7968,13 +8007,7 @@ def dashboard_fragment():
                 duration_color_class = "duration-red"
 
 
-            warning_ack_map = st.session_state.get(
-                "station_warning_ack_until",
-                {},
-            )
-            case_ack_until = float(
-                warning_ack_map.get(case_station, 0.0) or 0.0
-            )
+            case_ack_until = 0.0
 
 
             # The visual warning is handled entirely by browser-side JS so
@@ -8068,13 +8101,6 @@ def dashboard_fragment():
             }
 
 
-            function updateWarningAnimations() {
-                const nowMs = Date.now();
-
-
-                // Flashing is latched server-side and may only be stopped by
-                // clicking the station tile. Do not time it out in the browser.
-            }
             function updateTotalElapsed() {
                 const nodes = document.querySelectorAll('[data-total-elapsed-live="1"]');
                 const nowMs = Date.now();
@@ -8163,7 +8189,6 @@ def dashboard_fragment():
 
             updateDurations();
             updateTotalElapsed();
-            updateWarningAnimations();
 
 
             /*
@@ -8184,7 +8209,6 @@ def dashboard_fragment():
                 const refreshDurationClocks = function () {
                     updateDurations();
                     updateTotalElapsed();
-                    updateWarningAnimations();
                 };
 
                 window.__taskTrackerDurationInterval = window.setInterval(
@@ -8199,9 +8223,28 @@ def dashboard_fragment():
                  * clock so those data refreshes never become the visible timer.
                  */
                 if (!window.__taskTrackerDurationObserver) {
-                    window.__taskTrackerDurationObserver = new MutationObserver(function () {
-                        updateDurations();
-                        updateTotalElapsed();
+                    let durationDomRefreshQueued = false;
+                    window.__taskTrackerDurationObserver = new MutationObserver(function (mutations) {
+                        /* Streamlit can replace many nodes during a fragment refresh.
+                           Coalesce that burst into one browser paint instead of
+                           recalculating every mutation. The 1000 ms interval remains
+                           the authoritative Duration/Total Elapsed refresh. */
+                        if (durationDomRefreshQueued) return;
+                        const relevant = mutations.some(function (mutation) {
+                            return Array.from(mutation.addedNodes || []).some(function (node) {
+                                return node.nodeType === 1 && (
+                                    node.matches?.('[data-duration-live="1"], [data-total-elapsed-live="1"]') ||
+                                    node.querySelector?.('[data-duration-live="1"], [data-total-elapsed-live="1"]')
+                                );
+                            });
+                        });
+                        if (!relevant) return;
+                        durationDomRefreshQueued = true;
+                        window.requestAnimationFrame(function () {
+                            durationDomRefreshQueued = false;
+                            updateDurations();
+                            updateTotalElapsed();
+                        });
                     });
                     window.__taskTrackerDurationObserver.observe(document.body, {
                         childList: true,
@@ -8241,149 +8284,6 @@ seed_mock_cases()
 # case button during the fragment's sequential widget interaction.
 dashboard_fragment()
 
-
-# ============================================================
-# SIMULATION ALERT OVERLAY — visual reference inspired by the supplied image
-# ============================================================
-st.markdown(
-    """
-    <style>
-    [class*="st-key-simulation_alert_overlay"] {
-        position:fixed !important;
-        inset:0 !important;
-        z-index:999999 !important;
-        width:100vw !important;
-        height:100vh !important;
-        max-width:none !important;
-        margin:0 !important;
-        padding:0 !important;
-        display:flex !important;
-        align-items:center !important;
-        justify-content:center !important;
-        background:rgba(15,27,39,.58) !important;
-        backdrop-filter:blur(2px) !important;
-        pointer-events:auto !important;
-    }
-    [class*="st-key-simulation_alert_overlay"].simulation-alert-pending {
-        display:none !important;
-    }
-    .simulation-alert-delay-marker {
-        position:absolute !important;
-        width:1px !important;
-        height:1px !important;
-        overflow:hidden !important;
-        opacity:0 !important;
-        pointer-events:none !important;
-    }
-
-    [class*="st-key-simulation_alert_overlay"] > div {
-        width:100% !important;
-        height:100% !important;
-        display:flex !important;
-        flex-direction:column !important;
-        align-items:center !important;
-        justify-content:center !important;
-    }
-    [class*="st-key-simulation_alert_overlay"] .simulation-alert-card {
-        width:min(490px, calc(100vw - 34px));
-        box-sizing:border-box;
-        background:#fff;
-        border:1px solid #e5e9ef;
-        border-radius:14px;
-        padding:24px 24px 18px;
-        box-shadow:0 28px 90px rgba(0,0,0,.30);
-        animation:simulationAlertPulse .72s ease-in-out infinite alternate;
-    }
-    .simulation-alert-header {
-        display:flex;
-        align-items:flex-start;
-        gap:14px;
-    }
-    .simulation-alert-icon {
-        width:54px;
-        height:54px;
-        min-width:54px;
-        border-radius:50%;
-        background:#ef1738;
-        color:#fff;
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        font-size:34px;
-        font-weight:900;
-        line-height:1;
-        box-shadow:0 0 0 6px rgba(239,23,56,.12);
-        animation:simulationAlertIconBlink .42s ease-in-out infinite alternate;
-    }
-    .simulation-alert-title {
-        color:#e51c3a;
-        font-size:21px;
-        font-weight:900;
-        line-height:1.15;
-        margin-top:2px;
-    }
-    .simulation-alert-subtitle {
-        color:#526078;
-        font-size:12px;
-        line-height:1.4;
-        margin-top:6px;
-    }
-    .simulation-alert-details {
-        margin-top:16px;
-        padding:13px 15px;
-        background:#fff0f2;
-        border-radius:8px;
-        border:1px solid #ffd9df;
-    }
-    .simulation-alert-row {
-        display:grid;
-        grid-template-columns:105px 1fr;
-        gap:8px;
-        padding:4px 0;
-        color:#334155;
-        font-size:11px;
-    }
-    .simulation-alert-row strong { color:#102041; font-weight:800; }
-    .simulation-alert-critical {
-        display:inline-block;
-        color:#fff;
-        background:#ef1738;
-        border-radius:5px;
-        padding:3px 8px;
-        font-weight:850;
-    }
-    [class*="st-key-simulation_alert_overlay"] [data-testid="stButton"] {
-        width:min(490px, calc(100vw - 34px)) !important;
-        margin-top:12px !important;
-    }
-    [class*="st-key-simulation_alert_overlay"] [data-testid="stButton"] button {
-        width:100% !important;
-        height:42px !important;
-        border-radius:8px !important;
-        background:#ef1738 !important;
-        border:1px solid #ef1738 !important;
-        color:#fff !important;
-        font-weight:850 !important;
-        font-size:12px !important;
-        box-shadow:0 7px 18px rgba(239,23,56,.22) !important;
-    }
-    [class*="st-key-simulation_alert_overlay"] [data-testid="stButton"] button:hover {
-        background:#d91531 !important;
-        border-color:#d91531 !important;
-    }
-    @keyframes simulationAlertPulse {
-        from { transform:scale(1); box-shadow:0 28px 90px rgba(0,0,0,.30); }
-        to { transform:scale(1.012); box-shadow:0 28px 105px rgba(239,23,56,.16), 0 28px 90px rgba(0,0,0,.30); }
-    }
-    @keyframes simulationAlertIconBlink {
-        from { opacity:.55; transform:scale(.88); }
-        to { opacity:1; transform:scale(1.08); }
-    }
-    .kb-sop-list-spacer { height:8px; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
 
 # ============================================================
 # SIMULATION ALERT OVERLAY — visual reference inspired by the supplied image
@@ -8746,9 +8646,7 @@ if (
                 st.session_state["simulation_alert_active"] = False
                 st.session_state["simulation_alert_dismissed"] = True
                 st.session_state["simulation_alert_delay_until"] = 0.0
-                st.session_state["selected_case_id"] = str(simulation_alert_case_id)
                 st.session_state["selected_station"] = "CARE"
-                st.session_state["show_case"] = True
                 st.session_state["open_case_after_alert"] = True
 
                 # The alert represents a NEW case entering CARE. Reset both
@@ -8759,36 +8657,36 @@ if (
                 transition_now = utc_now()
                 care_sla = timedelta(minutes=STATIONS["CARE"]["sla_minutes"])
                 try:
-                    result = col(TASKS_COLLECTION).update_one(
-                        {"_id": simulation_alert_task.get("_id")},
+                    # Only the first View Case converts the hidden simulation
+                    # placeholder into a new CARE case and starts its timer.
+                    first_view = bool(simulation_alert_task.get("simulation_hold"))
+                    update_set = {
+                        "active": True,
+                        "simulation_hold": False,
+                        "account_name": "H&M",
+                        "account_priority": "Yes",
+                        "priority": "Critical",
+                        "department": "CARE",
+                        "status": "In Progress",
+                        "last_update": transition_now,
+                    }
+                    if first_view:
+                        update_set["station_started_at"] = transition_now
+                        update_set["due_date"] = transition_now + care_sla
+
+                    col(TASKS_COLLECTION).update_one(
                         {
-                            "$set": {
-                                # H&M becomes a real active CARE case NOW.
-                                "active": True,
-                                "simulation_hold": False,
-                
-                                "account_name": "H&M",
-                                "account_priority": "Yes",
-                                "priority": "Critical",
-                                "department": "CARE",
-                                "status": "In Progress",
-                
-                                # THIS IS THE NEW CARE START TIME.
-                                "station_started_at": transition_now,
-                
-                                # CARE SLA starts from the same moment.
-                                "due_date": transition_now + care_sla,
-                
-                                "last_update": transition_now,
-                            },
-                            "$unset": {
-                                "simulation_hold": "",
-                            },
+                            "_id": simulation_alert_task.get("_id"),
+                            **({"simulation_hold": True} if first_view else {}),
+                        },
+                        {
+                            "$set": update_set,
+                            "$unset": {"simulation_hold": ""},
                         },
                     )
-                
+
                     clear_task_cache()
-                
+
                 except Exception:
                     pass
                 try:
@@ -8802,7 +8700,6 @@ if (
                     )
                 except Exception:
                     pass
-                clear_task_cache()
 
                 # Open Case Details on a clean application render. Calling the
                 # native dialog directly from the alert button interaction can
@@ -8823,19 +8720,7 @@ if pending_case_dialog_id:
 # ============================================================
 # SIMULATION CLEANUP
 # ============================================================
-
-
-# Legacy simulation cleanup is retained only for compatibility with older
-# sessions that may still contain the former temporary simulation timer.
-if (
-    st.session_state.get("simulation_until", 0)
-    and time.time() > st.session_state.get("simulation_until", 0)
-):
-    st.session_state["simulation_until"] = 0
-    st.session_state["simulation_case_id"] = None
-    st.session_state["simulation_alert_delay_until"] = 0.0
-
-
+# Simulation state is persisted globally in Alert_Collection.
 
 
 # ============================================================
