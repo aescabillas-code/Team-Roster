@@ -1769,24 +1769,6 @@ st.markdown(
         text-decoration:underline;
     }
 
-    /* Transfer-station refresh control: compact on desktop, touch-friendly on mobile. */
-    [class*="st-key-case_transfer_refresh_"] {
-        min-width:44px !important;
-        width:100% !important;
-        min-height:44px !important;
-    }
-    [class*="st-key-case_transfer_refresh_"] button {
-        min-width:44px !important;
-        width:100% !important;
-        min-height:44px !important;
-        height:44px !important;
-        padding:0 !important;
-        font-size:20px !important;
-        line-height:1 !important;
-        border-radius:10px !important;
-    }
-
-
 
     /* Case number is a compact cell button that stays inside its table row. */
     [class*="st-key-case_cell_"] {
@@ -4230,7 +4212,13 @@ def set_case_checklist_item(task_id, station, index, checked):
         if index < 0 or index >= len(items):
             return False
         items[index]["checked"] = bool(checked)
-        return save_case_station_checklist(task_id, station, items)
+        saved = save_case_station_checklist(task_id, station, items)
+        if saved:
+            # Force the Case Details dialog to rerender immediately after the
+            # checkbox is persisted. This makes the Transfer Case control
+            # reflect the newly completed checklist without a manual refresh.
+            st.rerun()
+        return saved
     except Exception:
         return False
 
@@ -6155,38 +6143,41 @@ def case_details(task_id):
                         unsafe_allow_html=True,
                     )
                 else:
-                    transfer_station_col, transfer_refresh_col = st.columns(
-                        [1, 0.12],
-                        gap="small",
+                    destination = st.selectbox(
+                        "Transfer to station",
+                        stations,
+                        index=stations.index(current),
+                        format_func=station_display_name,
+                        key=f"case_transfer_destination_{task_id}",
                     )
-                    with transfer_station_col:
-                        destination = st.selectbox(
-                            "Transfer to station",
-                            stations,
-                            index=stations.index(current),
-                            format_func=station_display_name,
-                            key=f"case_transfer_destination_{task_id}",
+
+                    # The checklist callback persists the checkbox immediately and
+                    # Streamlit reruns the dialog after the widget change. Re-read
+                    # the case here so the Transfer Case control reflects the
+                    # persisted checklist state without a manual refresh button.
+                    try:
+                        from bson import ObjectId
+                        live_task = col(TASKS_COLLECTION).find_one(
+                            {"_id": ObjectId(str(task_id))}
                         )
-                    with transfer_refresh_col:
-                        if st.button(
-                            "↻",
-                            key=f"case_transfer_refresh_{task_id}",
-                            help="Refresh the checklist check and update transfer availability.",
-                            use_container_width=True,
-                        ):
-                            # Explicitly re-check the persisted checklist after the
-                            # user completes the final item. This is intentionally
-                            # a small rerun so the Transfer Case control updates
-                            # immediately without changing any case data.
-                            clear_task_cache()
-                            st.rerun()
+                    except Exception:
+                        live_task = None
+
+                    if live_task:
+                        task = live_task
+                        current_missing = checklist_missing(task, current)
 
                     if st.button(
                         "Transfer Case",
                         type="primary",
                         use_container_width=True,
                         key=f"case_transfer_{task_id}",
-                        help="Transfer becomes available as soon as the current-station checklist is complete.",
+                        disabled=bool(current_missing),
+                        help=(
+                            "Complete every current-station checklist item to enable transfer."
+                            if current_missing
+                            else "Transfer is ready. Choose the destination station."
+                        ),
                     ):
                         if destination == current:
                             st.warning("Choose a different station.")
