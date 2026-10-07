@@ -5180,9 +5180,14 @@ if st.session_state["show_settings"]:
                     if simulation_case:
                         from bson import ObjectId
                         simulation_id = simulation_case.get("_id")
+                        # The H&M case is only an alert placeholder at simulation start.
+                        # Its CARE timer must NOT begin until the user clicks View Case.
                         sla_seconds = int(STATIONS["CARE"]["sla_minutes"] * 60)
                         simulation_due = now + timedelta(seconds=45)
-                        simulation_started = simulation_due - timedelta(seconds=sla_seconds)
+                        
+                        # Keep the alert visually urgent without making the actual CARE timer
+                        # start before the case enters CARE.
+                        simulation_started = now
 
                         col(TASKS_COLLECTION).update_one(
                             {"_id": simulation_id},
@@ -8670,22 +8675,36 @@ if (
                 transition_now = utc_now()
                 care_sla = timedelta(minutes=STATIONS["CARE"]["sla_minutes"])
                 try:
-                    col(TASKS_COLLECTION).update_one(
+                    result = col(TASKS_COLLECTION).update_one(
                         {"_id": simulation_alert_task.get("_id")},
                         {
                             "$set": {
+                                # H&M becomes a real active CARE case NOW.
                                 "active": True,
                                 "simulation_hold": False,
+                
+                                "account_name": "H&M",
                                 "account_priority": "Yes",
                                 "priority": "Critical",
                                 "department": "CARE",
+                                "status": "In Progress",
+                
+                                # THIS IS THE NEW CARE START TIME.
                                 "station_started_at": transition_now,
+                
+                                # CARE SLA starts from the same moment.
                                 "due_date": transition_now + care_sla,
+                
                                 "last_update": transition_now,
                             },
-                            "$unset": {"simulation_hold": ""},
+                            "$unset": {
+                                "simulation_hold": "",
+                            },
                         },
                     )
+                
+                    clear_task_cache()
+                
                 except Exception:
                     pass
                 try:
@@ -8700,8 +8719,9 @@ if (
                 except Exception:
                     pass
                 clear_task_cache()
-                # Re-open Case Details using the freshly saved CARE
-                # station_started_at timestamp so both timers start at 00:00.
+                # Keep open_case_after_alert=True until the native dialog is
+                # actually dismissed. The on_dismiss callback then performs a
+                # full app rerun into CARE, eliminating the blank transition.
                 case_details(str(simulation_alert_case_id))
 
 # ============================================================
