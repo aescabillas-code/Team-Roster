@@ -1189,6 +1189,9 @@ defaults = {
     "pending_case_dialog_id": None,
     "simulation_active": False,
     "search": "",
+    # Marks the start of this browser session so a stale global simulation
+    # event from an earlier run is never shown simply because the app was reopened.
+    "app_session_started_at": utc_now(),
 }
 
 
@@ -6542,16 +6545,14 @@ def case_details(task_id):
                         unsafe_allow_html=True,
                     )
                 with checklist_refresh_col:
-                    if st.button(
+                    st.button(
                         "↻",
                         key=f"case_checklist_refresh_{task_id}_{current}",
                         help="Refresh the checklist from the latest saved case state.",
                         use_container_width=True,
-                    ):
-                        if refresh_case_checklist_state(task_id, current):
-                            st.rerun()
-                        else:
-                            st.error("Unable to refresh the checklist.")
+                        on_click=refresh_case_checklist_state,
+                        args=(task_id, current),
+                    )
                 st.caption(f"Required tasks for the current station: {station_display_name(current)}. Completed items are logged automatically when the station checklist is finished.")
 
                 selected_check_station = current
@@ -7540,21 +7541,41 @@ def dashboard_fragment():
     # Simulation state is shared through MongoDB so every connected user
     # receives the same H&M critical-account alert after the 5-second delay.
     global_simulation = _get_global_simulation_event()
+    session_started_at = as_utc(
+        st.session_state.get("app_session_started_at")
+    ) or utc_now()
+
     if global_simulation:
         global_task_id = str(global_simulation.get("task_id") or "")
         global_triggered_at = as_utc(global_simulation.get("triggered_at"))
         global_event_id = f"{global_task_id}:{iso_z(global_triggered_at)}"
-        if st.session_state.get("simulation_alert_event_id") != global_event_id:
-            already_seen = _simulation_event_seen(global_event_id)
-            st.session_state["simulation_alert_event_id"] = global_event_id
-            st.session_state["simulation_alert_case_id"] = global_task_id or None
-            st.session_state["simulation_alert_dismissed"] = bool(already_seen)
-            st.session_state["simulation_alert_active"] = False
-            st.session_state["simulation_alert_delay_until"] = (
-                0.0
-                if already_seen
-                else (global_triggered_at.timestamp() + 5.0 if global_triggered_at else 0.0)
-            )
+
+        # Alert_Collection is shared across users, so the event intentionally
+        # remains available to sessions that were already open when Simulation
+        # was triggered.  A newly opened/reopened browser session must NOT
+        # resurrect an old simulation alert just because the global event is
+        # still stored in MongoDB.
+        event_belongs_to_session = bool(
+            global_triggered_at
+            and global_triggered_at >= session_started_at
+        )
+
+        if event_belongs_to_session:
+            if st.session_state.get("simulation_alert_event_id") != global_event_id:
+                already_seen = _simulation_event_seen(global_event_id)
+                st.session_state["simulation_alert_event_id"] = global_event_id
+                st.session_state["simulation_alert_case_id"] = global_task_id or None
+                st.session_state["simulation_alert_dismissed"] = bool(already_seen)
+                st.session_state["simulation_alert_active"] = False
+                st.session_state["simulation_alert_delay_until"] = (
+                    0.0
+                    if already_seen
+                    else (
+                        global_triggered_at.timestamp() + 5.0
+                        if global_triggered_at
+                        else 0.0
+                    )
+                )
 
     simulation_delay_until = float(
         st.session_state.get("simulation_alert_delay_until", 0.0) or 0.0
@@ -9846,6 +9867,76 @@ div[data-testid="stDialog"] .case-copy-icon,
 div[data-testid="stDialog"] .case-timing-icon,
 div[data-testid="stDialog"] .case-heading-icon {
     line-height:1 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+st.markdown(r"""
+<style>
+/* ============================================================
+   CASE DETAILS — FINAL TYPOGRAPHY + COMPACT DROPDOWN PATCH
+   Keep Case Information / Attachments aligned with the same
+   Inter 10px body typography used by the rest of the dialog.
+   Header and case-detail hero remain larger.
+   ============================================================ */
+
+/* Case Information rows */
+div[data-testid="stDialog"] [role="tabpanel"] .case-info-row,
+div[data-testid="stDialog"] [role="tabpanel"] .case-info-row * {
+    font-family:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+    font-size:10px !important;
+    line-height:1.3 !important;
+}
+
+/* Attachments rows */
+div[data-testid="stDialog"] [role="tabpanel"] .attachment-row,
+div[data-testid="stDialog"] [role="tabpanel"] .attachment-row * {
+    font-family:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+    font-size:10px !important;
+    line-height:1.3 !important;
+}
+
+/* Keep the card headings as headings, rather than flattening them into body text. */
+div[data-testid="stDialog"] [role="tabpanel"] .case-card-heading,
+div[data-testid="stDialog"] [role="tabpanel"] .case-card-heading * {
+    font-family:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+}
+
+/* Remove Streamlit/BaseWeb selectbox whitespace above and below the label/value. */
+div[data-testid="stDialog"] [data-testid="stSelectbox"],
+div[data-testid="stDialog"] [data-testid="stSelectbox"] > div,
+div[data-testid="stDialog"] [data-testid="stSelectbox"] label,
+div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] {
+    margin:0 !important;
+    padding:0 !important;
+}
+
+div[data-testid="stDialog"] [data-testid="stSelectbox"] label {
+    display:block !important;
+    height:auto !important;
+    min-height:0 !important;
+    margin:0 0 1px !important;
+    line-height:1 !important;
+    font-size:8px !important;
+}
+
+div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"],
+div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] > div,
+div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] [role="combobox"] {
+    min-height:24px !important;
+    height:24px !important;
+    box-sizing:border-box !important;
+}
+
+div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] > div {
+    padding:0 6px !important;
+}
+
+div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] span {
+    font-family:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+    font-size:8px !important;
+    line-height:22px !important;
 }
 </style>
 """, unsafe_allow_html=True)
