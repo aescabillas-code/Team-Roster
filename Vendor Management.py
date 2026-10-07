@@ -8192,7 +8192,7 @@ st.markdown(
         opacity:0 !important;
         visibility:hidden !important;
         pointer-events:none !important;
-        animation:simulationAlertReveal 8s linear forwards !important;
+        animation:simulationAlertReveal 10s linear forwards !important;
     }
     @keyframes simulationAlertReveal {
         0%, 99.9% {
