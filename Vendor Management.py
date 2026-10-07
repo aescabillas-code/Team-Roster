@@ -1014,6 +1014,7 @@ defaults = {
     "simulation_alert_delay_until": 0.0,
     "simulation_alert_dismissed": False,
     "open_case_after_alert": False,
+    "pending_case_dialog_id": None,
     "simulation_active": False,
     "search": "",
     # Kept for compatibility with existing session state; acknowledgement
@@ -4234,6 +4235,38 @@ def save_case_station_checklist(task_id, station, items):
         return False
 
 
+def refresh_case_checklist_state(task_id, station):
+    """Synchronize checklist widgets with the latest persisted MongoDB state.
+
+    The checklist is saved immediately when a checkbox changes.  The refresh
+    icon therefore only needs to pull the persisted values back into
+    session_state before Streamlit renders the checkbox widgets again.
+    """
+    station = station_name(station)
+    try:
+        from bson import ObjectId
+        task = col(TASKS_COLLECTION).find_one({"_id": ObjectId(str(task_id))})
+        if not task:
+            return
+
+        items = get_case_station_checklist(task, station)
+        for idx, item in enumerate(items):
+            check_key = f"case_checklist_{task_id}_{station}_{idx}"
+            st.session_state[check_key] = bool(item.get("checked"))
+
+        # If items were removed since the last render, clear stale widget keys
+        # for the old indexes so they cannot leak into a later refresh.
+        prefix = f"case_checklist_{task_id}_{station}_"
+        valid_keys = {f"{prefix}{idx}" for idx in range(len(items))}
+        for key in list(st.session_state.keys()):
+            if key.startswith(prefix) and key not in valid_keys:
+                st.session_state.pop(key, None)
+
+        clear_task_cache()
+    except Exception:
+        pass
+
+
 def set_case_checklist_item(task_id, station, index, checked):
     # Streamlit callbacks pass the widget key so the current checkbox value
     # can be read from session_state at callback time.
@@ -6261,15 +6294,13 @@ def case_details(task_id):
                         unsafe_allow_html=True,
                     )
                 with checklist_refresh_col:
-                    if st.button(
+                    st.button(
                         "↻",
                         key=f"case_checklist_refresh_{task_id}_{selected_check_station}",
                         help="Refresh the checklist status from the latest saved case data.",
-                    ):
-                        # Do not call st.rerun() explicitly. The button interaction
-                        # already causes the Case Details dialog to rerun, where the
-                        # task is fetched fresh from MongoDB.
-                        clear_task_cache()
+                        on_click=refresh_case_checklist_state,
+                        args=(task_id, selected_check_station),
+                    )
 
                 for idx, item in enumerate(selected_items):
                     check_key = f"case_checklist_{task_id}_{selected_check_station}_{idx}"
@@ -8735,23 +8766,21 @@ if (
                     pass
                 clear_task_cache()
 
-                # Open Case Details immediately in this same View Case
-                # interaction. The alert has already been marked dismissed
-                # above, so it cannot render again. Keep open_case_after_alert
-                # true so the native dialog on_dismiss callback still handles
-                # the transition after the user closes Case Details.
-                case_details(str(simulation_alert_case_id))
-                st.stop()
+                # Open Case Details on a clean application render. Calling the
+                # native dialog directly from the alert button interaction can
+                # race the alert's own rerender and cause the dialog to require
+                # a second click or briefly reopen/close. A one-shot pending id
+                # avoids that race while keeping the transition immediate.
+                st.session_state["pending_case_dialog_id"] = str(simulation_alert_case_id)
+                st.rerun(scope="app")
 
-# Open the simulated H&M case only after the alert has been fully
-# dismissed from the previous render. Keeping this as a separate render
-# guarantees the alert cannot briefly reappear behind or before Case Details.
-if (
-    st.session_state.get("open_case_after_alert")
-    and st.session_state.get("simulation_alert_dismissed")
-    and st.session_state.get("selected_case_id")
-):
-    case_details(str(st.session_state["selected_case_id"]))
+# Open the simulated H&M case exactly once on the clean render following
+# View Case. The alert was already dismissed in the previous interaction,
+# so there is no second alert/dialog invocation competing with this call.
+pending_case_dialog_id = st.session_state.pop("pending_case_dialog_id", None)
+if pending_case_dialog_id:
+    case_details(str(pending_case_dialog_id))
+    st.stop()
 
 # ============================================================
 # SIMULATION CLEANUP
