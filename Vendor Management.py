@@ -4852,47 +4852,10 @@ if st.session_state["show_settings"]:
     def show_settings():
 
 
-        # Settings-wide uploader layout fix. This must remain active after
-        # administrator unlocks the dialog, when the upload controls are shown.
-        st.markdown(
-            """
-            <style>
-            div[data-testid="stDialog"] [data-testid="stFileUploader"] {
-                position:relative !important;
-                overflow:visible !important;
-            }
-            /* The visible section already contains the native Upload control.
-               Do not force Streamlit's hidden accessibility label back into the
-               layout; doing so creates the overlapping "uploadupload" text. */
-            div[data-testid="stDialog"] [data-testid="stFileUploader"] > label {
-                display:none !important;
-            }
-            div[data-testid="stDialog"] [data-testid="stFileUploader"] section {
-                display:block !important;
-                position:relative !important;
-                top:auto !important;
-                left:auto !important;
-                width:100% !important;
-                margin:0 !important;
-                min-height:88px !important;
-                padding:12px !important;
-                box-sizing:border-box !important;
-                z-index:auto !important;
-            }
-            div[data-testid="stDialog"] [data-testid="stFileUploader"] section > div {
-                position:relative !important;
-                margin:0 !important;
-                gap:8px !important;
-            }
-            div[data-testid="stDialog"] [data-testid="stFileUploader"] section > div {
-                gap:8px !important;
-            }
-            </style>
-            """,
-            unsafe_allow_html=True,
-        )
-
-
+        # Keep Streamlit's native uploader layout untouched. Earlier custom
+        # positioning of the uploader drop-zone caused duplicate/overlapping
+        # "Upload" text. The native label is already collapsed on each uploader
+        # below, so no uploader geometry override is required here.
         if not st.session_state[
             "admin_unlocked"
         ]:
@@ -8643,18 +8606,20 @@ if (
                 st.session_state["selected_case_id"] = str(simulation_alert_case_id)
                 st.session_state["show_case"] = True
                 st.session_state["open_case_after_alert"] = True
-                # Keep the simulated case hidden from the station while the
-                # Case Details dialog is open. It is activated only after the
-                # dialog is closed, on the next lightweight dashboard tick.
+                # Activate the simulated case immediately when View Case is
+                # clicked. The Case Details dialog sits above the dashboard, so
+                # the case is not visible to the user until the dialog closes.
+                # This avoids relying on a dialog-dismiss callback or fragment
+                # timing to make the case appear in CARE.
                 try:
                     col(TASKS_COLLECTION).update_one(
                         {"_id": simulation_alert_task.get("_id")},
                         {
                             "$set": {
-                                "active": False,
-                                "simulation_hold": True,
+                                "active": True,
                                 "last_update": utc_now(),
                             },
+                            "$unset": {"simulation_hold": ""},
                         },
                     )
                 except Exception:
@@ -8671,11 +8636,11 @@ if (
                 except Exception:
                     pass
                 clear_task_cache()
-                # Keep this flag true while Case Details is open. The dashboard
-                # fragment activates the case only after the dialog has closed.
-                # Open the real case dialog directly. The browser-side click
-                # handler hides the alert overlay before Streamlit renders the
-                # dialog, so there is no full-page refresh or alert behind it.
+                # The case is already active in CARE at this point. The browser-
+                # side click handler hides the alert overlay before Streamlit
+                # renders the dialog, so there is no full-page refresh or alert
+                # behind it.
+                st.session_state["open_case_after_alert"] = False
                 case_details(str(simulation_alert_case_id))
 
 # ============================================================
