@@ -5717,14 +5717,25 @@ def _case_details_dismissed():
     held_case_id = st.session_state.get("simulation_alert_case_id")
     try:
         from bson import ObjectId
-        # The simulated case is already activated when View Case is clicked.
-        # Keep this write idempotent so closing the dialog can never leave the
-        # case in a hidden/simulation-hold state.
+        # The simulated case is activated when View Case is clicked, but the
+        # CARE SLA clock is reset once the dialog actually closes. This makes
+        # the case a genuinely NEW CARE case at the moment it first appears
+        # in the CARE list, so its duration starts at 00:00 instead of carrying
+        # over any time spent in the simulation/alert dialog.
+        transition_now = utc_now()
+        care_sla = timedelta(minutes=STATIONS["CARE"]["sla_minutes"])
         col(TASKS_COLLECTION).update_one(
             {"_id": ObjectId(str(held_case_id))},
             {
                 "$set": {
                     "active": True,
+                    "simulation_hold": False,
+                    "account_priority": "Yes",
+                    "priority": "Critical",
+                    "department": "CARE",
+                    "station_started_at": transition_now,
+                    "due_date": transition_now + care_sla,
+                    "last_update": transition_now,
                 },
                 "$unset": {"simulation_hold": ""},
             },
@@ -9580,4 +9591,3 @@ div[data-testid="stDialog"] [data-testid="stFileUploader"] small {
 }
 </style>
 """, unsafe_allow_html=True)
-
