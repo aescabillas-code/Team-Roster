@@ -4212,13 +4212,12 @@ def set_case_checklist_item(task_id, station, index, checked):
         if index < 0 or index >= len(items):
             return False
         items[index]["checked"] = bool(checked)
-        saved = save_case_station_checklist(task_id, station, items)
-        if saved:
-            # Force the Case Details dialog to rerender immediately after the
-            # checkbox is persisted. This makes the Transfer Case control
-            # reflect the newly completed checklist without a manual refresh.
-            st.rerun()
-        return saved
+        # Persist the checkbox immediately. Streamlit automatically reruns
+        # the current dialog after an on_change callback, so do NOT call
+        # st.rerun() here; an explicit app rerun can close the Case Details
+        # dialog. The next dialog render reads the saved checklist state and
+        # updates Transfer Case availability immediately.
+        return save_case_station_checklist(task_id, station, items)
     except Exception:
         return False
 
@@ -5744,6 +5743,11 @@ def _case_details_dismissed():
         st.session_state["selected_station"] = "CARE"
         st.session_state["show_case"] = False
         st.session_state["open_case_after_alert"] = False
+        # The alert has served its purpose. The H&M record is now a normal
+        # active CARE case, so the simulation alert must never be rendered again.
+        st.session_state["simulation_alert_active"] = False
+        st.session_state["simulation_alert_dismissed"] = True
+        st.session_state["simulation_alert_delay_until"] = 0.0
 
         # The dialog is opened from the dashboard fragment. Explicitly return
         # to the full application render after dismissal so the user never
@@ -5756,6 +5760,9 @@ def _case_details_dismissed():
         st.session_state["selected_station"] = "CARE"
         st.session_state["show_case"] = False
         st.session_state["open_case_after_alert"] = False
+        st.session_state["simulation_alert_active"] = False
+        st.session_state["simulation_alert_dismissed"] = True
+        st.session_state["simulation_alert_delay_until"] = 0.0
         try:
             st.rerun(scope="app")
         except Exception:
@@ -7439,6 +7446,11 @@ def dashboard_fragment():
 
     selected_tasks.sort(
         key=lambda task: (
+            # H&M is the simulated critical-account case and must remain
+            # pinned above every other CARE case, including cases that are
+            # nearing breach or already breached.
+            0 if text(task.get("account_name")).strip().upper() == "H&M" else 1,
+            0 if is_priority(task.get("account_priority")) else 1,
             STATUS_ORDER.get(
                 states[
                     str(task["_id"])
@@ -8554,43 +8566,6 @@ div[data-testid="stDialog"] .simulation-collab-footer a {
 </style>
 """, unsafe_allow_html=True)
 
-# Hide the alert overlay immediately on View Case pointer interaction so
-# the Case Details dialog never appears with the alert behind it.
-st.markdown(
-    """
-    <script>
-    (function () {
-        function bindViewCase() {
-            const button = document.querySelector(
-                '[class*="st-key-simulation_alert_view_case"] button'
-            );
-            const overlay = document.querySelector(
-                '[class*="st-key-simulation_alert_overlay"]'
-            );
-            if (!button || !overlay || button.__viewCaseBound) return !!button;
-
-            button.__viewCaseBound = true;
-            button.addEventListener("pointerdown", function () {
-                overlay.style.display = "none";
-                overlay.style.pointerEvents = "none";
-            }, {passive:true});
-            return true;
-        }
-
-        if (!bindViewCase()) {
-            const observer = new MutationObserver(function () {
-                if (bindViewCase()) observer.disconnect();
-            });
-            observer.observe(document.body, {childList:true, subtree:true});
-            window.setTimeout(function () { observer.disconnect(); }, 15000);
-        }
-    })();
-    </script>
-    """,
-    unsafe_allow_html=True,
-)
-
-
 # ============================================================
 # SIMULATION CRITICAL ACCOUNT ALERT
 # ============================================================
@@ -8710,10 +8685,21 @@ if (
                 except Exception:
                     pass
                 clear_task_cache()
-                # Keep open_case_after_alert=True until the native dialog is
-                # actually dismissed. The on_dismiss callback then performs a
-                # full app rerun into CARE, eliminating the blank transition.
-                case_details(str(simulation_alert_case_id))
+                # Stop rendering the alert immediately. The next full app
+                # render opens Case Details from the persisted session state.
+                # This prevents the alert and dialog from competing in the
+                # same render and eliminates the close/reopen visual glitch.
+                st.rerun(scope="app")
+
+# Open the simulated H&M case only after the alert has been fully
+# dismissed from the previous render. Keeping this as a separate render
+# guarantees the alert cannot briefly reappear behind or before Case Details.
+if (
+    st.session_state.get("open_case_after_alert")
+    and st.session_state.get("simulation_alert_dismissed")
+    and st.session_state.get("selected_case_id")
+):
+    case_details(str(st.session_state["selected_case_id"]))
 
 # ============================================================
 # SIMULATION CLEANUP
