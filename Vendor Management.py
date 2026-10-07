@@ -1996,6 +1996,18 @@ st.markdown(
     div[data-testid="stDialog"] [data-testid="stDialogContent"] { padding-top:0 !important; }
     div[data-testid="stDialog"] header { border-bottom:1px solid #edf0f5 !important; }
     div[data-testid="stDialog"] > div > div { overflow-y:auto !important; }
+    @media(max-width:700px) {
+        div[data-testid="stDialog"] > div {
+            top:10px !important;
+            right:8px !important;
+            left:8px !important;
+            width:calc(100vw - 16px) !important;
+            max-width:calc(100vw - 16px) !important;
+            height:calc(100vh - 20px) !important;
+            max-height:calc(100vh - 20px) !important;
+            border-radius:14px !important;
+        }
+    }
 
 
     /* DIALOG */
@@ -5186,8 +5198,11 @@ if st.session_state["show_settings"]:
                                         "acknowledged_by": [],
                                         "started_at": now,
                                     },
-                                    "station_started_at": simulation_started,
-                                    "due_date": simulation_due,
+                                    # The case stays hidden until View Case. The
+                                    # real CARE SLA clock is initialized there so
+                                    # the newly surfaced case starts at 00:00.
+                                    "station_started_at": now,
+                                    "due_date": now + timedelta(minutes=STATIONS["CARE"]["sla_minutes"]),
                                     "last_update": now,
                                 },
                                 "$push": {
@@ -5705,36 +5720,40 @@ def automated_case_assessment(task, state):
 seed_demo_kb()
 
 
-def _case_details_dismissed():
-    """Promote the simulated alert case to CARE only after Case Details closes."""
-    if not (
-        st.session_state.get("open_case_after_alert")
-        and st.session_state.get("simulation_alert_case_id")
-        and st.session_state.get("simulation_alert_dismissed")
-    ):
-        return
-
-    held_case_id = st.session_state.get("simulation_alert_case_id")
+def _activate_simulation_case_in_care(task_id, reset_clock=True):
+    """Make the simulated alert case a fresh CARE case before opening the dialog."""
     try:
         from bson import ObjectId
-        col(TASKS_COLLECTION).update_one(
-            {"_id": ObjectId(str(held_case_id))},
-            {
-                "$set": {
-                    "active": True,
-                    "simulation_hold": False,
-                    "last_update": utc_now(),
-                },
-                "$unset": {"simulation_hold": ""},
+        now = utc_now()
+        update = {
+            "$set": {
+                "active": True,
+                "department": "CARE",
+                "simulation_hold": False,
+                "last_update": now,
             },
+            "$unset": {"simulation_hold": ""},
+        }
+        if reset_clock:
+            update["$set"].update({
+                "station_started_at": now,
+                "due_date": now + timedelta(minutes=STATIONS["CARE"]["sla_minutes"]),
+            })
+        result = col(TASKS_COLLECTION).update_one(
+            {"_id": ObjectId(str(task_id))},
+            update,
         )
-        st.session_state["open_case_after_alert"] = False
-        clear_task_cache()
+        if result.matched_count:
+            st.session_state["selected_station"] = "CARE"
+            st.session_state["selected_case_id"] = str(task_id)
+            clear_task_cache()
+            return True
     except Exception:
         pass
+    return False
 
 
-@st.dialog("Case Details", width="large", on_dismiss=_case_details_dismissed)
+@st.dialog("Case Details", width="large")
 def case_details(task_id):
     """Compact, centered Case Details modal using the original Caseflow data/actions.
 
@@ -8604,26 +8623,18 @@ if (
                 st.session_state["simulation_alert_dismissed"] = True
                 st.session_state["simulation_alert_delay_until"] = 0.0
                 st.session_state["selected_case_id"] = str(simulation_alert_case_id)
-                st.session_state["show_case"] = True
-                st.session_state["open_case_after_alert"] = True
-                # Activate the simulated case immediately when View Case is
-                # clicked. The Case Details dialog sits above the dashboard, so
-                # the case is not visible to the user until the dialog closes.
-                # This avoids relying on a dialog-dismiss callback or fragment
-                # timing to make the case appear in CARE.
-                try:
-                    col(TASKS_COLLECTION).update_one(
-                        {"_id": simulation_alert_task.get("_id")},
-                        {
-                            "$set": {
-                                "active": True,
-                                "last_update": utc_now(),
-                            },
-                            "$unset": {"simulation_hold": ""},
-                        },
-                    )
-                except Exception:
-                    pass
+                # Make the alert case a real, fresh CARE case before opening
+                # Case Details. Its station SLA clock starts at 00:00 here,
+                # while account priority remains CRITICAL independently.
+                # CARE is explicitly selected and the task cache is cleared so
+                # closing the dialog returns to the populated CARE table.
+                st.session_state["selected_station"] = "CARE"
+                st.session_state["show_case"] = False
+                st.session_state["open_case_after_alert"] = False
+                _activate_simulation_case_in_care(
+                    simulation_alert_case_id,
+                    reset_clock=True,
+                )
                 try:
                     col(ALERT_COLLECTION).update_many(
                         {
@@ -8635,12 +8646,8 @@ if (
                     )
                 except Exception:
                     pass
-                clear_task_cache()
-                # The case is already active in CARE at this point. The browser-
-                # side click handler hides the alert overlay before Streamlit
-                # renders the dialog, so there is no full-page refresh or alert
-                # behind it.
-                st.session_state["open_case_after_alert"] = False
+                # The case is already active in CARE and its clock has been
+                # reset before this call. Open the real dialog directly.
                 case_details(str(simulation_alert_case_id))
 
 # ============================================================
@@ -8685,6 +8692,90 @@ st.markdown(
 
 st.markdown(r'''
 <style>
+/* ============================================================
+   MOBILE-SAFE EXCEL UPLOAD TILE
+   The native Streamlit uploader remains the only upload control. Its native
+   Browse button is stretched across the complete tile, making the whole tile
+   the touch/click target and preventing duplicate Upload text.
+   ============================================================ */
+div[data-testid="stFileUploader"] {
+    width:100% !important;
+    margin:6px 0 12px !important;
+}
+div[data-testid="stFileUploader"] > label {
+    display:none !important;
+}
+div[data-testid="stFileUploader"] section {
+    position:relative !important;
+    width:100% !important;
+    min-height:78px !important;
+    border:1px dashed #b9c8d8 !important;
+    border-radius:12px !important;
+    background:#f8fbfd !important;
+    padding:18px 14px !important;
+    box-sizing:border-box !important;
+    cursor:pointer !important;
+    overflow:hidden !important;
+}
+div[data-testid="stFileUploader"] section > button {
+    position:absolute !important;
+    inset:0 !important;
+    width:100% !important;
+    height:100% !important;
+    min-height:100% !important;
+    opacity:0.001 !important;
+    z-index:20 !important;
+    cursor:pointer !important;
+    border:0 !important;
+    background:transparent !important;
+    color:transparent !important;
+    font-size:1px !important;
+}
+div[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzoneInstructions"] {
+    display:none !important;
+}
+div[data-testid="stFileUploader"] section > div {
+    position:relative !important;
+    z-index:1 !important;
+    pointer-events:none !important;
+}
+div[data-testid="stFileUploader"] section > div * {
+    pointer-events:none !important;
+}
+div[data-testid="stFileUploader"] section::before {
+    content:"Upload Excel file" !important;
+    position:relative !important;
+    z-index:2 !important;
+    pointer-events:none !important;
+    display:block !important;
+    text-align:center !important;
+    color:#17324d !important;
+    font-size:13px !important;
+    line-height:1.25 !important;
+    font-weight:800 !important;
+    margin-bottom:4px !important;
+}
+div[data-testid="stFileUploader"] section::after {
+    content:"Tap or click anywhere in this tile to choose a file" !important;
+    position:relative !important;
+    z-index:2 !important;
+    pointer-events:none !important;
+    display:block !important;
+    text-align:center !important;
+    color:#718398 !important;
+    font-size:10px !important;
+    line-height:1.25 !important;
+}
+@media(max-width:700px) {
+    div[data-testid="stFileUploader"] section {
+        min-height:82px !important;
+        padding:19px 10px !important;
+        border-radius:12px !important;
+    }
+    div[data-testid="stFileUploader"] section::before { font-size:12px !important; }
+    div[data-testid="stFileUploader"] section::after { font-size:9px !important; }
+}
+
 /* ============================================================
    CASEFLOW FINAL UI PATCH — 2026-10-06
    ============================================================ */
