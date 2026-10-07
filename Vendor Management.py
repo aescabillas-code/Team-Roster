@@ -4861,15 +4861,11 @@ if st.session_state["show_settings"]:
                 position:relative !important;
                 overflow:visible !important;
             }
+            /* The visible section already contains the native Upload control.
+               Do not force Streamlit's hidden accessibility label back into the
+               layout; doing so creates the overlapping "uploadupload" text. */
             div[data-testid="stDialog"] [data-testid="stFileUploader"] > label {
-                display:block !important;
-                position:static !important;
-                width:100% !important;
-                height:auto !important;
-                margin:0 0 8px 0 !important;
-                padding:0 !important;
-                line-height:1.35 !important;
-                z-index:auto !important;
+                display:none !important;
             }
             div[data-testid="stDialog"] [data-testid="stFileUploader"] section {
                 display:block !important;
@@ -5186,7 +5182,7 @@ if st.session_state["show_settings"]:
                     type="primary",
                     use_container_width=True,
                     key="run_caseflow_simulation",
-                    help="Reset all 25 mock cases below the 40%-remaining warning threshold, then show one H&M critical-account alert exactly 10 seconds after simulation starts.",
+                    help="Reset all 25 mock cases below the 40%-remaining warning threshold, then show one H&M critical-account alert exactly 5 seconds after simulation starts.",
                 ):
                     reset_count = reset_mock_case_durations()
                     now = utc_now()
@@ -5269,7 +5265,7 @@ if st.session_state["show_settings"]:
                     clear_task_cache()
                     st.session_state["simulation_until"] = 0.0
                     st.session_state["simulation_case_id"] = simulation_case_id or None
-                    # The simulation alert is intentionally delayed by 10 seconds.
+                    # The simulation alert is intentionally delayed by 5 seconds.
                     # The browser reveals the already-rendered alert at this
                     # timestamp without refreshing the dashboard.
                     st.session_state["simulation_alert_active"] = False
@@ -5277,7 +5273,7 @@ if st.session_state["show_settings"]:
                     st.session_state["simulation_alert_dismissed"] = False
                     st.session_state["open_case_after_alert"] = False
                     st.session_state["simulation_alert_delay_until"] = (
-                        time.time() + 10.0 if simulation_case_id else 0.0
+                        time.time() + 5.0 if simulation_case_id else 0.0
                     )
                     st.session_state["simulation_active"] = bool(simulation_case_id)
                     st.session_state["station_warning_ack_until"] = {}
@@ -5287,7 +5283,7 @@ if st.session_state["show_settings"]:
 
                     if simulation_case_id:
                         st.success(
-                            f"Simulation started. {reset_count} mock case(s) reset; the H&M critical-account alert will appear in 10 seconds."
+                            f"Simulation started. {reset_count} mock case(s) reset; the H&M critical-account alert will appear in 5 seconds."
                         )
                     else:
                         st.error("Simulation could not find the CARE mock case CAR-2026-0001.")
@@ -5746,7 +5742,36 @@ def automated_case_assessment(task, state):
 seed_demo_kb()
 
 
-@st.dialog("Case Details", width="large")
+def _case_details_dismissed():
+    """Promote the simulated alert case to CARE only after Case Details closes."""
+    if not (
+        st.session_state.get("open_case_after_alert")
+        and st.session_state.get("simulation_alert_case_id")
+        and st.session_state.get("simulation_alert_dismissed")
+    ):
+        return
+
+    held_case_id = st.session_state.get("simulation_alert_case_id")
+    try:
+        from bson import ObjectId
+        col(TASKS_COLLECTION).update_one(
+            {"_id": ObjectId(str(held_case_id))},
+            {
+                "$set": {
+                    "active": True,
+                    "simulation_hold": False,
+                    "last_update": utc_now(),
+                },
+                "$unset": {"simulation_hold": ""},
+            },
+        )
+        st.session_state["open_case_after_alert"] = False
+        clear_task_cache()
+    except Exception:
+        pass
+
+
+@st.dialog("Case Details", width="large", on_dismiss=_case_details_dismissed)
 def case_details(task_id):
     """Compact, centered Case Details modal using the original Caseflow data/actions.
 
@@ -7149,7 +7174,7 @@ def dashboard_fragment():
 
     # Duration/data monitoring remains in the 1-second fragment.
     # The simulation critical alert is promoted server-side exactly once
-    # when its 10-second deadline is reached. This is intentionally a
+    # when its 5-second deadline is reached. This is intentionally a
     # backend app rerun (with the Streamlit spinner hidden by CSS), rather
     # than browser JavaScript, because scripts embedded in st.markdown are
     # not reliably executed by Streamlit.
@@ -8618,16 +8643,18 @@ if (
                 st.session_state["selected_case_id"] = str(simulation_alert_case_id)
                 st.session_state["show_case"] = True
                 st.session_state["open_case_after_alert"] = True
+                # Keep the simulated case hidden from the station while the
+                # Case Details dialog is open. It is activated only after the
+                # dialog is closed, on the next lightweight dashboard tick.
                 try:
                     col(TASKS_COLLECTION).update_one(
                         {"_id": simulation_alert_task.get("_id")},
                         {
                             "$set": {
-                                "active": True,
-                                "simulation_hold": False,
+                                "active": False,
+                                "simulation_hold": True,
                                 "last_update": utc_now(),
                             },
-                            "$unset": {"simulation_hold": ""},
                         },
                     )
                 except Exception:
@@ -8644,7 +8671,8 @@ if (
                 except Exception:
                     pass
                 clear_task_cache()
-                st.session_state["open_case_after_alert"] = False
+                # Keep this flag true while Case Details is open. The dashboard
+                # fragment activates the case only after the dialog has closed.
                 # Open the real case dialog directly. The browser-side click
                 # handler hides the alert overlay before Streamlit renders the
                 # dialog, so there is no full-page refresh or alert behind it.
