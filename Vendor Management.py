@@ -7563,7 +7563,7 @@ def dashboard_fragment():
                 station_html = (
                     f'<div class="station-card-visual {slug}{critical_class}{warning_tone_class}{selected_class}" '
                     f'data-station="{html.escape(station)}" '
-                    f'data-warning-stop="{ack_until if ack_until > time.time() else 0:.3f}">'
+                    f'data-warning-stop="0">'
                     f'{alert_icon}'
                     f'<div class="station-icon-circle">{html.escape(icon)}</div>'
                     f'<div class="station-copy">'
