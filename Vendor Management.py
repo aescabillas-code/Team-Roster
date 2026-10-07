@@ -384,6 +384,76 @@ def dt_display(value):
 
 
 
+def format_elapsed_duration(seconds):
+    """Format a station duration as HH:MM:SS without changing the live clock logic."""
+    try:
+        total = max(0, int(round(float(seconds or 0))))
+    except Exception:
+        total = 0
+    hours, remainder = divmod(total, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+
+def case_station_durations(task, now=None):
+    """Return the elapsed duration for each station in the case journey."""
+    now = as_utc(now) or utc_now()
+    history = [x for x in (task.get("history") or []) if isinstance(x, dict)]
+    history = sorted(
+        history,
+        key=lambda x: as_utc(x.get("timestamp"))
+        or datetime.min.replace(tzinfo=timezone.utc),
+    )
+    durations = {}
+    current_station = None
+    station_started = None
+
+    for event in history:
+        stamp = as_utc(event.get("timestamp"))
+        if not stamp:
+            continue
+        action = text(event.get("action"))
+        match = re.search(
+            r"Transferred from (.+?) to (.+?)(?:$|\\.)",
+            action,
+            flags=re.IGNORECASE,
+        )
+        if match:
+            source = station_name(match.group(1))
+            destination = station_name(match.group(2))
+            if current_station is None:
+                current_station = source
+                station_started = stamp
+            if current_station == source and station_started:
+                durations[source] = durations.get(source, 0) + max(
+                    0, (stamp - station_started).total_seconds()
+                )
+            current_station = destination
+            station_started = stamp
+            continue
+
+        entered = re.search(
+            r"(?:Case entered|Entered) (.+?)(?: station)?(?:\\.|$)",
+            action,
+            flags=re.IGNORECASE,
+        )
+        if entered:
+            entered_station = station_name(entered.group(1))
+            if current_station is None:
+                current_station = entered_station
+                station_started = stamp
+
+    live_station = station_name(task.get("department"))
+    live_started = as_utc(task.get("station_started_at"))
+    if live_station and live_started:
+        current_duration = max(
+            0, (now - live_started).total_seconds()
+        )
+        durations[live_station] = current_duration
+
+    return durations
+
+
 def iso_z(value):
     value = as_utc(value)
     return value.isoformat() if value else ""
@@ -2791,6 +2861,41 @@ div[data-testid="stDialog"] [data-testid="stHorizontalBlock"] > div { min-width:
 .action-readonly-label { color:#526078; font-size:10px; margin-top:6px; }
 .action-readonly-value { border:1px solid #d8e1ea; border-radius:5px; background:#f8fafc; color:#172b52; font-size:12px; padding:7px 9px; margin-top:3px; }
 .case-actions-card [data-testid="stSelectbox"] { margin-top:5px; }
+.history-station-duration {
+    margin:0 0 10px 0;
+    padding:9px 11px;
+    border:1px solid #dbe4ee;
+    border-radius:8px;
+    background:#f8fafc;
+}
+.history-station-duration-title {
+    font-size:10px;
+    font-weight:800;
+    color:#334155;
+    margin-bottom:7px;
+}
+.history-duration-grid {
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(125px,1fr));
+    gap:6px;
+}
+.history-duration-item {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    padding:6px 8px;
+    border-radius:6px;
+    background:#fff;
+    color:#52637b;
+    font-size:9px;
+}
+.history-duration-item strong {
+    color:#102041;
+    font-size:9px;
+    font-variant-numeric:tabular-nums;
+}
+
 .case-history-card { margin-top:9px; }
 .history-row { display:flex; gap:10px; position:relative; padding:7px 0; }
 .history-dot { width:13px; height:13px; border-radius:50%; background:#0879c9; flex:none; margin-top:4px; box-shadow:0 0 0 3px #e7f2fb; }
@@ -5117,6 +5222,7 @@ def transfer_case(task, destination):
         "timestamp": now,
         "actor": actor,
         "station": source_station,
+        "station_duration_seconds": max(0, float(state_snapshot.get("elapsed", 0))),
         "resolution_assessment": resolution_snapshot,
         "action_plan": text(latest_action_log.get("action_plan")),
         "case_note": text(latest_action_log.get("note")),
@@ -5128,6 +5234,7 @@ def transfer_case(task, destination):
         ),
         "timestamp": now,
         "actor": text(task.get("assigned_to")) or "Caseflow",
+        "station": destination_station,
     })
 
 
@@ -6386,6 +6493,25 @@ def case_details(task_id):
                         "station": department,
                         "history_type": "collaboration",
                     })
+            station_durations = case_station_durations(task)
+            visited_stations = [
+                station for station in STATIONS
+                if station in station_durations
+            ]
+            if visited_stations:
+                duration_items = "".join(
+                    f"<div class='history-duration-item'><span>{html.escape(station_display_name(station))}</span>"
+                    f"<strong>{html.escape(format_elapsed_duration(station_durations[station]))}</strong></div>"
+                    for station in visited_stations
+                )
+                st.markdown(
+                    "<div class='history-station-duration'>"
+                    "<div class='history-station-duration-title'>Total Duration by Station</div>"
+                    f"<div class='history-duration-grid'>{duration_items}</div>"
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
+
             st.markdown("<div class='case-card case-history-card'>", unsafe_allow_html=True)
             st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>◷</span>Case History</div>", unsafe_allow_html=True)
             if history:
@@ -6415,6 +6541,12 @@ def case_details(task_id):
                         action_html += f"<br><span class='history-snapshot'><b>Action Plan:</b> {html.escape(action_plan_snapshot)}</span>"
                     if note_snapshot:
                         action_html += f"<br><span class='history-snapshot'><b>Case Note:</b> {html.escape(note_snapshot)}</span>"
+                    event_duration = event.get("station_duration_seconds") if isinstance(event, dict) else None
+                    if event_duration is not None and station_label:
+                        action_html += (
+                            f"<br><span class='history-snapshot'><b>Total time in station:</b> "
+                            f"{html.escape(format_elapsed_duration(event_duration))}</span>"
+                        )
                     st.markdown(
                         f"<div class='history-row'><div class='history-dot'></div>"
                         f"<div class='history-main'><div class='history-meta'>{html.escape(stamp)} "
