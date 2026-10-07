@@ -1769,6 +1769,24 @@ st.markdown(
         text-decoration:underline;
     }
 
+    /* Transfer-station refresh control: compact on desktop, touch-friendly on mobile. */
+    [class*="st-key-case_transfer_refresh_"] {
+        min-width:44px !important;
+        width:100% !important;
+        min-height:44px !important;
+    }
+    [class*="st-key-case_transfer_refresh_"] button {
+        min-width:44px !important;
+        width:100% !important;
+        min-height:44px !important;
+        height:44px !important;
+        padding:0 !important;
+        font-size:20px !important;
+        line-height:1 !important;
+        border-radius:10px !important;
+    }
+
+
 
     /* Case number is a compact cell button that stays inside its table row. */
     [class*="st-key-case_cell_"] {
@@ -5717,25 +5735,14 @@ def _case_details_dismissed():
     held_case_id = st.session_state.get("simulation_alert_case_id")
     try:
         from bson import ObjectId
-        # The simulated case is activated when View Case is clicked, but the
-        # CARE SLA clock is reset once the dialog actually closes. This makes
-        # the case a genuinely NEW CARE case at the moment it first appears
-        # in the CARE list, so its duration starts at 00:00 instead of carrying
-        # over any time spent in the simulation/alert dialog.
-        transition_now = utc_now()
-        care_sla = timedelta(minutes=STATIONS["CARE"]["sla_minutes"])
+        # The simulated case is already activated when View Case is clicked.
+        # Keep this write idempotent so closing the dialog can never leave the
+        # case in a hidden/simulation-hold state.
         col(TASKS_COLLECTION).update_one(
             {"_id": ObjectId(str(held_case_id))},
             {
                 "$set": {
                     "active": True,
-                    "simulation_hold": False,
-                    "account_priority": "Yes",
-                    "priority": "Critical",
-                    "department": "CARE",
-                    "station_started_at": transition_now,
-                    "due_date": transition_now + care_sla,
-                    "last_update": transition_now,
                 },
                 "$unset": {"simulation_hold": ""},
             },
@@ -6143,13 +6150,32 @@ def case_details(task_id):
                         unsafe_allow_html=True,
                     )
                 else:
-                    destination = st.selectbox(
-                        "Transfer to station",
-                        stations,
-                        index=stations.index(current),
-                        format_func=station_display_name,
-                        key=f"case_transfer_destination_{task_id}",
+                    transfer_station_col, transfer_refresh_col = st.columns(
+                        [1, 0.12],
+                        gap="small",
                     )
+                    with transfer_station_col:
+                        destination = st.selectbox(
+                            "Transfer to station",
+                            stations,
+                            index=stations.index(current),
+                            format_func=station_display_name,
+                            key=f"case_transfer_destination_{task_id}",
+                        )
+                    with transfer_refresh_col:
+                        if st.button(
+                            "↻",
+                            key=f"case_transfer_refresh_{task_id}",
+                            help="Refresh the checklist check and update transfer availability.",
+                            use_container_width=True,
+                        ):
+                            # Explicitly re-check the persisted checklist after the
+                            # user completes the final item. This is intentionally
+                            # a small rerun so the Transfer Case control updates
+                            # immediately without changing any case data.
+                            clear_task_cache()
+                            st.rerun()
+
                     if st.button(
                         "Transfer Case",
                         type="primary",
@@ -8636,9 +8662,11 @@ if (
                 st.session_state["show_case"] = True
                 st.session_state["open_case_after_alert"] = True
 
-                # The alert represents a NEW case entering CARE. Reset the
-                # station timer at the exact moment the user opens it, while
-                # preserving its high-priority-account status.
+                # The alert represents a NEW case entering CARE. Reset both
+                # the station timer and SLA due date at the exact moment the
+                # user opens it, so Total Elapsed and Duration begin at 00:00.
+                # The account remains a high-priority account independently of
+                # the newly reset timer.
                 transition_now = utc_now()
                 care_sla = timedelta(minutes=STATIONS["CARE"]["sla_minutes"])
                 try:
