@@ -282,6 +282,12 @@ def initialize_indexes():
         col(TASKS_COLLECTION).create_index(
             [("active", ASCENDING), ("department", ASCENDING)]
         )
+        # Dashboard query is active=True and sorted by station_started_at.
+        # This compound index avoids an unnecessary MongoDB sort on every
+        # short-lived dashboard data refresh.
+        col(TASKS_COLLECTION).create_index(
+            [("active", ASCENDING), ("station_started_at", ASCENDING)]
+        )
         col(TASKS_COLLECTION).create_index(
             [("case_number", ASCENDING)]
         )
@@ -1632,6 +1638,16 @@ st.markdown(
     }
 
 
+    /* Keep native controls responsive during the dashboard's background
+       fragment refreshes. These are interaction-only hints and do not alter
+       the existing control dimensions or functionality. */
+    button, [role="button"], [data-baseweb="tab"], input, select {
+        -webkit-tap-highlight-color:transparent !important;
+    }
+    button, [role="button"], [data-baseweb="tab"] {
+        touch-action:manipulation !important;
+    }
+
     /* TOP ICON BUTTONS */
 
 
@@ -1654,11 +1670,18 @@ st.markdown(
     [data-testid="stStatusWidget"],
     [data-testid="stSpinner"],
     [data-testid="stProgress"],
+    [data-testid="stAppRunningIndicator"],
     .stSpinner,
     .stProgress {
+        display:none !important;
         opacity:0 !important;
         visibility:hidden !important;
         pointer-events:none !important;
+    }
+
+    /* Monitoring reruns must never steal focus or create a visible loading flash. */
+    [data-testid="stAppViewContainer"] {
+        scroll-behavior:auto !important;
     }
 
 
@@ -1747,6 +1770,7 @@ st.markdown(
         background:transparent !important; border:0 !important; box-shadow:none !important;
         color:transparent !important; font-size:1px !important; opacity:0.001 !important;
         cursor:pointer !important; z-index:30 !important; pointer-events:auto !important;
+        touch-action:manipulation !important; -webkit-tap-highlight-color:transparent !important;
     }
     /* ACTIVE SLA WARNING: intentionally strong and unmistakable. */
     .station-card-visual.critical-red {
@@ -2728,8 +2752,25 @@ div[data-testid="stDialog"] .case-card:empty {
 .case-status-chip { display:inline-block; background:#ffe8b0; color:#8a5a00; border-radius:5px; padding:4px 10px; font-size:11px; }
 
 /* Make Streamlit tabs resemble the reference's compact navigation strip. */
-div[data-testid="stDialog"] [data-baseweb="tab-list"] { gap:0 !important; border-bottom:1px solid #dbe4ee !important; }
-div[data-testid="stDialog"] [data-baseweb="tab"] { padding:9px 15px !important; color:#334155 !important; font-size:12px !important; }
+div[data-testid="stDialog"] [data-baseweb="tab-list"] {
+    gap:0 !important;
+    border-bottom:1px solid #dbe4ee !important;
+    overflow-x:auto !important;
+    scrollbar-width:none !important;
+    -webkit-overflow-scrolling:touch !important;
+}
+div[data-testid="stDialog"] [data-baseweb="tab-list"]::-webkit-scrollbar { display:none !important; }
+div[data-testid="stDialog"] [data-baseweb="tab"] {
+    padding:8px 15px !important;
+    min-height:32px !important;
+    color:#334155 !important;
+    font-size:12px !important;
+    line-height:16px !important;
+    white-space:nowrap !important;
+    cursor:pointer !important;
+    touch-action:manipulation !important;
+    -webkit-tap-highlight-color:transparent !important;
+}
 div[data-testid="stDialog"] [aria-selected="true"] { color:#0879c9 !important; font-weight:800 !important; }
 
 .case-card { background:#fff; border:1px solid #e1e8f0; border-radius:7px; padding:10px 13px; box-shadow:0 1px 3px rgba(15,23,42,.025); min-height:100%; width:100%; box-sizing:border-box; }
@@ -3190,10 +3231,7 @@ def task_projection():
         "status": 1,
         "last_update": 1,
         "account_name": 1,
-        "vendor": 1,
         "issue": 1,
-        "description": 1,
-        "notes": 1,
         "station_warning_ack_trigger": 1,
         "station_warning_acknowledged_at": 1,
         "active": 1,
@@ -3933,14 +3971,12 @@ def acknowledge_station_alerts(station, trigger_keys=None):
 
 
 
-def scan_alerts(tasks):
+def scan_alerts(tasks, states=None, now=None):
     """Create missing alerts with minimal MongoDB round trips.
 
-
     Alert evaluation is intentionally throttled because Duration is updated
-    entirely in the browser. Rapid station clicks should not cause repeated
-    MongoDB alert reads/writes while preserving alert creation on normal
-    dashboard interactions.
+    entirely in the browser. When dashboard state has already been calculated,
+    reuse it instead of calculating every case a second time on each refresh.
     """
     now_epoch = time.time()
     last_scan = float(st.session_state.get("_last_alert_scan", 0.0) or 0.0)
@@ -3949,13 +3985,14 @@ def scan_alerts(tasks):
     st.session_state["_last_alert_scan"] = now_epoch
 
 
-    now = utc_now()
+    now = now or utc_now()
     candidates = []
 
 
     for task in tasks:
-        state = calculate_state(task, now)
-        if not (state["critical"] or state["nearing_due"]):
+        task_id = str(task["_id"])
+        state = states.get(task_id) if states else calculate_state(task, now)
+        if not state or not (state["critical"] or state["nearing_due"]):
             continue
 
 
@@ -7606,11 +7643,6 @@ def dashboard_fragment():
     )
 
 
-    # Alerts are evaluated during the same lightweight 1-second fragment
-    # refresh, keeping the visible dashboard and Alert_Collection synchronized.
-    scan_alerts(tasks)
-
-
     now = utc_now()
 
 
@@ -7629,6 +7661,11 @@ def dashboard_fragment():
         if task_station in tasks_by_station:
             tasks_by_station[task_station].append(task)
             states_by_station[task_station].append(task_state)
+
+
+    # Alerts reuse the state map above so the 1-second monitoring fragment
+    # performs only one calculate_state pass per active case.
+    scan_alerts(tasks, states=states, now=now)
 
 
     # --------------------------------------------------------
@@ -7771,11 +7808,10 @@ def dashboard_fragment():
                         )
 
 
-                    # A single click changes the filter and reruns ONLY
-                    # the dashboard fragment. This keeps station switching
-                    # fast without refreshing the rest of the application.
+                    # The station button itself already triggers the fragment
+                    # rerun. Do not force a second fragment rerun here; that
+                    # duplicate render makes tile switching feel less smooth.
                     st.session_state["selected_station"] = station
-                    st.rerun(scope="fragment")
 
 
     st.markdown(
