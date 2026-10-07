@@ -114,7 +114,7 @@ ACCOUNT_PRIORITY_COLLECTION = "Account_Priority_Collection"
 TASK_CACHE_TTL = 1.5
 # Alert scans are lightweight and run in the same 1-second fragment.
 # Duration itself remains browser-side, while Alert_Collection is kept near real time.
-ALERT_SCAN_MIN_INTERVAL = 2.0
+ALERT_SCAN_MIN_INTERVAL = 1.0
 
 
 STATIONS = {
@@ -1012,9 +1012,9 @@ defaults = {
     "simulation_alert_active": False,
     "simulation_alert_case_id": None,
     "simulation_alert_delay_until": 0.0,
+    "simulation_alert_dismissed": False,
+    "open_case_after_alert": False,
     "simulation_active": False,
-    "simulation_case_released": False,
-    "pending_case_open_id": None,
     "search": "",
     # Kept for compatibility with existing session state; acknowledgement
     # now stops tile flashing immediately.
@@ -2325,6 +2325,17 @@ div[data-testid="stDialog"] > div > div {
     scrollbar-width: none !important;
 }
 
+/* Case Details typography follows the supplied reference: Inter with the
+   same compact sizing used throughout the reference workspace. */
+div[data-testid="stDialog"],
+div[data-testid="stDialog"] [data-testid="stDialogContent"],
+div[data-testid="stDialog"] [data-testid="stDialogContent"] * {
+    font-family:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+}
+div[data-testid="stDialog"] [data-testid="stDialogContent"] {
+    font-size:9px !important;
+}
+
 /* Scale the actual Case Details workspace, not the modal shell/header. */
 div[data-testid="stDialog"] [data-testid="stDialogContent"] > div {
     zoom: .78 !important;
@@ -2976,6 +2987,7 @@ def task_projection():
         "station_warning_acknowledged_at": 1,
         "active": 1,
         "is_mock": 1,
+        "simulation_hold": 1,
     }
 
 
@@ -3430,7 +3442,6 @@ def reset_mock_case_durations():
                         "war_room": "",
                         "active_war_rooms": "",
                         "simulation_collaboration": "",
-                        "simulation_pending_alert": "",
                         "station_warning_ack_trigger": "",
                         "station_warning_acknowledged_at": "",
                     },
@@ -4979,7 +4990,7 @@ if st.session_state["show_settings"]:
                     type=["xlsx", "xls"],
                     key="case_excel_upload",
                     help="Import active cases into Tasks_Collection.",
-                    label_visibility="collapsed",
+                     label_visibility="collapsed",
                 )
 
 
@@ -5043,7 +5054,7 @@ if st.session_state["show_settings"]:
                     "Account Priority Excel",
                     type=["xlsx", "xls"],
                     key="account_priority_excel_upload",
-                    label_visibility="collapsed",
+                     label_visibility="collapsed",
                 )
                 if priority_file is not None:
                     try:
@@ -5089,6 +5100,7 @@ if st.session_state["show_settings"]:
                 file = st.file_uploader(
                     "Vendor Excel",
                     type=["xlsx", "xls"],
+                     label_visibility="collapsed",
                 )
 
 
@@ -5203,7 +5215,8 @@ if st.session_state["show_settings"]:
                                     "priority": "Critical",
                                     "account_name": "H&M",
                                     "status": "In Progress",
-                                    "simulation_pending_alert": True,
+                                    "active": False,
+                                    "simulation_hold": True,
                                     "simulation_collaboration": {
                                         "title": "H&M Critical Account Collaboration Session",
                                         "status": "LIVE",
@@ -5256,15 +5269,13 @@ if st.session_state["show_settings"]:
                     clear_task_cache()
                     st.session_state["simulation_until"] = 0.0
                     st.session_state["simulation_case_id"] = simulation_case_id or None
-                    # Keep the simulated critical case out of all station tiles/table
-                    # until the user has actually opened it from the alert.
-                    st.session_state["simulation_case_released"] = False
-                    st.session_state["pending_case_open_id"] = None
-                    # The alert is rendered immediately in a hidden/pending state.
-                    # Browser-side timing reveals it exactly 10 seconds later without
-                    # requiring a visible Streamlit rerun or dashboard refresh.
-                    st.session_state["simulation_alert_active"] = bool(simulation_case_id)
+                    # The simulation alert is intentionally delayed by 10 seconds.
+                    # The browser reveals the already-rendered alert at this
+                    # timestamp without refreshing the dashboard.
+                    st.session_state["simulation_alert_active"] = False
                     st.session_state["simulation_alert_case_id"] = simulation_case_id
+                    st.session_state["simulation_alert_dismissed"] = False
+                    st.session_state["open_case_after_alert"] = False
                     st.session_state["simulation_alert_delay_until"] = (
                         time.time() + 10.0 if simulation_case_id else 0.0
                     )
@@ -7136,6 +7147,12 @@ div[data-testid="stDialog"] [data-testid="stVerticalBlock"]::-webkit-scrollbar-t
 def dashboard_fragment():
 
 
+    # Duration/data monitoring remains in the 1-second fragment. The
+    # simulation critical alert is revealed entirely in the browser after its
+    # 10-second delay, so the dashboard does not visibly refresh just to show
+    # the alert.
+
+
     selected = st.session_state[
         "selected_station"
     ]
@@ -7148,16 +7165,6 @@ def dashboard_fragment():
         station=None,
         limit=300,
     )
-
-    # The simulated H&M case is intentionally invisible to station tiles and
-    # Active Cases until the user clicks View Case in the critical alert.
-    pending_simulation_id = text(st.session_state.get("simulation_alert_case_id"))
-    if pending_simulation_id and not st.session_state.get("simulation_case_released", False):
-        tasks = [
-            task for task in tasks
-            if str(task.get("_id")) != pending_simulation_id
-            and not bool(task.get("simulation_pending_alert"))
-        ]
 
 
     # Alerts are evaluated during the same lightweight 1-second fragment
@@ -8051,13 +8058,6 @@ seed_mock_cases()
 # case button during the fragment's sequential widget interaction.
 dashboard_fragment()
 
-# Simulation View Case uses a full app rerun so the alert overlay is removed
-# before the native Case Details dialog is created.
-_pending_case_id = text(st.session_state.get("pending_case_open_id"))
-if _pending_case_id:
-    st.session_state["pending_case_open_id"] = None
-    case_details(_pending_case_id)
-
 
 # ============================================================
 # SIMULATION ALERT OVERLAY — visual reference inspired by the supplied image
@@ -8081,6 +8081,18 @@ st.markdown(
         backdrop-filter:blur(2px) !important;
         pointer-events:auto !important;
     }
+    [class*="st-key-simulation_alert_overlay"].simulation-alert-pending {
+        display:none !important;
+    }
+    .simulation-alert-delay-marker {
+        position:absolute !important;
+        width:1px !important;
+        height:1px !important;
+        overflow:hidden !important;
+        opacity:0 !important;
+        pointer-events:none !important;
+    }
+
     [class*="st-key-simulation_alert_overlay"] > div {
         width:100% !important;
         height:100% !important;
@@ -8185,56 +8197,6 @@ st.markdown(
         to { opacity:1; transform:scale(1.08); }
     }
     .kb-sop-list-spacer { height:8px; }
-
-    /* Simulation alert is server-rendered immediately but remains completely
-       invisible/non-interactive until the browser reaches the 10-second mark. */
-    [class*="st-key-simulation_alert_overlay"]:has(.simulation-alert-pending-marker) {
-        opacity:0 !important;
-        visibility:hidden !important;
-        pointer-events:none !important;
-        animation:simulationAlertReveal 10s linear forwards !important;
-    }
-    @keyframes simulationAlertReveal {
-        0%, 99.9% {
-            opacity:0;
-            visibility:hidden;
-            pointer-events:none;
-        }
-        100% {
-            opacity:1;
-            visibility:visible;
-            pointer-events:auto;
-        }
-    }
-
-    /* Native uploader labels are replaced by the surrounding Settings headings
-       so the label never overlaps Streamlit's actual upload/dropzone control. */
-    div[data-testid="stDialog"] [data-testid="stFileUploader"] > label {
-        display:none !important;
-    }
-    div[data-testid="stDialog"] [data-testid="stFileUploader"] {
-        margin-top:4px !important;
-        margin-bottom:10px !important;
-    }
-
-    /* Match the supplied case-detail reference: Inter, compact 8–10px scale. */
-    div[data-testid="stDialog"] .case-detail-hero,
-    div[data-testid="stDialog"] .case-summary-strip,
-    div[data-testid="stDialog"] .case-card {
-        font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif !important;
-    }
-    div[data-testid="stDialog"] .case-summary-cell > span {
-        font-size:8px !important;
-        line-height:1.15 !important;
-    }
-    div[data-testid="stDialog"] .case-summary-cell > strong {
-        font-size:10px !important;
-        line-height:1.15 !important;
-    }
-    div[data-testid="stDialog"] .case-detail-copy,
-    div[data-testid="stDialog"] .case-detail-copy * {
-        font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif !important;
-    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -8366,6 +8328,56 @@ st.markdown(
     }
     .kb-sop-list-spacer { height:8px; }
     </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# Browser-only reveal for the delayed simulation alert. The dashboard itself
+# is not refreshed when the 10-second deadline is reached.
+st.markdown(
+    """
+    <script>
+    (function () {
+        function armSimulationAlert(overlay) {
+            if (!overlay || overlay.__simulationAlertArmed) return;
+            const marker = overlay.querySelector(".simulation-alert-delay-marker");
+            if (!marker) return;
+            overlay.__simulationAlertArmed = true;
+
+            const deadline = Number(marker.getAttribute("data-alert-delay-until") || "0") * 1000;
+            const show = function () {
+                overlay.classList.remove("simulation-alert-pending");
+                overlay.style.display = "flex";
+            };
+
+            if (!deadline || Date.now() >= deadline) {
+                show();
+                return;
+            }
+
+            overlay.classList.add("simulation-alert-pending");
+            overlay.style.display = "none";
+            window.setTimeout(show, Math.max(0, deadline - Date.now()));
+        }
+
+        function findAndArm() {
+            const overlay = document.querySelector('[class*="st-key-simulation_alert_overlay"]');
+            if (overlay) armSimulationAlert(overlay);
+            return !!overlay;
+        }
+
+        /* Streamlit may insert the overlay after this script block. Watch only
+           for that one element, then disconnect immediately. */
+        if (!findAndArm()) {
+            const observer = new MutationObserver(function () {
+                if (findAndArm()) observer.disconnect();
+            });
+            observer.observe(document.body, {childList:true, subtree:true});
+            window.setTimeout(function () { observer.disconnect(); }, 15000);
+        }
+    })();
+    </script>
     """,
     unsafe_allow_html=True,
 )
@@ -8535,10 +8547,50 @@ div[data-testid="stDialog"] .simulation-collab-footer a {
 </style>
 """, unsafe_allow_html=True)
 
+# Hide the alert overlay immediately on View Case pointer interaction so
+# the Case Details dialog never appears with the alert behind it.
+st.markdown(
+    """
+    <script>
+    (function () {
+        function bindViewCase() {
+            const button = document.querySelector(
+                '[class*="st-key-simulation_alert_view_case"] button'
+            );
+            const overlay = document.querySelector(
+                '[class*="st-key-simulation_alert_overlay"]'
+            );
+            if (!button || !overlay || button.__viewCaseBound) return !!button;
+
+            button.__viewCaseBound = true;
+            button.addEventListener("pointerdown", function () {
+                overlay.style.display = "none";
+                overlay.style.pointerEvents = "none";
+            }, {passive:true});
+            return true;
+        }
+
+        if (!bindViewCase()) {
+            const observer = new MutationObserver(function () {
+                if (bindViewCase()) observer.disconnect();
+            });
+            observer.observe(document.body, {childList:true, subtree:true});
+            window.setTimeout(function () { observer.disconnect(); }, 15000);
+        }
+    })();
+    </script>
+    """,
+    unsafe_allow_html=True,
+)
+
+
 # ============================================================
 # SIMULATION CRITICAL ACCOUNT ALERT
 # ============================================================
-if st.session_state.get("simulation_alert_active") and st.session_state.get("simulation_alert_case_id"):
+if (
+    st.session_state.get("simulation_alert_case_id")
+    and not st.session_state.get("simulation_alert_dismissed")
+):
     simulation_alert_case_id = st.session_state.get("simulation_alert_case_id")
     try:
         from bson import ObjectId
@@ -8555,10 +8607,13 @@ if st.session_state.get("simulation_alert_active") and st.session_state.get("sim
         simulation_account = text(simulation_alert_task.get("account_name")) or "H&M"
         simulation_due = dt_display(simulation_alert_task.get("due_date")) or "Today"
         with st.container(key="simulation_alert_overlay"):
-            delay_until = float(st.session_state.get("simulation_alert_delay_until", 0.0) or 0.0)
+            simulation_delay_until = float(
+                st.session_state.get("simulation_alert_delay_until", 0.0) or 0.0
+            )
             st.markdown(
                 f"""
-                <div class="simulation-alert-pending-marker" data-delay-until="{delay_until:.3f}" aria-hidden="true"></div>
+                <div class="simulation-alert-delay-marker"
+                     data-alert-delay-until="{simulation_delay_until:.3f}"></div>
                 <div class="simulation-alert-card">
                     <div class="simulation-alert-header">
                         <div class="simulation-alert-icon">!</div>
@@ -8588,48 +8643,43 @@ if st.session_state.get("simulation_alert_active") and st.session_state.get("sim
                 use_container_width=True,
                 key="simulation_alert_view_case",
             ):
-                # Close the alert first. The actual case is opened on the next
-                # full app render so the alert overlay cannot remain behind it.
                 st.session_state["simulation_alert_active"] = False
+                st.session_state["simulation_alert_dismissed"] = True
                 st.session_state["simulation_alert_delay_until"] = 0.0
-                st.session_state["simulation_case_released"] = True
                 st.session_state["selected_case_id"] = str(simulation_alert_case_id)
                 st.session_state["show_case"] = True
-                st.session_state["pending_case_open_id"] = str(simulation_alert_case_id)
+                st.session_state["open_case_after_alert"] = True
                 try:
-                    from bson import ObjectId
-                    now = utc_now()
                     col(TASKS_COLLECTION).update_one(
-                        {"_id": ObjectId(str(simulation_alert_case_id))},
+                        {"_id": simulation_alert_task.get("_id")},
                         {
                             "$set": {
-                                "simulation_pending_alert": False,
-                                "department": "CARE",
-                                "station_started_at": now,
-                                "last_update": now,
+                                "active": True,
+                                "simulation_hold": False,
+                                "last_update": utc_now(),
                             },
-                            "$push": {
-                                "history": {
-                                    "action": "Simulation critical alert viewed; case entered CARE station.",
-                                    "timestamp": now,
-                                    "actor": "Caseflow Simulation",
-                                    "station": "CARE",
-                                }
-                            },
+                            "$unset": {"simulation_hold": ""},
                         },
                     )
+                except Exception:
+                    pass
+                try:
                     col(ALERT_COLLECTION).update_many(
                         {
                             "task_id": str(simulation_alert_case_id),
                             "alert_type": "PRIORITY_ACCOUNT",
                             "acknowledged": False,
                         },
-                        {"$set": {"acknowledged": True, "acknowledged_at": now}},
+                        {"$set": {"acknowledged": True, "acknowledged_at": utc_now()}},
                     )
                 except Exception:
                     pass
                 clear_task_cache()
-                st.rerun(scope="app")
+                st.session_state["open_case_after_alert"] = False
+                # Open the real case dialog directly. The browser-side click
+                # handler hides the alert overlay before Streamlit renders the
+                # dialog, so there is no full-page refresh or alert behind it.
+                case_details(str(simulation_alert_case_id))
 
 # ============================================================
 # SIMULATION CLEANUP
