@@ -7147,10 +7147,25 @@ div[data-testid="stDialog"] [data-testid="stVerticalBlock"]::-webkit-scrollbar-t
 def dashboard_fragment():
 
 
-    # Duration/data monitoring remains in the 1-second fragment. The
-    # simulation critical alert is revealed entirely in the browser after its
-    # 10-second delay, so the dashboard does not visibly refresh just to show
-    # the alert.
+    # Duration/data monitoring remains in the 1-second fragment.
+    # The simulation critical alert is promoted server-side exactly once
+    # when its 10-second deadline is reached. This is intentionally a
+    # backend app rerun (with the Streamlit spinner hidden by CSS), rather
+    # than browser JavaScript, because scripts embedded in st.markdown are
+    # not reliably executed by Streamlit.
+    simulation_delay_until = float(
+        st.session_state.get("simulation_alert_delay_until", 0.0) or 0.0
+    )
+    if (
+        simulation_delay_until
+        and time.time() >= simulation_delay_until
+        and st.session_state.get("simulation_alert_case_id")
+        and not st.session_state.get("simulation_alert_active")
+        and not st.session_state.get("simulation_alert_dismissed")
+    ):
+        st.session_state["simulation_alert_active"] = True
+        st.session_state["simulation_alert_delay_until"] = 0.0
+        st.rerun(scope="app")
 
 
     selected = st.session_state[
@@ -8333,54 +8348,8 @@ st.markdown(
 )
 
 
-# Browser-only reveal for the delayed simulation alert. The dashboard itself
-# is not refreshed when the 10-second deadline is reached.
-st.markdown(
-    """
-    <script>
-    (function () {
-        function armSimulationAlert(overlay) {
-            if (!overlay || overlay.__simulationAlertArmed) return;
-            const marker = overlay.querySelector(".simulation-alert-delay-marker");
-            if (!marker) return;
-            overlay.__simulationAlertArmed = true;
-
-            const deadline = Number(marker.getAttribute("data-alert-delay-until") || "0") * 1000;
-            const show = function () {
-                overlay.classList.remove("simulation-alert-pending");
-                overlay.style.display = "flex";
-            };
-
-            if (!deadline || Date.now() >= deadline) {
-                show();
-                return;
-            }
-
-            overlay.classList.add("simulation-alert-pending");
-            overlay.style.display = "none";
-            window.setTimeout(show, Math.max(0, deadline - Date.now()));
-        }
-
-        function findAndArm() {
-            const overlay = document.querySelector('[class*="st-key-simulation_alert_overlay"]');
-            if (overlay) armSimulationAlert(overlay);
-            return !!overlay;
-        }
-
-        /* Streamlit may insert the overlay after this script block. Watch only
-           for that one element, then disconnect immediately. */
-        if (!findAndArm()) {
-            const observer = new MutationObserver(function () {
-                if (findAndArm()) observer.disconnect();
-            });
-            observer.observe(document.body, {childList:true, subtree:true});
-            window.setTimeout(function () { observer.disconnect(); }, 15000);
-        }
-    })();
-    </script>
-    """,
-    unsafe_allow_html=True,
-)
+# The delayed simulation alert is triggered by the 1-second dashboard
+# fragment above. No browser-injected script is required.
 
 
 # ============================================================
