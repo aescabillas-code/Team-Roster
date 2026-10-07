@@ -300,6 +300,12 @@ def initialize_indexes():
         col(ACCESS_COLLECTION).create_index(
             [("browser_fingerprint", ASCENDING), ("code_fingerprint", ASCENDING), ("authorized", ASCENDING)]
         )
+        col(ACCESS_COLLECTION).create_index(
+            [("request_fingerprint", ASCENDING), ("code_fingerprint", ASCENDING), ("authorized", ASCENDING)]
+        )
+        col(ACCESS_COLLECTION).create_index(
+            [("simulation_profile_key", ASCENDING), ("simulation_event_id", ASCENDING), ("authorized", ASCENDING)]
+        )
         col(ALERT_COLLECTION).create_index(
             [("acknowledged", ASCENDING), ("created_at", DESCENDING)]
         )
@@ -858,6 +864,33 @@ def _browser_fingerprint():
     return sha256(raw) if raw else ""
 
 
+
+def _server_request_fingerprint():
+    """Stable server-side fallback for mobile browsers that do not retain JS storage."""
+    try:
+        context = getattr(st, "context", None)
+        headers = getattr(context, "headers", None)
+        if not headers:
+            return ""
+        values = []
+        for key in (
+            "user-agent",
+            "accept-language",
+            "sec-ch-ua",
+            "sec-ch-ua-mobile",
+            "sec-ch-ua-platform",
+            "x-forwarded-for",
+        ):
+            value = headers.get(key, "")
+            if key == "x-forwarded-for" and value:
+                value = str(value).split(",")[0].strip()
+            values.append(str(value or "").strip())
+        raw = "|".join(values)
+        return sha256(raw) if raw else ""
+    except Exception:
+        return ""
+
+
 def _server_browser_authorized(fingerprint):
     """Fallback authorization for mobile/browser profiles where storage is unavailable."""
     if not fingerprint:
@@ -867,11 +900,15 @@ def _server_browser_authorized(fingerprint):
     if not code_fp:
         return False
     try:
-        return bool(col(ACCESS_COLLECTION).find_one({
-            "browser_fingerprint": fingerprint,
+        query = {
             "code_fingerprint": code_fp,
             "authorized": True,
-        }, {"_id": 1}))
+            "$or": [
+                {"browser_fingerprint": fingerprint},
+                {"request_fingerprint": fingerprint},
+            ],
+        }
+        return bool(col(ACCESS_COLLECTION).find_one(query, {"_id": 1}))
     except Exception:
         return False
 
@@ -910,6 +947,12 @@ def browser_is_authorized():
         st.session_state["access_granted"] = True
         return True
 
+    request_fp = _server_request_fingerprint()
+    if request_fp and _server_browser_authorized(request_fp):
+        st.session_state["access_authorized"] = True
+        st.session_state["access_granted"] = True
+        return True
+
     return False
 
 
@@ -929,14 +972,19 @@ def authorize_browser():
     _save_browser_token(token)
 
     fingerprint = _browser_fingerprint()
-    if fingerprint:
+    request_fp = _server_request_fingerprint()
+    if fingerprint or request_fp:
         access_code_value, _ = _get_access_secrets()
         try:
+            identity = {
+                "code_fingerprint": _get_code_fingerprint(access_code_value),
+            }
+            if fingerprint:
+                identity["browser_fingerprint"] = fingerprint
+            if request_fp:
+                identity["request_fingerprint"] = request_fp
             col(ACCESS_COLLECTION).update_one(
-                {
-                    "browser_fingerprint": fingerprint,
-                    "code_fingerprint": _get_code_fingerprint(access_code_value),
-                },
+                identity,
                 {"$set": {"authorized": True, "authorized_at": utc_now()}},
                 upsert=True,
             )
@@ -971,12 +1019,17 @@ def clear_token_access():
     _clear_browser_token()
 
     fingerprint = _browser_fingerprint()
-    if fingerprint:
+    request_fp = _server_request_fingerprint()
+    if fingerprint or request_fp:
         access_code_value, _ = _get_access_secrets()
         try:
+            code_fp = _get_code_fingerprint(access_code_value)
+            filters = [{"browser_fingerprint": fingerprint}] if fingerprint else []
+            if request_fp:
+                filters.append({"request_fingerprint": request_fp})
             col(ACCESS_COLLECTION).delete_many({
-                "browser_fingerprint": fingerprint,
-                "code_fingerprint": _get_code_fingerprint(access_code_value),
+                "code_fingerprint": code_fp,
+                "$or": filters,
             })
         except Exception:
             pass
@@ -3540,6 +3593,56 @@ def mock_original_state(case_number):
 GLOBAL_SIMULATION_ALERT_KEY = "OVR_VW_GLOBAL_SIMULATION_PRIORITY_ACCOUNT"
 
 
+def _simulation_profile_key():
+    """Return a stable per-browser key for one-time simulation-alert display."""
+    token = _read_browser_token()
+    if token and validate_browser_token(token):
+        return "token:" + sha256(token)
+    fingerprint = _browser_fingerprint()
+    if fingerprint:
+        return "browser:" + fingerprint
+    request_fp = _server_request_fingerprint()
+    return "request:" + request_fp if request_fp else ""
+
+
+def _simulation_event_seen(event_id):
+    profile_key = _simulation_profile_key()
+    if not profile_key or not event_id:
+        return False
+    try:
+        return bool(col(ACCESS_COLLECTION).find_one({
+            "simulation_profile_key": profile_key,
+            "simulation_event_id": event_id,
+            "authorized": True,
+        }, {"_id": 1}))
+    except Exception:
+        return False
+
+
+def _mark_simulation_event_seen(event_id):
+    profile_key = _simulation_profile_key()
+    if not profile_key or not event_id:
+        return
+    try:
+        col(ACCESS_COLLECTION).update_one(
+            {
+                "simulation_profile_key": profile_key,
+                "simulation_event_id": event_id,
+            },
+            {
+                "$set": {
+                    "authorized": True,
+                    "simulation_seen_at": utc_now(),
+                }
+            },
+            upsert=True,
+        )
+    except Exception:
+        pass
+
+
+
+
 def _get_global_simulation_event():
     try:
         return col(ALERT_COLLECTION).find_one({
@@ -4401,6 +4504,38 @@ def save_case_station_checklist(task_id, station, items):
             {"_id": ObjectId(str(task_id))},
             update,
         )
+        clear_task_cache()
+        return True
+    except Exception:
+        return False
+
+
+
+def refresh_case_checklist_state(task_id, station):
+    """Refresh checklist widget values from the latest persisted MongoDB state."""
+    station = station_name(station)
+    try:
+        from bson import ObjectId
+        task = col(TASKS_COLLECTION).find_one(
+            {"_id": ObjectId(str(task_id))}
+        )
+        if not task:
+            return False
+
+        items = get_case_station_checklist(task, station)
+        prefix = f"case_checklist_{task_id}_{station}_"
+        valid_keys = set()
+
+        for idx, item in enumerate(items):
+            key = f"{prefix}{idx}"
+            valid_keys.add(key)
+            st.session_state[key] = bool(item.get("checked"))
+
+        # Remove stale checkbox keys if checklist items were removed.
+        for key in list(st.session_state.keys()):
+            if key.startswith(prefix) and key not in valid_keys:
+                st.session_state.pop(key, None)
+
         clear_task_cache()
         return True
     except Exception:
@@ -6400,7 +6535,23 @@ def case_details(task_id):
 
             with checklist_col:
                 st.markdown("<div class='case-card'>", unsafe_allow_html=True)
-                st.markdown("<div class='case-card-heading'><span class='case-heading-icon'>☑</span>Station Task Checklists</div>", unsafe_allow_html=True)
+                checklist_head_col, checklist_refresh_col = st.columns([1, 0.10], gap="small")
+                with checklist_head_col:
+                    st.markdown(
+                        "<div class='case-card-heading'><span class='case-heading-icon'>☑</span>Station Task Checklists</div>",
+                        unsafe_allow_html=True,
+                    )
+                with checklist_refresh_col:
+                    if st.button(
+                        "↻",
+                        key=f"case_checklist_refresh_{task_id}_{current}",
+                        help="Refresh the checklist from the latest saved case state.",
+                        use_container_width=True,
+                    ):
+                        if refresh_case_checklist_state(task_id, current):
+                            st.rerun()
+                        else:
+                            st.error("Unable to refresh the checklist.")
                 st.caption(f"Required tasks for the current station: {station_display_name(current)}. Completed items are logged automatically when the station checklist is finished.")
 
                 selected_check_station = current
@@ -7394,12 +7545,15 @@ def dashboard_fragment():
         global_triggered_at = as_utc(global_simulation.get("triggered_at"))
         global_event_id = f"{global_task_id}:{iso_z(global_triggered_at)}"
         if st.session_state.get("simulation_alert_event_id") != global_event_id:
+            already_seen = _simulation_event_seen(global_event_id)
             st.session_state["simulation_alert_event_id"] = global_event_id
             st.session_state["simulation_alert_case_id"] = global_task_id or None
-            st.session_state["simulation_alert_dismissed"] = False
+            st.session_state["simulation_alert_dismissed"] = bool(already_seen)
             st.session_state["simulation_alert_active"] = False
             st.session_state["simulation_alert_delay_until"] = (
-                global_triggered_at.timestamp() + 5.0 if global_triggered_at else 0.0
+                0.0
+                if already_seen
+                else (global_triggered_at.timestamp() + 5.0 if global_triggered_at else 0.0)
             )
 
     simulation_delay_until = float(
@@ -8646,6 +8800,9 @@ if (
                 st.session_state["simulation_alert_active"] = False
                 st.session_state["simulation_alert_dismissed"] = True
                 st.session_state["simulation_alert_delay_until"] = 0.0
+                current_event_id = st.session_state.get("simulation_alert_event_id")
+                if current_event_id:
+                    _mark_simulation_event_seen(current_event_id)
                 st.session_state["selected_station"] = "CARE"
                 st.session_state["open_case_after_alert"] = True
 
@@ -9616,6 +9773,79 @@ div[data-testid="stDialog"] [data-testid="stFileUploader"] small {
     div[data-testid="stDialog"] [data-testid="stFileUploader"] section::before {
         font-size:12px !important;
     }
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+st.markdown(r"""
+<style>
+/* ============================================================
+   CHECKLIST REFRESH — restored manual synchronization control
+   ============================================================ */
+div[data-testid="stDialog"] [class*="st-key-case_checklist_refresh_"] {
+    display:flex !important;
+    justify-content:flex-end !important;
+    align-items:flex-start !important;
+    margin:0 !important;
+    padding:0 !important;
+}
+div[data-testid="stDialog"] [class*="st-key-case_checklist_refresh_"] button {
+    width:30px !important;
+    min-width:30px !important;
+    height:30px !important;
+    min-height:30px !important;
+    padding:0 !important;
+    margin:0 !important;
+    border:1px solid #dce5ef !important;
+    border-radius:6px !important;
+    background:#fff !important;
+    color:#0879c9 !important;
+    font-size:17px !important;
+    line-height:1 !important;
+    box-shadow:none !important;
+}
+div[data-testid="stDialog"] [class*="st-key-case_checklist_refresh_"] button:hover {
+    background:#eef8ff !important;
+    border-color:#0879c9 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+
+st.markdown(r"""
+<style>
+/* ============================================================
+   CASE DETAILS — UNIFORM BODY TYPOGRAPHY
+   Keep only the modal title, case number and subject as headers.
+   All other Case Details text uses one consistent Inter size.
+   ============================================================ */
+div[data-testid="stDialog"] [data-testid="stDialogContent"] * {
+    font-family:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+    font-size:10px !important;
+}
+
+/* Dialog header and Case Details hero remain intentionally larger. */
+div[data-testid="stDialog"] header p {
+    font-size:16px !important;
+    line-height:1.1 !important;
+}
+div[data-testid="stDialog"] .case-detail-case-number {
+    font-size:14px !important;
+    line-height:1.1 !important;
+}
+div[data-testid="stDialog"] .case-detail-subject {
+    font-size:11px !important;
+    line-height:1.2 !important;
+}
+
+/* Preserve icon sizing so typography normalization does not shrink visual icons. */
+div[data-testid="stDialog"] .case-folder-icon,
+div[data-testid="stDialog"] .case-copy-icon,
+div[data-testid="stDialog"] .case-timing-icon,
+div[data-testid="stDialog"] .case-heading-icon {
+    line-height:1 !important;
 }
 </style>
 """, unsafe_allow_html=True)
