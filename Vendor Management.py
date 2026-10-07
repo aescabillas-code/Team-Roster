@@ -111,7 +111,7 @@ ACCOUNT_PRIORITY_COLLECTION = "Account_Priority_Collection"
 # Performance tuning: retain a short cache so the 1-second UI fragment does not
 # force a MongoDB read on every tick. This reduces database/network churn while
 # keeping the dashboard visually current.
-TASK_CACHE_TTL = 1.5
+TASK_CACHE_TTL = 1.0
 # Alert scans are lightweight and run in the same 1-second fragment.
 # Duration itself remains browser-side, while Alert_Collection is kept near real time.
 ALERT_SCAN_MIN_INTERVAL = 1.0
@@ -1479,10 +1479,16 @@ st.markdown(
 
     /* Keep fragment station switching visually clean. The selected tile is
        updated on pointerdown before Streamlit performs its fragment rerun. */
+    /* Fragment refresh is intentionally invisible: no spinner/status flash,
+       no progress indicator, and no pointer interception during the 1-second
+       monitoring rerun. */
     [data-testid="stStatusWidget"],
     [data-testid="stSpinner"],
-    .stSpinner {
+    [data-testid="stProgress"],
+    .stSpinner,
+    .stProgress {
         opacity:0 !important;
+        visibility:hidden !important;
         pointer-events:none !important;
     }
 
@@ -6150,54 +6156,11 @@ def case_details(task_id):
                         unsafe_allow_html=True,
                     )
                 else:
-                    destination = st.selectbox(
-                        "Transfer to station",
-                        stations,
-                        index=stations.index(current),
-                        format_func=station_display_name,
-                        key=f"case_transfer_destination_{task_id}",
-                    )
-
-                    # The checklist callback persists the checkbox immediately and
-                    # Streamlit reruns the dialog after the widget change. Re-read
-                    # the case here so the Transfer Case control reflects the
-                    # persisted checklist state without a manual refresh button.
-                    try:
-                        from bson import ObjectId
-                        live_task = col(TASKS_COLLECTION).find_one(
-                            {"_id": ObjectId(str(task_id))}
-                        )
-                    except Exception:
-                        live_task = None
-
-                    if live_task:
-                        task = live_task
-                        current_missing = checklist_missing(task, current)
-
-                    if st.button(
-                        "Transfer Case",
-                        type="primary",
-                        use_container_width=True,
-                        key=f"case_transfer_{task_id}",
-                        disabled=bool(current_missing),
-                        help=(
-                            "Complete every current-station checklist item to enable transfer."
-                            if current_missing
-                            else "Transfer is ready. Choose the destination station."
-                        ),
-                    ):
-                        if destination == current:
-                            st.warning("Choose a different station.")
-                        elif current_missing:
-                            missing_html = "<br>• ".join(html.escape(x) for x in current_missing[:8])
-                            st.error(f"Complete the current-station checklist before transfer:<br>• {missing_html}", unsafe_allow_html=True)
-                        elif transfer_case(task, destination):
-                            st.success(f"Case transferred to {station_name(destination)}.")
-                            st.session_state["show_case"] = False
-                            st.session_state["selected_case_id"] = None
-                            st.rerun()
-                        else:
-                            st.error("Unable to transfer case.")
+                    # Reserve the exact transfer-control location in the left
+                    # action panel. The controls themselves are rendered after the
+                    # checklist below so their enabled/disabled state is calculated
+                    # from the freshest persisted checklist data.
+                    transfer_controls_slot = st.empty()
 
                     st.markdown(
                         "<div class='case-actions-note'>Station transfer is available immediately after the final checklist item is checked. Reassignment does not require checklist completion.</div>",
@@ -6248,6 +6211,61 @@ def case_details(task_id):
                                 st.error("Unable to remove this checklist item.")
 
                 st.markdown("</div>", unsafe_allow_html=True)
+
+            # Render Transfer Case into the reserved left-panel slot only
+            # after the checklist widgets have been processed. This prevents
+            # the button from being stuck in its pre-checklist state.
+            try:
+                from bson import ObjectId
+                live_task = col(TASKS_COLLECTION).find_one(
+                    {"_id": ObjectId(str(task_id))}
+                )
+            except Exception:
+                live_task = None
+
+            transfer_task = live_task or task
+            transfer_missing = checklist_missing(transfer_task, current)
+
+            with transfer_controls_slot.container():
+                destination = st.selectbox(
+                    "Transfer to station",
+                    stations,
+                    index=stations.index(current),
+                    format_func=station_display_name,
+                    key=f"case_transfer_destination_{task_id}",
+                )
+
+                if st.button(
+                    "Transfer Case",
+                    type="primary",
+                    use_container_width=True,
+                    key=f"case_transfer_{task_id}",
+                    disabled=bool(transfer_missing),
+                    help=(
+                        "Complete every current-station checklist item to enable transfer."
+                        if transfer_missing
+                        else "Transfer is ready. Choose the destination station."
+                    ),
+                ):
+                    if destination == current:
+                        st.warning("Choose a different station.")
+                    elif transfer_missing:
+                        missing_html = "<br>• ".join(
+                            html.escape(x) for x in transfer_missing[:8]
+                        )
+                        st.error(
+                            f"Complete the current-station checklist before transfer:<br>• {missing_html}",
+                            unsafe_allow_html=True,
+                        )
+                    elif transfer_case(transfer_task, destination):
+                        st.success(
+                            f"Case transferred to {station_name(destination)}."
+                        )
+                        st.session_state["show_case"] = False
+                        st.session_state["selected_case_id"] = None
+                        st.rerun()
+                    else:
+                        st.error("Unable to transfer case.")
 
             # -----------------------------------------------------------
             # LOGGED ACTION PLAN / NOTE — feeds the Resolution section
