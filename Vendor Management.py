@@ -1996,18 +1996,6 @@ st.markdown(
     div[data-testid="stDialog"] [data-testid="stDialogContent"] { padding-top:0 !important; }
     div[data-testid="stDialog"] header { border-bottom:1px solid #edf0f5 !important; }
     div[data-testid="stDialog"] > div > div { overflow-y:auto !important; }
-    @media(max-width:700px) {
-        div[data-testid="stDialog"] > div {
-            top:10px !important;
-            right:8px !important;
-            left:8px !important;
-            width:calc(100vw - 16px) !important;
-            max-width:calc(100vw - 16px) !important;
-            height:calc(100vh - 20px) !important;
-            max-height:calc(100vh - 20px) !important;
-            border-radius:14px !important;
-        }
-    }
 
 
     /* DIALOG */
@@ -5198,11 +5186,8 @@ if st.session_state["show_settings"]:
                                         "acknowledged_by": [],
                                         "started_at": now,
                                     },
-                                    # The case stays hidden until View Case. The
-                                    # real CARE SLA clock is initialized there so
-                                    # the newly surfaced case starts at 00:00.
-                                    "station_started_at": now,
-                                    "due_date": now + timedelta(minutes=STATIONS["CARE"]["sla_minutes"]),
+                                    "station_started_at": simulation_started,
+                                    "due_date": simulation_due,
                                     "last_update": now,
                                 },
                                 "$push": {
@@ -5720,40 +5705,53 @@ def automated_case_assessment(task, state):
 seed_demo_kb()
 
 
-def _activate_simulation_case_in_care(task_id, reset_clock=True):
-    """Make the simulated alert case a fresh CARE case before opening the dialog."""
+def _case_details_dismissed():
+    """Finish the simulated-alert transition and immediately return to CARE."""
+    if not (
+        st.session_state.get("open_case_after_alert")
+        and st.session_state.get("simulation_alert_case_id")
+        and st.session_state.get("simulation_alert_dismissed")
+    ):
+        return
+
+    held_case_id = st.session_state.get("simulation_alert_case_id")
     try:
         from bson import ObjectId
-        now = utc_now()
-        update = {
-            "$set": {
-                "active": True,
-                "department": "CARE",
-                "simulation_hold": False,
-                "last_update": now,
+        # The simulated case is already activated when View Case is clicked.
+        # Keep this write idempotent so closing the dialog can never leave the
+        # case in a hidden/simulation-hold state.
+        col(TASKS_COLLECTION).update_one(
+            {"_id": ObjectId(str(held_case_id))},
+            {
+                "$set": {
+                    "active": True,
+                },
+                "$unset": {"simulation_hold": ""},
             },
-            "$unset": {"simulation_hold": ""},
-        }
-        if reset_clock:
-            update["$set"].update({
-                "station_started_at": now,
-                "due_date": now + timedelta(minutes=STATIONS["CARE"]["sla_minutes"]),
-            })
-        result = col(TASKS_COLLECTION).update_one(
-            {"_id": ObjectId(str(task_id))},
-            update,
         )
-        if result.matched_count:
-            st.session_state["selected_station"] = "CARE"
-            st.session_state["selected_case_id"] = str(task_id)
-            clear_task_cache()
-            return True
+        clear_task_cache()
+        st.session_state["selected_station"] = "CARE"
+        st.session_state["show_case"] = False
+        st.session_state["open_case_after_alert"] = False
+
+        # The dialog is opened from the dashboard fragment. Explicitly return
+        # to the full application render after dismissal so the user never
+        # lands on a blank fragment state; CARE is rendered immediately with
+        # the newly activated case.
+        st.rerun(scope="app")
     except Exception:
-        pass
-    return False
+        # If MongoDB is temporarily unavailable, still return to the normal
+        # dashboard rather than leaving the user on an empty page.
+        st.session_state["selected_station"] = "CARE"
+        st.session_state["show_case"] = False
+        st.session_state["open_case_after_alert"] = False
+        try:
+            st.rerun(scope="app")
+        except Exception:
+            pass
 
 
-@st.dialog("Case Details", width="large")
+@st.dialog("Case Details", width="large", on_dismiss=_case_details_dismissed)
 def case_details(task_id):
     """Compact, centered Case Details modal using the original Caseflow data/actions.
 
@@ -8623,18 +8621,34 @@ if (
                 st.session_state["simulation_alert_dismissed"] = True
                 st.session_state["simulation_alert_delay_until"] = 0.0
                 st.session_state["selected_case_id"] = str(simulation_alert_case_id)
-                # Make the alert case a real, fresh CARE case before opening
-                # Case Details. Its station SLA clock starts at 00:00 here,
-                # while account priority remains CRITICAL independently.
-                # CARE is explicitly selected and the task cache is cleared so
-                # closing the dialog returns to the populated CARE table.
                 st.session_state["selected_station"] = "CARE"
-                st.session_state["show_case"] = False
-                st.session_state["open_case_after_alert"] = False
-                _activate_simulation_case_in_care(
-                    simulation_alert_case_id,
-                    reset_clock=True,
-                )
+                st.session_state["show_case"] = True
+                st.session_state["open_case_after_alert"] = True
+
+                # The alert represents a NEW case entering CARE. Reset the
+                # station timer at the exact moment the user opens it, while
+                # preserving its high-priority-account status.
+                transition_now = utc_now()
+                care_sla = timedelta(minutes=STATIONS["CARE"]["sla_minutes"])
+                try:
+                    col(TASKS_COLLECTION).update_one(
+                        {"_id": simulation_alert_task.get("_id")},
+                        {
+                            "$set": {
+                                "active": True,
+                                "simulation_hold": False,
+                                "account_priority": "Yes",
+                                "priority": "Critical",
+                                "department": "CARE",
+                                "station_started_at": transition_now,
+                                "due_date": transition_now + care_sla,
+                                "last_update": transition_now,
+                            },
+                            "$unset": {"simulation_hold": ""},
+                        },
+                    )
+                except Exception:
+                    pass
                 try:
                     col(ALERT_COLLECTION).update_many(
                         {
@@ -8646,8 +8660,10 @@ if (
                     )
                 except Exception:
                     pass
-                # The case is already active in CARE and its clock has been
-                # reset before this call. Open the real dialog directly.
+                clear_task_cache()
+                # Keep open_case_after_alert=True until the native dialog is
+                # actually dismissed. The on_dismiss callback then performs a
+                # full app rerun into CARE, eliminating the blank transition.
                 case_details(str(simulation_alert_case_id))
 
 # ============================================================
@@ -8692,90 +8708,6 @@ st.markdown(
 
 st.markdown(r'''
 <style>
-/* ============================================================
-   MOBILE-SAFE EXCEL UPLOAD TILE
-   The native Streamlit uploader remains the only upload control. Its native
-   Browse button is stretched across the complete tile, making the whole tile
-   the touch/click target and preventing duplicate Upload text.
-   ============================================================ */
-div[data-testid="stFileUploader"] {
-    width:100% !important;
-    margin:6px 0 12px !important;
-}
-div[data-testid="stFileUploader"] > label {
-    display:none !important;
-}
-div[data-testid="stFileUploader"] section {
-    position:relative !important;
-    width:100% !important;
-    min-height:78px !important;
-    border:1px dashed #b9c8d8 !important;
-    border-radius:12px !important;
-    background:#f8fbfd !important;
-    padding:18px 14px !important;
-    box-sizing:border-box !important;
-    cursor:pointer !important;
-    overflow:hidden !important;
-}
-div[data-testid="stFileUploader"] section > button {
-    position:absolute !important;
-    inset:0 !important;
-    width:100% !important;
-    height:100% !important;
-    min-height:100% !important;
-    opacity:0.001 !important;
-    z-index:20 !important;
-    cursor:pointer !important;
-    border:0 !important;
-    background:transparent !important;
-    color:transparent !important;
-    font-size:1px !important;
-}
-div[data-testid="stFileUploader"] [data-testid="stFileUploaderDropzoneInstructions"] {
-    display:none !important;
-}
-div[data-testid="stFileUploader"] section > div {
-    position:relative !important;
-    z-index:1 !important;
-    pointer-events:none !important;
-}
-div[data-testid="stFileUploader"] section > div * {
-    pointer-events:none !important;
-}
-div[data-testid="stFileUploader"] section::before {
-    content:"Upload Excel file" !important;
-    position:relative !important;
-    z-index:2 !important;
-    pointer-events:none !important;
-    display:block !important;
-    text-align:center !important;
-    color:#17324d !important;
-    font-size:13px !important;
-    line-height:1.25 !important;
-    font-weight:800 !important;
-    margin-bottom:4px !important;
-}
-div[data-testid="stFileUploader"] section::after {
-    content:"Tap or click anywhere in this tile to choose a file" !important;
-    position:relative !important;
-    z-index:2 !important;
-    pointer-events:none !important;
-    display:block !important;
-    text-align:center !important;
-    color:#718398 !important;
-    font-size:10px !important;
-    line-height:1.25 !important;
-}
-@media(max-width:700px) {
-    div[data-testid="stFileUploader"] section {
-        min-height:82px !important;
-        padding:19px 10px !important;
-        border-radius:12px !important;
-    }
-    div[data-testid="stFileUploader"] section::before { font-size:12px !important; }
-    div[data-testid="stFileUploader"] section::after { font-size:9px !important; }
-}
-
 /* ============================================================
    CASEFLOW FINAL UI PATCH — 2026-10-06
    ============================================================ */
@@ -9551,3 +9483,101 @@ div[data-testid="stDialog"] [role="tabpanel"]:has(.meeting-panel) * {
 
 </style>
 """, unsafe_allow_html=True)
+
+
+st.markdown(r"""
+<style>
+/* ============================================================
+   MOBILE-FRIENDLY EXCEL UPLOAD TILE
+   The entire visible tile is the native file-picker hit area.
+   Do not display a second "Upload" label/button over the tile.
+   ============================================================ */
+div[data-testid="stDialog"] [data-testid="stFileUploader"] {
+    width:100% !important;
+    margin:8px 0 12px !important;
+}
+div[data-testid="stDialog"] [data-testid="stFileUploader"] > label {
+    display:none !important;
+}
+div[data-testid="stDialog"] [data-testid="stFileUploader"] section {
+    position:relative !important;
+    width:100% !important;
+    min-height:74px !important;
+    height:74px !important;
+    box-sizing:border-box !important;
+    margin:0 !important;
+    padding:0 !important;
+    border:1.5px dashed #b8c9d7 !important;
+    border-radius:12px !important;
+    background:linear-gradient(180deg,#fbfdff,#f5f9fc) !important;
+    display:flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    overflow:hidden !important;
+    cursor:pointer !important;
+    transition:border-color .15s ease, background .15s ease, box-shadow .15s ease !important;
+}
+div[data-testid="stDialog"] [data-testid="stFileUploader"] section:hover {
+    border-color:#0879c9 !important;
+    background:#f3f9fd !important;
+    box-shadow:0 2px 10px rgba(8,121,201,.08) !important;
+}
+/* One visual label only. The native file button is made invisible but
+   remains the full-size touch/click target, so tapping anywhere on the tile
+   opens the device/browser file picker. */
+div[data-testid="stDialog"] [data-testid="stFileUploader"] section::before {
+    content:"Upload Excel file" !important;
+    position:absolute !important;
+    inset:0 !important;
+    z-index:1 !important;
+    display:flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    color:#486173 !important;
+    font-size:12px !important;
+    font-weight:700 !important;
+    letter-spacing:.1px !important;
+    pointer-events:none !important;
+}
+div[data-testid="stDialog"] [data-testid="stFileUploader"] section button {
+    position:absolute !important;
+    inset:0 !important;
+    z-index:5 !important;
+    width:100% !important;
+    height:100% !important;
+    min-width:100% !important;
+    min-height:100% !important;
+    margin:0 !important;
+    padding:0 !important;
+    border:0 !important;
+    border-radius:12px !important;
+    background:transparent !important;
+    box-shadow:none !important;
+    opacity:.001 !important;
+    color:transparent !important;
+    font-size:1px !important;
+    cursor:pointer !important;
+}
+div[data-testid="stDialog"] [data-testid="stFileUploader"] section button *,
+div[data-testid="stDialog"] [data-testid="stFileUploader"] section [data-testid="stFileUploaderDropzoneInstructions"] {
+    opacity:0 !important;
+    pointer-events:none !important;
+}
+/* Keep selected-file text readable below/around the native tile without
+   bringing back the duplicate Upload text. */
+div[data-testid="stDialog"] [data-testid="stFileUploader"] small {
+    font-size:10px !important;
+}
+@media (max-width: 900px) {
+    div[data-testid="stDialog"] [data-testid="stFileUploader"] section {
+        min-height:64px !important;
+        height:64px !important;
+        border-radius:11px !important;
+    }
+    div[data-testid="stDialog"] [data-testid="stFileUploader"] section::before {
+        font-size:12px !important;
+    }
+}
+</style>
+""", unsafe_allow_html=True)
+
