@@ -111,7 +111,7 @@ ACCOUNT_PRIORITY_COLLECTION = "Account_Priority_Collection"
 # Performance tuning: retain a short cache so the 1-second UI fragment does not
 # force a MongoDB read on every tick. This reduces database/network churn while
 # keeping the dashboard visually current.
-TASK_CACHE_TTL = 1.0
+TASK_CACHE_TTL = 2.0
 # Alert scans are lightweight and run in the same 1-second fragment.
 # Duration itself remains browser-side, while Alert_Collection is kept near real time.
 ALERT_SCAN_MIN_INTERVAL = 1.0
@@ -3790,17 +3790,27 @@ def _mark_simulation_event_seen(event_id):
 
 
 def _get_global_simulation_event():
+    """Read the shared simulation event without querying MongoDB on every dashboard paint."""
+    now_epoch = time.time()
+    cached_at = float(st.session_state.get("_global_simulation_cached_at", 0.0) or 0.0)
+    if now_epoch - cached_at < 2.0 and "_global_simulation_cached_value" in st.session_state:
+        return st.session_state.get("_global_simulation_cached_value")
     try:
-        return col(ALERT_COLLECTION).find_one({
+        value = col(ALERT_COLLECTION).find_one({
             "alert_type": "SIMULATION_PRIORITY_ACCOUNT",
             "trigger_key": GLOBAL_SIMULATION_ALERT_KEY,
             "active": True,
         })
     except Exception:
-        return None
+        value = None
+    st.session_state["_global_simulation_cached_at"] = now_epoch
+    st.session_state["_global_simulation_cached_value"] = value
+    return value
 
 
 def _set_global_simulation_event(task_id, triggered_at):
+    st.session_state.pop("_global_simulation_cached_at", None)
+    st.session_state.pop("_global_simulation_cached_value", None)
     try:
         col(ALERT_COLLECTION).update_one(
             {
@@ -3821,6 +3831,8 @@ def _set_global_simulation_event(task_id, triggered_at):
 
 
 def _clear_global_simulation_event():
+    st.session_state.pop("_global_simulation_cached_at", None)
+    st.session_state.pop("_global_simulation_cached_value", None)
     try:
         col(ALERT_COLLECTION).delete_many({
             "alert_type": "SIMULATION_PRIORITY_ACCOUNT",
@@ -7390,8 +7402,9 @@ def case_details(task_id):
     # DASHBOARD
     # ============================================================
     # REAL-TIME DASHBOARD
-    # The dashboard fragment refreshes once per second so MongoDB changes are
-    # reflected on the visible tiles/table without refreshing the entire app.
+    # The dashboard fragment refreshes on a lightweight 2-second data cadence so MongoDB changes
+    # are reflected without rebuilding the entire application; Duration/Total Elapsed remain
+    # browser-clock driven at 1-second precision.
 
 
 # ============================================================
@@ -7702,7 +7715,7 @@ div[data-testid="stDialog"] [data-testid="stVerticalBlock"]::-webkit-scrollbar-t
     # Duration and Total Elapsed are browser-clock driven; dashboard refresh cadence is independent.
 
 
-@st.fragment(run_every="1s")
+@st.fragment(run_every="2s")
 def dashboard_fragment():
 
 
