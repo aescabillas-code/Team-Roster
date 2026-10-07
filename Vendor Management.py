@@ -606,8 +606,9 @@ def _read_server_cookie_token():
 def _read_browser_token():
     """Read persistent authorization; prefer a server-visible cookie, then browser storage."""
     # Cookies survive refreshes and closing/reopening the tab and are available
-    # to Streamlit on the next request. This avoids relying solely on the
-    # streamlit-js-eval iframe's localStorage origin.
+    # to Streamlit on the next request. This is the primary persistence path
+    # for both desktop and mobile browsers, so mobile cannot bypass the
+    # one-time access-code gate.
     cookie_token = _read_server_cookie_token()
     if cookie_token:
         return cookie_token
@@ -639,10 +640,20 @@ def _read_browser_token():
             }}
 
 
-            try {{
-                const value = window.sessionStorage.getItem(key);
-                if (value) return value;
-            }} catch (e) {{}}
+            const sessionStores = [];
+            const addSessionStore = (store) => {{
+                if (store && !sessionStores.includes(store)) sessionStores.push(store);
+            }};
+            try {{ addSessionStore(window.top.sessionStorage); }} catch (e) {{}}
+            try {{ addSessionStore(window.parent.sessionStorage); }} catch (e) {{}}
+            try {{ addSessionStore(window.sessionStorage); }} catch (e) {{}}
+
+            for (const store of sessionStores) {{
+                try {{
+                    const value = store.getItem(key);
+                    if (value) return value;
+                }} catch (e) {{}}
+            }}
 
 
             return '';
@@ -713,7 +724,20 @@ def _save_browser_token(token: str):
 
 
             if (!saved) {{
-                try {{ window.sessionStorage.setItem(key, value); saved = true; }} catch (e) {{}}
+                const sessionStores = [];
+                const addSessionStore = (store) => {{
+                    if (store && !sessionStores.includes(store)) sessionStores.push(store);
+                }};
+                try {{ addSessionStore(window.top.sessionStorage); }} catch (e) {{}}
+                try {{ addSessionStore(window.parent.sessionStorage); }} catch (e) {{}}
+                try {{ addSessionStore(window.sessionStorage); }} catch (e) {{}}
+
+                for (const store of sessionStores) {{
+                    try {{
+                        store.setItem(key, value);
+                        saved = true;
+                    }} catch (e) {{}}
+                }}
             }}
 
 
@@ -774,7 +798,20 @@ def _clear_browser_token():
             }}
 
 
-            try {{ window.sessionStorage.removeItem(key); cleared = true; }} catch (e) {{}}
+            const sessionStores = [];
+            const addSessionStore = (store) => {{
+                if (store && !sessionStores.includes(store)) sessionStores.push(store);
+            }};
+            try {{ addSessionStore(window.top.sessionStorage); }} catch (e) {{}}
+            try {{ addSessionStore(window.parent.sessionStorage); }} catch (e) {{}}
+            try {{ addSessionStore(window.sessionStorage); }} catch (e) {{}}
+
+            for (const store of sessionStores) {{
+                try {{
+                    store.removeItem(key);
+                    cleared = true;
+                }} catch (e) {{}}
+            }}
             return cleared ? 'cleared' : 'error';
         }} catch (e) {{
             return 'error';
@@ -865,7 +902,9 @@ def clear_token_access():
 
 def access_gate():
     """
-    One-time access-code gate with persistent desktop/mobile authorization.
+    One-time access-code gate with the same authorization requirement on
+    desktop and mobile browsers. A valid signed browser token is the only
+    bypass after the code has been entered successfully.
     """
     if URLSafeTimedSerializer is None or streamlit_js_eval is None:
         st.error(
@@ -8135,24 +8174,23 @@ def dashboard_fragment():
              */
             if (!window.__taskTrackerDurationLoop) {
                 window.__taskTrackerDurationLoop = true;
-                let lastSecond = -1;
 
-                function durationClockLoop() {
-                    const now = Date.now();
-                    const second = Math.floor(now / 1000);
-                    if (second !== lastSecond) {
-                        lastSecond = second;
-                        updateDurations();
-                        updateTotalElapsed();
-                        updateWarningAnimations();
-                    }
-                    /* Wake close to the next wall-clock second instead of
-                       running requestAnimationFrame ~60 times per second.
-                       This preserves 1-second timer accuracy while materially
-                       reducing browser CPU work and visual contention. */
-                    const delay = Math.max(50, 1000 - (now % 1000) + 10);
-                    window.setTimeout(durationClockLoop, delay);
-                }
+                /*
+                 * Duration and Total Elapsed are true 1-second browser clocks.
+                 * They do NOT wait for the Streamlit fragment/data refresh.
+                 * A dedicated 1000 ms interval keeps the counters independent
+                 * from MongoDB/cache timing.
+                 */
+                const refreshDurationClocks = function () {
+                    updateDurations();
+                    updateTotalElapsed();
+                    updateWarningAnimations();
+                };
+
+                window.__taskTrackerDurationInterval = window.setInterval(
+                    refreshDurationClocks,
+                    1000
+                );
 
                 /*
                  * Streamlit may replace the fragment DOM on its normal
@@ -8171,7 +8209,7 @@ def dashboard_fragment():
                     });
                 }
 
-                durationClockLoop();
+                refreshDurationClocks();
             }
 
 
