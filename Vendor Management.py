@@ -5388,6 +5388,12 @@ if st.session_state["show_settings"]:
                     scrollbar-width:thin !important;
                     scrollbar-color:rgba(71,85,105,.48) transparent !important;
                     box-sizing:border-box !important;
+                    padding-top:8px !important;
+                }
+                /* Keep only a single compact line of space between the Settings
+                   dialog header and the tab row. */
+                div[data-testid="stDialog"]:has(.settings-scroll-marker) [data-baseweb="tab-list"] {
+                    margin-top:0 !important;
                 }
                 div[data-testid="stDialog"]:has(.settings-scroll-marker) [data-testid="stDialogContent"]::-webkit-scrollbar {
                     width:7px !important;
