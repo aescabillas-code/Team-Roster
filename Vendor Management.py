@@ -5368,15 +5368,17 @@ if st.session_state["show_settings"]:
 
         else:
 
-            # Use the same native single-scroll-surface behavior as Case Details.
-            # The marker scopes this behavior to Settings only.
+            # Settings uses the same single native scroll surface as Case Details.
+            # This is scoped to the Settings dialog as a whole, so every Settings
+            # tab, including Alert Management, uses the same global scroll behavior
+            # and inherits the application's existing global typography/formatting.
             st.markdown(
                 """
                 <style>
                 div[data-testid="stDialog"]:has(.settings-scroll-marker) > div {
                     overflow:hidden !important;
                 }
-                div[data-testid="stDialog"]:has(.settings-scroll-marker) > div > div {
+                div[data-testid="stDialog"]:has(.settings-scroll-marker) [data-testid="stDialogContent"] {
                     height:calc(100vh - 185px) !important;
                     max-height:calc(100vh - 185px) !important;
                     min-height:220px !important;
@@ -5387,14 +5389,14 @@ if st.session_state["show_settings"]:
                     scrollbar-color:rgba(71,85,105,.48) transparent !important;
                     box-sizing:border-box !important;
                 }
-                div[data-testid="stDialog"]:has(.settings-scroll-marker) > div > div::-webkit-scrollbar {
+                div[data-testid="stDialog"]:has(.settings-scroll-marker) [data-testid="stDialogContent"]::-webkit-scrollbar {
                     width:7px !important;
                 }
-                div[data-testid="stDialog"]:has(.settings-scroll-marker) > div > div::-webkit-scrollbar-thumb {
+                div[data-testid="stDialog"]:has(.settings-scroll-marker) [data-testid="stDialogContent"]::-webkit-scrollbar-thumb {
                     background:rgba(71,85,105,.48) !important;
                     border-radius:999px !important;
                 }
-                div[data-testid="stDialog"]:has(.settings-scroll-marker) > div > div::-webkit-scrollbar-thumb:hover {
+                div[data-testid="stDialog"]:has(.settings-scroll-marker) [data-testid="stDialogContent"]::-webkit-scrollbar-thumb:hover {
                     background:rgba(30,41,59,.68) !important;
                 }
                 </style>
@@ -5611,34 +5613,6 @@ if st.session_state["show_settings"]:
             # ALERT DEFINITIONS — additive admin functionality
             # -----------------------------------------------
             with tabs[4]:
-                # Smaller typography for Alert Management only. No control,
-                # spacing, sizing, or alert behavior is changed.
-                st.markdown(
-                    """
-                    <style>
-                    div[data-testid="stDialog"] div[data-testid="stVerticalBlock"]:has(.alert-management-font-marker) {
-                        font-size:10px !important;
-                    }
-                    div[data-testid="stDialog"] div[data-testid="stVerticalBlock"]:has(.alert-management-font-marker) h3 {
-                        font-size:13px !important;
-                        line-height:1.2 !important;
-                    }
-                    div[data-testid="stDialog"] div[data-testid="stVerticalBlock"]:has(.alert-management-font-marker) p,
-                    div[data-testid="stDialog"] div[data-testid="stVerticalBlock"]:has(.alert-management-font-marker) label,
-                    div[data-testid="stDialog"] div[data-testid="stVerticalBlock"]:has(.alert-management-font-marker) input,
-                    div[data-testid="stDialog"] div[data-testid="stVerticalBlock"]:has(.alert-management-font-marker) textarea,
-                    div[data-testid="stDialog"] div[data-testid="stVerticalBlock"]:has(.alert-management-font-marker) button,
-                    div[data-testid="stDialog"] div[data-testid="stVerticalBlock"]:has(.alert-management-font-marker) [role="combobox"] {
-                        font-size:10px !important;
-                    }
-                    div[data-testid="stDialog"] div[data-testid="stVerticalBlock"]:has(.alert-management-font-marker) [data-testid="stCaptionContainer"] {
-                        font-size:9px !important;
-                    }
-                    </style>
-                    <div class="alert-management-font-marker" aria-hidden="true"></div>
-                    """,
-                    unsafe_allow_html=True,
-                )
                 st.markdown("### Alert Management")
                 st.caption(
                     "Create and edit popup alert definitions. Existing dashboard alerts and simulation behavior remain unchanged unless an alert definition is explicitly edited."
