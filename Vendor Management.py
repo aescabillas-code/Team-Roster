@@ -5388,10 +5388,18 @@ if st.session_state["show_settings"]:
                     scrollbar-width:thin !important;
                     scrollbar-color:rgba(71,85,105,.48) transparent !important;
                     box-sizing:border-box !important;
-                    padding-top:8px !important;
+                    padding-top:4px !important;
                 }
-                /* Keep only a single compact line of space between the Settings
-                   dialog header and the tab row. */
+                /* The marker is only a selector anchor. It must not create a
+                   Streamlit vertical-block gap above the Settings tabs. */
+                div[data-testid="stDialog"] [data-testid="stElementContainer"]:has(.settings-scroll-marker),
+                div[data-testid="stDialog"] [data-testid="stElementContainer"]:has(.settings-scroll-marker) > div,
+                div[data-testid="stDialog"] [data-testid="stElementContainer"]:has(.settings-scroll-marker) [data-testid="stMarkdownContainer"] {
+                    height:0 !important;
+                    min-height:0 !important;
+                    margin:0 !important;
+                    padding:0 !important;
+                }
                 div[data-testid="stDialog"]:has(.settings-scroll-marker) [data-baseweb="tab-list"] {
                     margin-top:0 !important;
                 }
