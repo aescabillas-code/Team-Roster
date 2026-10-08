@@ -1173,6 +1173,7 @@ def access_gate():
     st.markdown(
         """
         <style>
+
         .access-wrap {
             max-width:560px;
             margin:12vh auto 0 auto;
@@ -1198,7 +1199,8 @@ def access_gate():
             color:#73819a;
             margin-bottom:25px;
         }
-        </style>
+        
+</style>
 
 
         <div class="access-wrap">
@@ -1292,6 +1294,7 @@ for k, v in defaults.items():
 st.markdown(
     """
     <style>
+
     @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
 
 
@@ -1755,11 +1758,6 @@ st.markdown(
         pointer-events:none !important;
     }
 
-    /* Monitoring reruns must never steal focus or create a visible loading flash. */
-    [data-testid="stAppViewContainer"] {
-        scroll-behavior:auto !important;
-    }
-
 
     /* STATION TILES — reference visual + reliable full-card click target */
     [class*="st-key-station_wrap_care"], [class*="st-key-station_wrap_arch"],
@@ -1769,8 +1767,6 @@ st.markdown(
         position:relative; z-index:1; height:150px; min-height:150px; box-sizing:border-box;
         border-radius:11px; padding:13px 17px; overflow:hidden;
         color:#102041;
-    }
-    .station-card-visual {
         transition:border-color .12s ease, box-shadow .12s ease, transform .12s ease;
         will-change:border-color, box-shadow;
     }
@@ -2264,24 +2260,7 @@ st.markdown(
 
     /* REFERENCE TABLE PANEL */
     .cases-panel { background:#fff;border-radius:18px;padding:16px 12px 18px;box-shadow:0 3px 18px rgba(29,55,96,.05); }
-
-
-    /* RIGHT-SIDE CASE DRAWER, matching the uploaded reference */
-    div[data-testid="stDialog"] > div { position:fixed !important;top:278px !important;right:14px !important;left:auto !important;transform:none !important;width:min(494px,calc(100vw - 28px)) !important;max-width:min(494px,calc(100vw - 28px)) !important;height:calc(100vh - 294px) !important;max-height:calc(100vh - 294px) !important;margin:0 !important;border-radius:18px !important;box-shadow:0 12px 36px rgba(25,42,76,.16) !important;overflow:hidden !important; }
-    div[data-testid="stDialog"] [data-testid="stDialogContent"] { padding-top:0 !important; }
-    div[data-testid="stDialog"] header { border-bottom:1px solid #edf0f5 !important; }
-    div[data-testid="stDialog"] > div > div { overflow-y:auto !important; }
-
-
-    /* DIALOG */
-
-
-    div[data-testid="stDialog"] > div {
-        border-radius:18px !important;
-    }
-
-
-    /* ALERT */
+/* ALERT */
 
 
     .alert-card {
@@ -2550,11 +2529,6 @@ st.markdown(
             border-radius:14px !important;
         }
 
-        div[data-testid="stDialog"] [data-testid="stDialogContent"] {
-            overflow:hidden !important;
-            scrollbar-width:none !important;
-        }
-
         div[data-testid="stDialog"] [data-testid="stDialogContent"] > div {
             zoom:.68 !important;
             width:147.06% !important;
@@ -2563,7 +2537,8 @@ st.markdown(
     }
 
 
-    </style>
+    
+</style>
     """,
     unsafe_allow_html=True,
 )
@@ -2575,25 +2550,25 @@ st.markdown(
 # ============================================================
 st.markdown(r"""
 <style>
+
 /* Center the Streamlit dialog instead of rendering it as the old right drawer. */
 /* CASE DETAILS — compact fit-to-modal layout.
    The complete workspace is scaled down slightly so the Case Information,
-   Case Actions and Knowledge Base columns fit inside the modal without
-   creating a vertical scrollbar. */
+   Case Actions and Knowledge Base columns fit inside the modal. */
 div[data-testid="stDialog"] > div {
-    position: fixed !important;
-    top: 50% !important;
-    left: 50% !important;
-    right: auto !important;
-    bottom: auto !important;
-    transform: translate(-50%, -50%) !important;
-    width: min(1400px, calc(100vw - 28px)) !important;
-    max-width: min(1400px, calc(100vw - 28px)) !important;
-    height: min(94vh, 900px) !important;
-    max-height: calc(100vh - 28px) !important;
-    margin: 0 !important;
-    border-radius: 12px !important;
-    overflow: hidden !important;
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     box-shadow: 0 18px 60px rgba(15,23,42,.28) !important;
     border: 1px solid #dbe4ef !important;
 }
@@ -2602,59 +2577,29 @@ div[data-testid="stDialog"] [data-testid="stDialogContent"] {
     padding: 0 8px 6px 8px !important;
     height: calc(100% - 54px) !important;
     max-height: calc(100% - 54px) !important;
-    overflow: hidden !important;
-    overflow-y: hidden !important;
-    overflow-x: hidden !important;
-    scrollbar-width: none !important;
-}
-
-div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar,
-div[data-testid="stDialog"] > div > div::-webkit-scrollbar {
-    display: none !important;
-    width: 0 !important;
-    height: 0 !important;
 }
 
 div[data-testid="stDialog"] header {
-    min-height: 50px !important;
-    height: 50px !important;
-    padding: 5px 14px !important;
+    
+    
+    
     background: linear-gradient(180deg,#f7fbff 0%,#edf4fb 100%) !important;
     border-bottom: 1px solid #dce5ef !important;
 }
 
 div[data-testid="stDialog"] header p {
-    font-size: 20px !important;
-    font-weight: 800 !important;
+    
+    
     color: #102041 !important;
-}
-
-div[data-testid="stDialog"] > div > div {
-    overflow: hidden !important;
-    overflow-y: hidden !important;
-    overflow-x: hidden !important;
-    scrollbar-width: none !important;
 }
 
 /* Case Details typography follows the supplied reference: Inter with the
    same compact sizing used throughout the reference workspace. */
-div[data-testid="stDialog"],
-div[data-testid="stDialog"] [data-testid="stDialogContent"],
-div[data-testid="stDialog"] [data-testid="stDialogContent"] * {
-    font-family:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
-}
 div[data-testid="stDialog"] [data-testid="stDialogContent"] {
     font-size:9px !important;
 }
 
 /* Scale the actual Case Details workspace, not the modal shell/header. */
-div[data-testid="stDialog"] [data-testid="stDialogContent"] > div {
-    zoom: .78 !important;
-    width: 128.205% !important;
-    max-width: 128.205% !important;
-    box-sizing: border-box !important;
-}
-
 /* Compact the top summary so the three-column workspace gets more vertical room. */
 div[data-testid="stDialog"] .case-detail-hero {
     margin: 0 0 5px 0 !important;
@@ -2675,17 +2620,10 @@ div[data-testid="stDialog"] .case-summary-strip {
     margin: 2px 0 4px !important;
 }
 div[data-testid="stDialog"] .case-summary-cell { padding: 1px 9px !important; }
-div[data-testid="stDialog"] .case-summary-cell > span { font-size: 8px !important; margin-bottom: 2px !important; }
+div[data-testid="stDialog"] .case-summary-cell > span {  margin-bottom: 2px !important; }
 div[data-testid="stDialog"] .case-summary-cell > strong { font-size: 10px !important; }
 div[data-testid="stDialog"] .case-avatar { width: 28px !important; height: 28px !important; font-size: 10px !important; }
 div[data-testid="stDialog"] .case-status-chip { padding: 3px 7px !important; font-size: 9px !important; }
-
-div[data-testid="stDialog"] [data-baseweb="tab"] {
-    padding: 6px 11px !important;
-    font-size: 10px !important;
-}
-
-
 /* Compact the three workspace columns so their full contents fit in the modal. */
 div[data-testid="stDialog"] .case-card {
     padding: 7px 9px !important;
@@ -2714,13 +2652,13 @@ div[data-testid="stDialog"] .action-readonly-label {
     margin-top: 3px !important;
 }
 div[data-testid="stDialog"] .action-readonly-value {
-    font-size: 9px !important;
-    padding: 5px 7px !important;
+    
+    
     margin-top: 2px !important;
 }
 div[data-testid="stDialog"] .case-checklist-wrap {
     margin-top: 5px !important;
-    padding: 6px !important;
+    
 }
 div[data-testid="stDialog"] .case-checklist-title {
     font-size: 9px !important;
@@ -2758,7 +2696,7 @@ div[data-testid="stDialog"] button {
     min-height: 28px !important;
     height: auto !important;
     padding: 4px 8px !important;
-    font-size: 9px !important;
+    
 }
 div[data-testid="stDialog"] .kb-inline-card {
     padding: 7px 8px !important;
@@ -2829,18 +2767,14 @@ div[data-testid="stDialog"] .case-card:empty {
 
 /* Make Streamlit tabs resemble the reference's compact navigation strip. */
 div[data-testid="stDialog"] [data-baseweb="tab-list"] {
-    gap:0 !important;
+    
     border-bottom:1px solid #dbe4ee !important;
-    overflow-x:auto !important;
-    scrollbar-width:none !important;
-    -webkit-overflow-scrolling:touch !important;
 }
-div[data-testid="stDialog"] [data-baseweb="tab-list"]::-webkit-scrollbar { display:none !important; }
 div[data-testid="stDialog"] [data-baseweb="tab"] {
-    padding:8px 15px !important;
+    
     min-height:32px !important;
     color:#334155 !important;
-    font-size:12px !important;
+    
     line-height:16px !important;
     white-space:nowrap !important;
     cursor:pointer !important;
@@ -2965,6 +2899,7 @@ div[data-testid="stDialog"] [data-testid="stHorizontalBlock"] > div { min-width:
     .case-summary-cell { border-left:0; border-top:1px solid #d7e0e9; }
     .case-summary-cell:nth-child(-n+2) { border-top:0; }
 }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -2975,59 +2910,13 @@ div[data-testid="stDialog"] [data-testid="stHorizontalBlock"] > div { min-width:
 # ============================================================
 st.markdown(r"""
 <style>
+
 /*
    CASE DETAILS SIZING
    The dashboard reference is approximately 1366px wide.  Keep the case
    dialog clearly smaller than the dashboard instead of allowing it to span
    almost the entire viewport.
 */
-div[data-testid="stDialog"] > div {
-    position: fixed !important;
-    top: 50% !important;
-    left: 50% !important;
-    right: auto !important;
-    bottom: auto !important;
-    transform: translate(-50%, -50%) !important;
-
-    /* Desktop target: compact, centered, approximately 3/4 of the viewport. */
-    width: min(1080px, calc(100vw - 72px)) !important;
-    max-width: min(1080px, calc(100vw - 72px)) !important;
-
-    height: min(76vh, 540px) !important;
-    max-height: calc(100vh - 48px) !important;
-
-    margin: 0 !important;
-    overflow: hidden !important;
-    border-radius: 12px !important;
-}
-
-/* The modal itself does not scroll horizontally.
-   Its content is the ONE vertical scroll surface. */
-div[data-testid="stDialog"] [data-testid="stDialogContent"] {
-    height: calc(100% - 48px) !important;
-    max-height: calc(100% - 48px) !important;
-    min-height: 0 !important;
-    overflow-y: auto !important;
-    overflow-x: hidden !important;
-    padding: 0 12px 12px 12px !important;
-    scrollbar-width: auto !important;
-    scrollbar-color: #8fa3b9 #edf2f7 !important;
-}
-
-div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar {
-    width: 9px !important;
-    display: block !important;
-}
-div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar-track {
-    background: #edf2f7 !important;
-    border-radius: 8px !important;
-}
-div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar-thumb {
-    background: #8fa3b9 !important;
-    border-radius: 8px !important;
-    border: 2px solid #edf2f7 !important;
-}
-
 div[data-testid="stDialog"] [data-testid="stDialogContent"] > div {
     width: 100% !important;
     max-width: 100% !important;
@@ -3090,8 +2979,8 @@ div[data-testid="stDialog"] .case-due-badge {
 /* Case summary: seven compact fields without forcing horizontal overflow. */
 div[data-testid="stDialog"] .case-summary-strip {
     grid-template-columns: 1.15fr 1fr 1fr 1.25fr 1fr 1.05fr 1.05fr !important;
-    padding: 4px 4px !important;
-    margin: 2px 0 5px !important;
+    
+    
 }
 div[data-testid="stDialog"] .case-summary-cell {
     padding: 2px 6px !important;
@@ -3136,7 +3025,7 @@ div[data-testid="stDialog"] .case-card {
     border-radius: 6px !important;
 }
 div[data-testid="stDialog"] .case-card-heading {
-    font-size: 10px !important;
+    
     padding-bottom: 5px !important;
     margin-bottom: 4px !important;
     gap: 5px !important;
@@ -3188,9 +3077,9 @@ div[data-testid="stDialog"] .kb-full-sop-label {
     margin-bottom:4px !important;
 }
 div[data-testid="stDialog"] .kb-full-sop-text {
-    color:#334155 !important;
-    font-size:8.5px !important;
-    line-height:1.35 !important;
+    
+    
+    
     word-break:break-word !important;
 }
 div[data-testid="stDialog"] [class*="st-key-kb_tile_"] {
@@ -3261,52 +3150,7 @@ div[data-testid="stDialog"] [data-testid="stHorizontalBlock"] > div {
     }
 }
 
-/* FINAL CASE DETAILS SCROLL FIX
-   The previous compact overrides explicitly hid the scroll surface.
-   Keep the modal compact, but make the dialog content itself the scroll area. */
-div[data-testid="stDialog"] > div {
-    overflow:hidden !important;
-}
-
-div[data-testid="stDialog"] > div > div {
-    height:calc(100% - 48px) !important;
-    max-height:calc(100% - 48px) !important;
-    min-height:0 !important;
-    overflow-y:auto !important;
-    overflow-x:hidden !important;
-    scrollbar-width:thin !important;
-    scrollbar-color:#7f94aa #edf2f7 !important;
-}
-
-div[data-testid="stDialog"] > div > div::-webkit-scrollbar {
-    width:10px !important;
-    display:block !important;
-}
-
-div[data-testid="stDialog"] > div > div::-webkit-scrollbar-track {
-    background:#edf2f7 !important;
-    border-radius:8px !important;
-}
-
-div[data-testid="stDialog"] > div > div::-webkit-scrollbar-thumb {
-    background:#7f94aa !important;
-    border-radius:8px !important;
-    border:2px solid #edf2f7 !important;
-}
-
-/* Do not hide the scrollbar on the nested Streamlit content element. */
-div[data-testid="stDialog"] [data-testid="stDialogContent"] {
-    height:auto !important;
-    max-height:none !important;
-    min-height:0 !important;
-    overflow:visible !important;
-    overflow-y:visible !important;
-    overflow-x:visible !important;
-    scrollbar-width:auto !important;
-}
-
-/* Preserve the compact 1366x768 desktop proportion while leaving enough
-   height for the user to scroll through complete case information. */
+/* Preserve the compact 1366x768 desktop proportion. */
 @media (min-width:1121px) {
     div[data-testid="stDialog"] > div {
         width:min(1080px,calc(100vw - 72px)) !important;
@@ -3315,6 +3159,7 @@ div[data-testid="stDialog"] [data-testid="stDialogContent"] {
         max-height:calc(100vh - 48px) !important;
     }
 }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -5468,13 +5313,15 @@ if st.session_state["show_settings"]:
             st.markdown(
                 """
                 <style>
+
                 /* Admin PIN is intentionally password-only: hide the native
                    visibility/reveal control. The surrounding st.form() keeps
                    Enter-key submission enabled. */
                 div[data-testid="stDialog"] [data-testid="stTextInput"] button {
                     display:none !important;
                 }
-                </style>
+                
+</style>
                 """,
                 unsafe_allow_html=True,
             )
@@ -5520,61 +5367,6 @@ if st.session_state["show_settings"]:
 
 
         else:
-
-            # Settings uses the same reliable single-scroll-surface behavior as
-            # the H&M Case Details workspace. The marker scopes this CSS to the
-            # Settings dialog only, so other dialogs and dashboard behavior are
-            # not changed.
-            st.markdown(
-                """
-                <style>
-                div[data-testid="stDialog"]:has(.settings-dialog-marker) > div {
-                    overflow:hidden !important;
-                    height:min(88vh,760px) !important;
-                    max-height:calc(100vh - 24px) !important;
-                }
-                div[data-testid="stDialog"]:has(.settings-dialog-marker) > div > div {
-                    height:calc(100% - 48px) !important;
-                    max-height:calc(100% - 48px) !important;
-                    min-height:0 !important;
-                    overflow-y:auto !important;
-                    overflow-x:hidden !important;
-                    scrollbar-width:thin !important;
-                    scrollbar-color:#7f94aa #edf2f7 !important;
-                    overscroll-behavior:contain !important;
-                }
-                div[data-testid="stDialog"]:has(.settings-dialog-marker) > div > div::-webkit-scrollbar {
-                    width:10px !important;
-                    display:block !important;
-                }
-                div[data-testid="stDialog"]:has(.settings-dialog-marker) > div > div::-webkit-scrollbar-track {
-                    background:#edf2f7 !important;
-                    border-radius:8px !important;
-                }
-                div[data-testid="stDialog"]:has(.settings-dialog-marker) > div > div::-webkit-scrollbar-thumb {
-                    background:#7f94aa !important;
-                    border-radius:8px !important;
-                    border:2px solid #edf2f7 !important;
-                }
-                div[data-testid="stDialog"]:has(.settings-dialog-marker) [data-testid="stDialogContent"] {
-                    height:auto !important;
-                    max-height:none !important;
-                    min-height:0 !important;
-                    overflow:visible !important;
-                    overflow-y:visible !important;
-                    overflow-x:visible !important;
-                }
-                @media (max-width:760px) {
-                    div[data-testid="stDialog"]:has(.settings-dialog-marker) > div {
-                        height:calc(100vh - 20px) !important;
-                        max-height:calc(100vh - 20px) !important;
-                    }
-                }
-                </style>
-                <div class="settings-dialog-marker" aria-hidden="true"></div>
-                """,
-                unsafe_allow_html=True,
-            )
 
             tabs = st.tabs([
                 "Cases",
@@ -7670,10 +7462,11 @@ def case_details(task_id):
 
 
 # ============================================================
-# FINAL CASE DETAILS MODAL SHELL — NATIVE SCROLL CONTAINER
+# FINAL CASE DETAILS MODAL SHELL
 # ============================================================
 st.markdown(r"""
 <style>
+
 /* Compact modal shell sized to the actual Caseflow desktop workspace. */
 div[data-testid="stDialog"] > div {
     position: fixed !important;
@@ -7690,11 +7483,6 @@ div[data-testid="stDialog"] > div {
     overflow: hidden !important;
 }
 
-/* Never hide the native scrollbar of the Streamlit container. */
-div[data-testid="stDialog"] [data-testid="stVerticalBlock"] {
-    scrollbar-width: thin !important;
-}
-
 /* Remove the old zoom/oversizing behavior from the case-detail workspace. */
 div[data-testid="stDialog"] .case-detail-hero,
 div[data-testid="stDialog"] .case-summary-strip {
@@ -7706,28 +7494,6 @@ div[data-testid="stDialog"] .case-summary-cell span { font-size: 8px !important;
 div[data-testid="stDialog"] .case-summary-cell strong { font-size: 9px !important; }
 div[data-testid="stDialog"] .case-assignee-copy span { font-size: 8px !important; }
 div[data-testid="stDialog"] .case-assignee-copy strong { font-size: 9px !important; }
-
-/* Sleek, thin, semi-transparent scrollbar for the ACTUAL native Streamlit scroll container. */
-div[data-testid="stDialog"] [data-testid="stVerticalBlock"] {
-    scrollbar-width: thin !important;
-    scrollbar-color: rgba(71, 85, 105, .42) transparent !important;
-}
-div[data-testid="stDialog"] [data-testid="stVerticalBlock"]::-webkit-scrollbar {
-    width: 5px !important;
-    height: 5px !important;
-}
-div[data-testid="stDialog"] [data-testid="stVerticalBlock"]::-webkit-scrollbar-track {
-    background: transparent !important;
-    border: 0 !important;
-}
-div[data-testid="stDialog"] [data-testid="stVerticalBlock"]::-webkit-scrollbar-thumb {
-    background: rgba(71, 85, 105, .42) !important;
-    border-radius: 999px !important;
-    border: 0 !important;
-}
-div[data-testid="stDialog"] [data-testid="stVerticalBlock"]::-webkit-scrollbar-thumb:hover {
-    background: rgba(30, 41, 59, .62) !important;
-}
 
 @media (max-width: 900px) {
     div[data-testid="stDialog"] > div {
@@ -7741,11 +7507,6 @@ div[data-testid="stDialog"] [data-testid="stVerticalBlock"]::-webkit-scrollbar-t
 /* ============================================================
    CASE DETAILS VISUAL REFINEMENT — INTER / UNIFORM BODY TYPE
    ============================================================ */
-div[data-testid="stDialog"],
-div[data-testid="stDialog"] * {
-    font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif !important;
-}
-
 /* Keep ordinary Case Details text on one consistent readable scale.
    Headings, selected SOP title and status chips retain deliberate hierarchy. */
 div[data-testid="stDialog"] .case-card,
@@ -7781,11 +7542,11 @@ div[data-testid="stDialog"] .meeting-record {
 
 /* Station buttons: compact checklist station switcher. */
 div[data-testid="stDialog"] [class*="st-key-select_action_station_"] button {
-    font-size:9.5px !important;
+    
     font-weight:700 !important;
-    min-height:28px !important;
-    height:28px !important;
-    padding:3px 7px !important;
+    
+    
+    
     border-radius:6px !important;
     line-height:1 !important;
     white-space:nowrap !important;
@@ -7807,15 +7568,15 @@ div[data-testid="stDialog"] .case-card [class*="st-key-case_checklist_remove_"] 
 
 /* Checklist delete control. */
 div[data-testid="stDialog"] [class*="st-key-case_checklist_remove_"] button {
-    width:28px !important;
-    min-width:28px !important;
-    height:28px !important;
-    min-height:28px !important;
+    
+    
+    
+    
     padding:0 !important;
     border:0 !important;
     background:transparent !important;
     color:#94a3b8 !important;
-    font-size:18px !important;
+    
     font-weight:400 !important;
 }
 div[data-testid="stDialog"] [class*="st-key-case_checklist_remove_"] button:hover {
@@ -7869,7 +7630,7 @@ div[data-testid="stDialog"] .kb-selected-sop-meta {
 }
 
 div[data-testid="stDialog"] .kb-full-sop {
-    padding:13px 15px !important;
+    
     background:#fff !important;
     border:1px solid #dbe5ef !important;
     border-radius:8px !important;
@@ -7952,24 +7713,6 @@ div[data-testid="stDialog"] .meeting-record a:hover {
     text-decoration:underline !important;
 }
 
-/* Keep the single actual Case Details scroll surface sleek and transparent. */
-div[data-testid="stDialog"] [data-testid="stVerticalBlock"] {
-    scrollbar-width:thin !important;
-    scrollbar-color:rgba(71,85,105,.42) transparent !important;
-}
-div[data-testid="stDialog"] [data-testid="stVerticalBlock"]::-webkit-scrollbar {
-    width:5px !important;
-}
-div[data-testid="stDialog"] [data-testid="stVerticalBlock"]::-webkit-scrollbar-track {
-    background:transparent !important;
-}
-div[data-testid="stDialog"] [data-testid="stVerticalBlock"]::-webkit-scrollbar-thumb {
-    background:rgba(71,85,105,.42) !important;
-    border-radius:999px !important;
-}
-div[data-testid="stDialog"] [data-testid="stVerticalBlock"]::-webkit-scrollbar-thumb:hover {
-    background:rgba(30,41,59,.62) !important;
-}
 
 </style>
 """, unsafe_allow_html=True)
@@ -8909,6 +8652,7 @@ dashboard_fragment()
 st.markdown(
     """
     <style>
+
     [class*="st-key-simulation_alert_overlay"] {
         position:fixed !important;
         inset:0 !important;
@@ -9032,7 +8776,8 @@ st.markdown(
         to { opacity:1; transform:scale(1.08); }
     }
     .kb-sop-list-spacer { height:8px; }
-    </style>
+    
+</style>
     """,
     unsafe_allow_html=True,
 )
@@ -9047,6 +8792,7 @@ st.markdown(
 # ============================================================
 st.markdown(r"""
 <style>
+
 div[data-testid="stDialog"] .active-war-room {
     border-color:#00a98f !important;
     background:linear-gradient(135deg,#f7fffc,#eefbf8) !important;
@@ -9203,6 +8949,7 @@ div[data-testid="stDialog"] .simulation-collab-footer a {
         grid-template-columns:1fr !important;
     }
 }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -9385,26 +9132,10 @@ st.markdown(
 
 st.markdown(r'''
 <style>
+
 /* ============================================================
    CASEFLOW FINAL UI PATCH — 2026-10-06
    ============================================================ */
-/* Use one real scroll surface for Case Details. Do not apply scrollbar
-   styling to every nested Streamlit vertical block. */
-div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
-    height:auto !important;
-    max-height:none !important;
-    min-height:0 !important;
-    overflow:visible !important;
-    overflow-x:visible !important;
-    overscroll-behavior:auto !important;
-    padding-bottom:18px !important;
-    box-sizing:border-box !important;
-}
-div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar { width:5px !important; height:5px !important; }
-div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar-track { background:transparent !important; }
-div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar-thumb { background:rgba(71,85,105,.42) !important; border-radius:999px !important; }
-div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar-thumb:hover { background:rgba(30,41,59,.62) !important; }
-
 /* Uniform Case Details body typography. Only the dialog header, hero case
    number/subject and card headings receive a larger type scale. */
 div[data-testid="stDialog"] .case-detail-description,
@@ -9437,7 +9168,7 @@ div[data-testid="stDialog"] .resolution-value { font-size:11px !important; }
 /* Compact select/dropdown controls so they do not consume large vertical space. */
 div[data-testid="stDialog"] [data-testid="stSelectbox"] { margin:1px 0 2px !important; }
 div[data-testid="stDialog"] [data-testid="stSelectbox"] label { font-size:9px !important; margin-bottom:1px !important; line-height:1.1 !important; }
-div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] > div { min-height:28px !important; height:28px !important; padding-top:0 !important; padding-bottom:0 !important; border-radius:5px !important; }
+div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] > div {   padding-top:0 !important; padding-bottom:0 !important;  }
 div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] span { font-size:9.5px !important; line-height:26px !important; }
 div[data-testid="stDialog"] [data-testid="stSelectbox"] svg { width:12px !important; height:12px !important; }
 
@@ -9452,76 +9183,76 @@ div[data-testid="stDialog"] .resolution-log-meta { color:#64748b !important; fon
    KNOWLEDGE BASE — CLEAN WHITE CASE-MATCHED READER
    ============================================================ */
 div[data-testid="stDialog"] .kb-panel-intro {
-    background:#fff !important;
+    
     border:1px solid #e3eaf1 !important;
     border-radius:7px !important;
-    padding:8px 10px !important;
+    
     margin-bottom:7px !important;
 }
 div[data-testid="stDialog"] .kb-panel-title {
     color:#102041 !important;
-    font-size:12px !important;
+    
     font-weight:850 !important;
 }
 div[data-testid="stDialog"] .kb-panel-sub {
     color:#64748b !important;
-    font-size:9.5px !important;
-    line-height:1.35 !important;
+    
+    
     margin-top:2px !important;
 }
 div[data-testid="stDialog"] .kb-suggested-title {
     color:#008f80 !important;
-    font-size:8px !important;
+    
     font-weight:850 !important;
     letter-spacing:.45px !important;
     text-transform:uppercase !important;
-    margin:6px 0 3px !important;
+    
 }
 div[data-testid="stDialog"] [class*="st-key-kb_suggested_"] button {
     border:1px solid #dce8e7 !important;
     background:#fff !important;
     color:#176b67 !important;
-    font-size:9px !important;
-    line-height:1.2 !important;
-    padding:5px 7px !important;
-    min-height:27px !important;
+    
+    
+    
+    
     height:auto !important;
     white-space:normal !important;
     text-align:left !important;
-    border-radius:6px !important;
+    
 }
 div[data-testid="stDialog"] [class*="st-key-kb_suggested_"] button:hover {
     background:#f2fbf9 !important;
     border-color:#00a98f !important;
 }
 div[data-testid="stDialog"] .kb-selected-sop {
-    padding:8px 10px !important;
+    
     border-left:3px solid #00a98f !important;
     border-top:1px solid #e1e8ee !important;
     border-right:1px solid #e1e8ee !important;
     border-bottom:1px solid #e1e8ee !important;
     background:#fff !important;
     border-radius:6px !important;
-    margin-top:7px !important;
+    
 }
 div[data-testid="stDialog"] .kb-selected-label {
     color:#008f80 !important;
-    font-size:8px !important;
+    
     font-weight:900 !important;
     letter-spacing:.45px !important;
 }
 div[data-testid="stDialog"] .kb-selected-sop-title {
     color:#102041 !important;
-    font-size:12px !important;
-    line-height:1.25 !important;
+    
+    
     font-weight:800 !important;
     margin-top:2px !important;
 }
 div[data-testid="stDialog"] .kb-selected-sop-meta {
     color:#64748b !important;
-    font-size:8.5px !important;
+    
     line-height:1.3 !important;
-    margin-top:3px !important;
+    
 }
 div[data-testid="stDialog"] .kb-full-sop,
 div[data-testid="stDialog"] .kb-recommendation {
@@ -9537,11 +9268,11 @@ div[data-testid="stDialog"] .kb-recommendation {
     border-left:3px solid #00a98f !important;
 }
 div[data-testid="stDialog"] .kb-full-sop-label {
-    font-size:8px !important;
+    
     font-weight:850 !important;
     letter-spacing:.45px !important;
     color:#087b71 !important;
-    margin-bottom:5px !important;
+    
 }
 div[data-testid="stDialog"] .kb-rich-content {
     color:#263957 !important;
@@ -9565,27 +9296,27 @@ div[data-testid="stDialog"] .kb-rich-content li {
 }
 div[data-testid="stDialog"] .kb-content-heading {
     color:#008f80 !important;
-    font-size:9px !important;
+    
     font-weight:850 !important;
     letter-spacing:.25px !important;
-    margin:7px 0 3px !important;
+    
 }
 div[data-testid="stDialog"] .kb-content-heading:first-child {
     margin-top:0 !important;
 }
 div[data-testid="stDialog"] .kb-sop-list-title {
     color:#102041 !important;
-    font-size:9px !important;
+    
     font-weight:850 !important;
-    margin:8px 0 4px !important;
+    
 }
 div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] button {
-    min-height:28px !important;
-    height:28px !important;
-    padding:4px 7px !important;
-    border-radius:5px !important;
-    font-size:9px !important;
-    line-height:1.15 !important;
+    
+    
+    
+    
+    
+    
     text-align:left !important;
 }
 
@@ -9674,10 +9405,12 @@ div[data-testid="stDialog"] .war-room-avatar {
 div[data-testid="stDialog"] [class*="st-key-select_action_station_"] button { min-height:32px !important; height:32px !important; padding:4px 7px !important; font-size:10px !important; }
 div[data-testid="stDialog"] [class*="st-key-case_checklist_remove_"] button { width:24px !important; min-width:24px !important; height:24px !important; min-height:24px !important; font-size:15px !important; }
 
+
 </style>
 ''', unsafe_allow_html=True)
 
 st.markdown(r'''<style>
+
 /* CASE DETAILS — compact header, tighter vertical rhythm */
 div[data-testid="stDialog"] header {
     min-height:40px !important; height:40px !important; padding:2px 12px !important;
@@ -9693,7 +9426,7 @@ div[data-testid="stDialog"] .case-detail-title-row { gap:8px !important; }
 div[data-testid="stDialog"] .case-folder-icon { font-size:20px !important; }
 div[data-testid="stDialog"] .case-detail-account-line {
     display:flex !important; align-items:center !important; flex-wrap:wrap !important; gap:6px !important;
-    color:#526078 !important; font-size:8.5px !important; line-height:1.15 !important; margin-top:2px !important;
+    color:#526078 !important;   
 }
 div[data-testid="stDialog"] .case-account-priority {
     display:inline-flex !important; padding:2px 5px !important; border-radius:999px !important;
@@ -9707,22 +9440,22 @@ div[data-testid="stDialog"] .case-timing-item span { font-size:7.5px !important;
 div[data-testid="stDialog"] .case-timing-item strong { font-size:9px !important; }
 div[data-testid="stDialog"] .case-timing-icon { font-size:12px !important; }
 div[data-testid="stDialog"] .case-summary-strip { padding:3px 3px !important; margin:1px 0 2px !important; }
-div[data-testid="stDialog"] .case-summary-cell { padding:1px 7px !important; min-width:0 !important; }
-div[data-testid="stDialog"] .case-summary-cell > span { font-size:7px !important; margin:0 0 1px !important; line-height:1 !important; }
+div[data-testid="stDialog"] .case-summary-cell {  min-width:0 !important; }
+div[data-testid="stDialog"] .case-summary-cell > span {   line-height:1 !important; }
 div[data-testid="stDialog"] .case-summary-cell > strong { font-size:8.5px !important; line-height:1.05 !important; }
 
 /* Compact dropdowns: remove the whitespace around labels and selected values. */
 div[data-testid="stDialog"] [data-testid="stSelectbox"] { margin:0 !important; padding:0 !important; }
 div[data-testid="stDialog"] [data-testid="stSelectbox"] > div { margin:0 !important; padding:0 !important; }
-div[data-testid="stDialog"] [data-testid="stSelectbox"] label { margin:0 0 1px !important; padding:0 !important; font-size:8.5px !important; line-height:1 !important; }
+div[data-testid="stDialog"] [data-testid="stSelectbox"] label {  padding:0 !important;   }
 div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] { margin:0 !important; padding:0 !important; }
-div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] > div { min-height:25px !important; height:25px !important; padding:0 7px !important; margin:0 !important; border-radius:5px !important; }
+div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] > div {     border-radius:5px !important; }
 div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] span { font-size:8.5px !important; line-height:23px !important; }
 
 /* Only the CURRENT station checklist is shown. */
 div[data-testid="stDialog"] .case-checklist-wrap { margin:4px 0 4px !important; padding:6px 8px !important; }
 div[data-testid="stDialog"] .case-checklist-title { font-size:10px !important; margin:0 0 1px !important; }
-div[data-testid="stDialog"] .case-checklist-sub { font-size:8px !important; line-height:1.2 !important; margin:0 0 4px !important; }
+div[data-testid="stDialog"] .case-checklist-sub {  line-height:1.2 !important;  }
 div[data-testid="stDialog"] .case-checklist-status { padding:2px 6px !important; font-size:7.5px !important; margin:0 !important; }
 div[data-testid="stDialog"] [data-testid="stCheckbox"] { margin:0 !important; padding:0 !important; min-height:22px !important; }
 div[data-testid="stDialog"] [data-testid="stCheckbox"] label { font-size:9px !important; line-height:1.15 !important; padding:0 !important; margin:0 !important; }
@@ -9735,34 +9468,28 @@ div[data-testid="stDialog"] .kb-panel-sub { font-size:8px !important; line-heigh
 div[data-testid="stDialog"] .kb-suggested-title { font-size:7px !important; margin:3px 0 2px !important; }
 div[data-testid="stDialog"] [class*="st-key-kb_suggested_"] { margin:0 !important; padding:0 !important; }
 div[data-testid="stDialog"] [class*="st-key-kb_suggested_"] button {
-    font-size:7.5px !important; line-height:1.12 !important; padding:3px 5px !important;
-    min-height:22px !important; border-radius:4px !important; margin:0 0 2px !important;
+      
+     border-radius:4px !important; 
 }
 div[data-testid="stDialog"] .kb-sop-list-title { font-size:7.5px !important; margin:4px 0 2px !important; }
-div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] { margin:0 !important; padding:0 !important; }
-div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] button {
-    min-height:23px !important; height:23px !important; padding:2px 5px !important;
-    font-size:7.5px !important; line-height:1 !important; border-radius:4px !important; margin:0 0 2px !important;
-}
 div[data-testid="stDialog"] .kb-selected-sop { padding:5px 7px !important; margin-top:3px !important; }
 div[data-testid="stDialog"] .kb-selected-label { font-size:6.5px !important; }
-div[data-testid="stDialog"] .kb-selected-sop-title { font-size:9px !important; line-height:1.15 !important; }
-div[data-testid="stDialog"] .kb-selected-sop-meta { font-size:7px !important; margin-top:2px !important; }
+div[data-testid="stDialog"] .kb-selected-sop-title {  line-height:1.15 !important; }
+div[data-testid="stDialog"] .kb-selected-sop-meta {  margin-top:2px !important; }
 div[data-testid="stDialog"] .kb-full-sop { padding:7px 9px !important; margin-top:4px !important; }
-div[data-testid="stDialog"] .kb-full-sop-label { font-size:7px !important; margin-bottom:3px !important; }
-div[data-testid="stDialog"] .kb-rich-content { font-size:8.5px !important; line-height:1.35 !important; color:#243858 !important; }
+div[data-testid="stDialog"] .kb-rich-content {   color:#243858 !important; }
 div[data-testid="stDialog"] .kb-rich-content p { margin:0 0 4px !important; }
 div[data-testid="stDialog"] .kb-rich-content ul,
 div[data-testid="stDialog"] .kb-rich-content ol { margin:1px 0 5px 15px !important; padding:0 !important; }
-div[data-testid="stDialog"] .kb-rich-content li { margin:0 0 2px !important; padding-left:1px !important; }
+div[data-testid="stDialog"] .kb-rich-content li {  padding-left:1px !important; }
 div[data-testid="stDialog"] .kb-content-heading { font-size:8px !important; margin:5px 0 2px !important; }
 
 /* Exact clickable War Room tile. */
-div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] { position:relative !important; min-height:88px !important; margin:0 !important; padding:0 !important; }
-div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] .war-room-mock { margin:0 !important; min-height:82px !important; box-sizing:border-box !important; cursor:pointer !important; transition:border-color .12s ease, box-shadow .12s ease !important; }
+div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] {  min-height:88px !important;   }
+div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] .war-room-mock { margin:0 !important; min-height:82px !important; box-sizing:border-box !important;  transition:border-color .12s ease, box-shadow .12s ease !important; }
 div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] .war-room-mock:hover { border-color:#00a98f !important; box-shadow:0 0 0 2px rgba(0,169,143,.08) !important; }
-div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] [class*="st-key-war_room_open_button_"] { position:absolute !important; inset:0 !important; z-index:30 !important; margin:0 !important; padding:0 !important; }
-div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] [class*="st-key-war_room_open_button_"] button { position:absolute !important; inset:0 !important; width:100% !important; height:100% !important; background:transparent !important; border:0 !important; color:transparent !important; box-shadow:none !important; opacity:.001 !important; cursor:pointer !important; }
+div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] [class*="st-key-war_room_open_button_"] {    margin:0 !important; padding:0 !important; }
+div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] [class*="st-key-war_room_open_button_"] button {        box-shadow:none !important;   }
 div[data-testid="stDialog"] .war-room-expanded {
     background:#f8fcfb !important; border:1px solid #cfe3e1 !important; border-radius:7px !important;
     padding:7px 9px !important; margin:4px 0 5px !important;
@@ -9774,19 +9501,12 @@ div[data-testid="stDialog"] .war-room-expanded-grid { display:grid !important; g
 div[data-testid="stDialog"] .war-room-expanded-grid ul { margin:2px 0 0 14px !important; padding:0 !important; font-size:8px !important; line-height:1.3 !important; }
 div[data-testid="stDialog"] .war-room-link { font-size:8.5px !important; color:#0879c9 !important; font-weight:750 !important; text-decoration:none !important; }
 
-/* Preserve a single scroll surface and make it tall enough to reach the bottom. */
-
 /* Remove old product-family/navigation tiles if any legacy markup remains. */
 div[data-testid="stDialog"] .kb-product-family,
 div[data-testid="stDialog"] .product-family-tiles,
 div[data-testid="stDialog"] [class*="product-family"] { display:none !important; }
 
 /* KNOWLEDGE BASE FINAL SPACING / READABILITY FIX */
-div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] {
-    margin:0 !important;
-    padding:0 !important;
-    min-height:0 !important;
-}
 div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] + div {
     margin-top:0 !important;
 }
@@ -9802,11 +9522,13 @@ div[data-testid="stDialog"] .kb-full-sop-label {
     font-size:9px !important;
     margin-bottom:5px !important;
 }
+
 </style>''', unsafe_allow_html=True)
 
 
 st.markdown(r'''
 <style>
+
 /* ============================================================
    CASE DETAILS FINAL FIX — requested compact reference spacing
    ============================================================ */
@@ -9817,8 +9539,8 @@ div[data-testid="stDialog"] header {
     margin:0 !important;
 }
 div[data-testid="stDialog"] header p {
-    font-size:16px !important;
-    line-height:1.1 !important;
+    
+    
     font-weight:750 !important;
     margin:0 !important;
 }
@@ -9862,8 +9584,8 @@ div[data-testid="stDialog"] .case-priority-badge {
     margin-left:6px !important;
 }
 div[data-testid="stDialog"] .case-detail-subject {
-    font-size:11px !important;
-    line-height:1.15 !important;
+    
+    
     margin-top:2px !important;
 }
 div[data-testid="stDialog"] .case-detail-account-line {
@@ -9927,14 +9649,14 @@ div[data-testid="stDialog"] [data-testid="stSelectbox"] label {
     padding:0 !important;
 }
 div[data-testid="stDialog"] [data-testid="stSelectbox"] label {
-    font-size:8px !important;
-    line-height:1 !important;
+    
+    
     margin-bottom:1px !important;
 }
 div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] > div {
     min-height:24px !important;
     height:24px !important;
-    padding:0 6px !important;
+    
     margin:0 !important;
 }
 div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] span {
@@ -10062,7 +9784,7 @@ div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
     overscroll-behavior:contain !important;
     scrollbar-width:thin !important;
     scrollbar-color:rgba(71,85,105,.48) transparent !important;
-    padding-bottom:18px !important;
+    
     box-sizing:border-box !important;
 }
 div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar {
@@ -10075,12 +9797,14 @@ div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrol
 div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar-thumb:hover {
     background:rgba(30,41,59,.68) !important;
 }
+
 </style>
 
 ''', unsafe_allow_html=True)
 
 st.markdown(r"""
 <style>
+
 /* CASE DETAILS — ONLY tighten the vertical space between Matching SOP tiles.
    Do NOT change the parent dialog/vertical-block gap, because that affects
    unrelated Case Details content. */
@@ -10100,6 +9824,7 @@ div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] button {
     height:24px !important;
     padding:2px 6px !important;
     margin:0 !important;
+    border-radius:4px !important;
     font-size:8.5px !important;
     line-height:1 !important;
 }
@@ -10110,11 +9835,13 @@ div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
 div[data-testid="stDialog"] [data-testid="stDialogContent"] {
     padding-bottom:18px !important;
 }
+
 </style>
 """, unsafe_allow_html=True)
 
 st.markdown(r"""
 <style>
+
 /* USER REQUEST — ONLY these two typography changes.
    1) Matching SOP tiles: one smaller, uniform font size.
    2) Case Details tabs: smaller, uniform tab-label font size.
@@ -10158,12 +9885,14 @@ div[data-testid="stDialog"] [role="tabpanel"]:has(.meeting-panel) * {
     font-size:9px !important;
 }
 
+
 </style>
 """, unsafe_allow_html=True)
 
 
 st.markdown(r"""
 <style>
+
 /* ============================================================
    MOBILE-FRIENDLY EXCEL UPLOAD TILE
    The entire visible tile is the native file-picker hit area.
@@ -10255,12 +9984,14 @@ div[data-testid="stDialog"] [data-testid="stFileUploader"] small {
         font-size:12px !important;
     }
 }
+
 </style>
 """, unsafe_allow_html=True)
 
 
 st.markdown(r"""
 <style>
+
 /* ============================================================
    CHECKLIST REFRESH — restored manual synchronization control
    ============================================================ */
@@ -10290,6 +10021,7 @@ div[data-testid="stDialog"] [class*="st-key-case_checklist_refresh_"] button:hov
     background:#eef8ff !important;
     border-color:#0879c9 !important;
 }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -10297,13 +10029,13 @@ div[data-testid="stDialog"] [class*="st-key-case_checklist_refresh_"] button:hov
 
 st.markdown(r"""
 <style>
+
 /* ============================================================
    CASE DETAILS — UNIFORM BODY TYPOGRAPHY
    Keep only the modal title, case number and subject as headers.
    All other Case Details text uses one consistent Inter size.
    ============================================================ */
 div[data-testid="stDialog"] [data-testid="stDialogContent"] * {
-    font-family:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
     font-size:10px !important;
 }
 
@@ -10328,12 +10060,14 @@ div[data-testid="stDialog"] .case-timing-icon,
 div[data-testid="stDialog"] .case-heading-icon {
     line-height:1 !important;
 }
+
 </style>
 """, unsafe_allow_html=True)
 
 
 st.markdown(r"""
 <style>
+
 /* ============================================================
    CASE DETAILS — FINAL TYPOGRAPHY + COMPACT DROPDOWN PATCH
    Keep Case Information / Attachments aligned with the same
@@ -10344,7 +10078,6 @@ st.markdown(r"""
 /* Case Information rows */
 div[data-testid="stDialog"] [role="tabpanel"] .case-info-row,
 div[data-testid="stDialog"] [role="tabpanel"] .case-info-row * {
-    font-family:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
     font-size:10px !important;
     line-height:1.3 !important;
 }
@@ -10352,16 +10085,12 @@ div[data-testid="stDialog"] [role="tabpanel"] .case-info-row * {
 /* Attachments rows */
 div[data-testid="stDialog"] [role="tabpanel"] .attachment-row,
 div[data-testid="stDialog"] [role="tabpanel"] .attachment-row * {
-    font-family:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
     font-size:10px !important;
     line-height:1.3 !important;
 }
 
 /* Keep the card headings as headings, rather than flattening them into body text. */
-div[data-testid="stDialog"] [role="tabpanel"] .case-card-heading,
-div[data-testid="stDialog"] [role="tabpanel"] .case-card-heading * {
-    font-family:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
-}
+
 
 /* Remove Streamlit/BaseWeb selectbox whitespace above and below the label/value. */
 div[data-testid="stDialog"] [data-testid="stSelectbox"],
@@ -10394,9 +10123,9 @@ div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] 
 }
 
 div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] span {
-    font-family:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
     font-size:8px !important;
     line-height:22px !important;
 }
+
 </style>
 """, unsafe_allow_html=True)
