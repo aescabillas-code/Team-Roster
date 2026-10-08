@@ -1094,8 +1094,6 @@ def clear_token_access():
     """
     st.session_state["access_authorized"] = False
     st.session_state["access_granted"] = False
-    st.session_state.pop("access_token", None)
-    st.session_state.pop("access_code_hash", None)
 
 
     _clear_browser_token()
@@ -1260,7 +1258,6 @@ if not access_gate():
 
 defaults = {
     "selected_station": "CARE",
-    "show_alerts": False,
     "show_settings": False,
     "admin_unlocked": False,
     "simulation_case_id": None,
@@ -1303,11 +1300,6 @@ st.markdown(
     }
 
 
-    button, input, textarea, select, [role="button"], [role="combobox"] {
-        font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
-    }
-
-
     #MainMenu,
     footer,
     [data-testid="stToolbar"],
@@ -1335,19 +1327,6 @@ st.markdown(
     [data-testid="stAppViewContainer"],
     [data-testid="stAppViewContainer"] > .main {
         background:#ffffff !important;
-    }
-
-
-    .block-container,
-    .block-container p,
-    .block-container div,
-    .block-container span,
-    .block-container label,
-    .block-container button,
-    .block-container input,
-    .block-container textarea,
-    .block-container select {
-        font-family:"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
     }
 
 
@@ -3967,45 +3946,6 @@ def list_alert_definitions():
         return []
 
 
-def active_alerts():
-    try:
-        return list(
-            col(ALERT_COLLECTION)
-            .find({
-                "acknowledged": False
-            })
-            .sort(
-                "created_at",
-                DESCENDING,
-            )
-            .limit(50)
-        )
-    except Exception:
-        return []
-
-
-
-
-def acknowledge_alert(alert_id):
-    try:
-        from bson import ObjectId
-
-
-        col(ALERT_COLLECTION).update_one(
-            {"_id": ObjectId(alert_id)},
-            {
-                "$set": {
-                    "acknowledged": True,
-                    "acknowledged_at": utc_now(),
-                }
-            },
-        )
-    except Exception:
-        pass
-
-
-
-
 def acknowledge_station_alerts(station, trigger_keys=None):
     """Acknowledge only the active warning triggers represented by the clicked tile."""
     query = {
@@ -5938,7 +5878,7 @@ if st.session_state["show_settings"]:
                     type="primary",
                     use_container_width=True,
                     key="run_caseflow_simulation",
-                    help="Reset all 25 mock cases below the 40%-remaining warning threshold, then show one H&M critical-account alert exactly 5 seconds after simulation starts.",
+                    help="Reset all 25 mock cases below the 40%-remaining warning threshold, then show one H&M critical-account alert after the configured alert delay.",
                 ):
                     reset_count = reset_mock_case_durations()
                     now = utc_now()
@@ -6025,7 +5965,7 @@ if st.session_state["show_settings"]:
 
                     clear_task_cache()
                     st.session_state["simulation_case_id"] = simulation_case_id or None
-                    # The simulation alert is intentionally delayed by 5 seconds.
+                    # The simulation alert uses the globally configured alert delay.
                     # The browser reveals the already-rendered alert at this
                     # timestamp without refreshing the dashboard.
                     st.session_state["simulation_alert_active"] = False
@@ -6042,7 +5982,9 @@ if st.session_state["show_settings"]:
 
                     if simulation_case_id:
                         st.success(
-                            f"Simulation started. {reset_count} mock case(s) reset; the H&M critical-account alert will appear in 5 seconds."
+                            f"Simulation started. {reset_count} mock case(s) reset; "
+                            f"the H&M critical-account alert will appear in "
+                            f"{simulation_delay_seconds} second(s)."
                         )
                     else:
                         st.error("Simulation could not find the CARE mock case CAR-2026-0001.")
@@ -6063,93 +6005,6 @@ if st.session_state["show_settings"]:
 
 
     show_settings()
-
-
-
-
-# ============================================================
-# ALERT CENTER DIALOG
-# ============================================================
-
-
-if st.session_state["show_alerts"]:
-
-
-    @st.dialog(
-        "Alert Center",
-        width="large",
-    )
-    def show_alert_center():
-
-
-        alerts = active_alerts()
-
-
-        if not alerts:
-            st.success(
-                "No active alerts."
-            )
-        else:
-
-
-            for alert in alerts:
-
-
-                with st.container(
-                    border=True
-                ):
-
-
-                    st.markdown(
-                        f"""
-                        <div class="alert-card">
-                            <div class="alert-title">
-                                🚨 {html.escape(
-                                    text(alert.get("alert_type"))
-                                    .replace("_", " ")
-                                )}
-                            </div>
-                            <div class="alert-message">
-                                {html.escape(
-                                    text(alert.get("message"))
-                                )}
-                            </div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-
-
-                    if st.button(
-                        "Acknowledge",
-                        key=f"ack_{alert['_id']}",
-                        use_container_width=True,
-                    ):
-
-
-                        acknowledge_alert(
-                            str(alert["_id"])
-                        )
-
-
-                        st.rerun()
-
-
-        if st.button(
-            "Close",
-            use_container_width=True,
-        ):
-
-
-            st.session_state[
-                "show_alerts"
-            ] = False
-
-
-            st.rerun()
-
-
-    show_alert_center()
 
 
 
@@ -7989,14 +7844,23 @@ def dashboard_fragment():
                 st.session_state["simulation_alert_case_id"] = global_task_id or None
                 st.session_state["simulation_alert_dismissed"] = bool(already_seen)
                 st.session_state["simulation_alert_active"] = False
+
+            # The alert definition is stored in MongoDB and is therefore global.
+            # Re-read the current delay on every monitoring tick so an admin
+            # change in Settings applies to every connected browser, not only
+            # the browser that started the simulation.
+            if (
+                global_triggered_at
+                and not st.session_state.get("simulation_alert_dismissed")
+                and not st.session_state.get("simulation_alert_active")
+            ):
+                global_alert_definition = get_alert_definition("SIMULATION_CRITICAL")
+                global_delay_seconds = max(
+                    0,
+                    min(60, int(global_alert_definition.get("delay_seconds", 5) or 0)),
+                )
                 st.session_state["simulation_alert_delay_until"] = (
-                    0.0
-                    if already_seen
-                    else (
-                        global_triggered_at.timestamp() + 5.0
-                        if global_triggered_at
-                        else 0.0
-                    )
+                    global_triggered_at.timestamp() + global_delay_seconds
                 )
 
     simulation_delay_until = float(
