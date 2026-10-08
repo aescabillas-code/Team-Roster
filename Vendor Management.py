@@ -5722,12 +5722,17 @@ if st.session_state["show_settings"]:
                         font-size:7px !important;
                     }
 
+                    div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stFormSubmitButton"] {
+                        margin:4px 0 0 !important;
+                        padding:0 !important;
+                    }
+
                     div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stFormSubmitButton"] button {
                         min-height:28px !important;
                         height:28px !important;
                         padding:3px 8px !important;
                         font-size:8px !important;
-                        margin:2px 0 0 !important;
+                        margin:0 !important;
                     }
 
                     div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stAlert"] {
@@ -5851,7 +5856,7 @@ if st.session_state["show_settings"]:
                         )
                         st.caption(f"Current alert sound: {current_sound_name}")
                         alert_sound_upload = st.file_uploader(
-                            "Add / change alert sound",
+                            "Upload file",
                             type=["mp3", "wav", "ogg", "m4a"],
                             key=f"alert_sound_upload_{sha256(text(selected_alert_key))[:12]}",
                             help="Upload a new MP3, WAV, OGG or M4A file to replace the current alert sound for this alert.",
@@ -5862,11 +5867,13 @@ if st.session_state["show_settings"]:
                                 f"New sound selected: {text(getattr(alert_sound_upload, 'name', '')) or 'Uploaded audio'}"
                             )
 
-                    save_alert = st.form_submit_button(
-                        "Save Alert Definition",
-                        type="primary",
-                        use_container_width=True,
-                    )
+                        # Keep the submit action inside the right-hand editor column
+                        # so it remains visible within the compact Settings modal.
+                        save_alert = st.form_submit_button(
+                            "Save Alert Definition",
+                            type="primary",
+                            use_container_width=True,
+                        )
 
                 if save_alert:
                     ok, msg = save_alert_definition({
@@ -10146,7 +10153,7 @@ div[data-testid="stDialog"] [data-testid="stFileUploader"] section:hover {
    remains the full-size touch/click target, so tapping anywhere on the tile
    opens the device/browser file picker. */
 div[data-testid="stDialog"] [data-testid="stFileUploader"] section::before {
-    content:"Upload Excel file" !important;
+    content:"Upload file" !important;
     position:absolute !important;
     inset:0 !important;
     z-index:1 !important;
