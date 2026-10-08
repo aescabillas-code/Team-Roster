@@ -5645,53 +5645,94 @@ if st.session_state["show_settings"]:
                     selected_definition["delay_seconds"] = 0
 
                 with st.form("alert_definition_form", clear_on_submit=False):
-                    alert_key = st.text_input("Alert Key", value=text(selected_definition.get("alert_key")))
-                    alert_name = st.text_input("Alert Name", value=text(selected_definition.get("name")))
-                    alert_title = st.text_input("Popup Title", value=text(selected_definition.get("title")))
-                    alert_subtitle = st.text_area("Popup Subtitle", value=text(selected_definition.get("subtitle")), height=70)
-                    alert_message = st.text_area("Alert Message", value=text(selected_definition.get("message")), height=80)
-                    alert_severity = st.selectbox(
-                        "Severity",
-                        ["Critical", "High", "Medium", "Low"],
-                        index=["Critical", "High", "Medium", "Low"].index(text(selected_definition.get("severity")) or "Critical") if text(selected_definition.get("severity")) in {"Critical", "High", "Medium", "Low"} else 0,
-                    )
+                    alert_left, alert_right = st.columns(2, gap="medium")
 
-                    st.markdown("**Alert Appearance & Sound**")
-                    alert_popup = st.checkbox("Show as popup alert", value=bool(selected_definition.get("popup_enabled", True)))
-                    alert_flashing = st.checkbox(
-                        "Flash the alert popup",
-                        value=bool(selected_definition.get("flashing_enabled", True)),
-                        help="Makes the alert card pulse/flash while it is displayed.",
-                    )
-                    alert_blinking = st.checkbox(
-                        "Blink the alert icon",
-                        value=bool(selected_definition.get("blinking_enabled", True)),
-                        help="Makes the default alert icon blink while the popup is displayed.",
-                    )
-                    alert_sound = st.checkbox(
-                        "Play alert sound",
-                        value=bool(selected_definition.get("sound_enabled", True)),
-                    )
-                    current_sound_name = text(selected_definition.get("sound_filename")) or "Built-in uploaded alert sound"
-                    st.caption(f"Current alert sound: {current_sound_name}")
-                    alert_sound_upload = st.file_uploader(
-                        "Add / change alert sound",
-                        type=["mp3", "wav", "ogg", "m4a"],
-                        key=f"alert_sound_upload_{sha256(text(selected_alert_key))[:12]}",
-                        help="Upload a new MP3, WAV, OGG or M4A file to replace the current alert sound for this alert.",
-                        label_visibility="collapsed",
-                    )
-                    if alert_sound_upload is not None:
-                        st.caption(f"New sound selected: {text(getattr(alert_sound_upload, 'name', '')) or 'Uploaded audio'}")
+                    with alert_left:
+                        alert_key = st.text_input(
+                            "Alert Key",
+                            value=text(selected_definition.get("alert_key")),
+                        )
+                        alert_name = st.text_input(
+                            "Alert Name",
+                            value=text(selected_definition.get("name")),
+                        )
+                        alert_title = st.text_input(
+                            "Popup Title",
+                            value=text(selected_definition.get("title")),
+                        )
+                        alert_subtitle = st.text_area(
+                            "Popup Subtitle",
+                            value=text(selected_definition.get("subtitle")),
+                            height=70,
+                        )
+                        alert_severity = st.selectbox(
+                            "Severity",
+                            ["Critical", "High", "Medium", "Low"],
+                            index=(
+                                ["Critical", "High", "Medium", "Low"].index(
+                                    text(selected_definition.get("severity")) or "Critical"
+                                )
+                                if text(selected_definition.get("severity"))
+                                in {"Critical", "High", "Medium", "Low"}
+                                else 0
+                            ),
+                        )
+                        alert_delay = st.number_input(
+                            "Delay before popup (seconds)",
+                            min_value=0,
+                            max_value=60,
+                            value=int(selected_definition.get("delay_seconds", 5) or 0),
+                            step=1,
+                        )
 
-                    alert_delay = st.number_input(
-                        "Delay before popup (seconds)",
-                        min_value=0,
-                        max_value=60,
-                        value=int(selected_definition.get("delay_seconds", 5) or 0),
-                        step=1,
+                    with alert_right:
+                        alert_message = st.text_area(
+                            "Alert Message",
+                            value=text(selected_definition.get("message")),
+                            height=70,
+                        )
+
+                        st.markdown("**Alert Appearance & Sound**")
+                        alert_popup = st.checkbox(
+                            "Show as popup alert",
+                            value=bool(selected_definition.get("popup_enabled", True)),
+                        )
+                        alert_flashing = st.checkbox(
+                            "Flash the alert popup",
+                            value=bool(selected_definition.get("flashing_enabled", True)),
+                            help="Makes the alert card pulse/flash while it is displayed.",
+                        )
+                        alert_blinking = st.checkbox(
+                            "Blink the alert icon",
+                            value=bool(selected_definition.get("blinking_enabled", True)),
+                            help="Makes the default alert icon blink while the popup is displayed.",
+                        )
+                        alert_sound = st.checkbox(
+                            "Play alert sound",
+                            value=bool(selected_definition.get("sound_enabled", True)),
+                        )
+                        current_sound_name = (
+                            text(selected_definition.get("sound_filename"))
+                            or "Built-in uploaded alert sound"
+                        )
+                        st.caption(f"Current alert sound: {current_sound_name}")
+                        alert_sound_upload = st.file_uploader(
+                            "Add / change alert sound",
+                            type=["mp3", "wav", "ogg", "m4a"],
+                            key=f"alert_sound_upload_{sha256(text(selected_alert_key))[:12]}",
+                            help="Upload a new MP3, WAV, OGG or M4A file to replace the current alert sound for this alert.",
+                            label_visibility="collapsed",
+                        )
+                        if alert_sound_upload is not None:
+                            st.caption(
+                                f"New sound selected: {text(getattr(alert_sound_upload, 'name', '')) or 'Uploaded audio'}"
+                            )
+
+                    save_alert = st.form_submit_button(
+                        "Save Alert Definition",
+                        type="primary",
+                        use_container_width=True,
                     )
-                    save_alert = st.form_submit_button("Save Alert Definition", type="primary", use_container_width=True)
 
                 if save_alert:
                     ok, msg = save_alert_definition({
@@ -5718,7 +5759,9 @@ if st.session_state["show_settings"]:
                     else:
                         st.error(msg)
 
-                st.info("The uploaded sound is used by the simulated critical popup when 'Play the uploaded alert sound' is enabled. It is embedded in this application, so the alert does not depend on a separate local file.")
+                st.info(
+                    "The uploaded sound is used by the simulated critical popup when 'Play the uploaded alert sound' is enabled. It is embedded in this application, so the alert does not depend on a separate local file."
+                )
 
             # -----------------------------------------------
             # SIMULATION
