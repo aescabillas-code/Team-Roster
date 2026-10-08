@@ -9146,7 +9146,6 @@ if (
                     first_view = bool(simulation_alert_task.get("simulation_hold"))
                     update_set = {
                         "active": True,
-                        "simulation_hold": False,
                         "account_name": "H&M",
                         "account_priority": "Yes",
                         "priority": "Critical",
