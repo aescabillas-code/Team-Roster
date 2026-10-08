@@ -1269,6 +1269,10 @@ defaults = {
     "open_case_after_alert": False,
     "pending_case_dialog_id": None,
     "simulation_active": False,
+    "custom_alert_event_id": None,
+    "custom_alert_active": False,
+    "custom_alert_dismissed": False,
+    "custom_alert_delay_until": 0.0,
     "search": "",
     # Marks the start of this browser session so a stale global simulation
     # event from an earlier run is never shown simply because the app was reopened.
@@ -3862,6 +3866,9 @@ DEFAULT_ALERT_DEFINITION = {
     "sound_filename": "77e629ebd4a1b51110736bdd69348450.mp3",
     "sound_mime": "audio/mpeg",
     "delay_seconds": 5,
+    "trigger_type": "Simulation Start",
+    "trigger_station": "Any Station",
+    "trigger_status": "",
 }
 
 
@@ -3924,6 +3931,9 @@ def save_alert_definition(definition):
         "sound_filename": sound_filename,
         "sound_mime": sound_mime,
         "delay_seconds": max(0, min(60, int(definition.get("delay_seconds", 5) or 0))),
+        "trigger_type": text(definition.get("trigger_type")) or "Priority Account",
+        "trigger_station": text(definition.get("trigger_station")) or "Any Station",
+        "trigger_status": text(definition.get("trigger_status")),
         "updated_at": utc_now(),
     }
     if sound_data_b64:
@@ -3934,6 +3944,14 @@ def save_alert_definition(definition):
             {"$set": doc, "$setOnInsert": {"created_at": utc_now()}},
             upsert=True,
         )
+        # Trigger/appearance edits are global. Remove only still-pending custom
+        # events for this definition so every connected user evaluates the new
+        # definition rather than receiving a stale event from the old trigger.
+        col(ALERT_COLLECTION).delete_many({
+            "alert_key": key,
+            "alert_type": "CUSTOM",
+            "acknowledged": False,
+        })
         return True, "Alert definition saved."
     except Exception as exc:
         return False, str(exc)
@@ -3944,6 +3962,154 @@ def list_alert_definitions():
         return list(col(ALERT_DEFINITION_COLLECTION).find({}).sort("name", ASCENDING))
     except Exception:
         return []
+
+
+def delete_alert_definition(alert_key):
+    """Delete a custom alert definition without allowing the built-in simulation alert to be removed."""
+    key = text(alert_key)
+    if not key:
+        return False, "Alert key is required."
+    if key == DEFAULT_ALERT_DEFINITION["alert_key"]:
+        return False, "The built-in Simulation Critical alert cannot be deleted."
+    try:
+        result = col(ALERT_DEFINITION_COLLECTION).delete_one({"alert_key": key})
+        if result.deleted_count:
+            # Remove only generated alert records belonging to this deleted definition.
+            col(ALERT_COLLECTION).delete_many({"alert_key": key})
+            return True, "Alert definition deleted."
+        return False, "Alert definition was not found."
+    except Exception as exc:
+        return False, str(exc)
+
+
+ALERT_TRIGGER_OPTIONS = [
+    "Priority Account",
+    "SLA Warning (40% remaining)",
+    "SLA Critical (20% remaining)",
+    "SLA Breached",
+    "Case Created",
+    "Station Entered",
+    "Case Status",
+    "Simulation Start",
+]
+
+
+def alert_trigger_matches(task, state, definition, now=None):
+    """Return True when a custom alert definition's configured trigger is active."""
+    trigger = text(definition.get("trigger_type")) or "Priority Account"
+    station = station_name(task.get("department"))
+    selected_station = station_name(definition.get("trigger_station"))
+    selected_status = text(definition.get("trigger_status"))
+    state = state or {}
+    if trigger == "Priority Account":
+        return bool(state.get("priority_account"))
+    if trigger == "SLA Warning (40% remaining)":
+        return bool(state.get("nearing_due"))
+    if trigger == "SLA Critical (20% remaining)":
+        return bool(state.get("critical")) and not bool(state.get("breached")) and not bool(state.get("priority_account"))
+    if trigger == "SLA Breached":
+        return bool(state.get("breached"))
+    if trigger == "Case Created":
+        return bool(as_utc(task.get("created_at")))
+    if trigger == "Station Entered":
+        return bool(as_utc(task.get("station_started_at") or task.get("created_at"))) and (
+            selected_station in {"", "ANY STATION"} or selected_station == station
+        )
+    if trigger == "Case Status":
+        return bool(selected_status) and text(task.get("status")) == selected_status
+    # Simulation Start is intentionally handled by the existing global simulation
+    # event and must not create a second custom alert.
+    return False
+
+
+def alert_trigger_key(task, definition):
+    """Stable identifier for one trigger occurrence of a custom alert."""
+    trigger = text(definition.get("trigger_type")) or "Priority Account"
+    task_id = text(task.get("_id")) or text(task.get("case_number"))
+    station = station_name(task.get("department"))
+    started = iso_z(task.get("station_started_at") or task.get("created_at"))
+    if trigger == "Case Status":
+        return sha256(
+            f"{text(definition.get('alert_key'))}|{task_id}|{trigger}|{text(definition.get('trigger_status'))}|{station}|{started}"
+        )[:32]
+    if trigger == "Case Created":
+        started = iso_z(task.get("created_at"))
+    return sha256(
+        f"{text(definition.get('alert_key'))}|{task_id}|{trigger}|{station}|{started}|{text(definition.get('trigger_station'))}"
+    )[:32]
+
+
+def scan_custom_alert_definitions(tasks, states=None, now=None):
+    """Create shared alert events for administrator-created trigger definitions."""
+    definitions = [
+        definition for definition in list_alert_definitions()
+        if text(definition.get("alert_key"))
+        and text(definition.get("alert_key")) != DEFAULT_ALERT_DEFINITION["alert_key"]
+    ]
+    if not definitions or not tasks:
+        return
+
+    now = now or utc_now()
+    # Alert triggers are global application rules. Do not restrict their
+    # evaluation to the current user's search/filter state.
+    try:
+        alert_tasks = fetch_tasks(search="", station=None, limit=1000)
+    except Exception:
+        alert_tasks = tasks
+    alert_states = states or {}
+    candidates = []
+    for definition in definitions:
+        for task in alert_tasks:
+            task_id = str(task.get("_id"))
+            state = alert_states.get(task_id) or calculate_state(task, now)
+            if not alert_trigger_matches(task, state, definition, now):
+                continue
+            trigger_key = alert_trigger_key(task, definition)
+            candidates.append((definition, task, trigger_key))
+
+    if not candidates:
+        return
+
+    try:
+        existing = {
+            (text(doc.get("alert_key")), text(doc.get("task_id")), text(doc.get("trigger_key")))
+            for doc in col(ALERT_COLLECTION).find(
+                {
+                    "alert_key": {"$in": [text(d.get("alert_key")) for d, _, _ in candidates]},
+                    "task_id": {"$in": [str(t.get("_id")) for _, t, _ in candidates]},
+                    "trigger_key": {"$in": [k for _, _, k in candidates]},
+                },
+                {"alert_key": 1, "task_id": 1, "trigger_key": 1},
+            )
+        }
+    except Exception:
+        existing = set()
+
+    docs = []
+    for definition, task, trigger_key in candidates:
+        alert_key = text(definition.get("alert_key"))
+        task_id = str(task.get("_id"))
+        identity = (alert_key, task_id, trigger_key)
+        if identity in existing:
+            continue
+        docs.append({
+            "alert_key": alert_key,
+            "task_id": task_id,
+            "case_number": task.get("case_number"),
+            "station": station_name(task.get("department")),
+            "alert_type": "CUSTOM",
+            "trigger_key": trigger_key,
+            "message": text(definition.get("message")) or text(definition.get("title")) or "Alert triggered.",
+            "created_at": now,
+            "acknowledged": False,
+            "active": True,
+        })
+
+    if docs:
+        try:
+            col(ALERT_COLLECTION).insert_many(docs, ordered=False)
+        except Exception:
+            pass
 
 
 def acknowledge_station_alerts(station, trigger_keys=None):
@@ -3966,6 +4132,20 @@ def acknowledge_station_alerts(station, trigger_keys=None):
     )
 
 
+
+
+def _get_latest_custom_alert(session_started_at):
+    """Return the newest custom alert event created during this browser session."""
+    try:
+        query = {
+            "alert_type": "CUSTOM",
+            "acknowledged": False,
+            "active": True,
+            "created_at": {"$gte": as_utc(session_started_at) or utc_now()},
+        }
+        return col(ALERT_COLLECTION).find_one(query, sort=[("created_at", DESCENDING)])
+    except Exception:
+        return None
 
 
 def scan_alerts(tasks, states=None, now=None):
@@ -4012,6 +4192,10 @@ def scan_alerts(tasks, states=None, now=None):
 
         candidates.append((task, alert_type, message))
 
+
+    # Administrator-created alerts use their own trigger definitions while
+    # retaining the existing station-alert behavior unchanged.
+    scan_custom_alert_definitions(tasks, states=states, now=now)
 
     if not candidates:
         return
@@ -5777,6 +5961,35 @@ if st.session_state["show_settings"]:
                             value=int(selected_definition.get("delay_seconds", 5) or 0),
                             step=1,
                         )
+                        trigger_options = (
+                            ALERT_TRIGGER_OPTIONS
+                            if selected_alert_key == DEFAULT_ALERT_DEFINITION["alert_key"]
+                            else [x for x in ALERT_TRIGGER_OPTIONS if x != "Simulation Start"]
+                        )
+                        selected_trigger = text(selected_definition.get("trigger_type")) or (
+                            "Simulation Start" if selected_alert_key == DEFAULT_ALERT_DEFINITION["alert_key"] else "Priority Account"
+                        )
+                        if selected_trigger not in trigger_options:
+                            selected_trigger = trigger_options[0]
+                        alert_trigger_type = st.selectbox(
+                            "Trigger",
+                            trigger_options,
+                            index=trigger_options.index(selected_trigger),
+                            help="Specify the event or case condition that will create this alert.",
+                        )
+                        alert_trigger_station = st.selectbox(
+                            "Trigger Station",
+                            ["Any Station"] + list(STATIONS.keys()),
+                            index=(
+                                ["Any Station"] + list(STATIONS.keys())
+                            ).index(
+                                text(selected_definition.get("trigger_station")) or "Any Station"
+                            )
+                            if (text(selected_definition.get("trigger_station")) or "Any Station")
+                            in (["Any Station"] + list(STATIONS.keys()))
+                            else 0,
+                            help="Limit Station Entered triggers to one station, or use Any Station.",
+                        )
 
                     with alert_right:
                         alert_message = st.text_area(
@@ -5816,6 +6029,18 @@ if st.session_state["show_settings"]:
                             help="Upload a new MP3, WAV, OGG or M4A file to replace the current alert sound for this alert.",
                             label_visibility="collapsed",
                         )
+                        alert_trigger_status = ""
+                        if alert_trigger_type == "Case Status":
+                            alert_trigger_status = st.selectbox(
+                                "Trigger Status",
+                                CASE_STATUS_OPTIONS,
+                                index=(
+                                    CASE_STATUS_OPTIONS.index(text(selected_definition.get("trigger_status")))
+                                    if text(selected_definition.get("trigger_status")) in CASE_STATUS_OPTIONS
+                                    else 0
+                                ),
+                                help="Create this alert when a case has this status.",
+                            )
                         if alert_sound_upload is not None:
                             st.caption(
                                 f"New sound selected: {text(getattr(alert_sound_upload, 'name', '')) or 'Uploaded audio'}"
@@ -5828,8 +6053,22 @@ if st.session_state["show_settings"]:
                             type="primary",
                             use_container_width=True,
                         )
+                        delete_alert = False
+                        if selected_alert_key != "+ Create New Alert" and selected_alert_key != DEFAULT_ALERT_DEFINITION["alert_key"]:
+                            delete_alert = st.form_submit_button(
+                                "Delete Alert",
+                                type="secondary",
+                                use_container_width=True,
+                            )
 
-                if save_alert:
+                if delete_alert:
+                    deleted, delete_msg = delete_alert_definition(selected_alert_key)
+                    if deleted:
+                        st.success(delete_msg)
+                        st.rerun()
+                    else:
+                        st.error(delete_msg)
+                elif save_alert:
                     ok, msg = save_alert_definition({
                         "alert_key": alert_key,
                         "name": alert_name,
@@ -5847,6 +6086,9 @@ if st.session_state["show_settings"]:
                         "sound_filename": selected_definition.get("sound_filename"),
                         "sound_mime": selected_definition.get("sound_mime"),
                         "delay_seconds": alert_delay,
+                        "trigger_type": alert_trigger_type,
+                        "trigger_station": alert_trigger_station,
+                        "trigger_status": alert_trigger_status,
                     })
                     if ok:
                         st.success(msg)
@@ -7916,6 +8158,43 @@ def dashboard_fragment():
     # performs only one calculate_state pass per active case.
     scan_alerts(tasks, states=states, now=now)
 
+    # Custom administrator-created alerts are shared through MongoDB. Each
+    # connected browser receives the same event, while dismissal remains local
+    # to that browser so one user cannot suppress the alert for everyone else.
+    if not st.session_state.get("simulation_alert_active"):
+        custom_event = _get_latest_custom_alert(session_started_at)
+        if custom_event:
+            custom_event_id = str(custom_event.get("_id"))
+            if st.session_state.get("custom_alert_event_id") != custom_event_id:
+                custom_definition = get_alert_definition(text(custom_event.get("alert_key")))
+                st.session_state["custom_alert_event_id"] = custom_event_id
+                st.session_state["custom_alert_dismissed"] = not bool(custom_definition.get("popup_enabled", True))
+                st.session_state["custom_alert_active"] = False
+                custom_created_at = as_utc(custom_event.get("created_at")) or now
+                custom_delay = max(
+                    0,
+                    min(60, int(custom_definition.get("delay_seconds", 5) or 0)),
+                )
+                st.session_state["custom_alert_delay_until"] = (
+                    custom_created_at.timestamp() + custom_delay
+                    if not st.session_state.get("custom_alert_dismissed")
+                    else 0.0
+                )
+
+        custom_delay_until = float(
+            st.session_state.get("custom_alert_delay_until", 0.0) or 0.0
+        )
+        if (
+            custom_delay_until
+            and time.time() >= custom_delay_until
+            and st.session_state.get("custom_alert_event_id")
+            and not st.session_state.get("custom_alert_active")
+            and not st.session_state.get("custom_alert_dismissed")
+        ):
+            st.session_state["custom_alert_active"] = True
+            st.session_state["custom_alert_delay_until"] = 0.0
+            st.rerun(scope="app")
+
 
     # --------------------------------------------------------
     # STATION TILES
@@ -9051,6 +9330,108 @@ div[data-testid="stDialog"] .simulation-collab-footer a {
 
 </style>
 """, unsafe_allow_html=True)
+
+# ============================================================
+# ADMIN-CREATED ALERT
+# ============================================================
+if (
+    st.session_state.get("custom_alert_active")
+    and not st.session_state.get("custom_alert_dismissed")
+    and st.session_state.get("custom_alert_event_id")
+):
+    try:
+        from bson import ObjectId
+        custom_alert_event = col(ALERT_COLLECTION).find_one(
+            {"_id": ObjectId(str(st.session_state.get("custom_alert_event_id")))}
+        ) or {}
+    except Exception:
+        custom_alert_event = {}
+    if custom_alert_event:
+        custom_alert_definition = get_alert_definition(text(custom_alert_event.get("alert_key")))
+        if bool(custom_alert_definition.get("popup_enabled", True)):
+            try:
+                custom_alert_task = col(TASKS_COLLECTION).find_one(
+                    {"_id": ObjectId(str(custom_alert_event.get("task_id")))}
+                ) or {}
+            except Exception:
+                custom_alert_task = {}
+            custom_sound_b64 = text(custom_alert_definition.get("sound_data_b64"))
+            custom_sound_mime = text(custom_alert_definition.get("sound_mime")) or "audio/mpeg"
+            custom_sound_src = (
+                f"data:{custom_sound_mime};base64,{custom_sound_b64}"
+                if custom_sound_b64
+                else ""
+            )
+            custom_flash_class = " simulation-alert-flashing" if bool(custom_alert_definition.get("flashing_enabled", True)) else ""
+            custom_blink_class = " simulation-alert-blinking" if bool(custom_alert_definition.get("blinking_enabled", True)) else ""
+            custom_icon = html.escape(text(custom_alert_definition.get("icon")) or "!")
+            custom_case_number = text(custom_alert_task.get("case_number")) or text(custom_alert_event.get("case_number")) or "—"
+            custom_subject = text(custom_alert_task.get("subject")) or text(custom_alert_task.get("issue")) or "Case alert"
+            custom_account = text(custom_alert_task.get("account_name")) or text(custom_alert_event.get("account_name")) or "—"
+            custom_station = station_display_name(custom_alert_task.get("department") or custom_alert_event.get("station")) or "—"
+            custom_status = text(custom_alert_task.get("status")) or "—"
+            with st.container(key="custom_alert_overlay"):
+                st.markdown(
+                    f"""
+                    <div class="simulation-alert-card{custom_flash_class}">
+                        {f'<audio id="custom-alert-sound" autoplay preload="auto" style="display:none"><source src="{custom_sound_src}" type="{html.escape(custom_sound_mime)}"></audio><script>(function(){{var a=document.getElementById("custom-alert-sound");if(a){{a.volume=1.0;var p=a.play();if(p&&p.catch)p.catch(function(){{}});}}}})();</script>' if bool(custom_alert_definition.get("sound_enabled", True)) and custom_sound_src else ''}
+                        <div class="simulation-alert-header">
+                            <div class="simulation-alert-icon{custom_blink_class}">{custom_icon}</div>
+                            <div>
+                                <div class="simulation-alert-title">{html.escape(text(custom_alert_definition.get("title")) or "Alert")}</div>
+                                <div class="simulation-alert-subtitle">{html.escape(text(custom_alert_definition.get("subtitle")) or text(custom_alert_definition.get("message")) or "An alert has been triggered.")}</div>
+                            </div>
+                        </div>
+                        <div class="simulation-alert-details">
+                            <div class="simulation-alert-row"><span>Case #</span><strong>{html.escape(custom_case_number)}</strong></div>
+                            <div class="simulation-alert-row"><span>Subject</span><strong>{html.escape(custom_subject)}</strong></div>
+                            <div class="simulation-alert-row"><span>Account</span><strong>{html.escape(custom_account)}</strong></div>
+                            <div class="simulation-alert-row"><span>Station</span><strong>{html.escape(custom_station)}</strong></div>
+                            <div class="simulation-alert-row"><span>Current Status</span><strong>{html.escape(custom_status)}</strong></div>
+                            <div class="simulation-alert-row"><span>Message</span><strong>{html.escape(text(custom_alert_definition.get("message")) or "Alert triggered.")}</strong></div>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                custom_button_cols = st.columns([1, 1])
+                with custom_button_cols[0]:
+                    if st.button(
+                        "View Case",
+                        type="primary",
+                        use_container_width=True,
+                        key=f"custom_alert_view_{st.session_state.get('custom_alert_event_id')}",
+                    ):
+                        st.session_state["custom_alert_active"] = False
+                        st.session_state["custom_alert_dismissed"] = True
+                        st.session_state["custom_alert_delay_until"] = 0.0
+                        try:
+                            col(ALERT_COLLECTION).update_one(
+                                {"_id": custom_alert_event.get("_id")},
+                                {"$set": {"acknowledged": True, "acknowledged_at": utc_now()}},
+                            )
+                        except Exception:
+                            pass
+                        st.session_state["pending_case_dialog_id"] = text(custom_alert_event.get("task_id"))
+                        st.rerun(scope="app")
+                with custom_button_cols[1]:
+                    if st.button(
+                        "Dismiss",
+                        use_container_width=True,
+                        key=f"custom_alert_dismiss_{st.session_state.get('custom_alert_event_id')}",
+                    ):
+                        st.session_state["custom_alert_active"] = False
+                        st.session_state["custom_alert_dismissed"] = True
+                        st.session_state["custom_alert_delay_until"] = 0.0
+                        try:
+                            col(ALERT_COLLECTION).update_one(
+                                {"_id": custom_alert_event.get("_id")},
+                                {"$set": {"acknowledged": True, "acknowledged_at": utc_now()}},
+                            )
+                        except Exception:
+                            pass
+                        st.rerun(scope="app")
+
 
 # ============================================================
 # SIMULATION CRITICAL ACCOUNT ALERT
@@ -10226,5 +10607,49 @@ div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] 
     line-height:22px !important;
 }
 
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown(r"""
+<style>
+/* ============================================================
+   CASE DETAILS — ONE GLOBAL SCROLL SURFACE
+   The keyed Case Details container is the only custom scroll surface.
+   Case Information, Case Actions, Knowledge Base, Collaboration and
+   Attachments all scroll through this same container. Tab panels and
+   nested blocks must not create their own independent scroll areas.
+   ============================================================ */
+div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
+    height:calc(100vh - 185px) !important;
+    max-height:calc(100vh - 185px) !important;
+    min-height:220px !important;
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+    overscroll-behavior:contain !important;
+    scrollbar-width:thin !important;
+    scrollbar-color:rgba(71,85,105,.48) transparent !important;
+    box-sizing:border-box !important;
+}
+
+div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] > div,
+div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] [data-testid="stTabs"],
+div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] [data-baseweb="tab-panel"],
+div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] [role="tabpanel"] {
+    height:auto !important;
+    max-height:none !important;
+    min-height:0 !important;
+    overflow:visible !important;
+}
+
+div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar {
+    width:7px !important;
+}
+div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar-thumb {
+    background:rgba(71,85,105,.48) !important;
+    border-radius:999px !important;
+}
+div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar-thumb:hover {
+    background:rgba(30,41,59,.68) !important;
+}
 </style>
 """, unsafe_allow_html=True)
