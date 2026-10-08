@@ -4031,6 +4031,12 @@ DEFAULT_ALERT_DEFINITION = {
     "severity": "Critical",
     "popup_enabled": True,
     "sound_enabled": True,
+    # Additive visual controls. Defaults preserve the existing urgent
+    # simulation behavior while allowing the administrator to disable either
+    # effect for an edited alert.
+    "flash_enabled": True,
+    "blink_enabled": True,
+    "icon": "⚠",
     "delay_seconds": 5,
 }
 
@@ -4070,6 +4076,9 @@ def save_alert_definition(definition):
         "severity": text(definition.get("severity")) or "Critical",
         "popup_enabled": bool(definition.get("popup_enabled", True)),
         "sound_enabled": bool(definition.get("sound_enabled", True)),
+        "flash_enabled": bool(definition.get("flash_enabled", True)),
+        "blink_enabled": bool(definition.get("blink_enabled", True)),
+        "icon": text(definition.get("icon")) or "⚠",
         "delay_seconds": max(0, min(60, int(definition.get("delay_seconds", 5) or 0))),
         "updated_at": utc_now(),
     }
@@ -5421,6 +5430,48 @@ if st.session_state["show_settings"]:
     def show_settings():
 
 
+        # SETTINGS DIALOG SCROLL FIX
+        # The Alert Management form can extend beyond the viewport. Keep the
+        # Settings dialog within the screen while making its content vertically
+        # scrollable. This is scoped to the Settings dialog render and does not
+        # change the existing dashboard/case-detail functionality.
+        st.markdown(
+            """
+            <style>
+            div[data-testid="stDialog"] > div {
+                height:min(92vh,760px) !important;
+                max-height:calc(100vh - 28px) !important;
+                overflow:hidden !important;
+            }
+            div[data-testid="stDialog"] [data-testid="stDialogContent"] {
+                height:calc(100% - 52px) !important;
+                max-height:calc(100% - 52px) !important;
+                min-height:0 !important;
+                overflow-y:auto !important;
+                overflow-x:hidden !important;
+                padding-bottom:18px !important;
+                scrollbar-width:thin !important;
+                scrollbar-color:#8fa3b9 #edf2f7 !important;
+            }
+            div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar {
+                width:9px !important;
+                display:block !important;
+            }
+            div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar-track {
+                background:#edf2f7 !important;
+                border-radius:8px !important;
+            }
+            div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar-thumb {
+                background:#8fa3b9 !important;
+                border-radius:8px !important;
+                border:2px solid #edf2f7 !important;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
         # Keep Streamlit's native uploader layout untouched. Earlier custom
         # positioning of the uploader drop-zone caused duplicate/overlapping
         # "Upload" text. The native label is already collapsed on each uploader
@@ -5728,6 +5779,9 @@ if st.session_state["show_settings"]:
                     selected_definition["title"] = "Critical Case Alert"
                     selected_definition["subtitle"] = ""
                     selected_definition["message"] = ""
+                    selected_definition["flash_enabled"] = True
+                    selected_definition["blink_enabled"] = True
+                    selected_definition["icon"] = "⚠"
                     selected_definition["delay_seconds"] = 0
 
                 with st.form("alert_definition_form", clear_on_submit=False):
@@ -5741,8 +5795,24 @@ if st.session_state["show_settings"]:
                         ["Critical", "High", "Medium", "Low"],
                         index=["Critical", "High", "Medium", "Low"].index(text(selected_definition.get("severity")) or "Critical") if text(selected_definition.get("severity")) in {"Critical", "High", "Medium", "Low"} else 0,
                     )
+                    alert_icon = st.text_input(
+                        "Alert Icon",
+                        value=text(selected_definition.get("icon")) or "⚠",
+                        max_chars=8,
+                        help="Default alert icon is ⚠. This icon is shown in the simulation popup.",
+                    )
                     alert_popup = st.checkbox("Show as popup alert", value=bool(selected_definition.get("popup_enabled", True)))
                     alert_sound = st.checkbox("Play the uploaded alert sound", value=bool(selected_definition.get("sound_enabled", True)))
+                    alert_flash = st.checkbox(
+                        "Flash the alert",
+                        value=bool(selected_definition.get("flash_enabled", True)),
+                        help="Makes the simulation alert card visibly flash/pulse while it is displayed.",
+                    )
+                    alert_blink = st.checkbox(
+                        "Blink the alert icon",
+                        value=bool(selected_definition.get("blink_enabled", True)),
+                        help="Makes the alert icon blink while the simulation alert is displayed.",
+                    )
                     alert_delay = st.number_input("Delay before popup (seconds)", min_value=0, max_value=60, value=int(selected_definition.get("delay_seconds", 5) or 0), step=1)
                     save_alert = st.form_submit_button("Save Alert Definition", type="primary", use_container_width=True)
 
@@ -5756,6 +5826,9 @@ if st.session_state["show_settings"]:
                         "severity": alert_severity,
                         "popup_enabled": alert_popup,
                         "sound_enabled": alert_sound,
+                        "flash_enabled": alert_flash,
+                        "blink_enabled": alert_blink,
+                        "icon": alert_icon,
                         "delay_seconds": alert_delay,
                     })
                     if ok:
@@ -5764,7 +5837,11 @@ if st.session_state["show_settings"]:
                     else:
                         st.error(msg)
 
-                st.info("The uploaded sound is used by the simulated critical popup when 'Play the uploaded alert sound' is enabled. It is embedded in this application, so the alert does not depend on a separate local file.")
+                st.info(
+                    "The uploaded sound is used by the simulated critical popup when enabled. "
+                    "You can also control the alert flash, icon blinking, and alert icon. "
+                    "The default simulation alert icon is ⚠."
+                )
 
             # -----------------------------------------------
             # SIMULATION
@@ -8815,7 +8892,9 @@ st.markdown(
         border-radius:14px;
         padding:24px 24px 18px;
         box-shadow:0 28px 90px rgba(0,0,0,.30);
-        animation:simulationAlertPulse .72s ease-in-out infinite alternate;
+    }
+    .simulation-alert-card.alert-flashing {
+        animation:simulationAlertFlash .72s ease-in-out infinite alternate;
     }
     .simulation-alert-header {
         display:flex;
@@ -8836,6 +8915,8 @@ st.markdown(
         font-weight:900;
         line-height:1;
         box-shadow:0 0 0 6px rgba(239,23,56,.12);
+    }
+    .simulation-alert-icon.alert-blinking {
         animation:simulationAlertIconBlink .42s ease-in-out infinite alternate;
     }
     .simulation-alert-title {
@@ -8894,9 +8975,17 @@ st.markdown(
         background:#d91531 !important;
         border-color:#d91531 !important;
     }
-    @keyframes simulationAlertPulse {
-        from { transform:scale(1); box-shadow:0 28px 90px rgba(0,0,0,.30); }
-        to { transform:scale(1.012); box-shadow:0 28px 105px rgba(239,23,56,.16), 0 28px 90px rgba(0,0,0,.30); }
+    @keyframes simulationAlertFlash {
+        0%, 100% {
+            opacity:1;
+            transform:scale(1);
+            box-shadow:0 28px 90px rgba(0,0,0,.30);
+        }
+        50% {
+            opacity:.78;
+            transform:scale(1.012);
+            box-shadow:0 28px 105px rgba(239,23,56,.22), 0 28px 90px rgba(0,0,0,.30);
+        }
     }
     @keyframes simulationAlertIconBlink {
         from { opacity:.55; transform:scale(.88); }
@@ -9105,14 +9194,19 @@ if (
             simulation_delay_until = float(
                 st.session_state.get("simulation_alert_delay_until", 0.0) or 0.0
             )
+            simulation_flash_class = " alert-flashing" if bool(simulation_alert_definition.get("flash_enabled", True)) else ""
+            simulation_blink_class = " alert-blinking" if bool(simulation_alert_definition.get("blink_enabled", True)) else ""
+            simulation_alert_icon = html.escape(
+                text(simulation_alert_definition.get("icon")) or "⚠"
+            )
             st.markdown(
                 f"""
                 <div class="simulation-alert-delay-marker"
                      data-alert-delay-until="{simulation_delay_until:.3f}"></div>
                 {f'<audio id="simulation-critical-alert-sound" autoplay preload="auto" style="display:none"><source src="data:audio/mpeg;base64,{SIMULATION_ALERT_SOUND_B64}" type="audio/mpeg"></audio><script>(function(){{var a=document.getElementById("simulation-critical-alert-sound");if(a){{a.volume=1.0;a.currentTime=0;var p=a.play();if(p&&p.catch)p.catch(function(){{}});}}}})();</script>' if bool(simulation_alert_definition.get("sound_enabled", True)) else ''}
-                <div class="simulation-alert-card">
+                <div class="simulation-alert-card{simulation_flash_class}">
                     <div class="simulation-alert-header">
-                        <div class="simulation-alert-icon">!</div>
+                        <div class="simulation-alert-icon{simulation_blink_class}">{simulation_alert_icon}</div>
                         <div>
                             <div class="simulation-alert-title">{html.escape(text(simulation_alert_definition.get("title")) or "Critical Case Alert")}</div>
                             <div class="simulation-alert-subtitle">
