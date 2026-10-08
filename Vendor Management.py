@@ -5613,6 +5613,140 @@ if st.session_state["show_settings"]:
             # ALERT DEFINITIONS — additive admin functionality
             # -----------------------------------------------
             with tabs[4]:
+                # Compact Alert Management presentation so the complete two-column
+                # editor fits cleanly inside the Settings modal without changing
+                # any alert fields, values, save logic, or alert behavior.
+                st.markdown(
+                    """
+                    <style>
+                    /* ALERT MANAGEMENT — FIT SETTINGS MODAL */
+                    div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) {
+                        font-size:8px !important;
+                    }
+
+                    div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) .alert-management-fit-marker {
+                        display:none !important;
+                    }
+
+                    div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) h3 {
+                        font-size:13px !important;
+                        line-height:1.1 !important;
+                        margin:0 0 4px !important;
+                    }
+
+                    div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stCaptionContainer"] {
+                        font-size:8px !important;
+                        line-height:1.2 !important;
+                        margin:0 0 5px !important;
+                    }
+
+                    div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stVerticalBlock"] {
+                        gap:0.18rem !important;
+                    }
+
+                    div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stHorizontalBlock"] {
+                        gap:0.65rem !important;
+                    }
+
+                    div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) label {
+                        font-size:8px !important;
+                        line-height:1.05 !important;
+                        margin:0 0 1px !important;
+                    }
+
+                    div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stTextInput"],
+                    div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stTextArea"],
+                    div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stSelectbox"],
+                    div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stNumberInput"] {
+                        margin:0 !important;
+                        padding:0 !important;
+                    }
+
+                    div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stTextInput"] input,
+                    div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stNumberInput"] input {
+                        height:27px !important;
+                        min-height:27px !important;
+                        padding:3px 7px !important;
+                        font-size:8px !important;
+                        line-height:1.1 !important;
+                    }
+
+                    div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stTextArea"] textarea {
+                        height:52px !important;
+                        min-height:52px !important;
+                        padding:5px 7px !important;
+                        font-size:8px !important;
+                        line-height:1.2 !important;
+                    }
+
+                    div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stSelectbox"] [data-baseweb="select"],
+                    div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stSelectbox"] [data-baseweb="select"] > div {
+                        min-height:27px !important;
+                        height:27px !important;
+                        padding:0 7px !important;
+                        box-sizing:border-box !important;
+                    }
+
+                    div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stSelectbox"] span {
+                        font-size:8px !important;
+                        line-height:25px !important;
+                    }
+
+                    div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stCheckbox"] {
+                        min-height:20px !important;
+                        height:20px !important;
+                        margin:0 !important;
+                        padding:0 !important;
+                    }
+
+                    div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stCheckbox"] label {
+                        font-size:8px !important;
+                        line-height:1 !important;
+                        margin:0 !important;
+                        padding:0 !important;
+                    }
+
+                    div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stFileUploader"] {
+                        margin:0 !important;
+                        padding:0 !important;
+                    }
+
+                    div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stFileUploader"] section {
+                        min-height:36px !important;
+                        height:36px !important;
+                        padding:4px 7px !important;
+                        box-sizing:border-box !important;
+                    }
+
+                    div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stFileUploader"] section * {
+                        font-size:7px !important;
+                    }
+
+                    div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stFormSubmitButton"] button {
+                        min-height:28px !important;
+                        height:28px !important;
+                        padding:3px 8px !important;
+                        font-size:8px !important;
+                        margin:2px 0 0 !important;
+                    }
+
+                    div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stAlert"] {
+                        padding:5px 7px !important;
+                        margin:4px 0 0 !important;
+                        font-size:7.5px !important;
+                        line-height:1.2 !important;
+                    }
+
+                    div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stAlert"] * {
+                        font-size:7.5px !important;
+                        line-height:1.2 !important;
+                    }
+                    </style>
+                    <div class="alert-management-fit-marker" aria-hidden="true"></div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
                 st.markdown("### Alert Management")
                 st.caption(
                     "Create and edit popup alert definitions. Existing dashboard alerts and simulation behavior remain unchanged unless an alert definition is explicitly edited."
