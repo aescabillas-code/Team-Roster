@@ -6945,10 +6945,7 @@ def case_details(task_id):
             # The suggested-question strip was intentionally removed to keep
             # the Case Details Knowledge Base focused on the matched SOP list
             # and the Exact Answer.
-            if search_clicked:
-                active_query = text(query).strip() or auto_query
-            else:
-                active_query = text(query).strip() or auto_query
+            active_query = text(query).strip() or auto_query
 
             results = search_kb(active_query, limit=8)
 
@@ -6961,11 +6958,6 @@ def case_details(task_id):
                 if stored_selected not in available_ids or search_clicked:
                     stored_selected = text(results[0].get("_id")) or text(results[0].get("title"))
                     st.session_state[selected_kb_key] = stored_selected
-
-                selected_doc = next(
-                    (doc for doc in results if (text(doc.get("_id")) or text(doc.get("title"))) == stored_selected),
-                    results[0],
-                )
 
                 # Keep the matching-SOP list inside the same dialog. Clicking a
                 # result changes the selected document without closing the modal.
@@ -9808,35 +9800,6 @@ div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] [class*="st-key-war
 st.markdown(r"""
 <style>
 
-/* CASE DETAILS — ONLY tighten the vertical space between Matching SOP tiles.
-   Do NOT change the parent dialog/vertical-block gap, because that affects
-   unrelated Case Details content. */
-div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] {
-    margin-top:-5px !important;
-    margin-bottom:-5px !important;
-    padding-top:0 !important;
-    padding-bottom:0 !important;
-    min-height:0 !important;
-}
-div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] > div {
-    margin:0 !important;
-    padding:0 !important;
-}
-div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] button {
-    min-height:24px !important;
-    height:24px !important;
-    padding:2px 6px !important;
-    margin:0 !important;
-    border-radius:4px !important;
-    font-size:8.5px !important;
-    line-height:1 !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown(r"""
-<style>
-
 /* USER REQUEST — ONLY these two typography changes.
    1) Matching SOP tiles: one smaller, uniform font size.
    2) Case Details tabs: smaller, uniform tab-label font size.
@@ -9869,13 +9832,9 @@ div[data-testid="stDialog"] [data-testid="stTabs"] [role="tab"] span {
    No spacing, layout, color, functionality, or control-size changes.
    ============================================================ */
 
-/* 1. KNOWLEDGE BASE SEARCH SECTION */
-div[data-testid="stDialog"] [role="tabpanel"]:has(.kb-panel-intro) * {
-    font-size:9px !important;
-}
-
-/* 2. CASE ACTIONS + COLLABORATION SECTIONS */
-div[data-testid="stDialog"] [role="tabpanel"]:has(.case-checklist-wrap) *,
+/* The former broad 9px rules for Case Actions and Knowledge Base were
+   removed because they overrode each section's specific typography. Keep
+   Collaboration's existing font-size rule independent of these two sections. */
 div[data-testid="stDialog"] [role="tabpanel"]:has(.meeting-panel) * {
     font-size:9px !important;
 }
@@ -10218,3 +10177,136 @@ div[data-testid="stDialog"]:has(.settings-scroll-marker) [data-testid="stDialogC
 }
 </style>
 """, unsafe_allow_html=True)
+
+# ============================================================
+# CASE ACTIONS + KNOWLEDGE BASE — CONSOLIDATED SECTION STYLES
+# These rules are intentionally scoped to the two requested tabs.
+# The parent Case Details container remains the sole scroll surface.
+# ============================================================
+st.markdown(r"""
+<style>
+/* CASE ACTIONS: remove inherited fixed sizing and normalize gaps. */
+div[data-testid="stDialog"] [role="tabpanel"]:has(.case-checklist-wrap),
+div[data-testid="stDialog"] [role="tabpanel"]:has(.case-actions-card) {
+    height:auto !important;
+    min-height:0 !important;
+    max-height:none !important;
+    overflow:visible !important;
+    box-sizing:border-box !important;
+}
+div[data-testid="stDialog"] [role="tabpanel"]:has(.case-checklist-wrap) [data-testid="stVerticalBlock"],
+div[data-testid="stDialog"] [role="tabpanel"]:has(.case-actions-card) [data-testid="stVerticalBlock"] {
+    gap:0.45rem !important;
+    min-height:0 !important;
+}
+div[data-testid="stDialog"] [role="tabpanel"]:has(.case-checklist-wrap) [data-testid="stHorizontalBlock"],
+div[data-testid="stDialog"] [role="tabpanel"]:has(.case-actions-card) [data-testid="stHorizontalBlock"] {
+    gap:0.65rem !important;
+    align-items:flex-start !important;
+    min-width:0 !important;
+}
+div[data-testid="stDialog"] [role="tabpanel"]:has(.case-checklist-wrap) [data-testid="stCheckbox"],
+div[data-testid="stDialog"] [role="tabpanel"]:has(.case-actions-card) [data-testid="stCheckbox"] {
+    height:auto !important;
+    min-height:22px !important;
+    margin:0 !important;
+    padding:0 !important;
+}
+div[data-testid="stDialog"] [role="tabpanel"]:has(.case-checklist-wrap) [data-testid="stCheckbox"] label,
+div[data-testid="stDialog"] [role="tabpanel"]:has(.case-actions-card) [data-testid="stCheckbox"] label {
+    white-space:normal !important;
+    overflow-wrap:anywhere !important;
+    line-height:1.25 !important;
+}
+div[data-testid="stDialog"] [role="tabpanel"]:has(.case-checklist-wrap) .case-card,
+div[data-testid="stDialog"] [role="tabpanel"]:has(.case-actions-card) .case-card {
+    height:auto !important;
+    min-height:0 !important;
+    overflow:visible !important;
+    box-sizing:border-box !important;
+}
+
+/* KNOWLEDGE BASE: remove conflicting negative margins and fixed tile heights.
+   SOP labels can wrap, and article content can grow naturally inside the parent
+   Case Details scroll container instead of being clipped by a child element. */
+div[data-testid="stDialog"] [role="tabpanel"]:has(.kb-panel-intro) {
+    height:auto !important;
+    min-height:0 !important;
+    max-height:none !important;
+    overflow:visible !important;
+    box-sizing:border-box !important;
+}
+div[data-testid="stDialog"] [role="tabpanel"]:has(.kb-panel-intro) [data-testid="stVerticalBlock"] {
+    gap:0.4rem !important;
+    min-height:0 !important;
+}
+div[data-testid="stDialog"] [role="tabpanel"]:has(.kb-panel-intro) [data-testid="stHorizontalBlock"] {
+    gap:0.5rem !important;
+    align-items:flex-start !important;
+    min-width:0 !important;
+}
+div[data-testid="stDialog"] [role="tabpanel"]:has(.kb-panel-intro) .kb-panel-intro {
+    margin:0 0 4px !important;
+    padding:6px 8px !important;
+    box-sizing:border-box !important;
+}
+div[data-testid="stDialog"] [role="tabpanel"]:has(.kb-panel-intro) [class*="st-key-kb_sop_list_"] {
+    min-height:0 !important;
+    height:auto !important;
+    margin:0 !important;
+    padding:0 !important;
+}
+div[data-testid="stDialog"] [role="tabpanel"]:has(.kb-panel-intro) [class*="st-key-kb_sop_list_"] > div {
+    min-height:0 !important;
+    height:auto !important;
+    margin:0 !important;
+    padding:0 !important;
+}
+div[data-testid="stDialog"] [role="tabpanel"]:has(.kb-panel-intro) [class*="st-key-kb_sop_list_"] button {
+    min-height:28px !important;
+    height:auto !important;
+    max-height:none !important;
+    padding:5px 7px !important;
+    margin:0 !important;
+    line-height:1.2 !important;
+    white-space:normal !important;
+    overflow-wrap:anywhere !important;
+    text-align:left !important;
+    box-sizing:border-box !important;
+}
+div[data-testid="stDialog"] [role="tabpanel"]:has(.kb-panel-intro) .kb-selected-sop,
+div[data-testid="stDialog"] [role="tabpanel"]:has(.kb-panel-intro) .kb-full-sop {
+    height:auto !important;
+    min-height:0 !important;
+    max-height:none !important;
+    overflow:visible !important;
+    box-sizing:border-box !important;
+}
+div[data-testid="stDialog"] [role="tabpanel"]:has(.kb-panel-intro) .kb-rich-content {
+    height:auto !important;
+    max-height:none !important;
+    overflow:visible !important;
+    overflow-wrap:anywhere !important;
+    word-break:normal !important;
+}
+div[data-testid="stDialog"] [role="tabpanel"]:has(.kb-panel-intro) .kb-rich-content p:last-child {
+    margin-bottom:0 !important;
+}
+
+/* At narrow widths, keep both two-column workspaces within the modal. */
+@media (max-width: 760px) {
+    div[data-testid="stDialog"] [role="tabpanel"]:has(.case-checklist-wrap) [data-testid="stHorizontalBlock"],
+    div[data-testid="stDialog"] [role="tabpanel"]:has(.case-actions-card) [data-testid="stHorizontalBlock"] {
+        flex-wrap:wrap !important;
+    }
+    div[data-testid="stDialog"] [role="tabpanel"]:has(.case-checklist-wrap) [data-testid="stHorizontalBlock"] > div,
+    div[data-testid="stDialog"] [role="tabpanel"]:has(.case-actions-card) [data-testid="stHorizontalBlock"] > div {
+        min-width:0 !important;
+    }
+    div[data-testid="stDialog"] [role="tabpanel"]:has(.kb-panel-intro) [data-testid="stHorizontalBlock"] {
+        flex-wrap:wrap !important;
+    }
+}
+</style>
+""", unsafe_allow_html=True)
+
