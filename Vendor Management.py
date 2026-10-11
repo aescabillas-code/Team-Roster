@@ -10122,94 +10122,136 @@ div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] 
 st.markdown(r"""
 <style>
 /* GLOBAL SCROLL STANDARD
-   Settings: scroll the dialog content below its fixed header.
-   Case Details/H&M: retain the existing keyed native container.
-   A single scrollbar style is shared; no nested overflow containers. */
+   Keep modal headers fixed and give each modal body one bounded scroll surface.
+   Use flex sizing and dynamic viewport units so browser zoom/resizing cannot
+   leave the bottom of Case Details or Settings clipped. */
 :root {
     --caseflow-scroll-thumb: rgba(71,85,105,.48);
     --caseflow-scroll-thumb-hover: rgba(30,41,59,.68);
 }
+
+/* Consistent scrollbar appearance across the app and inside every modal. */
 *, *::before, *::after {
     scrollbar-width:thin !important;
     scrollbar-color:var(--caseflow-scroll-thumb) transparent !important;
 }
-*::-webkit-scrollbar { width:7px !important; height:7px !important; }
+*::-webkit-scrollbar {
+    width:7px !important;
+    height:7px !important;
+}
 *::-webkit-scrollbar-thumb {
     background:var(--caseflow-scroll-thumb) !important;
     border-radius:999px !important;
 }
-*::-webkit-scrollbar-thumb:hover { background:var(--caseflow-scroll-thumb-hover) !important; }
+*::-webkit-scrollbar-thumb:hover {
+    background:var(--caseflow-scroll-thumb-hover) !important;
+}
 
-/* Keep the Settings modal within the viewport and make its content area flex
-   to the available height. The fallback selectors cover Streamlit DOM variants. */
+/* One viewport-bounded modal shell; the header remains outside the scroll area. */
+div[data-testid="stDialog"] > div,
+div[data-testid="stDialog"] [role="dialog"] {
+    box-sizing:border-box !important;
+    min-height:0 !important;
+}
+div[data-testid="stDialog"] > div {
+    max-height:calc(100dvh - 24px) !important;
+}
+@supports not (height: 100dvh) {
+    div[data-testid="stDialog"] > div {
+        max-height:calc(100vh - 24px) !important;
+    }
+}
+
+/* Settings: the dialog content itself is the only scroll surface. */
 div[data-testid="stDialog"]:has(.settings-scroll-marker) [role="dialog"] {
-    max-height:calc(100dvh - 20px) !important;
     display:flex !important;
     flex-direction:column !important;
+    max-height:calc(100dvh - 24px) !important;
     overflow:hidden !important;
-    box-sizing:border-box !important;
 }
 div[data-testid="stDialog"]:has(.settings-scroll-marker) [data-testid="stDialogContent"],
 div[data-testid="stDialog"]:has(.settings-scroll-marker):not(:has([data-testid="stDialogContent"])) [role="dialog"] > div:last-child {
-    flex:1 1 auto !important;
+    display:block !important;
+    flex:1 1 0% !important;
     min-height:0 !important;
-    max-height:calc(100dvh - 92px) !important;
     height:auto !important;
+    max-height:none !important;
     overflow-y:auto !important;
     overflow-x:hidden !important;
     overscroll-behavior:contain !important;
+    -webkit-overflow-scrolling:touch !important;
     scrollbar-width:thin !important;
     scrollbar-color:var(--caseflow-scroll-thumb) transparent !important;
     box-sizing:border-box !important;
-    padding-bottom:14px !important;
+    padding-bottom:16px !important;
 }
 div[data-testid="stDialog"]:has(.settings-scroll-marker) [data-testid="stDialogContent"]::-webkit-scrollbar,
-div[data-testid="stDialog"]:has(.settings-scroll-marker):not(:has([data-testid="stDialogContent"])) [role="dialog"] > div:last-child::-webkit-scrollbar,
-div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar {
+div[data-testid="stDialog"]:has(.settings-scroll-marker):not(:has([data-testid="stDialogContent"])) [role="dialog"] > div:last-child::-webkit-scrollbar {
     width:7px !important;
 }
 div[data-testid="stDialog"]:has(.settings-scroll-marker) [data-testid="stDialogContent"]::-webkit-scrollbar-thumb,
-div[data-testid="stDialog"]:has(.settings-scroll-marker):not(:has([data-testid="stDialogContent"])) [role="dialog"] > div:last-child::-webkit-scrollbar-thumb,
-div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar-thumb {
+div[data-testid="stDialog"]:has(.settings-scroll-marker):not(:has([data-testid="stDialogContent"])) [role="dialog"] > div:last-child::-webkit-scrollbar-thumb {
     background:var(--caseflow-scroll-thumb) !important;
     border-radius:999px !important;
 }
 div[data-testid="stDialog"]:has(.settings-scroll-marker) [data-testid="stDialogContent"]::-webkit-scrollbar-thumb:hover,
-div[data-testid="stDialog"]:has(.settings-scroll-marker):not(:has([data-testid="stDialogContent"])) [role="dialog"] > div:last-child::-webkit-scrollbar-thumb:hover,
-div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar-thumb:hover {
+div[data-testid="stDialog"]:has(.settings-scroll-marker):not(:has([data-testid="stDialogContent"])) [role="dialog"] > div:last-child::-webkit-scrollbar-thumb:hover {
     background:var(--caseflow-scroll-thumb-hover) !important;
 }
 
-/* Case Details keeps the same single native scroll container used by H&M. */
+/* Case Details/H&M: constrain the keyed container to the available modal body
+   rather than to the full viewport. This prevents clipping at high resolutions
+   and preserves a reachable bottom at browser zoom levels. */
+div[data-testid="stDialog"]:not(:has(.settings-scroll-marker)) [data-testid="stDialogContent"] {
+    display:flex !important;
+    flex-direction:column !important;
+    flex:1 1 0% !important;
+    min-height:0 !important;
+    height:auto !important;
+    max-height:none !important;
+    overflow:hidden !important;
+    box-sizing:border-box !important;
+}
+div[data-testid="stDialog"]:not(:has(.settings-scroll-marker)) [data-testid="stDialogContent"] > div {
+    display:flex !important;
+    flex-direction:column !important;
+    flex:1 1 0% !important;
+    min-height:0 !important;
+    height:auto !important;
+    max-height:none !important;
+}
+div[data-testid="stDialog"] [data-testid="stElementContainer"]:has([class*="st-key-case_detail_scroll_"]) {
+    display:flex !important;
+    flex:1 1 0% !important;
+    flex-direction:column !important;
+    min-height:0 !important;
+    height:auto !important;
+    max-height:none !important;
+}
 div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
-    height:calc(100dvh - 185px) !important;
-    max-height:calc(100dvh - 185px) !important;
-    min-height:220px !important;
+    display:block !important;
+    flex:1 1 0% !important;
+    min-height:0 !important;
+    height:auto !important;
+    max-height:none !important;
     overflow-y:auto !important;
     overflow-x:hidden !important;
     overscroll-behavior:contain !important;
+    -webkit-overflow-scrolling:touch !important;
+    scrollbar-width:thin !important;
+    scrollbar-color:var(--caseflow-scroll-thumb) transparent !important;
     box-sizing:border-box !important;
     padding-bottom:18px !important;
 }
-div[data-testid="stDialog"]:has(.settings-scroll-marker) [data-testid="stDialogContent"] {
-    padding-bottom:14px !important;
+div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar {
+    width:7px !important;
 }
-
-/* Suppress Streamlit's visual activity/loading indicators only.
-   The 1-second fragment/monitoring interval is unchanged. */
-[data-testid="stStatusWidget"],
-[data-testid="stSpinner"],
-[data-testid="stProgress"],
-[data-testid="stAppRunningIndicator"],
-[data-testid="stAppViewContainer"] [data-testid="stStatusWidget"],
-[data-testid="stAppViewContainer"] [data-testid="stAppRunningIndicator"],
-.stSpinner,
-.stProgress,
-.stApp > header [data-testid="stDecoration"] {
-    display:none !important;
-    opacity:0 !important;
-    visibility:hidden !important;
-    pointer-events:none !important;
+div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar-thumb {
+    background:var(--caseflow-scroll-thumb) !important;
+    border-radius:999px !important;
+}
+div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar-thumb:hover {
+    background:var(--caseflow-scroll-thumb-hover) !important;
 }
 </style>
 """, unsafe_allow_html=True)
