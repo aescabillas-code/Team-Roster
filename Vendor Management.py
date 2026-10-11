@@ -5278,18 +5278,8 @@ if st.session_state["show_settings"]:
             st.markdown(
                 """
                 <style>
-                div[data-testid="stDialog"]:has(.settings-scroll-marker) > div {
-                    overflow:hidden !important;
-                }
-                div[data-testid="stDialog"]:has(.settings-scroll-marker) [data-testid="stDialogContent"] {
-                    height:calc(100vh - 185px) !important;
-                    max-height:calc(100vh - 185px) !important;
-                    min-height:220px !important;
-                    box-sizing:border-box !important;
-                    padding-top:4px !important;
-                }
-                /* The marker is only a selector anchor. It must not create a
-                   Streamlit vertical-block gap above the Settings tabs. */
+                /* Marker is a zero-size anchor only. The final shared scroll rule
+                   controls the Settings viewport; no local overflow/height rules here. */
                 div[data-testid="stDialog"] [data-testid="stElementContainer"]:has(.settings-scroll-marker),
                 div[data-testid="stDialog"] [data-testid="stElementContainer"]:has(.settings-scroll-marker) > div,
                 div[data-testid="stDialog"] [data-testid="stElementContainer"]:has(.settings-scroll-marker) [data-testid="stMarkdownContainer"] {
@@ -5515,47 +5505,41 @@ if st.session_state["show_settings"]:
             # ALERT DEFINITIONS — additive admin functionality
             # -----------------------------------------------
             with tabs[4]:
-                # Compact Alert Management presentation so the complete two-column
-                # editor fits cleanly inside the Settings modal without changing
-                # any alert fields, values, save logic, or alert behavior.
+                # Keep Alert Management readable and compact. The shared Settings
+                # scroll surface handles shorter viewports without clipping controls.
                 st.markdown(
                     """
                     <style>
-                    /* ALERT MANAGEMENT — FIT SETTINGS MODAL */
+                    /* One restrained Alert Management style. Avoid fixed heights on
+                       checkbox/uploader wrappers that can clip text or hide controls. */
                     div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) {
-                        font-size:8px !important;
+                        font-size:10px !important;
                     }
-
                     div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) .alert-management-fit-marker {
                         display:none !important;
                     }
-
                     div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) h3 {
-                        font-size:13px !important;
-                        line-height:1.1 !important;
-                        margin:0 0 4px !important;
-                    }
-
-                    div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stCaptionContainer"] {
-                        font-size:8px !important;
+                        font-size:14px !important;
                         line-height:1.2 !important;
-                        margin:0 0 5px !important;
+                        margin:0 0 6px !important;
                     }
-
+                    div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stCaptionContainer"] {
+                        font-size:9px !important;
+                        line-height:1.3 !important;
+                        margin:0 0 7px !important;
+                    }
                     div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stVerticalBlock"] {
-                        gap:0.18rem !important;
+                        gap:0.42rem !important;
                     }
-
                     div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stHorizontalBlock"] {
-                        gap:0.65rem !important;
+                        gap:0.8rem !important;
+                        align-items:flex-start !important;
                     }
-
                     div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) label {
-                        font-size:8px !important;
-                        line-height:1.05 !important;
-                        margin:0 0 1px !important;
+                        font-size:10px !important;
+                        line-height:1.2 !important;
+                        margin:0 0 2px !important;
                     }
-
                     div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stTextInput"],
                     div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stTextArea"],
                     div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stSelectbox"],
@@ -5563,90 +5547,75 @@ if st.session_state["show_settings"]:
                         margin:0 !important;
                         padding:0 !important;
                     }
-
                     div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stTextInput"] input,
                     div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stNumberInput"] input {
-                        height:27px !important;
-                        min-height:27px !important;
-                        padding:3px 7px !important;
-                        font-size:8px !important;
-                        line-height:1.1 !important;
-                    }
-
-                    div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stTextArea"] textarea {
-                        height:52px !important;
-                        min-height:52px !important;
-                        padding:5px 7px !important;
-                        font-size:8px !important;
+                        min-height:32px !important;
+                        height:32px !important;
+                        padding:4px 8px !important;
+                        font-size:10px !important;
                         line-height:1.2 !important;
                     }
-
+                    div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stTextArea"] textarea {
+                        min-height:58px !important;
+                        padding:6px 8px !important;
+                        font-size:10px !important;
+                        line-height:1.3 !important;
+                    }
                     div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stSelectbox"] [data-baseweb="select"],
                     div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stSelectbox"] [data-baseweb="select"] > div {
-                        min-height:27px !important;
-                        height:27px !important;
-                        padding:0 7px !important;
+                        min-height:32px !important;
+                        height:32px !important;
                         box-sizing:border-box !important;
                     }
-
                     div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stSelectbox"] span {
-                        font-size:8px !important;
-                        line-height:25px !important;
+                        font-size:10px !important;
+                        line-height:30px !important;
                     }
-
                     div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stCheckbox"] {
-                        min-height:20px !important;
-                        height:20px !important;
+                        min-height:24px !important;
+                        height:auto !important;
                         margin:0 !important;
                         padding:0 !important;
                     }
-
                     div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stCheckbox"] label {
-                        font-size:8px !important;
-                        line-height:1 !important;
+                        font-size:10px !important;
+                        line-height:1.2 !important;
                         margin:0 !important;
                         padding:0 !important;
                     }
-
                     div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stFileUploader"] {
                         margin:0 !important;
                         padding:0 !important;
                     }
-
                     div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stFileUploader"] section {
-                        min-height:36px !important;
-                        height:36px !important;
-                        padding:4px 7px !important;
+                        min-height:42px !important;
+                        height:auto !important;
+                        padding:6px 8px !important;
                         box-sizing:border-box !important;
                     }
-
                     div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stFileUploader"] section * {
-                        font-size:7px !important;
+                        font-size:9px !important;
                     }
-
                     div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stFormSubmitButton"] {
-                        margin:4px 0 0 !important;
+                        margin:6px 0 0 !important;
                         padding:0 !important;
                     }
-
                     div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stFormSubmitButton"] button {
-                        min-height:28px !important;
-                        height:28px !important;
-                        padding:3px 8px !important;
-                        font-size:8px !important;
+                        min-height:32px !important;
+                        height:auto !important;
+                        padding:6px 10px !important;
+                        font-size:10px !important;
                         margin:0 !important;
                     }
-
                     div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stAlert"] {
-                        padding:5px 7px !important;
-                        margin:4px 0 0 !important;
-                        font-size:7.5px !important;
-                        line-height:1.2 !important;
+                        padding:6px 8px !important;
+                        margin:5px 0 0 !important;
+                        font-size:9px !important;
+                        line-height:1.3 !important;
                     }
-
                     div[data-testid="stDialog"] [role="tabpanel"]:has(.alert-management-fit-marker) [data-testid="stAlert"] * {
-                        font-size:7.5px !important;
-                        line-height:1.2 !important;
+                        font-size:9px !important;
+                        line-height:1.3 !important;
                     }
                     </style>
                     <div class="alert-management-fit-marker" aria-hidden="true"></div>
@@ -5725,6 +5694,7 @@ if st.session_state["show_settings"]:
                             value=int(selected_definition.get("delay_seconds", 5) or 0),
                             step=1,
                         )
+                    with alert_right:
                         alert_trigger = st.selectbox(
                             "Trigger",
                             ["Simulation starts", "High-priority account simulation", "Manual only"],
@@ -5735,10 +5705,9 @@ if st.session_state["show_settings"]:
                                 {"Simulation starts", "High-priority account simulation", "Manual only"}
                                 else 1
                             ),
+                            key=f"alert_trigger_{sha256(text(selected_alert_key))[:12]}",
                             help="Choose when this alert is eligible to appear. Manual only suppresses automatic simulation popups.",
                         )
-
-                    with alert_right:
                         alert_message = st.text_area(
                             "Alert Message",
                             value=text(selected_definition.get("message")),
@@ -9832,15 +9801,6 @@ div[data-testid="stDialog"] [class*="st-key-war_room_tile_"] [class*="st-key-war
     color:transparent !important;
     cursor:pointer !important;
 }
-/* CASE DETAILS — RESTORE THE NATIVE SCROLLBAR.
-   This is the single scroll surface inside the dialog. */
-div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
-    height:calc(100vh - 185px) !important;
-    max-height:calc(100vh - 185px) !important;
-    min-height:220px !important;
-    box-sizing:border-box !important;
-}
-
 </style>
 
 ''', unsafe_allow_html=True)
@@ -9871,14 +9831,6 @@ div[data-testid="stDialog"] [class*="st-key-kb_sop_list_"] button {
     font-size:8.5px !important;
     line-height:1 !important;
 }
-/* Equal bottom breathing room, matching the compact top spacing. */
-div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
-    padding-bottom:18px !important;
-}
-div[data-testid="stDialog"] [data-testid="stDialogContent"] {
-    padding-bottom:18px !important;
-}
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -10174,33 +10126,95 @@ div[data-testid="stDialog"] [data-testid="stSelectbox"] [data-baseweb="select"] 
 
 st.markdown(r"""
 <style>
-/* GLOBAL SCROLL STANDARD — use the Case Details/H&M scroll behavior consistently.
-   Keep only the two actual content surfaces scrollable; avoid nested/double scrollbars. */
-:root { --caseflow-scroll-thumb: rgba(71,85,105,.48); --caseflow-scroll-thumb-hover: rgba(30,41,59,.68); }
-*, *::before, *::after { scrollbar-width:thin !important; scrollbar-color:var(--caseflow-scroll-thumb) transparent !important; }
-*::-webkit-scrollbar { width:7px !important; height:7px !important; }
-*::-webkit-scrollbar-thumb { background:var(--caseflow-scroll-thumb) !important; border-radius:999px !important; }
-*::-webkit-scrollbar-thumb:hover { background:var(--caseflow-scroll-thumb-hover) !important; }
-div[data-testid="stDialog"]:has(.settings-scroll-marker) [data-testid="stDialogContent"],
-div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
-    overflow-y:auto !important; overflow-x:hidden !important;
-    overscroll-behavior:contain !important; scrollbar-width:thin !important;
+/* GLOBAL SCROLL STANDARD
+   Settings: scroll the dialog content below its fixed header.
+   Case Details/H&M: retain the existing keyed native container.
+   A single scrollbar style is shared; no nested overflow containers. */
+:root {
+    --caseflow-scroll-thumb: rgba(71,85,105,.48);
+    --caseflow-scroll-thumb-hover: rgba(30,41,59,.68);
+}
+*, *::before, *::after {
+    scrollbar-width:thin !important;
     scrollbar-color:var(--caseflow-scroll-thumb) transparent !important;
+}
+*::-webkit-scrollbar { width:7px !important; height:7px !important; }
+*::-webkit-scrollbar-thumb {
+    background:var(--caseflow-scroll-thumb) !important;
+    border-radius:999px !important;
+}
+*::-webkit-scrollbar-thumb:hover { background:var(--caseflow-scroll-thumb-hover) !important; }
+
+/* Keep the Settings modal within the viewport and make its content area flex
+   to the available height. The fallback selectors cover Streamlit DOM variants. */
+div[data-testid="stDialog"]:has(.settings-scroll-marker) [role="dialog"] {
+    max-height:calc(100dvh - 20px) !important;
+    display:flex !important;
+    flex-direction:column !important;
+    overflow:hidden !important;
     box-sizing:border-box !important;
 }
-div[data-testid="stDialog"]:has(.settings-scroll-marker) > div { overflow:hidden !important; }
-div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar,
-div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar { width:7px !important; }
-div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar-thumb,
-div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar-thumb {
-    background:var(--caseflow-scroll-thumb) !important; border-radius:999px !important;
+div[data-testid="stDialog"]:has(.settings-scroll-marker) [data-testid="stDialogContent"],
+div[data-testid="stDialog"]:has(.settings-scroll-marker):not(:has([data-testid="stDialogContent"])) [role="dialog"] > div:last-child {
+    flex:1 1 auto !important;
+    min-height:0 !important;
+    max-height:calc(100dvh - 92px) !important;
+    height:auto !important;
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+    overscroll-behavior:contain !important;
+    scrollbar-width:thin !important;
+    scrollbar-color:var(--caseflow-scroll-thumb) transparent !important;
+    box-sizing:border-box !important;
+    padding-bottom:14px !important;
 }
-div[data-testid="stDialog"] [data-testid="stDialogContent"]::-webkit-scrollbar-thumb:hover,
+div[data-testid="stDialog"]:has(.settings-scroll-marker) [data-testid="stDialogContent"]::-webkit-scrollbar,
+div[data-testid="stDialog"]:has(.settings-scroll-marker):not(:has([data-testid="stDialogContent"])) [role="dialog"] > div:last-child::-webkit-scrollbar,
+div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar {
+    width:7px !important;
+}
+div[data-testid="stDialog"]:has(.settings-scroll-marker) [data-testid="stDialogContent"]::-webkit-scrollbar-thumb,
+div[data-testid="stDialog"]:has(.settings-scroll-marker):not(:has([data-testid="stDialogContent"])) [role="dialog"] > div:last-child::-webkit-scrollbar-thumb,
+div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar-thumb {
+    background:var(--caseflow-scroll-thumb) !important;
+    border-radius:999px !important;
+}
+div[data-testid="stDialog"]:has(.settings-scroll-marker) [data-testid="stDialogContent"]::-webkit-scrollbar-thumb:hover,
+div[data-testid="stDialog"]:has(.settings-scroll-marker):not(:has([data-testid="stDialogContent"])) [role="dialog"] > div:last-child::-webkit-scrollbar-thumb:hover,
 div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"]::-webkit-scrollbar-thumb:hover {
     background:var(--caseflow-scroll-thumb-hover) !important;
 }
-/* Prevent accidental nested scroll surfaces in dialogs; content markers above are the exception. */
-div[data-testid="stDialog"] [data-testid="stVerticalBlockBorderWrapper"],
-div[data-testid="stDialog"] [data-testid="stVerticalBlock"] { overscroll-behavior:inherit; }
+
+/* Case Details keeps the same single native scroll container used by H&M. */
+div[data-testid="stDialog"] [class*="st-key-case_detail_scroll_"] {
+    height:calc(100dvh - 185px) !important;
+    max-height:calc(100dvh - 185px) !important;
+    min-height:220px !important;
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+    overscroll-behavior:contain !important;
+    box-sizing:border-box !important;
+    padding-bottom:18px !important;
+}
+div[data-testid="stDialog"]:has(.settings-scroll-marker) [data-testid="stDialogContent"] {
+    padding-bottom:14px !important;
+}
+
+/* Suppress Streamlit's visual activity/loading indicators only.
+   The 1-second fragment/monitoring interval is unchanged. */
+[data-testid="stStatusWidget"],
+[data-testid="stSpinner"],
+[data-testid="stProgress"],
+[data-testid="stAppRunningIndicator"],
+[data-testid="stAppViewContainer"] [data-testid="stStatusWidget"],
+[data-testid="stAppViewContainer"] [data-testid="stAppRunningIndicator"],
+.stSpinner,
+.stProgress,
+.stApp > header [data-testid="stDecoration"] {
+    display:none !important;
+    opacity:0 !important;
+    visibility:hidden !important;
+    pointer-events:none !important;
+}
 </style>
 """, unsafe_allow_html=True)
