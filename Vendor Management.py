@@ -1140,43 +1140,38 @@ def access_gate():
 
     st.markdown(
         """
-        <style>
+<style>
+.access-wrap {
+    max-width:560px;
+    margin:12vh auto 0 auto;
+    background:#ffffff;
+    border:1px solid #e8edf4;
+    border-radius:26px;
+    padding:42px;
+    box-shadow:0 24px 70px rgba(20,38,70,.10);
+}
 
-        .access-wrap {
-            max-width:560px;
-            margin:12vh auto 0 auto;
-            background:#ffffff;
-            border:1px solid #e8edf4;
-            border-radius:26px;
-            padding:42px;
-            box-shadow:0 24px 70px rgba(20,38,70,.10);
-        }
+.access-title {
+    text-align:center;
+    color:#102041;
+    font-size:30px;
+    font-weight:850;
+    margin-top:18px;
+}
 
-
-        .access-title {
-            text-align:center;
-            color:#102041;
-            font-size:30px;
-            font-weight:850;
-            margin-top:18px;
-        }
-
-
-        .access-sub {
-            text-align:center;
-            color:#73819a;
-            margin-bottom:25px;
-        }
-        
+.access-sub {
+    text-align:center;
+    color:#73819a;
+    margin-bottom:25px;
+}
 </style>
 
-
-        <div class="access-wrap">
-            <div class="access-title">OVR-VW</div>
-            <div class="access-sub">
-                Enter the one-time access code to continue.
-            </div>
-        </div>
+<div class="access-wrap">
+    <div class="access-title">OVR-VW</div>
+    <div class="access-sub">
+        Enter the one-time access code to continue.
+    </div>
+</div>
         """,
         unsafe_allow_html=True,
     )
