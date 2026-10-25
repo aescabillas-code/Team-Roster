@@ -4,5 +4,6 @@ pandas>=2.0.0
 openpyxl>=3.1.0
 plotly>=5.18.0
 pytz>=2023.3
-itsdangerous
-streamlit-js-eval
+itsdangerous>=2.1.0
+streamlit-js-eval>=0.1.6
+requests>=2.31.0
