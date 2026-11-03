@@ -5,6 +5,7 @@ Env:  MONGODB_URI (required) · MONGODB_DB · JWT_SECRET (required in prod) · R
       ALLOWED_ORIGINS (comma list, default *) · TOKEN_HOURS (default 12) · MAX_UPLOAD_MB (default 25)
 """
 import hashlib, hmac, logging, os, secrets, time
+import streamlit as st
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
