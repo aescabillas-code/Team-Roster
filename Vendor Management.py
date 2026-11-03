@@ -19,26 +19,46 @@ from pydantic import BaseModel
 from pymongo import ASCENDING, MongoClient, ReturnDocument
 
 log = logging.getLogger("ovr-vw")
-import os
+# ------------------------------------------------------------
+# Configuration
+# ------------------------------------------------------------
+MONGODB_URI = None
 
+# Try Streamlit Secrets first
 try:
     import streamlit as st
-    MONGODB_URI = st.secrets.get("MONGODB_URI")
+
+    if "MONGODB_URI" in st.secrets:
+        MONGODB_URI = st.secrets["MONGODB_URI"]
+
+    DB_NAME = st.secrets.get("MONGODB_DB", "ovr_vw")
+    JWT_SECRET = st.secrets.get("JWT_SECRET")
+
 except Exception:
-    MONGODB_URI = os.getenv("MONGODB_URI")
+    DB_NAME = None
+    JWT_SECRET = None
+
+# Fall back to environment variables
+MONGODB_URI = MONGODB_URI or os.getenv("MONGODB_URI")
+DB_NAME = DB_NAME or os.getenv("MONGODB_DB", "ovr_vw")
+JWT_SECRET = JWT_SECRET or os.getenv("JWT_SECRET")
 
 if not MONGODB_URI:
     raise RuntimeError(
-        "MONGODB_URI is not configured."
+        "MONGODB_URI not found. Configure it in Streamlit Secrets "
+        "or as an environment variable."
     )
-DB_NAME = os.environ.get("MONGODB_DB", "ovr_vw")
-JWT_SECRET = os.environ.get("JWT_SECRET")
+
 if not JWT_SECRET:
     JWT_SECRET = secrets.token_urlsafe(48)
-    log.warning("JWT_SECRET not set: using a random one, logins reset on every restart.")
-REGISTER_CODE = os.environ.get("REGISTER_CODE", "")
-TOKEN_HOURS = int(os.environ.get("TOKEN_HOURS", "12"))
-MAX_UPLOAD = int(os.environ.get("MAX_UPLOAD_MB", "25")) * 1024 * 1024
+    log.warning(
+        "JWT_SECRET not configured. Using temporary secret; "
+        "all sessions will be invalidated after restart."
+    )
+
+REGISTER_CODE = os.getenv("REGISTER_CODE", "")
+TOKEN_HOURS = int(os.getenv("TOKEN_HOURS", "12"))
+MAX_UPLOAD = int(os.getenv("MAX_UPLOAD_MB", "25")) * 1024 * 1024
 WS_KEYS = {"staff", "rules", "config"}            # shared workspace documents
 
 client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=8000)
