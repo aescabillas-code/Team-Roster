@@ -8,3 +8,4 @@ itsdangerous>=2.1.0
 streamlit-js-eval>=0.1.6
 requests>=2.31.0
 PyJWT==2.10.1
+fastapi==0.118.0
