@@ -19,9 +19,18 @@ from pydantic import BaseModel
 from pymongo import ASCENDING, MongoClient, ReturnDocument
 
 log = logging.getLogger("ovr-vw")
-MONGODB_URI = os.environ.get("MONGODB_URI")
+import os
+
+try:
+    import streamlit as st
+    MONGODB_URI = st.secrets.get("MONGODB_URI")
+except Exception:
+    MONGODB_URI = os.getenv("MONGODB_URI")
+
 if not MONGODB_URI:
-    raise RuntimeError("Set the MONGODB_URI environment variable (never hard-code it).")
+    raise RuntimeError(
+        "MONGODB_URI is not configured."
+    )
 DB_NAME = os.environ.get("MONGODB_DB", "ovr_vw")
 JWT_SECRET = os.environ.get("JWT_SECRET")
 if not JWT_SECRET:
