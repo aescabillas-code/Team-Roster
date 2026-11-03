@@ -19,7 +19,7 @@ from pydantic import BaseModel
 from pymongo import ASCENDING, MongoClient, ReturnDocument
 
 log = logging.getLogger("ovr-vw")
-MONGODB_URI = os.environ.get("MONGODB_URI")
+MONGODB_URI = st.secrets["MONGODB_URI"]
 if not MONGODB_URI:
     raise RuntimeError("Set the MONGODB_URI environment variable (never hard-code it).")
 DB_NAME = os.environ.get("MONGODB_DB", "ovr_vw")
