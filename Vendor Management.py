@@ -5,7 +5,6 @@ Env:  MONGODB_URI (required) · MONGODB_DB · JWT_SECRET (required in prod) · R
       ALLOWED_ORIGINS (comma list, default *) · TOKEN_HOURS (default 12) · MAX_UPLOAD_MB (default 25)
 """
 import hashlib, hmac, logging, os, secrets, time
-import streamlit as st
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -20,7 +19,7 @@ from pydantic import BaseModel
 from pymongo import ASCENDING, MongoClient, ReturnDocument
 
 log = logging.getLogger("ovr-vw")
-MONGODB_URI = st.secrets["MONGODB_URI"]
+MONGODB_URI = os.environ.get("MONGODB_URI")
 if not MONGODB_URI:
     raise RuntimeError("Set the MONGODB_URI environment variable (never hard-code it).")
 DB_NAME = os.environ.get("MONGODB_DB", "ovr_vw")
