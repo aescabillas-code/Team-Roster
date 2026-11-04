@@ -38,18 +38,31 @@ if COMPONENT_DIR is None:
 ovrvw_component = components.declare_component("ovrvw_workspace", path=str(COMPONENT_DIR))
 
 
-def get_mongo_uri() -> str:
+def get_setting(name: str, default: str = "") -> str:
+    """Read Streamlit Secrets first, then fall back to hosting environment variables.
+
+    On Render, configure sensitive values under Dashboard > Service > Environment.
+    Locally, values may be placed in .streamlit/secrets.toml or environment variables.
+    """
+    value = ""
     try:
-        return str(st.secrets.get("MONGODB_URI", "")).strip()
+        value = str(st.secrets.get(name, "")).strip()
     except Exception:
-        return os.getenv("MONGODB_URI", "").strip()
+        # st.secrets may not exist when running outside Streamlit or without secrets.toml.
+        value = ""
+
+    if not value:
+        value = str(os.getenv(name, "")).strip()
+
+    return value or default
+
+
+def get_mongo_uri() -> str:
+    return get_setting("MONGODB_URI")
 
 
 def get_database_name() -> str:
-    try:
-        return str(st.secrets.get("MONGODB_DATABASE", "OVRVW")).strip() or "OVRVW"
-    except Exception:
-        return os.getenv("MONGODB_DATABASE", "OVRVW").strip() or "OVRVW"
+    return get_setting("MONGODB_DATABASE", "OVRVW")
 
 
 @st.cache_resource(show_spinner=False)
@@ -62,8 +75,17 @@ def mongo_resources(uri: str, database_name: str):
 
 uri = get_mongo_uri()
 if not uri:
-    st.error("MongoDB is not configured. Add MONGODB_URI to .streamlit/secrets.toml or the MONGODB_URI environment variable before using the workspace.")
-    st.code('MONGODB_URI = "mongodb+srv://<db_user>:<db_password>@<cluster>.mongodb.net/?retryWrites=true&w=majority"\nMONGODB_DATABASE = "OVRVW"', language="toml")
+    st.error("MongoDB is not configured.")
+    st.markdown(
+        "**For Render hosting:** open your Streamlit service in the Render dashboard, "
+        "go to **Environment**, and add `MONGODB_URI` as a secret environment variable. "
+        "Set `MONGODB_DATABASE` to `OVRVW`. Do not place credentials in the source code "
+        "or commit them to GitHub."
+    )
+    st.markdown(
+        "**For local development only:** you may alternatively use "
+        "`.streamlit/secrets.toml` or set environment variables."
+    )
     st.stop()
 
 try:
