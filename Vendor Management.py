@@ -13,7 +13,28 @@ import streamlit.components.v1 as components
 
 st.set_page_config(page_title="HPE OVR-VW Operations Workspace", page_icon="🟢", layout="wide", initial_sidebar_state="collapsed")
 
-COMPONENT_DIR = Path(__file__).parent / "component"
+APP_DIR = Path(__file__).resolve().parent
+# Locate the bundled frontend whether the folder is named component/components
+# and whether Streamlit is launched from the project root or another working directory.
+_candidates = [
+    APP_DIR / "component",
+    APP_DIR / "components",
+    Path.cwd() / "component",
+    Path.cwd() / "components",
+]
+COMPONENT_DIR = next(
+    (candidate.resolve() for candidate in _candidates if (candidate / "index.html").is_file()),
+    None,
+)
+if COMPONENT_DIR is None:
+    st.error("The OVR-VW frontend component could not be found.")
+    st.code(
+        f"Expected this file: {APP_DIR / 'component' / 'index.html'}\n\n"
+        "Keep app.py and the component folder together. The folder must contain index.html.",
+        language="text",
+    )
+    st.stop()
+
 ovrvw_component = components.declare_component("ovrvw_workspace", path=str(COMPONENT_DIR))
 
 
